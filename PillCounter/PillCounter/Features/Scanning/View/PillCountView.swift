@@ -42,6 +42,8 @@ struct OPillCountView: View {
     @State private var showFullScreenImage = false
     @State private var fullScreenImage: Image?
 
+    @State private var showDeleteAllTransactionDetailsPopup: Bool = false
+    
     // MARK: - BODY
     var body: some View {
         ZStack {
@@ -114,8 +116,6 @@ struct OPillCountView: View {
         .onAppear {
             // Load transaction if missing
             initializeTransaction()
-            
-            print("selected pill count view : \(router.selectedPillScanningType?.rawValue ?? "None")")
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -143,6 +143,9 @@ struct OPillCountView: View {
         .customPopup(isPresented: $showZeroCountPopup) {
             zeroCountPopupContent
         }
+        .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup, content: {
+            deleteAllTransactionDetailsForCurrentTransaction
+        })
         .fullScreenCover(isPresented: $showFullScreenImage) {
             FullScreenImageView(
                 image: fullScreenImage,
@@ -258,6 +261,9 @@ extension OPillCountView {
                     }
                 }
             },
+            onReset: {
+                showDeleteAllTransactionDetailsPopup = true
+            },
             onTransactionDetailTapped: { detail in
                 selectedTransactionDetail = detail
                 showTransactionDetailPopup = true
@@ -281,6 +287,51 @@ extension OPillCountView {
 
 // MARK: - POPUP VIEWS
 extension OPillCountView {
+    
+    private var deleteAllTransactionDetailsForCurrentTransaction: some View {
+        VStack (spacing: 20) {
+            Text("CONFIRM DELETION")
+                .foregroundStyle(appColors.text)
+                .font(.headline)
+            
+            Text("Are you sure you want to delete all the transactions for this current transaction.")
+                .foregroundStyle(appColors.text)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            
+            HStack {
+                PillCountingButton(
+                    iconName: nil,
+                    title: "NO",
+                    textColor: appColors.primary,
+                    backgroundColor: .clear,
+                    borderColor: appColors.primary,
+                    font: .system(size: 12, weight: .semibold),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 18,
+                    iconSize: 0,
+                    action: {showDeleteAllTransactionDetailsPopup = false}
+                )
+                PillCountingButton(
+                    iconName: nil,
+                    title: "YES ",
+                    textColor: Color.white,
+                    backgroundColor: appColors.primary,
+                    borderColor: appColors.primary,
+                    font: .system(size: 12, weight: .semibold),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 18,
+                    iconSize: 0,
+                    action: {
+                        showDeleteAllTransactionDetailsPopup = false
+                        pillScanViewModel.deleteAllDetailsOfCurrentTransaction()
+                    }
+                )
+            }
+        }
+    }
 
     private var zeroCountPopupContent: some View {
         VStack(spacing: 25) {
@@ -325,7 +376,6 @@ extension OPillCountView {
                 }
             )
         }
-        .frame(width: 300)
     }
 
     // Popup showing details of a specific saved count.

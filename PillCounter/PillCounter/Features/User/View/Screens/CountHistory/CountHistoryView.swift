@@ -253,7 +253,6 @@ struct CountHistoryView: View {
                             onIconTap: {
                                 // Only allow menu options if NOT editing
                                 if !isEditing {
-                                    print("Tapped \(txn.txn_id)")
                                     showMenuOptions = true
                                     selectedTransasctionId = txn.txn_id
                                     userViewModel.currentTransactionTxnId =

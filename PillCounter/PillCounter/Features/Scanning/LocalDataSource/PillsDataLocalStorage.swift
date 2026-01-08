@@ -536,7 +536,7 @@ final class PillsDataLocalStorage {
         }
     }
     
-    // MARK: - FETCH TRANSACTIONS (New Methods)
+    // MARK: - FETCH TRANSACTIONS
     
     /// Fetches transactions for a user within a specific time range (timestamps in milliseconds).
     /// Used for both "History Option" range and "Single Date" range.
@@ -566,6 +566,31 @@ final class PillsDataLocalStorage {
             return []
         }
     }
+    
+    // MARK: - BULK DELETE TRANSACTION DETAILS
+    func softDeleteAllTransactionDetails(for txnId: Int64) {
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> =
+        PillCountTransactionDetailsEntity.fetchRequest()
+        
+        request.predicate = NSPredicate(
+            format: "txn_id == %lld AND is_deleted == false", txnId
+        )
+        do {
+            let details = try mainThreadContext.fetch(request)
+            guard !details.isEmpty else { return }
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+            
+            for detail in details {
+                detail.is_deleted = true
+                detail.updated_at = now
+            }
+            
+            CoreDataManager.shared.save(context: mainThreadContext)
+        } catch {
+            print("❌ Failed to delete transaction details for txnId \(txnId): \(error)")
+        }
+    }
+
     
     
     // MARK: DEBUGGING

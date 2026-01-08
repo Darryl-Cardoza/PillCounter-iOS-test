@@ -57,8 +57,6 @@ final class CameraService: NSObject, ObservableObject {
 
         stop()
         isPausedDueToInactivity = true
-
-        print("📷 Camera paused due to inactivity")
     }
     
     func resumeIfPaused() {

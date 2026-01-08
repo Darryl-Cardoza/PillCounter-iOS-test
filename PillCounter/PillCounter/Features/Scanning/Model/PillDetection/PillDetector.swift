@@ -18,7 +18,6 @@ final class PillDetector {
     private(set) var model: best?
 
     private init() {
-        print("🔄 PillDetector.init called")
         loadModel()
     }
 
@@ -33,7 +32,6 @@ final class PillDetector {
             
             let mlModel = try best(configuration: config)
             self.model = mlModel
-            print("✅ MODEL LOADED SUCCESSFULLY")
 
         } catch let error {
             print("❌ FALIED TO LOAD MODEL: \(error)")

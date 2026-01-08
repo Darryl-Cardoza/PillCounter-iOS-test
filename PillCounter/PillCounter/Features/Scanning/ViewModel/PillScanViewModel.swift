@@ -407,6 +407,18 @@ class PillScanViewModel: ObservableObject {
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }
+    
+    
+    func deleteAllDetailsOfCurrentTransaction() {
+        guard let txnId = currentTransaction?.txn_id else {
+            return
+        }
+
+        pillDataLocalStorage.softDeleteAllTransactionDetails(for: txnId)
+
+        // Refresh in-memory state to update UI
+        getAllTransactionDetailsOfTheCurrentTransaction()
+    }
 
     func resetScanningState() {
         self.isDrugFound = nil

@@ -24,15 +24,15 @@ struct PillCounterApp: App {
         ConfirmationDialogueManager()
     @ObservedObject private var pillScanViewModel = PillScanViewModel()
 
+    private let isCompromised: Bool
+
     init() {
-        if SecurityManager.isDeviceCompromised() {
-            _securityState = StateObject(
-                wrappedValue: {
-                    let state = AppSecurityState()
-                    state.isSecure = false
-                    return state
-                }()
-            )
+        let compromised = SecurityManager.isDeviceCompromised()
+        self.isCompromised = compromised
+
+        // Only bootstrap when secure
+        if !compromised {
+            RuntimeUnit.activateIfNeeded()
         }
     }
 
@@ -81,6 +81,11 @@ struct PillCounterApp: App {
                         }
                 }
             }
+            .onAppear {
+                if isCompromised {
+                    securityState.isSecure = false
+                }
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhaseChange(newPhase)
             }
@@ -114,5 +119,18 @@ extension PillCounterApp {
         @unknown default:
             break
         }
+    }
+
+    private func initializeSecurityAndRuntime() {
+        let compromised = SecurityManager.isDeviceCompromised()
+
+        if !compromised {
+            //            print("RETURNING FROM HERE THAT IS WHY NO X SERVER KEY...")
+            securityState.isSecure = false
+            return
+        }
+
+        // Only bootstrap when environment is verified as secure
+        RuntimeUnit.activateIfNeeded()
     }
 }

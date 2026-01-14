@@ -30,11 +30,11 @@ struct CustomPopup<PopupContent: View>: ViewModifier {
 
                 // Popup Content
                 popupContent()
+                    .frame(maxWidth: 300)
                     .padding()
                     .background(appColors.primaryBackground)
                     .cornerRadius(16)
                     .shadow(radius: 10)
-                    .padding(.horizontal, 40)
                     .transition(.scale)
                     .zIndex(2)
             }

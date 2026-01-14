@@ -7,12 +7,8 @@
 
 import Foundation
 
-//
-// ConfigurationManager.swift
-// PillCounter
-//
-
 final class ConfigurationManager {
+
     static let shared = ConfigurationManager()
     private var config: [String: Any] = [:]
 
@@ -20,7 +16,10 @@ final class ConfigurationManager {
         loadFromBundle()
     }
 
-    /// Loads the Config.plist from the app bundle
+    // MARK: - BUNDLE LOAD
+
+    /// LOAD
+    /// Reads non-sensitive configuration values from the app bundle.
     private func loadFromBundle() {
         guard
             let url = Bundle.main.url(
@@ -37,20 +36,30 @@ final class ConfigurationManager {
                 config = dict
             }
         } catch {
-            print("❌ Failed to load plist:", error.localizedDescription)
+            #if DEBUG
+            print("Config load failed:", error.localizedDescription)
+            #endif
         }
     }
 
-    // MARK: - Public Accessors
-    func getValue(forKey key: String) -> Any? {
-        config[key]
-    }
+    // MARK: - PUBLIC ACCESS
 
+    /// BASE URL
+    /// Returns the API base URL from bundle configuration.
     var apiBaseURL: String {
         config["BASE_URL"] as? String ?? ""
     }
 
+    /// SERVER VALUE
+    /// Retrieves the protected runtime value for request authentication.
     var xServerKey: String {
-        config["X_SERVER_KEY"] as? String ?? ""
+        (try? RuntimeUnit.material()) ?? ""
+    }
+
+    /// GENERIC ACCESS
+    /// Provides access to non-sensitive configuration values.
+    func getValue(forKey key: String) -> Any? {
+        config[key]
     }
 }
+

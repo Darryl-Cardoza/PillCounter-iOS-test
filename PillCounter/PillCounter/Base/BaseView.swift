@@ -30,12 +30,17 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
     // MARK: - OPTIONAL BACKGROUND STYLES
     let backButtonBackground: Color?
     let headerActionsBackground: Color?
+    
+    let onBack: (() -> Void)?
 
     // MARK: - ENVIRONMENT
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var confirmationDialogueManager: ConfirmationDialogueManager
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var appColors: AppColors
+    
+    // MARK: - STATE
+    @State private var keyboardHeight: CGFloat = 0
 
     // MARK: - MAIN INIT
     init(
@@ -52,7 +57,8 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         cancelButtonText: String? = nil,
         confirmButtonText: String? = nil,
         backButtonBackground: Color? = nil,
-        headerActionsBackground: Color? = nil
+        headerActionsBackground: Color? = nil,
+        onBack: (() -> Void)? = nil
     ) {
         self.topRatio = topRatio
         self.topContent = topContent
@@ -68,6 +74,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         self.confirmButtonText = confirmButtonText
         self.backButtonBackground = backButtonBackground
         self.headerActionsBackground = headerActionsBackground
+        self.onBack = onBack
     }
 
     // MARK: - BODY
@@ -114,7 +121,8 @@ extension BaseView where HeaderActions == EmptyView {
         confirmTitle: String? = nil,
         confirmMessage: String? = nil,
         cancelButtonText: String? = nil,
-        confirmButtonText: String? = nil
+        confirmButtonText: String? = nil,
+        onBack: (() -> Void)? = nil
     ) {
         self.init(
             topRatio: topRatio,
@@ -128,7 +136,8 @@ extension BaseView where HeaderActions == EmptyView {
             confirmTitle: confirmTitle,
             confirmMessage: confirmMessage,
             cancelButtonText: cancelButtonText,
-            confirmButtonText: confirmButtonText
+            confirmButtonText: confirmButtonText,
+            onBack: onBack
         )
     }
 }
@@ -233,7 +242,7 @@ extension BaseView {
                     )
                     .clipShape(Circle())
 
-                Text(title.uppercased())
+                Text((title.count > 25 ? "\(title.prefix(25))..." : title).uppercased())
                     .foregroundStyle(appColors.text)
                     .font(.headline)
             }
@@ -241,16 +250,21 @@ extension BaseView {
     }
 
     private func handleBackAction() {
+        let backAction = onBack ?? {
+            router.navigateBack()
+        }
+        
         if confirmBack {
             confirmationDialogueManager.showConfirmation {
                 confirmationPopup
             } onConfirm: {
-                router.navigateBack()
+                backAction()
             }
         } else {
-            router.navigateBack()
+            backAction()
         }
     }
+
 
     private var confirmationPopup: some View {
         ConfirmationDialogue(

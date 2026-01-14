@@ -66,3 +66,6 @@ fastlane/test_output
 
 Config.plist
 **/Config.plist
+
+# model encryption key not to be committed !!
+*.mlmodelkey

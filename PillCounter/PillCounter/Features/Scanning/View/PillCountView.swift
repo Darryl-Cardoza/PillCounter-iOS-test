@@ -34,16 +34,20 @@ struct OPillCountView: View {
     @State private var showTransactionHistory: Bool = true
 
     @State private var showToast: Bool = false
-    
+
     @State private var isZeroOrTargetNotReached: Bool = false
-    
+
     @State private var isPaused: Bool = false
-    
+
     @State private var showFullScreenImage = false
     @State private var fullScreenImage: Image?
 
     @State private var showDeleteAllTransactionDetailsPopup: Bool = false
-    
+
+    @State private var isAddDisabled: Bool = false
+    @State private var showSuccessAnimation: Bool = false
+    @State private var lastAddedCount: Int = 0
+
     // MARK: - BODY
     var body: some View {
         ZStack {
@@ -56,7 +60,6 @@ struct OPillCountView: View {
                     CameraContentView(cameraService: cameraService)
                         .environment(\.colorScheme, .light)
                         .id("camera-content")
-                        .overlay(rotationObserver)
                         .onTapGesture {
                             isPaused = false
                             cameraService.resetInactivityTimer()
@@ -68,7 +71,11 @@ struct OPillCountView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: NSLocalizedString("PILL_COUNT_HEADER", comment: "")
+                title: NSLocalizedString("PILL_COUNT_HEADER", comment: ""),
+                onBack: {
+                    router.setRoot(
+                        to: .authentication(.login(.dashboard(.dashboardHome))))
+                }
             )
 
             if showToast {
@@ -81,9 +88,13 @@ struct OPillCountView: View {
                             .scaledToFit()
                             .frame(width: 24, height: 24)
 
-                        Text(!isZeroOrTargetNotReached ? "Total transaction count exceeds target." : "No Transaction Found, please start counting pills.")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
+                        Text(
+                            !isZeroOrTargetNotReached
+                                ? "Total transaction count exceeds target."
+                                : "No Transaction Found, please start counting pills."
+                        )
+                        .font(.subheadline)
+                        .foregroundColor(.white)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -95,6 +106,15 @@ struct OPillCountView: View {
                 .animation(.easeInOut, value: showToast)
             }
             
+            if showSuccessAnimation {
+                SuccessAnimationView(
+                    count: lastAddedCount,
+                    color: appColors.secondary
+                )
+                .allowsHitTesting(false) // Let user tap through if needed
+                .zIndex(100) // Ensure it's on top
+            }
+
             if cameraService.isPausedDueToInactivity {
                 pausedOverlay
             }
@@ -105,6 +125,8 @@ struct OPillCountView: View {
             pillScanViewModel.currentTransaction = nil
             pillScanViewModel.currentTransactionTransactionDetails = nil
             pillScanViewModel.note = ""
+
+            cameraService.stop()
         }
         .onTapGesture {
             if !cameraService.isPausedDueToInactivity {
@@ -116,6 +138,9 @@ struct OPillCountView: View {
         .onAppear {
             // Load transaction if missing
             initializeTransaction()
+
+            cameraService.configureInitialOrientation()
+            cameraService.startObservingOrientation()
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -127,9 +152,12 @@ struct OPillCountView: View {
                 break
             }
         }
-        .onChange(of: cameraService.isPausedDueToInactivity, { _, newValue in
-            isPaused = newValue
-        })
+        .onChange(
+            of: cameraService.isPausedDueToInactivity,
+            { _, newValue in
+                isPaused = newValue
+            }
+        )
         // MARK: - POPUPS
         .customPopup(isPresented: $showNoteOption) {
             showNoteOptionPopup
@@ -143,9 +171,12 @@ struct OPillCountView: View {
         .customPopup(isPresented: $showZeroCountPopup) {
             zeroCountPopupContent
         }
-        .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup, content: {
-            deleteAllTransactionDetailsForCurrentTransaction
-        })
+        .customPopup(
+            isPresented: $showDeleteAllTransactionDetailsPopup,
+            content: {
+                deleteAllTransactionDetailsForCurrentTransaction
+            }
+        )
         .fullScreenCover(isPresented: $showFullScreenImage) {
             FullScreenImageView(
                 image: fullScreenImage,
@@ -184,18 +215,6 @@ extension OPillCountView {
             )
     }
 
-    // Helper to detect size changes (rotation) and notify the camera service.
-    private var rotationObserver: some View {
-        GeometryReader { geo in
-            Color.clear
-                .onChange(of: geo.size) { _, _ in
-                    cameraService.updateOrientation(
-                        UIDevice.current.orientation
-                    )
-                }
-        }
-    }
-
     // The bottom control panel with buttons and lists.
     private var controlsContent: some View {
         BottomControlsView(
@@ -203,8 +222,11 @@ extension OPillCountView {
             pillScanViewModel: pillScanViewModel,
             cameraService: cameraService,
             appColors: appColors,
+            isAddButtonDisabled: isAddDisabled,
             onAddPill: {
 
+                guard !isAddDisabled else { return }
+                
                 cameraService.resetInactivityTimer()
                 cameraService.resumeIfPaused()
 
@@ -215,17 +237,28 @@ extension OPillCountView {
 
                 if router.selectedPillScanningType == .FIXED {
                     if pillScanViewModel.getTotalPillCountOfCurrentTransaction()
-                        == pillScanViewModel.currentTransaction?.target_count ?? 0
+                        == pillScanViewModel.currentTransaction?.target_count
+                        ?? 0
                     {
-                        
+
                         showToast = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             showToast = false
                             isZeroOrTargetNotReached = false
                         }
-                        
+
                         return
                     }
+                }
+                
+                isAddDisabled = true
+                lastAddedCount = cameraService.stableCount
+                showSuccessAnimation = true
+                
+                // 6. Reset UI after 3 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    isAddDisabled = false
+                    showSuccessAnimation = false
                 }
 
                 // 1. Capture the composite image
@@ -249,7 +282,9 @@ extension OPillCountView {
                 if addNoteSettings {
                     showNoteOption = true
                 } else {
-                    if pillScanViewModel.getTotalPillCountOfCurrentTransaction() > 0 {
+                    if pillScanViewModel.getTotalPillCountOfCurrentTransaction()
+                        > 0
+                    {
                         showConfirmCompletionPopup = true
                     } else {
                         showToast = true
@@ -269,7 +304,7 @@ extension OPillCountView {
                 showTransactionDetailPopup = true
             },
             showTransactionDetails: $showTransactionHistory,
-            isPaused : $isPaused
+            isPaused: $isPaused
         )
     }
 
@@ -287,18 +322,20 @@ extension OPillCountView {
 
 // MARK: - POPUP VIEWS
 extension OPillCountView {
-    
+
     private var deleteAllTransactionDetailsForCurrentTransaction: some View {
-        VStack (spacing: 20) {
+        VStack(spacing: 20) {
             Text("CONFIRM DELETION")
                 .foregroundStyle(appColors.text)
                 .font(.headline)
-            
-            Text("Are you sure you want to delete all the transactions for this current transaction.")
-                .foregroundStyle(appColors.text)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            
+
+            Text(
+                "Are you sure you want to delete all the transactions for this current transaction."
+            )
+            .foregroundStyle(appColors.text)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal)
+
             HStack {
                 PillCountingButton(
                     iconName: nil,
@@ -311,7 +348,7 @@ extension OPillCountView {
                     horizontalPadding: 32,
                     verticalPadding: 18,
                     iconSize: 0,
-                    action: {showDeleteAllTransactionDetailsPopup = false}
+                    action: { showDeleteAllTransactionDetailsPopup = false }
                 )
                 PillCountingButton(
                     iconName: nil,
@@ -400,7 +437,9 @@ extension OPillCountView {
             // Content (Image + Count)
             HStack(spacing: 30) {
                 if let image = selectedTransactionDetail?.image_path,
-                   let loadedImage = PhotoFileManager.shared.loadImage(from: image) {
+                    let loadedImage = PhotoFileManager.shared.loadImage(
+                        from: image)
+                {
 
                     loadedImage
                         .resizable()
@@ -432,8 +471,8 @@ extension OPillCountView {
                         isAnimated: false
                     )
                     Text(
-                        "\(Formatter.getDateString(from: selectedTransactionDetail?.created_at ?? 0)) " +
-                        "\(Formatter.getTimeString(from: selectedTransactionDetail?.created_at ?? 0))"
+                        "\(Formatter.getDateString(from: selectedTransactionDetail?.created_at ?? 0)) "
+                            + "\(Formatter.getTimeString(from: selectedTransactionDetail?.created_at ?? 0))"
                     )
                     .foregroundStyle(appColors.text).font(.system(size: 14))
                 }
@@ -478,16 +517,23 @@ extension OPillCountView {
         }
         .frame(width: 300)
     }
-    
+
     private var isTransactionCompleted: Bool {
         pillScanViewModel.getTotalPillCountOfCurrentTransaction()
-        == (pillScanViewModel.currentTransaction?.target_count ?? 0)
+            == (pillScanViewModel.currentTransaction?.target_count ?? 0)
     }
-    
+
     private var confirmationMessage: String {
-        let status = isTransactionCompleted || router.selectedPillScanningType == .REGULAR ? "COMPLETED" : "PENDING"
-        
-        let message = isTransactionCompleted || router.selectedPillScanningType == .REGULAR ? "Are you sure you want to mark this transaction as \(status)" : "Target not reached. This transaction will be marked as \(status)."
+        let status =
+            isTransactionCompleted
+                || router.selectedPillScanningType == .REGULAR
+            ? "COMPLETED" : "PENDING"
+
+        let message =
+            isTransactionCompleted
+                || router.selectedPillScanningType == .REGULAR
+            ? "Are you sure you want to mark this transaction as \(status)"
+            : "Target not reached. This transaction will be marked as \(status)."
 
         return message
     }
@@ -506,11 +552,19 @@ extension OPillCountView {
             onConfirm: {
                 showNoteOption = false
                 showConfirmCompletionPopup = false
-                router.navigateBack()
-                if isTransactionCompleted || router.selectedPillScanningType == .REGULAR {
-                    Task(priority: .background, operation: {
-                        await userViewModel.completeTheSelectedTransaction(txnId: pillScanViewModel.currentTransaction?.txn_id ?? 0, countType: router.selectedPillScanningType ?? .FIXED)
-                    })
+                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+                if isTransactionCompleted
+                    || router.selectedPillScanningType == .REGULAR
+                {
+                    Task(
+                        priority: .background,
+                        operation: {
+                            await userViewModel.completeTheSelectedTransaction(
+                                txnId: pillScanViewModel.currentTransaction?
+                                    .txn_id ?? 0,
+                                countType: router.selectedPillScanningType
+                                    ?? .FIXED)
+                        })
                 }
             }
         )
@@ -616,16 +670,16 @@ extension OPillCountView {
 struct FullScreenImageView: View {
     let image: Image?
     let onDismiss: () -> Void
-    
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             image?
                 .resizable()
                 .scaledToFit()
                 .ignoresSafeArea()
-            
+
             VStack {
                 HStack {
                     Spacer()

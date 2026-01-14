@@ -23,7 +23,11 @@ struct CameraContentView: View {
                         cameraService: cameraService
                     )
                     .ignoresSafeArea()
-                    .task { cameraService.start() }
+                    .task {
+                        cameraService.configureInitialOrientation()
+                        cameraService.startObservingOrientation()
+                        cameraService.start()
+                    }
                     .onDisappear { cameraService.stop() }
 
                     DetectionOverlay(cameraService: cameraService)
@@ -46,6 +50,7 @@ struct BottomControlsView: View {
     let pillScanViewModel: PillScanViewModel
     let cameraService: CameraService
     let appColors: AppColors
+    var isAddButtonDisabled: Bool = false
     let onAddPill: () -> Void
     let onComplete: () -> Void
     let onReset: () -> Void
@@ -60,7 +65,6 @@ struct BottomControlsView: View {
     var body: some View {
         VStack(spacing: 0) {
 
-            // MARK: HEADER
             BottomControlsViewHeader(
                 drugName: pillScanViewModel.currentTransaction?.drug?.drug_name
                     ?? "",
@@ -69,8 +73,8 @@ struct BottomControlsView: View {
                 onResetPills: onReset
             )
             .padding()
+            .padding(.top, isLandscape ? 0 : 10)
 
-            // MARK: BODY
             VStack {
                 if showHistoryOrScanPillIcon {
                     BottonControlsViewForTransactionList(
@@ -97,7 +101,9 @@ struct BottomControlsView: View {
                         onAddPills: onAddPill,
                         onCompleteScan: onComplete,
                         isLandscape: isLandscape,
-                        isPausedDueToInactivity: cameraService.isPausedDueToInactivity
+                        isPausedDueToInactivity: cameraService
+                            .isPausedDueToInactivity,
+                        isAddButtonDisabled: isAddButtonDisabled
                     )
                     .padding()
                 }
@@ -108,6 +114,7 @@ struct BottomControlsView: View {
     }
 }
 
+// MARK: ADD BUTTON-
 struct CountAddButtonView: View {
     let count: Int
     let ringColor: Color
@@ -117,8 +124,12 @@ struct CountAddButtonView: View {
     let size: CGFloat
     let isAnimating: Bool
     let onAddTap: () -> Void
+    var isDisabled: Bool = false
 
-    @State private var animateStroke: Bool = false
+    // We use a UUID to force SwiftUI to recreate the view when animation state changes.
+    // This prevents the "repeatForever" from getting stuck or not resetting correctly.
+    @State private var animationID = UUID()
+    @State private var trimValue: CGFloat = 1.0
 
     var body: some View {
         VStack(spacing: -20) {
@@ -126,7 +137,7 @@ struct CountAddButtonView: View {
             // Circle with animated stroke
             ZStack {
                 Circle()
-                    .trim(from: 0, to: animateStroke ? 1 : 0)
+                    .trim(from: 0, to: trimValue)
                     .stroke(
                         ringColor,
                         style: StrokeStyle(
@@ -134,48 +145,59 @@ struct CountAddButtonView: View {
                             lineCap: .round
                         )
                     )
-                    .rotationEffect(.degrees(90))  // start at 6 o'clock
+                    .rotationEffect(.degrees(90)) // Start at 6 o'clock
                     .frame(width: size, height: size)
+                    .id(animationID) // ⬅️ Critical for resetting animation cleanly
                     .onAppear {
-                        startOrStopAnimation()
+                        updateAnimationState()
                     }
                     .onChange(of: isAnimating) { _, _ in
-                        startOrStopAnimation()
+                        updateAnimationState()
                     }
 
                 Text("\(count)")
                     .font(.system(size: size * 0.28, weight: .bold))
                     .foregroundStyle(textColor)
             }
+            .opacity(isDisabled ? 0.5 : 1.0)
 
             // Add button
             Button(action: onAddTap) {
-                Text("Add")
+                Text(isDisabled ? "Wait..." : "Add")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 10)
-                    .background(buttonColor)
+                    .background(isDisabled ? Color.gray : buttonColor)
                     .clipShape(Capsule())
             }
+            .disabled(isDisabled)
         }
     }
 
-    private func startOrStopAnimation() {
+    private func updateAnimationState() {
+        // Regenerate ID to kill any existing animation context
+        animationID = UUID()
+        
         if isAnimating {
-            animateStroke = false
+            // Start with empty circle
+            trimValue = 0
             withAnimation(
                 .linear(duration: 1.5)
-                    .repeatForever(autoreverses: false)
+                .repeatForever(autoreverses: false)
             ) {
-                animateStroke = true
+                trimValue = 1
             }
         } else {
-            animateStroke = false
+            // Stop state: Full Circle Visible immediately
+            withAnimation(.linear(duration: 0.2)) {
+                trimValue = 1
+            }
         }
     }
 }
 
+// MARK: PILL SCAN BODY
 struct BottomControlsViewBodyForPillScan: View {
 
     let appColors: AppColors
@@ -187,135 +209,133 @@ struct BottomControlsViewBodyForPillScan: View {
     let onCompleteScan: () -> Void
     let isLandscape: Bool
     let isPausedDueToInactivity: Bool
-    
+    var isAddButtonDisabled: Bool
+
     @State private var isAnimating: Bool = true
-    @State private var lastCount: Int = -1
-    @State private var lastChangeTime: Date = Date()
-    
-    private let minStableSeconds: TimeInterval = 2
-    private let maxStableSeconds: TimeInterval = 5
+    @State private var stabilityWorkItem: DispatchWorkItem?
 
     var body: some View {
-        VStack {
-            HStack {
-                if !isLandscape {
-                    TotalCountView(
-                        currentTotalCount: currentTotalCount,
-                        targetCount: targetCount,
-                        countType: countType,
-                        appColors: appColors
-                    )
-
-                    Spacer()
-                }
-
-                CountAddButtonView(
-                    count: currentScanningCount,
-                    ringColor: appColors.secondary,
-                    buttonColor: appColors.primary,
-                    textColor: appColors.text,
-                    ringLineWidth: 5,
-                    size: 120,
-                    isAnimating: isAnimating
-                ) {
-                    onAddPills()
-                }
-
-                if !isLandscape {
-                    Spacer()
-
-                    Button {
-                        // some action
-                        onCompleteScan()
-                    } label: {
-                        VStack(spacing: 6) {
-                            Image("all_done")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 50, height: 50)
-                                .overlay(appColors.primary)
-                                .mask(
-                                    Image("all_done")
-                                        .resizable()
-                                        .scaledToFit()
-                                )
-
-                            Text("All Done")
-                                .foregroundStyle(appColors.text)
-                                .font(.system(size: 16))
-                        }
-                    }
-                }
-            }
-
+        Group {
             if isLandscape {
-                HStack {
-                    TotalCountView(
-                        currentTotalCount: currentTotalCount,
-                        targetCount: targetCount,
-                        countType: countType,
-                        appColors: appColors
-                    )
-
-                    Spacer()
-
-                    Button {
-                        // some action
-                        onCompleteScan()
-                    } label: {
-                        VStack(spacing: 6) {
-                            Image("all_done")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 50, height: 50)
-                                .overlay(appColors.primary)
-                                .mask(
-                                    Image("all_done")
-                                        .resizable()
-                                        .scaledToFit()
-                                )
-
-                            Text("All Done")
-                                .foregroundStyle(appColors.text)
-                                .font(.system(size: 16))
-                        }
+                // MARK: - LANDSCAPE LAYOUT
+                // 1. Center: Add Button
+                // 2. Below: Row with Total Count (Left) and All Done (Right)
+                VStack(spacing: 20) {
+                    addButton
+                    
+                    HStack(alignment: .bottom) {
+                        totalCountView
+                        Spacer()
+                        allDoneButton
                     }
                 }
+            } else {
+                // MARK: - PORTRAIT LAYOUT
+                // All three in one bottom-aligned row
+                HStack(alignment: .bottom) {
+                    totalCountView
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    addButton
+                        .frame(maxWidth: .infinity)
+                    
+                    allDoneButton
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .padding(.horizontal)
             }
+        }
+        .onAppear {
+            if !isPausedDueToInactivity { handleCountChange() }
         }
         .onChange(of: isPausedDueToInactivity) { _, paused in
             if paused {
-                isAnimating = false
+                stabilityWorkItem?.cancel()
+                withAnimation { isAnimating = false }
             } else {
-                // Camera resumed → restart animation
-                lastChangeTime = Date()
-                isAnimating = true
+                handleCountChange()
             }
         }
-        .onChange(of: currentScanningCount) { _, newValue in
-            let now = Date()
-            
-            guard !isPausedDueToInactivity else {
-                isAnimating = false
-                return
-            }
-            
-            if newValue != lastCount {
-                lastCount = newValue
-                lastChangeTime = now
-                isAnimating = true
-            } else {
-                let elapsed = now.timeIntervalSince(lastChangeTime)
+        .onChange(of: currentScanningCount) { _, _ in
+            handleCountChange()
+        }
+    }
+
+    // MARK: - COMPONENT BUILDERS
+    // Extracted to avoid code duplication across the if/else layout
+
+    @ViewBuilder
+    private var addButton: some View {
+        CountAddButtonView(
+            count: currentScanningCount,
+            ringColor: appColors.secondary,
+            buttonColor: appColors.primary,
+            textColor: appColors.text,
+            ringLineWidth: 5,
+            size: 120,
+            isAnimating: isAnimating,
+            onAddTap: { onAddPills() },
+            isDisabled: isAddButtonDisabled
+        )
+    }
+
+    @ViewBuilder
+    private var totalCountView: some View {
+        TotalCountView(
+            currentTotalCount: currentTotalCount,
+            targetCount: targetCount,
+            countType: countType,
+            appColors: appColors
+        )
+    }
+
+    @ViewBuilder
+    private var allDoneButton: some View {
+        Button {
+            onCompleteScan()
+        } label: {
+            VStack(spacing: 6) {
                 
-                if elapsed >= minStableSeconds && elapsed <= maxStableSeconds {
-                    isAnimating = false
-                }
+                Spacer()
+                
+                Image("all_done")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 50, height: 50)
+                    .overlay(appColors.primary)
+                    .mask(Image("all_done").resizable().scaledToFit())
+                
+                Spacer().frame(height: 10)
+                
+                Text("All Done")
+                    .foregroundStyle(appColors.text)
+                    .font(.system(size: 16))
+            }
+        }
+    }
+
+    // MARK: - LOGIC
+    private func handleCountChange() {
+        guard !isPausedDueToInactivity else { return }
+
+        if !isAnimating {
+            isAnimating = true
+        }
+
+        stabilityWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
+            withAnimation {
+                isAnimating = false
             }
         }
         
+        stabilityWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
     }
 }
 
+// MARK: TOTAL COUNT VIEW
 struct TotalCountView: View {
     let currentTotalCount: Int
     let targetCount: Int32?
@@ -324,11 +344,15 @@ struct TotalCountView: View {
 
     var body: some View {
         VStack(spacing: 6) {
+            
+            if countType == .REGULAR {
+                Spacer()
+            }
 
             // Current Total
             Text("\(currentTotalCount)")
                 .foregroundStyle(appColors.primary)
-                .font(.system(size: 26, weight: .bold))
+                .font(.system(size: countType == .FIXED ? 26 : 30, weight: .bold))
 
             // Divider (ONLY for FIXED + target exists)
             if countType == .FIXED, targetCount != nil {
@@ -343,15 +367,21 @@ struct TotalCountView: View {
                     .foregroundStyle(appColors.primary)
                     .font(.system(size: 20, weight: .bold))
             }
+            
+            if countType == .REGULAR {
+                Spacer().frame(height: 10)
+            }
 
             // Label
             Text("Total Count")
                 .foregroundStyle(appColors.text)
+                .font(.system(size: 16)) // Changed to 16 to match "All Done" text
                 .padding(.top, 8)
         }
     }
 }
 
+// MARK: LIST BOTTOM
 struct BottonControlsViewForTransactionList: View {
 
     let details: [PillCountTransactionDetailsEntity]
@@ -405,7 +435,7 @@ struct BottonControlsViewForTransactionList: View {
                     scrollToLast(proxy)
                 }
             }
-            
+
             if !isLandscape {
                 Text("Total Count")
                     .font(.caption)
@@ -446,6 +476,7 @@ struct BottonControlsViewForTransactionList: View {
     }
 }
 
+// MARK: - HEADER BOTTOM
 struct BottomControlsViewHeader: View {
     let drugName: String
     let isLandScape: Bool
@@ -454,80 +485,68 @@ struct BottomControlsViewHeader: View {
     let onResetPills: () -> Void
 
     var body: some View {
-        VStack(spacing: 20) {
-            HStack {
-                Button {
-                    // some action to be taken
-                    onResetPills()
-                } label: {
-                    Image("reset_pills")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 36, height: 36)
-                        .overlay(
-                            appColors.primary
-                        )
-                        .mask(
-                            Image("reset_pills")
-                                .resizable()
-                                .scaledToFit()
-                        )
+        Group {
+            if isLandScape {
+                VStack(spacing: 2) {
+                    HStack {
+                        resetButton
+                        Spacer()
+                        historyScanButton
+                    }
+                    
+                    Text(drugName)
+                        .foregroundStyle(appColors.text)
+                        .font(.system(size: 18))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                 }
-
-                if !isLandScape {
-                    Spacer()
-
+            } else {
+                ZStack {
+                    // Layer 1: The Text (Centered)
                     Text(drugName)
                         .foregroundStyle(appColors.text)
                         .font(.system(size: 20))
-                }
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 44)
+                        .frame(maxWidth: .infinity, alignment: .center)
 
-                Spacer()
-
-                if isScanPill {
-                    Button {
-                        // some action to be taken
-                        isScanPill = false
-                    } label: {
-                        Image("scan_pill")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                appColors.primary
-                            )
-                            .mask(
-                                Image("scan_pill")
-                                    .resizable()
-                                    .scaledToFit()
-                            )
-                    }
-                } else {
-                    Button {
-                        // some action to be taken
-                        isScanPill = true
-                    } label: {
-                        Image("history_icon")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                appColors.primary
-                            )
-                            .mask(
-                                Image("history_icon")
-                                    .resizable()
-                                    .scaledToFit()
-                            )
+                    // Layer 2: The Buttons (Left & Right edges)
+                    HStack {
+                        resetButton
+                        Spacer()
+                        historyScanButton
                     }
                 }
             }
+        }
+    }
 
-            if isLandScape {
-                Text(drugName)
-                    .foregroundStyle(appColors.text)
-                    .font(.system(size: 20))
-            }
+    private var resetButton: some View {
+        Button {
+            onResetPills()
+        } label: {
+            Image("reset_pills")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 36, height: 36)
+                .overlay(appColors.primary)
+                .mask(Image("reset_pills").resizable().scaledToFit())
+        }
+    }
+
+    private var historyScanButton: some View {
+        Button {
+            isScanPill.toggle()
+        } label: {
+            let iconName = isScanPill ? "scan_pill" : "history_icon"
+            
+            Image(iconName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 36, height: 36)
+                .overlay(appColors.primary)
+                .mask(Image(iconName).resizable().scaledToFit())
         }
     }
 }
@@ -545,7 +564,7 @@ struct CircleBadge: View {
     let isAnimated: Bool
 
     @State private var trimValue: CGFloat = 1
-    @State private var animationID = UUID()  // ⬅️ animation reset key
+    @State private var animationID = UUID()
 
     var body: some View {
         ZStack {
@@ -561,7 +580,7 @@ struct CircleBadge: View {
                 )
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
-                .id(animationID)  // ⬅️ forces SwiftUI to kill animation
+                .id(animationID)
                 .onAppear {
                     handleAnimationChange()
                 }
@@ -604,4 +623,92 @@ struct CircleBadge: View {
             trimValue = 1
         }
     }
+}
+
+struct SuccessAnimationView: View {
+    let count: Int
+    let color: Color
+
+    @State private var particles: [ConfettiParticle] = []
+    @State private var scale: CGFloat = 0.1
+    @State private var opacity: Double = 1.0
+
+    var body: some View {
+        ZStack {
+            // 1. Confetti Layer
+            ForEach(particles) { particle in
+                Circle()
+                    .fill(particle.color)
+                    .frame(width: particle.size, height: particle.size)
+                    .position(x: particle.x, y: particle.y)
+                    .opacity(particle.opacity)
+            }
+
+            // 2. Central Text Layer
+            Text("+\(count)")
+                .font(.system(size: 80, weight: .heavy))
+                .foregroundStyle(color)
+                .scaleEffect(scale)
+                .opacity(opacity)
+                .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 0)
+        }
+        .onAppear {
+            createParticles()
+            animate()
+        }
+    }
+
+    private func createParticles() {
+        let colors: [Color] = [
+            color, .red, .blue, .yellow, .green, .orange, .purple,
+        ]
+        for _ in 0..<50 {
+            let angle = Double.random(in: 0..<360) * .pi / 180
+            let speed = Double.random(in: 200...500)  // Explosion distance
+
+            particles.append(
+                ConfettiParticle(
+                    x: UIScreen.main.bounds.width / 2,
+                    y: UIScreen.main.bounds.height / 2,
+                    vx: cos(angle) * speed,
+                    vy: sin(angle) * speed,
+                    color: colors.randomElement() ?? .blue,
+                    size: CGFloat.random(in: 5...12),
+                    opacity: 1.0
+                )
+            )
+        }
+    }
+
+    private func animate() {
+        // Animate Text
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
+            scale = 1.5
+        }
+
+        // Animate Particles
+        withAnimation(.easeOut(duration: 1.5)) {
+            for i in particles.indices {
+                particles[i].x += particles[i].vx
+                particles[i].y += particles[i].vy
+                particles[i].opacity = 0
+            }
+        }
+
+        // Fade out text at the end
+        withAnimation(.easeIn(duration: 0.5).delay(2.0)) {
+            opacity = 0
+        }
+    }
+}
+
+struct ConfettiParticle: Identifiable {
+    let id = UUID()
+    var x: Double
+    var y: Double
+    var vx: Double
+    var vy: Double
+    let color: Color
+    let size: CGFloat
+    var opacity: Double
 }

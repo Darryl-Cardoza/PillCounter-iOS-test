@@ -21,6 +21,7 @@ struct SecurityManager {
             || isDebuggerAttached()
             || isRunningOnSimulator()
             || isTampered()
+//        return false
     }
 
     // MARK: - JAILBREAK DETECTION
@@ -87,7 +88,11 @@ struct SecurityManager {
     /// Typically blocked in production builds for security reasons.
     private static func isRunningOnSimulator() -> Bool {
         #if targetEnvironment(simulator)
-            return true
+            #if DEBUG
+                return false
+            #else
+                return true
+            #endif
         #else
             return false
         #endif

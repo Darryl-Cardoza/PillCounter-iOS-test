@@ -2,46 +2,57 @@
 //  CameraViewModel.swift
 //  PillCounter
 //
-//  Created by HC on 14/11/25.
+//  Optimized for performance, safety, and maintainability
 //
 
 import AVFoundation
-import Foundation
 import UIKit
+import Foundation
 
-class CameraViewModel: NSObject, ObservableObject,
-                       AVCaptureMetadataOutputObjectsDelegate, AVCapturePhotoCaptureDelegate
-{
+final class CameraViewModel: NSObject, ObservableObject {
+
+    // MARK: - PUBLISHED STATE
     @Published var scannedCode: String = ""
     @Published var codeType: String = ""
-    @Published var isAuthorized = false
+    @Published var isAuthorized: Bool = false
     @Published var error: String?
+    @Published private(set) var currentCameraOrientation: UIDeviceOrientation = .portrait
 
+    // MARK: - SESSION CORE
     private let session = AVCaptureSession()
-    private let sessionQueue = DispatchQueue(label: "camera.session.queue")
-    private var videoDeviceInput: AVCaptureDeviceInput?
+    private let sessionQueue = DispatchQueue(label: "camera.viewmodel.session.queue")
+    private var isConfigured = false
+
+    // MARK: - INPUT / OUTPUTS
+    private var videoInput: AVCaptureDeviceInput?
     private let metadataOutput = AVCaptureMetadataOutput()
     private let photoOutput = AVCapturePhotoOutput()
 
+    // MARK: - PHOTO CAPTURE
     private var photoCaptureCompletion: ((UIImage?) -> Void)?
-    
+
+    // MARK: - PREVIEW
     var previewLayer: AVCaptureVideoPreviewLayer?
 
+    // MARK: - INIT
+    /// INITIALIZES VIEW MODEL AND CHECKS CAMERA PERMISSIONS
     override init() {
         super.init()
         checkPermissions()
     }
 
-    func checkPermissions() {
+    // MARK: - PERMISSIONS
+    /// CHECKS AND REQUESTS CAMERA AUTHORIZATION
+    private func checkPermissions() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             isAuthorized = true
-            setupCamera()
+            configureSession()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
                     self?.isAuthorized = granted
-                    if granted { self?.setupCamera() }
+                    if granted { self?.configureSession() }
                 }
             }
         default:
@@ -50,49 +61,58 @@ class CameraViewModel: NSObject, ObservableObject,
         }
     }
 
-    private func setupCamera() {
-        sessionQueue.async { [weak self] in
-            guard let self = self else { return }
+    // MARK: - SESSION CONFIGURATION
+    /// CONFIGURES CAMERA INPUTS AND OUTPUTS ONCE
+    private func configureSession() {
+        sessionQueue.async {
+            guard !self.isConfigured else { return }
+            self.isConfigured = true
 
             self.session.beginConfiguration()
-            defer { self.session.commitConfiguration() }  // IMPORTANT
-
             self.session.sessionPreset = .photo
 
+            // INPUT
             guard
-                let videoDevice = AVCaptureDevice.default(
-                    .builtInWideAngleCamera, for: .video, position: .back),
-                let videoInput = try? AVCaptureDeviceInput(device: videoDevice)
+                let device = AVCaptureDevice.default(.builtInWideAngleCamera,
+                                                     for: .video,
+                                                     position: .back),
+                let input = try? AVCaptureDeviceInput(device: device),
+                self.session.canAddInput(input)
             else {
-                DispatchQueue.main.async { self.error = "Cannot access camera" }
+                DispatchQueue.main.async {
+                    self.error = "Unable to access camera"
+                }
+                self.session.commitConfiguration()
                 return
             }
 
-            if self.session.canAddInput(videoInput) {
-                self.session.addInput(videoInput)
-                self.videoDeviceInput = videoInput
-            }
+            self.session.addInput(input)
+            self.videoInput = input
 
-            // Output: Metadata (Barcodes)
+            // METADATA OUTPUT (BARCODES)
             if self.session.canAddOutput(self.metadataOutput) {
                 self.session.addOutput(self.metadataOutput)
-                self.metadataOutput.setMetadataObjectsDelegate(
-                    self, queue: DispatchQueue.main)
-
+                self.metadataOutput.setMetadataObjectsDelegate(self,
+                                                              queue: DispatchQueue.main)
                 self.metadataOutput.metadataObjectTypes = [
-                    .qr, .ean8, .ean13, .pdf417, .code128,
-                    .code39, .code93, .upce, .aztec, .dataMatrix,
-                    .interleaved2of5, .itf14,
+                    .qr, .ean8, .ean13, .pdf417,
+                    .code128, .code39, .code93,
+                    .upce, .aztec, .dataMatrix,
+                    .interleaved2of5, .itf14
                 ]
             }
-            
-            // Output: Photo (Images) - 2. Add Photo Output
+
+            // PHOTO OUTPUT
             if self.session.canAddOutput(self.photoOutput) {
                 self.session.addOutput(self.photoOutput)
             }
+
+            self.session.commitConfiguration()
         }
     }
 
+    // MARK: - SESSION CONTROL
+    /// STARTS CAMERA SESSION
     func startSession() {
         sessionQueue.async {
             guard !self.session.isRunning else { return }
@@ -100,6 +120,7 @@ class CameraViewModel: NSObject, ObservableObject,
         }
     }
 
+    /// STOPS CAMERA SESSION
     func stopSession() {
         sessionQueue.async {
             guard self.session.isRunning else { return }
@@ -107,78 +128,133 @@ class CameraViewModel: NSObject, ObservableObject,
         }
     }
 
+    /// RETURNS ACTIVE CAPTURE SESSION
     func getSession() -> AVCaptureSession {
-        return session
+        session
     }
 
-    func updateOrientation(_ orientation: UIDeviceOrientation) {
+    // MARK: - ORIENTATION
+    /// CONFIGURES INITIAL ORIENTATION FROM WINDOW SCENE
+    func configureInitialOrientation() {
+        currentCameraOrientation = initialOrientation()
+        applyOrientation()
+    }
+
+    /// STARTS LISTENING TO DEVICE ORIENTATION CHANGES
+    func startObservingOrientation() {
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleOrientationChange),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+    }
+
+    /// HANDLES DEVICE ORIENTATION CHANGE
+    @objc private func handleOrientationChange() {
+        let newOrientation = UIDevice.current.orientation
+        guard newOrientation.isValidInterfaceOrientation,
+              newOrientation != currentCameraOrientation else { return }
+
+        currentCameraOrientation = newOrientation
+        applyOrientation()
+    }
+
+    /// APPLIES ROTATION TO PREVIEW LAYER
+    private func applyOrientation() {
         guard let connection = previewLayer?.connection else { return }
+        let angle = currentCameraOrientation.videoRotationAngle
+        guard connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
+    }
 
-        if connection.isVideoRotationAngleSupported(0) {
-            connection.videoRotationAngle = orientation.videoRotationAngle
+    /// DETERMINES INITIAL ORIENTATION FROM UI SCENE
+    private func initialOrientation() -> UIDeviceOrientation {
+        guard let scene = UIApplication.shared.connectedScenes.first
+                as? UIWindowScene else { return .portrait }
+
+        switch scene.interfaceOrientation {
+        case .landscapeLeft: return .landscapeRight
+        case .landscapeRight: return .landscapeLeft
+        case .portraitUpsideDown: return .portraitUpsideDown
+        default: return .portrait
         }
     }
-    
-    // MARK: - 3. Capture Image Method
+
+    // MARK: - PHOTO CAPTURE
+    /// CAPTURES STILL IMAGE AND RETURNS UIIMAGE
     func captureImage(completion: @escaping (UIImage?) -> Void) {
-        // Store the completion handler
-        self.photoCaptureCompletion = completion
-        
-        // Configure settings
+        photoCaptureCompletion = completion
+
         let settings = AVCapturePhotoSettings()
-        if let photoOutputConnection = photoOutput.connection(with: .video) {
-            // Match the preview orientation for the saved image
-            if let previewLayer = previewLayer, let previewConnection = previewLayer.connection {
-                photoOutputConnection.videoRotationAngle = previewConnection.videoRotationAngle
-            }
+
+        if let connection = photoOutput.connection(with: .video),
+           let previewConnection = previewLayer?.connection {
+            connection.videoRotationAngle = previewConnection.videoRotationAngle
         }
-        
-        // Capture
-        sessionQueue.async { [weak self] in
-            guard let self = self else { return }
+
+        sessionQueue.async {
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
-    
-    // MARK: - AVCapturePhotoCaptureDelegate
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+}
+
+// MARK: - PHOTO DELEGATE
+extension CameraViewModel: AVCapturePhotoCaptureDelegate {
+
+    /// HANDLES PHOTO CAPTURE RESULT
+    func photoOutput(_ output: AVCapturePhotoOutput,
+                     didFinishProcessingPhoto photo: AVCapturePhoto,
+                     error: Error?) {
+
         guard let data = photo.fileDataRepresentation(),
               let image = UIImage(data: data) else {
-            print("❌ Error capturing photo: \(String(describing: error))")
-            DispatchQueue.main.async { self.photoCaptureCompletion?(nil) }
+            DispatchQueue.main.async {
+                self.photoCaptureCompletion?(nil)
+            }
             return
         }
+
         DispatchQueue.main.async {
             self.photoCaptureCompletion?(image)
         }
     }
+}
 
-    func metadataOutput(
-        _ output: AVCaptureMetadataOutput,
-        didOutput metadataObjects: [AVMetadataObject],
-        from connection: AVCaptureConnection
-    ) {
+// MARK: - METADATA DELEGATE
+extension CameraViewModel: AVCaptureMetadataOutputObjectsDelegate {
+
+    /// HANDLES DETECTED BARCODE METADATA
+    func metadataOutput(_ output: AVCaptureMetadataOutput,
+                        didOutput metadataObjects: [AVMetadataObject],
+                        from connection: AVCaptureConnection) {
+
         guard
-            let metadataObject = metadataObjects.first
+            let object = metadataObjects.first
                 as? AVMetadataMachineReadableCodeObject,
-            let stringValue = metadataObject.stringValue
+            let value = object.stringValue
         else { return }
 
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 
-        scannedCode = stringValue
-        codeType = metadataObject.type.rawValue
+        scannedCode = value
+        codeType = object.type.rawValue
     }
 }
 
+// MARK: - ORIENTATION HELPER
 extension UIDeviceOrientation {
+
+    /// MAPS DEVICE ORIENTATION TO VIDEO ROTATION ANGLE
     var videoRotationAngle: CGFloat {
         switch self {
-        case .landscapeLeft: 0
-        case .portrait: 90
-        case .landscapeRight: 180
-        case .portraitUpsideDown: 270
-        default: 90
+        case .landscapeLeft: return 0
+        case .portrait: return 90
+        case .landscapeRight: return 180
+        case .portraitUpsideDown: return 270
+        default: return 90
         }
     }
 }
+

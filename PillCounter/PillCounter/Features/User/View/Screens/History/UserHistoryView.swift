@@ -164,7 +164,7 @@ struct UserHistoryView: View {
                     }
 
                 }
-                .padding(.horizontal, isLandscape ? 40 : 20)
+                .padding(.horizontal, isLandscape ? 40 : 5)
                 .padding(.top, isLandscape ? SafeAreaInsets.top + 10 : 10)
             }
 
@@ -207,7 +207,6 @@ struct UserHistoryView: View {
                                 .foregroundStyle(appColors.text)
                         }
                     }
-                    .padding(.horizontal, 10)
                     .padding(.bottom, 20)
                 }
             }
@@ -254,6 +253,7 @@ struct TransactionRow: View {
                 Text(txn.drug?.drug_name ?? "Unknown Pill")
                     .foregroundColor(appColors.text)
                     .font(.headline)
+                    .lineLimit(2)
 
                 Text(convertInt64ToDate(txn.created_at))
                     .foregroundColor(appColors.text.opacity(0.7))

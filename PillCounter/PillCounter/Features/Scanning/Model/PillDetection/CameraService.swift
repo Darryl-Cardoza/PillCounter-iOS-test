@@ -2,7 +2,7 @@
 //  CameraService.swift
 //  PillCounter
 //
-//  Created by HC on 24/11/25.
+//  Optimized for performance, safety, and maintainability
 //
 
 import AVFoundation
@@ -10,126 +10,103 @@ import SwiftUI
 
 final class CameraService: NSObject, ObservableObject {
 
-    private let session = AVCaptureSession()
-    private let sessionQueue = DispatchQueue(label: "camera.queue")
-    private let detector = PillDetectionService()
+    // MARK: - CONSTANTS
+    private let inactivityTimeout: TimeInterval = 25
+    private let sessionQueue = DispatchQueue(label: "camera.session.queue")
 
+    // MARK: - CAMERA CORE
+    private let session = AVCaptureSession()
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private var videoInput: AVCaptureDeviceInput?
+    private var captureDevice: AVCaptureDevice?
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+
+    // MARK: - IMAGE PROCESSING
+    private let detector = PillDetectionService()
+    private let ciContext = CIContext()
+    private(set) var lastPixelBuffer: CVPixelBuffer?
+
+    // MARK: - TIMER
+    private var inactivityTimer: DispatchSourceTimer?
+
+    // MARK: - PREVIEW
+    var previewLayer: AVCaptureVideoPreviewLayer?
+
+    // MARK: - STATE (PUBLISHED)
     @Published var stableCount: Int = 0
     @Published var detections: [DetectionResult] = []
     @Published var isAuthorized = false
     @Published var error: String?
-    
     @Published private(set) var isPausedDueToInactivity = false
+    @Published private(set) var currentCameraOrientation: UIDeviceOrientation = .portrait
 
-    private var didApplyInitialRotation = false
-
-    var previewLayer: AVCaptureVideoPreviewLayer?
-    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
-    private var videoDeviceInput: AVCaptureDeviceInput?
-    private let videoOutput = AVCaptureVideoDataOutput()
-    private var captureDevice: AVCaptureDevice?
-
-    var lastPixelBuffer: CVPixelBuffer?
-    
-    private var inactivityTimer: DispatchSourceTimer?
-    private let inactivityTimeout: TimeInterval = 25
-
+    // MARK: - INIT
+    /// INITIALIZES CAMERA SERVICE AND CHECKS PERMISSIONS
     override init() {
         super.init()
         checkPermissions()
     }
-    
-    func resetInactivityTimer() {
-        inactivityTimer?.cancel()
 
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + inactivityTimeout)
-        timer.setEventHandler { [weak self] in
-            self?.pauseCameraForInactivity()
-        }
-        timer.resume()
-
-        inactivityTimer = timer
-    }
-    
-    private func pauseCameraForInactivity() {
-        guard !isPausedDueToInactivity else { return }
-
-        stop()
-        isPausedDueToInactivity = true
-    }
-    
-    func resumeIfPaused() {
-        guard isPausedDueToInactivity else { return }
-
-        start()
-        isPausedDueToInactivity = false
-        resetInactivityTimer()
-    }
-
-
-
-    func checkPermissions() {
+    // MARK: - PERMISSIONS
+    /// CHECKS AND REQUESTS CAMERA AUTHORIZATION
+    private func checkPermissions() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             isAuthorized = true
-            configure()
+            configureSession()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
                     self?.isAuthorized = granted
-                    if granted { self?.configure() }
+                    if granted { self?.configureSession() }
                 }
             }
         default:
-            isAuthorized = false
             error = "Camera access denied"
         }
     }
 
-    // MARK: - Camera Configuration
-    private func configure() {
-        sessionQueue.async { [weak self] in
-            guard let self = self else { return }
-
+    // MARK: - SESSION CONFIGURATION
+    /// CONFIGURES CAMERA INPUT, OUTPUT AND SESSION PRESET
+    private func configureSession() {
+        sessionQueue.async {
             self.session.beginConfiguration()
-            defer { self.session.commitConfiguration() }
-
-            self.session.sessionPreset = .photo  // Changed to photo for better quality/aspect ratio
+            self.session.sessionPreset = .photo
 
             guard
-                let videoDevice = AVCaptureDevice.default(
-                    .builtInWideAngleCamera, for: .video, position: .back),
-                let videoInput = try? AVCaptureDeviceInput(device: videoDevice)
+                let device = AVCaptureDevice.default(.builtInWideAngleCamera,
+                                                     for: .video,
+                                                     position: .back),
+                let input = try? AVCaptureDeviceInput(device: device),
+                self.session.canAddInput(input)
             else {
-                DispatchQueue.main.async { self.error = "Cannot access camera" }
+                DispatchQueue.main.async { self.error = "Camera unavailable" }
+                self.session.commitConfiguration()
                 return
             }
 
-            if self.session.canAddInput(videoInput) {
-                self.session.addInput(videoInput)
-            }
+            self.captureDevice = device
+            self.videoInput = input
+            self.session.addInput(input)
 
-            let videoOutput = AVCaptureVideoDataOutput()
-            videoOutput.setSampleBufferDelegate(
-                self, queue: sessionQueue
-            )
-
-            videoOutput.videoSettings = [
+            self.videoOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String:
                     kCVPixelFormatType_32BGRA
             ]
+            self.videoOutput.alwaysDiscardsLateVideoFrames = true
+            self.videoOutput.setSampleBufferDelegate(self,
+                                                     queue: self.sessionQueue)
 
-            videoOutput.alwaysDiscardsLateVideoFrames = true
-
-            if self.session.canAddOutput(videoOutput) {
-                self.session.addOutput(videoOutput)
+            if self.session.canAddOutput(self.videoOutput) {
+                self.session.addOutput(self.videoOutput)
             }
 
             self.session.commitConfiguration()
         }
     }
 
+    // MARK: - SESSION CONTROL
+    /// STARTS CAMERA SESSION
     func start() {
         sessionQueue.async {
             guard !self.session.isRunning else { return }
@@ -138,151 +115,199 @@ final class CameraService: NSObject, ObservableObject {
         resetInactivityTimer()
     }
 
+    /// STOPS CAMERA SESSION
     func stop() {
-        inactivityTimer?.cancel()
-        inactivityTimer = nil
-        
+        cancelInactivityTimer()
         sessionQueue.async {
             guard self.session.isRunning else { return }
             self.session.stopRunning()
         }
     }
 
+    /// RETURNS ACTIVE CAPTURE SESSION
     func getSession() -> AVCaptureSession {
-        return session
+        session
     }
 
-    // MARK: - Orientation Fix
-    func updateOrientation(_ orientation: UIDeviceOrientation) {
-        // Ensure we are on main thread to touch UI layers
+    // MARK: - INACTIVITY HANDLING
+    /// RESETS USER INACTIVITY TIMER
+    func resetInactivityTimer() {
+        cancelInactivityTimer()
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + inactivityTimeout)
+        timer.setEventHandler { [weak self] in
+            self?.pauseForInactivity()
+        }
+        timer.resume()
+        inactivityTimer = timer
+    }
+
+    /// CANCELS INACTIVITY TIMER
+    private func cancelInactivityTimer() {
+        inactivityTimer?.cancel()
+        inactivityTimer = nil
+    }
+
+    /// PAUSES CAMERA WHEN USER IS INACTIVE
+    private func pauseForInactivity() {
+        guard !isPausedDueToInactivity else { return }
+        stop()
+        isPausedDueToInactivity = true
+    }
+
+    /// RESUMES CAMERA AFTER INACTIVITY
+    func resumeIfPaused() {
+        guard isPausedDueToInactivity else { return }
+        configureInitialOrientation()
+        startObservingOrientation()
+        start()
+        isPausedDueToInactivity = false
+    }
+
+    // MARK: - ORIENTATION
+    /// STARTS LISTENING TO DEVICE ORIENTATION CHANGES
+    func startObservingOrientation() {
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleOrientationChange),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+    }
+
+    /// HANDLES DEVICE ORIENTATION CHANGE
+    @objc private func handleOrientationChange() {
+        let newOrientation = UIDevice.current.orientation
+        guard newOrientation.isValidInterfaceOrientation,
+              newOrientation != currentCameraOrientation else { return }
+
+        currentCameraOrientation = newOrientation
+        applyOrientation()
+    }
+
+    /// CONFIGURES INITIAL CAMERA ORIENTATION
+    func configureInitialOrientation() {
+        currentCameraOrientation = initialOrientation()
+        applyOrientation()
+    }
+
+    /// RETURNS INITIAL ORIENTATION FROM WINDOW SCENE
+    private func initialOrientation() -> UIDeviceOrientation {
+        guard let scene = UIApplication.shared.connectedScenes.first
+                as? UIWindowScene else { return .portrait }
+
+        switch scene.interfaceOrientation {
+        case .landscapeLeft: return .landscapeRight
+        case .landscapeRight: return .landscapeLeft
+        case .portraitUpsideDown: return .portraitUpsideDown
+        default: return .portrait
+        }
+    }
+
+    /// APPLIES VIDEO ROTATION TO PREVIEW LAYER
+    private func applyOrientation() {
         DispatchQueue.main.async {
-            guard let connection = self.previewLayer?.connection,
-                connection.isVideoOrientationSupported
-            else { return }
+            guard let connection = self.previewLayer?.connection else { return }
+            let angle = self.rotationAngle(for: self.currentCameraOrientation)
+            guard connection.isVideoRotationAngleSupported(angle) else { return }
+            connection.videoRotationAngle = angle
+            self.previewLayer?.frame = self.previewLayer?.superlayer?.bounds ?? .zero
+        }
+    }
 
-            let videoOrientation: AVCaptureVideoOrientation
-            switch orientation {
-            case .portrait: videoOrientation = .portrait
-            case .landscapeLeft: videoOrientation = .landscapeRight  // Cameras are often mirrored
-            case .landscapeRight: videoOrientation = .landscapeLeft
-            case .portraitUpsideDown: videoOrientation = .portraitUpsideDown
-            default: videoOrientation = .portrait
-            }
-
-            connection.videoOrientation = videoOrientation
-
-            // Force the layer to match the bounds immediately
-            if let superlayer = self.previewLayer?.superlayer {
-                self.previewLayer?.frame = superlayer.bounds
-            }
+    /// MAPS DEVICE ORIENTATION TO ROTATION ANGLE
+    private func rotationAngle(for orientation: UIDeviceOrientation) -> CGFloat {
+        switch orientation {
+        case .portrait: return 90
+        case .landscapeLeft: return 0
+        case .landscapeRight: return 180
+        case .portraitUpsideDown: return 90
+        default: return 90
         }
     }
 }
 
+// MARK: - SAMPLE BUFFER DELEGATE
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
-    func captureOutput(
-        _ output: AVCaptureOutput,
-        didOutput sampleBuffer: CMSampleBuffer,
-        from connection: AVCaptureConnection
-    ) {
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
-        else {
-            return
-        }
+    /// RECEIVES CAMERA FRAMES AND RUNS DETECTION
+    func captureOutput(_ output: AVCaptureOutput,
+                       didOutput sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
 
-        self.lastPixelBuffer = pixelBuffer
+        guard !isPausedDueToInactivity,
+              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+        else { return }
 
-        // Detection pipeline
-        detector.detect(pixelBuffer: pixelBuffer) {
-            [weak self] detections, stabilizedCount in
+        lastPixelBuffer = pixelBuffer
+
+        detector.detect(pixelBuffer: pixelBuffer) { [weak self] detections, count in
             DispatchQueue.main.async {
                 self?.detections = detections
-                self?.stableCount = stabilizedCount
+                self?.stableCount = count
             }
         }
     }
 }
 
+// MARK: - SNAPSHOT CAPTURE
 extension CameraService {
 
-    // 1. CALL THIS FUNCTION FROM YOUR "ADD" BUTTON
+    /// CAPTURES SNAPSHOT WITH DETECTION OVERLAYS
     func captureSnapshotWithOverlays() -> UIImage? {
-        // This variable needs to be added to your class (see Step 2 below)
-        guard let pixelBuffer = self.lastPixelBuffer else {
-            print("❌ No frame to capture")
-            return nil
-        }
+        guard let pixelBuffer = lastPixelBuffer else { return nil }
 
-        // Convert PixelBuffer to CIImage then CGImage
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let context = CIContext()
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent)
+        guard let cgImage = ciContext.createCGImage(ciImage,
+                                                    from: ciImage.extent)
         else { return nil }
 
-        let width = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
-        let height = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
-        let size = CGSize(width: width, height: height)
+        let size = CGSize(width: ciImage.extent.width,
+                          height: ciImage.extent.height)
 
-        // Begin Image Context to draw boxes
         let renderer = UIGraphicsImageRenderer(size: size)
 
-        let combinedImage = renderer.image { ctx in
-            let cgContext = ctx.cgContext
+        return renderer.image { ctx in
+            let context = ctx.cgContext
 
-            // A. Draw the raw camera image first
-            // Note: Coordinate system in CoreGraphics is often flipped compared to UIKit
-            cgContext.saveGState()
-            cgContext.translateBy(x: 0, y: height)
-            cgContext.scaleBy(x: 1.0, y: -1.0)
-            cgContext.draw(cgImage, in: CGRect(origin: .zero, size: size))
-            cgContext.restoreGState()
+            context.saveGState()
+            context.translateBy(x: 0, y: size.height)
+            context.scaleBy(x: 1, y: -1)
+            context.draw(cgImage, in: CGRect(origin: .zero, size: size))
+            context.restoreGState()
 
-            // B. Setup Drawing Style (Yellow Lines like your View)
-            cgContext.setStrokeColor(UIColor.yellow.cgColor)
-            cgContext.setLineWidth(5.0)  // Thicker line for high-res photo
+            context.setStrokeColor(UIColor.yellow.cgColor)
+            context.setLineWidth(5)
 
-            // C. Draw Detections
-            for (index, detection) in detections.enumerated() {
-                // The detection.rect is already relative to the frame size (pixel buffer size)
-                // So we can use it directly!
-                let rect = detection.rect
-
-                // Draw Box
-                cgContext.addRect(rect)
-                cgContext.strokePath()
-
-                // Draw Number Badge (Optional, slightly complex in CoreGraphics)
-                drawBadge(context: cgContext, index: index, rect: rect)
+            detections.enumerated().forEach { index, detection in
+                context.addRect(detection.rect)
+                context.strokePath()
+                drawBadge(context: context, index: index, rect: detection.rect)
             }
         }
-
-        // D. Fix Orientation
-        // The raw buffer is usually Landscape (rotated 90deg relative to Portrait phone).
-        // We wrap it in a UIImage with .right orientation to make it upright.
-        return UIImage(
-            cgImage: combinedImage.cgImage!, scale: 1.0, orientation: .right)
     }
 
-    // Helper to draw the circle number
-    private func drawBadge(context: CGContext, index: Int, rect: CGRect) {
-        let badgeSize: CGFloat = 40
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let badgeRect = CGRect(
-            x: center.x - badgeSize / 2, y: center.y - badgeSize / 2,
-            width: badgeSize, height: badgeSize)
+    /// DRAWS NUMBERED BADGE OVER DETECTION RECT
+    private func drawBadge(context: CGContext,
+                           index: Int,
+                           rect: CGRect) {
 
-        // Fill Black Circle
+        let size: CGFloat = 40
+        let badgeRect = CGRect(
+            x: rect.midX - size / 2,
+            y: rect.midY - size / 2,
+            width: size,
+            height: size
+        )
+
         context.setFillColor(UIColor.black.withAlphaComponent(0.8).cgColor)
         context.fillEllipse(in: badgeRect)
 
-        // Stroke Yellow Circle
         context.setStrokeColor(UIColor.yellow.cgColor)
-        context.setLineWidth(3.0)
+        context.setLineWidth(3)
         context.strokeEllipse(in: badgeRect)
-
-        // Draw Text (Simple version)
-        // Note: Drawing text in CoreGraphics is verbose.
-        // For simplicity in this snippet, we might skip text or use a basic UIString drawer if imported.
     }
 }
+

@@ -126,7 +126,8 @@ extension BaseRepositoryProtocol {
     static func headers(_ accessToken: String?) -> [String: String] {
         var headers: [String: String] = [
             "Content-Type": "application/json",
-            "X-Server-Key": ConfigurationManager.shared.xServerKey,  // always include
+//            "X-Server-Key": ConfigurationManager.shared.xServerKey,
+            "X-Server-Key": "d1ff4797acb7147205bb249cce918f23a4f8e54a8d56488d79e83abcdf1b24f6f1ccc9af5dea3c1a1b5e2b6aa247ff55ac8e12f165974f8cfce41328f7ea447e",
         ]
 
         if let token = accessToken, !token.isEmpty {

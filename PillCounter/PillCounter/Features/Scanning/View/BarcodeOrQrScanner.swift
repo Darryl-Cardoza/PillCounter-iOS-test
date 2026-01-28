@@ -97,6 +97,10 @@ struct QRBarcodeScannerView: View {
                             // Fallback/Loading background
                             Color.black
                         }
+                        
+                        scanInstructionOverlay
+                            .padding(.horizontal, 80)
+                            .padding(.bottom, 20)
 
                         // 2. Scanned Data Card (Overlay)
                         if !cameraManager.scannedCode.isEmpty {
@@ -164,6 +168,16 @@ struct QRBarcodeScannerView: View {
         .customPopup(isPresented: $showPillTargetCountPopup) {
             mannulaEntryTargetCount
         }
+    }
+    
+    private var scanInstructionOverlay: some View {
+        Text("Scan barcode / QR code")
+            .font(.headline)
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.black.opacity(0.5))
+            .cornerRadius(24)
     }
     
     private func startScanTimeout() {

@@ -10,6 +10,7 @@ import SwiftUI
 
 // MARK: - Camera Preview Wrapper
 
+
 struct CameraView: UIViewRepresentable {
 
     let session: AVCaptureSession
@@ -97,14 +98,13 @@ struct DetectionOverlay: View {
             ZStack(alignment: .topLeading) {
 
                 // Draw only when preview layer & session are valid
-                if
-                    let layer = cameraService.previewLayer,
+                if let layer = cameraService.previewLayer,
                     layer.session != nil
                 {
                     ForEach(
                         Array(cameraService.detections.enumerated()),
                         id: \.offset
-                    ) { index, det in
+                    ) { _, det in
 
                         let screenRect = getScreenRect(
                             for: det,
@@ -113,21 +113,19 @@ struct DetectionOverlay: View {
 
                         let badgeSize: CGFloat = 20
 
-                        ZStack {
-                            Circle()
-                                .fill(Color.black.opacity(0.8))
-                                .stroke(Color.white, lineWidth: 2)
-
-                            Text("\(index + 1)")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(appColors.text)
-                        }
-                        .frame(width: badgeSize, height: badgeSize)
-                        .position(
-                            x: screenRect.midX,
-                            y: screenRect.midY
-                        )
+                        Circle()
+                            .fill(Color.black.opacity(0.8))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: 2)
+                            )
+                            .frame(width: badgeSize, height: badgeSize)
+                            .position(
+                                x: screenRect.midX,
+                                y: screenRect.midY
+                            )
                     }
+
                 }
             }
         }
@@ -153,4 +151,3 @@ struct DetectionOverlay: View {
         )
     }
 }
-

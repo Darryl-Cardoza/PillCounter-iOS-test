@@ -94,7 +94,7 @@ struct PillCounterApp: App {
     }
 }
 
-// MARK: - Security Handling
+// MARK: - SECURITY HANDLING
 extension PillCounterApp {
 
     private func startSecurityMonitoring() {
@@ -125,7 +125,6 @@ extension PillCounterApp {
         let compromised = SecurityManager.isDeviceCompromised()
 
         if !compromised {
-            //            print("RETURNING FROM HERE THAT IS WHY NO X SERVER KEY...")
             securityState.isSecure = false
             return
         }

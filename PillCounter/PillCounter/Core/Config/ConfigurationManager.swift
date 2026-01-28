@@ -50,12 +50,6 @@ final class ConfigurationManager {
         config["BASE_URL"] as? String ?? ""
     }
 
-    /// SERVER VALUE
-    /// Retrieves the protected runtime value for request authentication.
-    var xServerKey: String {
-        (try? RuntimeUnit.material()) ?? ""
-    }
-
     /// GENERIC ACCESS
     /// Provides access to non-sensitive configuration values.
     func getValue(forKey key: String) -> Any? {

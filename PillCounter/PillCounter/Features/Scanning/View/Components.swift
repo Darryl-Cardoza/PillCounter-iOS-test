@@ -12,6 +12,8 @@ import SwiftUI
 struct CameraContentView: View {
     @ObservedObject var cameraService: CameraService
     @EnvironmentObject var appColors: AppColors
+    @State private var isAutoOrManual: Bool = false // this variable is to handle the auto detection capture.
+    @Environment(\.isLandscape) private var isLandscape
 
     var body: some View {
         ZStack {
@@ -32,6 +34,25 @@ struct CameraContentView: View {
 
                     DetectionOverlay(cameraService: cameraService)
                         .ignoresSafeArea()
+                    
+                    VStack {
+                        HStack {
+                            Spacer()
+                            
+                            PillCountingToggleButton(
+                                isOn: $isAutoOrManual,
+                                onColor: appColors.secondary,
+                                offColor: Color.black.opacity(0.5)
+                            )
+                            .padding(.trailing, 16)
+                            .padding(.top, 16)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.top, isLandscape ? 0 : 30)
+
+                    ZoomControlView(cameraService: cameraService)
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -40,6 +61,81 @@ struct CameraContentView: View {
             }
 
         }
+    }
+    private var headerToggle: some View {
+        PillCountingToggleButton(
+            isOn: $isAutoOrManual,
+            onColor: appColors.secondary,
+            offColor: appColors.text.opacity(0.4)
+        )
+    }
+}
+
+struct ZoomControlView: View {
+
+    @ObservedObject var cameraService: CameraService
+    @EnvironmentObject var appColors: AppColors
+
+    private let minZoom: CGFloat = 1.0
+    private let maxZoom: CGFloat = 5.0
+
+    var body: some View {
+        VStack {
+            Spacer()
+
+            VStack(spacing: 8) {
+                Text(String(format: "%.1fx", cameraService.zoomFactor))
+                    .font(.caption)
+                    .foregroundColor(appColors.secondary)
+
+                GeometryReader { geo in
+                    ZStack {
+                        // Native slider
+                        Slider(
+                            value: Binding(
+                                get: { cameraService.zoomFactor },
+                                set: { newValue in
+                                    cameraService.setZoom(newValue)
+                                    cameraService.resetInactivityTimer()
+                                }
+                            ),
+                            in: minZoom...maxZoom,
+                            step: 0.1
+                        )
+                        .tint(appColors.secondary)
+
+                        // Invisible tap layer
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        let x = value.location.x
+                                        let width = geo.size.width
+
+                                        guard width > 0 else { return }
+
+                                        let percentage = min(
+                                            max(x / width, 0), 1)
+                                        let zoom =
+                                            minZoom + (maxZoom - minZoom)
+                                            * percentage
+
+                                        cameraService.setZoom(zoom)
+                                        cameraService.resetInactivityTimer()
+                                    }
+                            )
+                    }
+                }
+                .frame(height: 44)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .cornerRadius(14)
+            .padding(.bottom, 16)
+        }
+        .allowsHitTesting(!cameraService.isPausedDueToInactivity)
     }
 }
 
@@ -145,9 +241,9 @@ struct CountAddButtonView: View {
                             lineCap: .round
                         )
                     )
-                    .rotationEffect(.degrees(90)) // Start at 6 o'clock
+                    .rotationEffect(.degrees(90))  // Start at 6 o'clock
                     .frame(width: size, height: size)
-                    .id(animationID) // ⬅️ Critical for resetting animation cleanly
+                    .id(animationID)  // ⬅️ Critical for resetting animation cleanly
                     .onAppear {
                         updateAnimationState()
                     }
@@ -178,13 +274,13 @@ struct CountAddButtonView: View {
     private func updateAnimationState() {
         // Regenerate ID to kill any existing animation context
         animationID = UUID()
-        
+
         if isAnimating {
             // Start with empty circle
             trimValue = 0
             withAnimation(
                 .linear(duration: 1.5)
-                .repeatForever(autoreverses: false)
+                    .repeatForever(autoreverses: false)
             ) {
                 trimValue = 1
             }
@@ -222,7 +318,7 @@ struct BottomControlsViewBodyForPillScan: View {
                 // 2. Below: Row with Total Count (Left) and All Done (Right)
                 VStack(spacing: 20) {
                     addButton
-                    
+
                     HStack(alignment: .bottom) {
                         totalCountView
                         Spacer()
@@ -235,10 +331,10 @@ struct BottomControlsViewBodyForPillScan: View {
                 HStack(alignment: .bottom) {
                     totalCountView
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    
+
                     addButton
                         .frame(maxWidth: .infinity)
-                    
+
                     allDoneButton
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
@@ -295,18 +391,18 @@ struct BottomControlsViewBodyForPillScan: View {
             onCompleteScan()
         } label: {
             VStack(spacing: 6) {
-                
+
                 Spacer()
-                
+
                 Image("all_done")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 50, height: 50)
                     .overlay(appColors.primary)
                     .mask(Image("all_done").resizable().scaledToFit())
-                
+
                 Spacer().frame(height: 10)
-                
+
                 Text("All Done")
                     .foregroundStyle(appColors.text)
                     .font(.system(size: 16))
@@ -329,7 +425,7 @@ struct BottomControlsViewBodyForPillScan: View {
                 isAnimating = false
             }
         }
-        
+
         stabilityWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
     }
@@ -344,7 +440,7 @@ struct TotalCountView: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            
+
             if countType == .REGULAR {
                 Spacer()
             }
@@ -352,7 +448,8 @@ struct TotalCountView: View {
             // Current Total
             Text("\(currentTotalCount)")
                 .foregroundStyle(appColors.primary)
-                .font(.system(size: countType == .FIXED ? 26 : 30, weight: .bold))
+                .font(
+                    .system(size: countType == .FIXED ? 26 : 30, weight: .bold))
 
             // Divider (ONLY for FIXED + target exists)
             if countType == .FIXED, targetCount != nil {
@@ -367,7 +464,7 @@ struct TotalCountView: View {
                     .foregroundStyle(appColors.primary)
                     .font(.system(size: 20, weight: .bold))
             }
-            
+
             if countType == .REGULAR {
                 Spacer().frame(height: 10)
             }
@@ -375,7 +472,7 @@ struct TotalCountView: View {
             // Label
             Text("Total Count")
                 .foregroundStyle(appColors.text)
-                .font(.system(size: 16)) // Changed to 16 to match "All Done" text
+                .font(.system(size: 16))  // Changed to 16 to match "All Done" text
                 .padding(.top, 8)
         }
     }
@@ -493,7 +590,7 @@ struct BottomControlsViewHeader: View {
                         Spacer()
                         historyScanButton
                     }
-                    
+
                     Text(drugName)
                         .foregroundStyle(appColors.text)
                         .font(.system(size: 18))
@@ -540,7 +637,7 @@ struct BottomControlsViewHeader: View {
             isScanPill.toggle()
         } label: {
             let iconName = isScanPill ? "scan_pill" : "history_icon"
-            
+
             Image(iconName)
                 .resizable()
                 .scaledToFit()

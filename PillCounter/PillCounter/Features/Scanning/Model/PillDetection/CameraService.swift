@@ -32,13 +32,18 @@ final class CameraService: NSObject, ObservableObject {
     // MARK: - PREVIEW
     var previewLayer: AVCaptureVideoPreviewLayer?
 
-    // MARK: - STATE (PUBLISHED)
+    // MARK: - STATE
     @Published var stableCount: Int = 0
     @Published var detections: [DetectionResult] = []
     @Published var isAuthorized = false
     @Published var error: String?
     @Published private(set) var isPausedDueToInactivity = false
-    @Published private(set) var currentCameraOrientation: UIDeviceOrientation = .portrait
+    @Published private(set) var currentCameraOrientation: UIDeviceOrientation =
+        .portrait
+    @Published var zoomFactor: CGFloat = 1.0
+
+    private let minZoom: CGFloat = 1.0
+    private var maxzoom: CGFloat = 1.0
 
     // MARK: - INIT
     /// INITIALIZES CAMERA SERVICE AND CHECKS PERMISSIONS
@@ -74,9 +79,10 @@ final class CameraService: NSObject, ObservableObject {
             self.session.sessionPreset = .photo
 
             guard
-                let device = AVCaptureDevice.default(.builtInWideAngleCamera,
-                                                     for: .video,
-                                                     position: .back),
+                let device = AVCaptureDevice.default(
+                    .builtInWideAngleCamera,
+                    for: .video,
+                    position: .back),
                 let input = try? AVCaptureDeviceInput(device: device),
                 self.session.canAddInput(input)
             else {
@@ -86,6 +92,7 @@ final class CameraService: NSObject, ObservableObject {
             }
 
             self.captureDevice = device
+            self.maxzoom = min(device.activeFormat.videoMaxZoomFactor, 5.0)
             self.videoInput = input
             self.session.addInput(input)
 
@@ -94,14 +101,34 @@ final class CameraService: NSObject, ObservableObject {
                     kCVPixelFormatType_32BGRA
             ]
             self.videoOutput.alwaysDiscardsLateVideoFrames = true
-            self.videoOutput.setSampleBufferDelegate(self,
-                                                     queue: self.sessionQueue)
+            self.videoOutput.setSampleBufferDelegate(
+                self,
+                queue: self.sessionQueue)
 
             if self.session.canAddOutput(self.videoOutput) {
                 self.session.addOutput(self.videoOutput)
             }
 
             self.session.commitConfiguration()
+        }
+    }
+
+    // MARK: - ZOOM CONTROL
+    func setZoom(_ factor: CGFloat) {
+        guard let device = captureDevice else { return }
+
+        let clamped = max(minZoom, min(factor, maxzoom))
+
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = clamped
+            device.unlockForConfiguration()
+
+            DispatchQueue.main.async {
+                self.zoomFactor = clamped
+            }
+        } catch {
+            // Intentionally silent – zoom failure should not break camera
         }
     }
 
@@ -112,6 +139,7 @@ final class CameraService: NSObject, ObservableObject {
             guard !self.session.isRunning else { return }
             self.session.startRunning()
         }
+        setZoom(zoomFactor == 0 ? 1.0 : zoomFactor)
         resetInactivityTimer()
     }
 
@@ -181,7 +209,8 @@ final class CameraService: NSObject, ObservableObject {
     @objc private func handleOrientationChange() {
         let newOrientation = UIDevice.current.orientation
         guard newOrientation.isValidInterfaceOrientation,
-              newOrientation != currentCameraOrientation else { return }
+            newOrientation != currentCameraOrientation
+        else { return }
 
         currentCameraOrientation = newOrientation
         applyOrientation()
@@ -195,8 +224,10 @@ final class CameraService: NSObject, ObservableObject {
 
     /// RETURNS INITIAL ORIENTATION FROM WINDOW SCENE
     private func initialOrientation() -> UIDeviceOrientation {
-        guard let scene = UIApplication.shared.connectedScenes.first
-                as? UIWindowScene else { return .portrait }
+        guard
+            let scene = UIApplication.shared.connectedScenes.first
+                as? UIWindowScene
+        else { return .portrait }
 
         switch scene.interfaceOrientation {
         case .landscapeLeft: return .landscapeRight
@@ -211,14 +242,18 @@ final class CameraService: NSObject, ObservableObject {
         DispatchQueue.main.async {
             guard let connection = self.previewLayer?.connection else { return }
             let angle = self.rotationAngle(for: self.currentCameraOrientation)
-            guard connection.isVideoRotationAngleSupported(angle) else { return }
+            guard connection.isVideoRotationAngleSupported(angle) else {
+                return
+            }
             connection.videoRotationAngle = angle
-            self.previewLayer?.frame = self.previewLayer?.superlayer?.bounds ?? .zero
+            self.previewLayer?.frame =
+                self.previewLayer?.superlayer?.bounds ?? .zero
         }
     }
 
     /// MAPS DEVICE ORIENTATION TO ROTATION ANGLE
-    private func rotationAngle(for orientation: UIDeviceOrientation) -> CGFloat {
+    private func rotationAngle(for orientation: UIDeviceOrientation) -> CGFloat
+    {
         switch orientation {
         case .portrait: return 90
         case .landscapeLeft: return 0
@@ -233,17 +268,20 @@ final class CameraService: NSObject, ObservableObject {
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
     /// RECEIVES CAMERA FRAMES AND RUNS DETECTION
-    func captureOutput(_ output: AVCaptureOutput,
-                       didOutput sampleBuffer: CMSampleBuffer,
-                       from connection: AVCaptureConnection) {
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
 
         guard !isPausedDueToInactivity,
-              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+            let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
         else { return }
 
         lastPixelBuffer = pixelBuffer
 
-        detector.detect(pixelBuffer: pixelBuffer) { [weak self] detections, count in
+        detector.detect(pixelBuffer: pixelBuffer) {
+            [weak self] detections, count in
             DispatchQueue.main.async {
                 self?.detections = detections
                 self?.stableCount = count
@@ -254,18 +292,20 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
 // MARK: - SNAPSHOT CAPTURE
 extension CameraService {
-
     /// CAPTURES SNAPSHOT WITH DETECTION OVERLAYS
     func captureSnapshotWithOverlays() -> UIImage? {
         guard let pixelBuffer = lastPixelBuffer else { return nil }
 
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        guard let cgImage = ciContext.createCGImage(ciImage,
-                                                    from: ciImage.extent)
+        guard
+            let cgImage = ciContext.createCGImage(
+                ciImage,
+                from: ciImage.extent)
         else { return nil }
 
-        let size = CGSize(width: ciImage.extent.width,
-                          height: ciImage.extent.height)
+        let size = CGSize(
+            width: ciImage.extent.width,
+            height: ciImage.extent.height)
 
         let renderer = UIGraphicsImageRenderer(size: size)
 
@@ -278,36 +318,57 @@ extension CameraService {
             context.draw(cgImage, in: CGRect(origin: .zero, size: size))
             context.restoreGState()
 
-            context.setStrokeColor(UIColor.yellow.cgColor)
-            context.setLineWidth(5)
-
             detections.enumerated().forEach { index, detection in
-                context.addRect(detection.rect)
-                context.strokePath()
-                drawBadge(context: context, index: index, rect: detection.rect)
+                drawBadge(
+                    context: context,
+                    index: index,
+                    rect: detection.rect
+                )
             }
         }
     }
 
     /// DRAWS NUMBERED BADGE OVER DETECTION RECT
-    private func drawBadge(context: CGContext,
-                           index: Int,
-                           rect: CGRect) {
+    private func drawBadge(
+        context: CGContext,
+        index: Int,
+        rect: CGRect
+    ) {
+        let circleSize: CGFloat = min(rect.width, rect.height) * 0.6
+        let center = CGPoint(x: rect.midX, y: rect.midY)
 
-        let size: CGFloat = 40
-        let badgeRect = CGRect(
-            x: rect.midX - size / 2,
-            y: rect.midY - size / 2,
-            width: size,
-            height: size
+        let circleRect = CGRect(
+            x: center.x - circleSize / 2,
+            y: center.y - circleSize / 2,
+            width: circleSize,
+            height: circleSize
         )
 
+        // Fill circle
         context.setFillColor(UIColor.black.withAlphaComponent(0.8).cgColor)
-        context.fillEllipse(in: badgeRect)
+        context.fillEllipse(in: circleRect)
 
-        context.setStrokeColor(UIColor.yellow.cgColor)
+        // Stroke circle
+        context.setStrokeColor(UIColor.white.cgColor)
         context.setLineWidth(3)
-        context.strokeEllipse(in: badgeRect)
-    }
-}
+        context.strokeEllipse(in: circleRect)
 
+        // Draw count text
+        let text = "\(index + 1)"
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.boldSystemFont(ofSize: circleSize * 0.4),
+            .foregroundColor: UIColor.white
+        ]
+
+        let textSize = text.size(withAttributes: attributes)
+        let textRect = CGRect(
+            x: center.x - textSize.width / 2,
+            y: center.y - textSize.height / 2,
+            width: textSize.width,
+            height: textSize.height
+        )
+
+        text.draw(in: textRect, withAttributes: attributes)
+    }
+
+}

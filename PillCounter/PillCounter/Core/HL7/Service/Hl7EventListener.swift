@@ -8,6 +8,8 @@
 import Foundation
 
 protocol Hl7EventListener: AnyObject {
+    
+    
 
     func onServiceStarted()
     func onServiceStopped()

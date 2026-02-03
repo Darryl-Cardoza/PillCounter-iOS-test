@@ -27,11 +27,13 @@ struct MobileSettingsData: Codable {
     let isMaintenanceMode: Bool?
     let settings: AppSettings?
     let iosVersion: String?
+    let hl7Config:AppHl7Config?
 
     enum CodingKeys: String, CodingKey {
         case isMaintenanceMode = "is_maintenance_mode"
         case settings
         case iosVersion = "ios_version"
+        case hl7Config = "hl7_config"
     }
 }
 
@@ -76,3 +78,12 @@ struct AppColorPalette: Codable {
     }
 }
 
+struct AppHl7Config: Codable {
+    let pmsHostName: String?
+    let pillCounterHostName: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case pmsHostName = "pms_host_name"
+        case pillCounterHostName = "pillcounter_host_name"
+    }
+}

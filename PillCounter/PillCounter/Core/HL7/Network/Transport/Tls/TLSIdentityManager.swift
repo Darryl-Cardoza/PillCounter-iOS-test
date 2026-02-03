@@ -34,7 +34,6 @@ final class TLSIdentityManager {
             throw NSError(domain: "TLS", code: -2, userInfo: [NSLocalizedDescriptionKey: "PKCS#12 import returned no items"])
         }
 
-        // kSecImportItemIdentity value is a SecIdentity CFType; bridging to Swift always succeeds, so use `as!` after validating structure.
         guard let identityAny = firstItem[kSecImportItemIdentity as String] else {
             throw NSError(domain: "TLS", code: -3, userInfo: [NSLocalizedDescriptionKey: "No identity found in PKCS#12 import result"])
         }

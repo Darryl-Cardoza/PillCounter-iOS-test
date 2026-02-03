@@ -6,7 +6,8 @@
 //
 
 import Foundation
-import SwiftUI  // neccessary to import for app storage
+import SwiftUI
+import CoreData
 
 @MainActor  // decalaring this as an main actor since we will change the colors on the app launch.
 class UserViewModel: ObservableObject {
@@ -81,6 +82,11 @@ class UserViewModel: ObservableObject {
 
     // settings repo
     let settingsRepo = SettingsRepository.shared
+    
+    private var frcRegularPartial: NSFetchedResultsController<PillCountTransactionEntity>!
+     private var frcRegularCompleted: NSFetchedResultsController<PillCountTransactionEntity>!
+
+    
 
     // MARK: MOBILE SETTINGS
     // mobile color settings.
@@ -620,5 +626,4 @@ class UserViewModel: ObservableObject {
             print("❌ Failed to delete user profile: \(error)")
         }
     }
-
 }

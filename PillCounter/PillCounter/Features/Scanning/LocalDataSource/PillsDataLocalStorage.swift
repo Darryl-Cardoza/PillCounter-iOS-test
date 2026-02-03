@@ -95,8 +95,11 @@ final class PillsDataLocalStorage {
     // MARK: PILL COUNT TRANSACTION
     // create transaction for the pill after scanning the qr or barcode.
     func createTransaction(
-        for user: UserEntity, drugId: Int64?, countType: CountType,
-        barcodeImagePath: String
+        for user: UserEntity,
+        drugId: Int64?,
+        countType: CountType,
+        barcodeImagePath: String,
+        isComingFromPms: Bool = false
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -125,6 +128,11 @@ final class PillsDataLocalStorage {
         // setting both the values created_at and updated_at same at time of creating the transaction.
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
         entity.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        
+        // set is hl7 or normal transaction and isSynced false
+        entity.isComingFromPms = isComingFromPms
+        entity.isSynced = false
+        
 
         entity.user = user
         print(

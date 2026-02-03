@@ -23,17 +23,32 @@ struct PillCounterApp: App {
     @ObservedObject private var confirmationDialogueManager =
         ConfirmationDialogueManager()
     @ObservedObject private var pillScanViewModel = PillScanViewModel()
+    
+    private var hl7Manager: Hl7ServiceManager?
+    private let hl7Handler: Hl7EventHandler
+
+    
 
     private let isCompromised: Bool
 
     init() {
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised
+        self.hl7Handler = Hl7EventHandler()
+
 
         // Only bootstrap when secure
         if !compromised {
             RuntimeUnit.activateIfNeeded()
         }
+        
+        self.hl7Manager = Hl7ServiceManager(
+               port: 2575,
+               serviceName: "PillCounterHL7",
+               serviceType: "_bhushan._tcp",
+               listener: hl7Handler
+           )
+        self.hl7Manager?.start()
     }
 
     var body: some Scene {
@@ -113,9 +128,13 @@ extension PillCounterApp {
                 securityState.isSecure = false
             } else {
                 startSecurityMonitoring()
+                //Starting Hl7 Service
+//                hl7Adapter.start()
             }
         case .background, .inactive:
             SecurityMonitor.shared.stopMonitoring()
+            //Stopping Hl7 Service
+//            hl7Adapter.stop()
         @unknown default:
             break
         }

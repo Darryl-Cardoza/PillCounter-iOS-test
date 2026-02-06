@@ -18,23 +18,17 @@ struct PillCounterApp: App {
 
     @ObservedObject private var router = Router()
     @ObservedObject private var loginViewModel = LoginViewModel()
-    @ObservedObject private var userViewModel = UserViewModel()
     @ObservedObject private var appColors = AppColors.shared
     @ObservedObject private var confirmationDialogueManager =
         ConfirmationDialogueManager()
-    @ObservedObject private var pillScanViewModel = PillScanViewModel()
-    
-    private var hl7Manager: Hl7ServiceManager?
-    private let hl7Handler: Hl7EventHandler
-
-    
+    @StateObject private var pillScanViewModel = PillScanViewModel()
+    @StateObject private var userViewModel = UserViewModel()
 
     private let isCompromised: Bool
 
     init() {
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised
-        self.hl7Handler = Hl7EventHandler()
 
 
         // Only bootstrap when secure
@@ -42,13 +36,13 @@ struct PillCounterApp: App {
             RuntimeUnit.activateIfNeeded()
         }
         
-        self.hl7Manager = Hl7ServiceManager(
-               port: 2575,
-               serviceName: "PillCounterHL7",
-               serviceType: "_bhushan._tcp",
-               listener: hl7Handler
-           )
-        self.hl7Manager?.start()
+        let center = UNUserNotificationCenter.current()
+              center.delegate = NotificationDelegate.shared
+
+              center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                  print("Notification permission granted:", granted)
+              }
+
     }
 
     var body: some Scene {
@@ -100,6 +94,13 @@ struct PillCounterApp: App {
                 if isCompromised {
                     securityState.isSecure = false
                 }
+                
+                Hl7ServiceController.shared.bind(
+                    pillScanViewModel: pillScanViewModel,
+                    userViewModel: userViewModel
+                )
+                
+                Hl7ServiceController.shared.evaluate()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhaseChange(newPhase)
@@ -128,13 +129,9 @@ extension PillCounterApp {
                 securityState.isSecure = false
             } else {
                 startSecurityMonitoring()
-                //Starting Hl7 Service
-//                hl7Adapter.start()
             }
         case .background, .inactive:
             SecurityMonitor.shared.stopMonitoring()
-            //Stopping Hl7 Service
-//            hl7Adapter.stop()
         @unknown default:
             break
         }

@@ -565,6 +565,10 @@ extension OPillCountView {
                                 countType: router.selectedPillScanningType
                                     ?? .FIXED)
                         })
+                    
+                    if pillScanViewModel.selectedTransaction?.isComingFromPms == true {
+                        pillScanViewModel.observePendingHl7Transactions()
+                    }
                 }
             }
         )

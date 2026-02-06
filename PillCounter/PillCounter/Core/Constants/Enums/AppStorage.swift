@@ -26,6 +26,9 @@ final class AppStorageManager {
         static let tokenExpiryTimestamp = "token_expiry_timestamp"
         static let saveHistoryOption = "save_history_option"
         static let isPillCountingEnabled = "is_pill_counting_enabled"
+        static let isHl7Enable: String = "is_hl7_enable"
+        static let pmsHostName = "pms_host_name"
+        static let pillCounterHostName = "pillcounter_host_name"
     }
 
     // MARK: - Access Token
@@ -99,6 +102,34 @@ final class AppStorageManager {
             defaults.setValue(newValue, forKey: AppStorageKeys.isPillCountingEnabled)
         }
     }
+    
+    //MARK: - Pill Counting HL7 enabled
+    var isHl7Enabled: Bool {
+        get {
+            defaults.bool(forKey: AppStorageKeys.isHl7Enable)
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.isHl7Enable)
+        }
+    }
+    
+    var pmsHostName: String {
+        get {
+            defaults.string(forKey: AppStorageKeys.pmsHostName) ?? ""
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.pmsHostName)
+        }
+    }
+
+    var pillCounterHostName: String {
+        get {
+            defaults.string(forKey: AppStorageKeys.pillCounterHostName) ?? ""
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.pillCounterHostName)
+        }
+    }
 
     // MARK: - Add email
     func addEmail(_ email: String) {
@@ -164,5 +195,8 @@ final class AppStorageManager {
         defaults.removeObject(forKey: AppStorageKeys.userId)
         defaults.removeObject(forKey: AppStorageKeys.isLoggedIn)
         defaults.removeObject(forKey: AppStorageKeys.tokenExpiryTimestamp)
+        defaults.removeObject(forKey: AppStorageKeys.isHl7Enable)
+        defaults.removeObject(forKey: AppStorageKeys.pmsHostName)
+        defaults.removeObject(forKey: AppStorageKeys.pillCounterHostName)
     }
 }

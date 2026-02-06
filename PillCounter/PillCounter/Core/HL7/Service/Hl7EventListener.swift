@@ -6,10 +6,9 @@
 //
 
 import Foundation
+import ComposeApp
 
 protocol Hl7EventListener: AnyObject {
-    
-    
 
     func onServiceStarted()
     func onServiceStopped()
@@ -18,7 +17,7 @@ protocol Hl7EventListener: AnyObject {
     func onServerStopped()
 
     func onMessageReceived(
-        raw: String,
+        message: CompleteHL7Message,
         messageId: String
     )
 
@@ -27,4 +26,10 @@ protocol Hl7EventListener: AnyObject {
     func onError(source: String, error: Error)
 
     func onBonjourRegistered(serviceName: String)
+    
+    func onClientConnected()
+    
+    func onClientDisconnected()
+    
+    func onAckReceived(messageId: String)
 }

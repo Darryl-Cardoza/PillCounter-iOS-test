@@ -33,7 +33,7 @@ final class HL7TLSServer {
         self.onMessage = onMessage
         self.onAckSent = onAckSent
 
-        // 🔐 TLS configuration
+        // TLS configuration
         let tlsOptions = NWProtocolTLS.Options()
 
         let secIdentity = try TLSIdentityManager.loadIdentity()
@@ -54,7 +54,7 @@ final class HL7TLSServer {
 
         let listener = try NWListener(using: parameters, on: port)
 
-        // ✅ Advertise THIS listener via Bonjour
+        // Advertise THIS listener via Bonjour
         listener.service = NWListener.Service(
             name: serviceName,
             type: serviceType,   // e.g. "_hl7._tcp"
@@ -64,18 +64,18 @@ final class HL7TLSServer {
         listener.stateUpdateHandler = { state in
             switch state {
             case .ready:
-                print("✅ HL7 TLS Server + Bonjour ready on port \(self.port)")
+                print("HL7 TLS Server + Bonjour ready on port \(self.port)")
             case .failed(let error):
-                print("❌ HL7 TLS Server failed: \(error)")
+                print(" HL7 TLS Server failed: \(error)")
             case .cancelled:
-                print("🛑 HL7 TLS Server cancelled")
+                print("HL7 TLS Server cancelled")
             default:
                 break
             }
         }
 
         listener.newConnectionHandler = { connection in
-            print("🔐 PMS connected from \(connection.endpoint)")
+            print(" PMS connected from \(connection.endpoint)")
             self.handle(connection)
         }
 
@@ -88,7 +88,7 @@ final class HL7TLSServer {
     func stop() {
         listener?.cancel()
         listener = nil
-        print("🛑 HL7 TLS Server stopped")
+        print("HL7 TLS Server stopped")
     }
 
     // MARK: - Connection Handling
@@ -108,7 +108,7 @@ final class HL7TLSServer {
                 if let hl7 = self.unwrapMLLP(text) {
                     let messageId = UUID().uuidString
 
-                    print("📨 HL7 received:\n\(hl7)")
+                    print("HL7 received:\n\(hl7)")
                     self.onMessage?(hl7, messageId)
 
                     let ack = self.wrapMLLP(self.buildACK())
@@ -121,7 +121,7 @@ final class HL7TLSServer {
             if error == nil {
                 self.receive(on: connection)
             } else {
-                print("❌ Connection error: \(error!)")
+                print(" Connection error: \(error!)")
             }
         }
     }

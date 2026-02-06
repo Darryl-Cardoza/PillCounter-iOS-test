@@ -28,7 +28,9 @@
 	</dict>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_bhushan._tcp</string>
+		<string>_pillcounting._tcp</string>
+		<string>_hl7._tcp</string>
+		<string>_ritepmsserver._tcp</string>
 	</array>
 </dict>
 </plist>

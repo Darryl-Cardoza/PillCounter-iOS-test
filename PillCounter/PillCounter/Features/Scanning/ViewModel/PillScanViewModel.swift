@@ -7,6 +7,8 @@
 
 import Foundation
 import SwiftUI
+import ComposeApp
+import Combine
 
 @MainActor
 class PillScanViewModel: ObservableObject {
@@ -45,9 +47,20 @@ class PillScanViewModel: ObservableObject {
 
     // published variable to store the note.
     @Published var note: String = ""
+    
+    @Published var selectedTransaction: PillCountTransactionEntity?
 
     // get the user id
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
+    
+    @Published var showPmsNdcMismatchPopup = false
+    
+    private var cancellables = Set<AnyCancellable>()
+
+
+    init() {
+        observePendingHl7Transactions()
+    }
 
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
@@ -63,7 +76,9 @@ class PillScanViewModel: ObservableObject {
         let gtin = decodedGs1Value.gtin ?? ""
 
         if gtin.isEmpty { return }
-
+        
+        
+       
         // 1. Generate a potential ID (only used if we create a NEW drug)
         var drugIdToUse = generateUniqueDrugId()
 
@@ -121,6 +136,79 @@ class PillScanViewModel: ObservableObject {
             DispatchQueue.main.async { self.isDrugFound = false }
         }
     }
+    
+    
+    func scnnedPmsPill(
+        rawValueFromBarcodeOrQr: String, countType: CountType,
+        image: UIImage? = nil
+    ){
+        let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
+        let gtin = decodedGs1Value.gtin ?? ""
+
+        if gtin.isEmpty { return }
+        
+        // 1. Generate a potential ID (only used if we create a NEW drug)
+        var drugIdToUse = generateUniqueDrugId()
+        if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(
+            by: gtin)
+        {
+
+            drugName = drugFoundInLocalStorage.drug_name
+
+            // FIX: Use the EXISTING ID from the database
+            drugIdToUse = drugFoundInLocalStorage.drug_id
+            Task(priority: .background) {
+                await updaetTransaction(
+                    drugId: drugIdToUse,
+                    countType: countType,
+                    txnId: selectedTransaction?.txn_id ?? 0,
+                    barcodeImage: image
+                )
+            }
+            getAllTransactionDetailsOfTheCurrentTransaction()
+            isDrugFound = true
+            if countType == .FIXED {
+                updateTargetCountForCurrentTransaction()
+            }
+            return
+        }
+    }
+    
+    func checkIsNdcMatch(
+        rawValueFromBarcodeOrQr: String,
+    ){
+        let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
+        let gtin = decodedGs1Value.gtin ?? ""    
+        if let expectedNdc = getExpectedPmsNdc(),
+           expectedNdc != gtin {
+            print("Mismatch: expectedNdc: \(String(describing: getExpectedPmsNdc())), gtin: \(gtin)")
+            showPmsNdcMismatchPopup = true
+            return
+        }else{
+            print("Match: expectedNdc: \(String(describing: getExpectedPmsNdc())), gtin: \(gtin)")
+        }
+    }
+    
+    
+    func getExpectedPmsNdc() -> String? {
+        guard let txn = selectedTransaction,
+              txn.isComingFromPms
+        else {
+            return nil
+        }
+        return txn.drug?.ndc
+    }
+
+    func getFixedCount() -> Int32? {
+        guard let txn = selectedTransaction,
+              txn.isComingFromPms
+        else {
+            return nil
+        }
+        print("target count \(txn.target_count)")
+        return txn.target_count
+    }
+
 
     private func generateUniqueDrugId() -> Int64 {
         let defaults = UserDefaults.standard
@@ -136,15 +224,16 @@ class PillScanViewModel: ObservableObject {
     }
 
     func manuallyEnteredPill(
-        ndc: String, countType: CountType, isFixedCount: Bool = false
+        ndc: String, countType: CountType, isFixedCount: Bool = false, enteredDrugName:String?=nil
     ) async {
+        
 
         // check in the database first
         if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(
             by: ndc)
         {
             isDrugFound = true
-            drugName = drugFoundInLocalStorage.drug_name
+            drugName = enteredDrugName ?? drugFoundInLocalStorage.drug_name
             // after the drug is found from the db we create a new transaction.
             await createTransaction(
                 drugId: drugFoundInLocalStorage.drug_id, countType: countType)
@@ -250,7 +339,9 @@ class PillScanViewModel: ObservableObject {
 
     // create transaction for every new transaction that user scans the barcode or enters the ndc or the gtin number manually.
     func createTransaction(
-        drugId: Int64, countType: CountType, barcodeImage: UIImage? = nil
+        drugId: Int64, countType: CountType, barcodeImage: UIImage? = nil,
+        isComingFromPms:Bool = false,
+        targetCount: Int32? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.
@@ -275,6 +366,54 @@ class PillScanViewModel: ObservableObject {
             for: user,
             drugId: drugId,
             countType: countType,
+            barcodeImagePath: savedPath,
+            isComingFromPms: isComingFromPms,
+            targetCount: targetCount
+        
+        )
+
+        // step 3: set the latest transaction as current transaction.
+        if let latest = pillDataLocalStorage.fetechLatestTransactionOfUser(
+            for: user)
+        {
+            self.currentTransaction = latest
+        }
+    }
+    
+    
+    func updaetTransaction(
+        drugId: Int64,
+        countType: CountType,
+        txnId:Int64,
+        barcodeImage: UIImage? = nil,
+        isComingFromPms:Bool = false,
+        targetCount: Int32? = nil
+    ) async {
+        
+        // creating the transaction for the pill.
+        // step1: get the user.
+        guard
+            !userId.isEmpty,
+            let user = userDataLocalStorage.getUserByUserId(by: userId)
+        else {
+            return
+        }
+
+        // Save Image using Helper if it exists
+        var savedPath = ""
+        if let img = barcodeImage {
+            if let path = PhotoFileManager.shared.saveImage(img) {
+                savedPath = path
+            }
+        }
+
+        // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
+        // we now call the db function to create the transaction.
+        pillDataLocalStorage.updateTransaction(
+            txnId: txnId,
+            drugId: drugId,
+            countType: countType,
+            targetCount: targetCount,
             barcodeImagePath: savedPath
         )
 
@@ -283,6 +422,10 @@ class PillScanViewModel: ObservableObject {
             for: user)
         {
             self.currentTransaction = latest
+        }
+        
+        if selectedTransaction?.isComingFromPms == true {
+            Hl7ServiceController.shared.startClient()
         }
     }
 
@@ -428,4 +571,195 @@ class PillScanViewModel: ObservableObject {
         self.ndcNumber = ""
         self.targetCount = ["", "", "", ""]
     }
+    
+    // Message handling for transaction coming from pms
+    typealias HL7SimpleCallback = (Bool) -> Void
+
+    
+    func handleReceivedMessage(
+        message: CompleteHL7Message,
+        callback: HL7SimpleCallback? = nil
+    ){
+        print("Received message parsed message \(message)")
+        guard let inboundType = classifyInboundMessage(message) else {
+            return
+        }
+        
+        print("Message Type \(inboundType)")
+
+        Task(priority: .background) {
+            switch inboundType {
+            case .FIXED:
+                 await createFixedHl7Transaction(message:message, inboundType: .FIXED, callback: callback)
+
+            case .REGULAR:
+                 await createRegularHl7Transaction(message:message, inboundType: .REGULAR, callback: callback)
+            }
+        }
+    }
+    
+    
+
+    @MainActor
+    private func createFixedHl7Transaction(
+        message: CompleteHL7Message,
+        inboundType: CountType,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+
+        guard let component = message.components.first else {
+            print("Fixed Count: No RXC component found")
+            return
+        }
+        
+        guard let medication = message.medications.first else {
+            print("Fixed Count: No RXC component found")
+            return
+        }
+
+        let ndc = component.ndcOrComponentCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let drugName = component.componentAmount ?? ""
+        let targetCount = medication.requestedQty ?? ""
+
+        print("Fixed Count Drug Info: \(ndc), name='\(drugName)' count\(targetCount)")
+
+        await processHl7DrugAndCreateTransaction(
+            ndc: ndc,
+            drugName: drugName,
+            countType: inboundType,
+            targetCount: Int32(targetCount)
+        )
+        callback?(true)
+    }
+
+    @MainActor
+    private func createRegularHl7Transaction(
+        message: CompleteHL7Message,
+        inboundType: CountType,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+        
+        guard let inventory = message.inventoryItems.first else {
+            print("Regular Count: No RXE medication found")
+            return
+        }
+
+
+        let ndc = inventory.substanceCode ?? ""
+        let drugName = inventory.description
+        
+
+
+        print("Regular Count Drug Info: \(ndc), \(drugName)")
+
+        await processHl7DrugAndCreateTransaction(
+            ndc: ndc,
+            drugName: drugName,
+            countType: inboundType
+        )
+        callback?(true)
+    }
+
+
+    
+    private func classifyInboundMessage(
+        _ message: CompleteHL7Message
+    ) -> CountType? {
+
+        if message.messageType == "RDE",
+           message.triggerEvent == "O11",
+           !message.medications.isEmpty {
+            return .FIXED
+        }
+
+        if message.messageType == "INR",
+           message.triggerEvent == "U06",
+           !message.inventoryItems.isEmpty {
+            return .REGULAR
+        }
+
+        return nil
+    }
+
+    
+    @MainActor
+    func processHl7DrugAndCreateTransaction(
+        ndc: String,
+        drugName: String,
+        countType: CountType,
+        targetCount: Int32? = nil
+    ) async {
+
+        print("🧾 HL7 Drug Processing → NDC: \(ndc), Name: \(drugName)")
+
+        // Check DrugMaster (local DB)
+        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+
+            print("Drug found in DrugMaster (id: \(existingDrug.drug_id))")
+
+            self.drugName = existingDrug.drug_name
+
+            await createTransaction(
+                drugId: existingDrug.drug_id,
+                countType: countType,
+                isComingFromPms: true,
+                targetCount: targetCount
+            )
+
+            if countType == .FIXED {
+                updateTargetCountForCurrentTransaction()
+            }
+
+            getAllTransactionDetailsOfTheCurrentTransaction()
+            return
+        }
+
+        // Not found → create new DrugMaster entry
+        let drugId = generateUniqueDrugId()
+
+        print("Drug not found — creating new DrugMaster entry")
+
+        Task(priority: .background) {
+            self.pillDataLocalStorage.saveManualPill(
+                ndc: ndc,
+                drugId: drugId,
+                drugName: drugName
+            )
+        }
+
+        self.drugName = drugName
+
+        await createTransaction(
+            drugId: drugId,
+            countType: countType,
+            isComingFromPms: true,
+            targetCount: targetCount
+        )
+
+        if countType == .FIXED {
+            updateTargetCountForCurrentTransaction()
+        }
+
+        getAllTransactionDetailsOfTheCurrentTransaction()
+    }
+
+    
+    
+    
+    func observePendingHl7Transactions() {
+        print("pending transcatin observe called")
+        print("pending transaction \(pillDataLocalStorage.getPendingHl7TxnOnce())")
+           pillDataLocalStorage
+               .observePendingHl7Transactions()
+               .receive(on: DispatchQueue.main)
+               .sink { txns in
+                   guard !txns.isEmpty else { return }
+
+                   print("Pending HL7 txns detected: \(txns.count)")
+
+                   // ONLY trigger connection
+                   Hl7ServiceController.shared.startClient()
+               }
+               .store(in: &cancellables)
+       }
 }

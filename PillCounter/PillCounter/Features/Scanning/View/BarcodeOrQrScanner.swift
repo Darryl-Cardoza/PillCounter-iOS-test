@@ -168,6 +168,9 @@ struct QRBarcodeScannerView: View {
         .customPopup(isPresented: $showPillTargetCountPopup) {
             mannulaEntryTargetCount
         }
+        .customPopup(isPresented: $pillScanViewModel.showPmsNdcMismatchPopup) {
+            showNdcMismatachDialog
+        }
     }
     
     private var scanInstructionOverlay: some View {
@@ -221,9 +224,14 @@ extension QRBarcodeScannerView {
                 // 4. Update UI
                 showScannedData = true
                 scannedData = newValue
+                
+                Task { @MainActor in
+                    pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue)
 
-                Task {
-                    if router.selectedPillScanningType == .FIXED {
+                    if router.selectedPillScanningType == .FIXED,
+
+                       let fixedCount = pillScanViewModel.getFixedCount(),
+                       fixedCount <= 0 {
                         showPillTargetCountPopup = true
                         isFromScanning = true
                         // Note: For fixed flow, we might hold onto capturedImage in a @State
@@ -235,13 +243,24 @@ extension QRBarcodeScannerView {
                         // BUT, based on your previous code, 'scannedPill' is called in the ELSE block
                         // or passed later. Let's handle the REGULAR case first.
                     } else {
-                        // 5. Call ViewModel with Image
-                        await pillScanViewModel.scannedPill(
-                            rawValueFromBarcodeOrQr: newValue,
-                            countType: router.selectedPillScanningType
+                        
+                        if(pillScanViewModel.selectedTransaction?.isComingFromPms == true){
+                             pillScanViewModel.scnnedPmsPill(
+                                rawValueFromBarcodeOrQr: newValue,
+                                countType: router.selectedPillScanningType
                                 ?? .FIXED,
-                            image: tempCapturedImage  // Pass the image here!
-                        )
+                                image: tempCapturedImage
+                            )
+                        }else{
+                            
+                            // 5. Call ViewModel with Image
+                            await pillScanViewModel.scannedPill(
+                                rawValueFromBarcodeOrQr: newValue,
+                                countType: router.selectedPillScanningType
+                                ?? .FIXED,
+                                image: tempCapturedImage  // Pass the image here!
+                            )
+                        }
                     }
                 }
             }
@@ -797,4 +816,24 @@ extension QRBarcodeScannerView {
         }
         .frame(width: 300)
     }
+    
+    
+    private var showNdcMismatachDialog: some View {
+        ConfirmationDialogue(
+            title: "Medication Mismatch",
+            message: "The scanned NDC does not match the prescription received \nPlease verify the drug and scan again.",
+            cancelButtonText: "Cancel",
+            confirmButtonText: "Rescan",
+            onCancel: {
+                pillScanViewModel.showPmsNdcMismatchPopup = false
+                router.navigateBack()
+            },
+            onConfirm: {
+                pillScanViewModel.showPmsNdcMismatchPopup = false
+                cameraManager.startSession()
+            }
+        )
+    }
 }
+
+

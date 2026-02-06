@@ -13,6 +13,7 @@ struct CountHistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
+    @EnvironmentObject private var pillScanViewmodel: PillScanViewModel
     @EnvironmentObject private var router: Router
 
     @State private var selectedTransactionDetailOption:
@@ -451,13 +452,34 @@ struct CountHistoryView: View {
                         showMenuOptions = false
                         switch selectedTransactionDetailOption {
                         case .resume:
-                            userViewModel.currentTransactionTxnId =
-                                selectedTransasctionId
-                            router.navigate(
-                                to: .authentication(
-                                    .login(
-                                        .dashboard(.pillCount(.pillCountView))))
-                            )
+                            if let txnId = selectedTransasctionId,
+                               let txn = userViewModel.getTransactionEntity(by: txnId) {
+
+                                userViewModel.currentTransactionTxnId = txnId
+                                pillScanViewmodel.selectedTransaction = txn.isComingFromPms ? txn : nil
+
+                                if txn.isComingFromPms && (txn.barcode_image?.isEmpty ?? true) {
+                                    router.navigate(
+                                        to: .authentication(
+                                            .login(
+                                                .dashboard(.pillCount(.barcodeScanning))
+                                            )
+                                        )
+                                    )
+                                    Hl7ServiceController.shared.startClient()
+                                } else {
+                                    router.navigate(
+                                        to: .authentication(
+                                            .login(
+                                                .dashboard(.pillCount(.pillCountView))
+                                            )
+                                        )
+                                    )
+                                }
+
+                            } else {
+                                print("Resume failed: transaction ID or entity missing")
+                            }
                         case .delete:
                             Task {
                                 await userViewModel

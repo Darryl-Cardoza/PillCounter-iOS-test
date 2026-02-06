@@ -33,6 +33,9 @@ class LoginViewModel: ObservableObject {
         Bool = false
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = false
+    
+    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable)
+    var isHl7Enabled: Bool = false
 
     // for successful sending of the otp and navigate to the next screen.
     // successful otp sent to the email.
@@ -194,7 +197,8 @@ class LoginViewModel: ObservableObject {
                 errorMessage = nil
                 isOtpVerificationSuccess = true
                 isLoggedIn = true
-
+                isHl7Enabled = verifyOTPresult.data?.user?.isHl7Enabled ?? false
+                print("isHL7Enabled \(isHl7Enabled)")
                 // store the access token and refresh token to the app storage or user defaults.
                 // saving the user email to user defaults too.
                 accessToken = verifyOTPresult.data?.accessToken ?? ""
@@ -206,6 +210,11 @@ class LoginViewModel: ObservableObject {
                 let expiryDate = Date().addingTimeInterval(expiresInSeconds)
                 AppStorageManager.shared.tokenExpiryTimestamp =
                     expiryDate.timeIntervalSince1970
+                
+                
+                await MainActor.run {
+                    Hl7ServiceController.shared.evaluate()
+                }
             } else {
                 errorMessage =
                     verifyOTPresult.message
@@ -235,6 +244,9 @@ class LoginViewModel: ObservableObject {
                 AppStorageManager.shared.logout()
             }
 
+            Task { @MainActor in
+                Hl7ServiceController.shared.evaluate()
+            }
         } catch let error {
             isLoading = false
             print("Error: \(error)")

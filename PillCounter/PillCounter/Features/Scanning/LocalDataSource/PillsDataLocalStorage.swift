@@ -12,12 +12,15 @@ final class PillsDataLocalStorage {
     // singleton instance
     static let shared = PillsDataLocalStorage()
 
+     var pendingTxnController: NSFetchedResultsController<PillCountTransactionEntity>?
+     var pendingTxnDelegate: PendingTxnFetchedResultsDelegate?
+    
     // init function.
     private init() {}
 
     // MARK: DRUG MASTER
     // context that we need to save the operations or find something.
-    private let mainThreadContext = CoreDataManager.shared.context
+    let mainThreadContext = CoreDataManager.shared.context
 
     // background context
     //    private let backgroundContext = CoreDataManager.shared.backgroundContext
@@ -99,7 +102,9 @@ final class PillsDataLocalStorage {
         drugId: Int64?,
         countType: CountType,
         barcodeImagePath: String,
-        isComingFromPms: Bool = false
+        isComingFromPms: Bool? = nil,
+        drugName:String? = nil,
+        targetCount:Int32? = nil
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -130,8 +135,9 @@ final class PillsDataLocalStorage {
         entity.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         
         // set is hl7 or normal transaction and isSynced false
-        entity.isComingFromPms = isComingFromPms
+        entity.isComingFromPms = isComingFromPms ?? false
         entity.isSynced = false
+        entity.target_count = targetCount ?? 0
         
 
         entity.user = user
@@ -170,6 +176,7 @@ final class PillsDataLocalStorage {
 
         transaction.status = newStatus.rawValue
         transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        
 
         CoreDataManager.shared.save(context: mainThreadContext)
     }
@@ -598,6 +605,70 @@ final class PillsDataLocalStorage {
             print("❌ Failed to delete transaction details for txnId \(txnId): \(error)")
         }
     }
+    
+    // MARK: UPDATE
+    // Update an existing transaction instead of creating a new one
+    func updateTransaction(
+        txnId: Int64,
+        drugId: Int64?,
+        countType: CountType,
+        targetCount: Int32?,
+        barcodeImagePath: String? = nil
+    ) {
+        guard
+            let entity = fetchPillCountTransactionByTransactionId(txnId: txnId)
+        else {
+            print("❌ No transaction found to update for txnId \(txnId)")
+            return
+        }
+
+        // Update drug if needed
+        if let drugId = drugId,
+           let drugEntity = fetchDrugById(drugId) {
+            entity.drug_id = drugId
+            entity.drug = drugEntity
+        }
+
+        // Update core fields
+        entity.count_type = countType.rawValue
+        entity.isSynced = false
+        
+        // Update target count ONLY if provided
+        if let targetCount {
+            entity.target_count = targetCount
+        }
+
+        // Update barcode image ONLY if provided
+        if let barcodeImagePath, !barcodeImagePath.isEmpty {
+            entity.barcode_image = barcodeImagePath
+        }
+
+        // Update timestamp
+        entity.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+        debugPrintAllTransactions()
+    }
+    
+    func updateTransactionSynced(txnId: Int64) {
+
+        print("[DB][SYNC] updateTransactionSynced called for txnId =", txnId)
+
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("[DB][SYNC] ❌ Transaction NOT FOUND for txnId =", txnId)
+            return
+        }
+
+        print("[DB][SYNC] Before update → isSynced =", txn.isSynced,
+              "status =", txn.status ?? "nil")
+
+        txn.isSynced = true
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("[DB][SYNC] After update → isSynced =", txn.isSynced)
+    }
 
     
     
@@ -618,7 +689,11 @@ final class PillsDataLocalStorage {
                     📊 Status: \(txn.status ?? "nil")
                     🔢 Type: \(txn.count_type ?? "nil")
                     🗑️ Deleted: \(txn.is_deleted)
-                    ---------------------------------------------------
+                       isComingFromPms \(txn.isComingFromPms)
+                       isSynced \(txn.isSynced)
+                       Status \(txn.status)
+                    ---------------------------------
+                    ------------------
                     """)
             }
         } catch {

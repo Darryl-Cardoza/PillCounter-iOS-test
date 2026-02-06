@@ -39,50 +39,106 @@ final class PillDetectionService {
         completion: @escaping ([DetectionResult], Int) -> Void
     ) {
 
+        print("🟢 [Detect] Starting detection")
+
         guard let model else {
+            print("❌ [Detect] Model is nil")
             return
         }
 
+        print("📐 [Detect] Input frame size: \(pixelBuffer.size)")
+
         // PREPROCESS
-        guard
-            let resized = Letterbox.preprocess(
-                pixelBuffer,
-                targetSize: Int(inputSize))
-        else {
+        guard let resized = Letterbox.preprocess(
+            pixelBuffer,
+            targetSize: Int(inputSize)
+        ) else {
+            print("❌ [Preprocess] Letterbox preprocessing failed")
             return
+        }
+
+        print("✅ [Preprocess] Image resized to \(inputSize)x\(inputSize)")
+        if let scale = Letterbox.currentScaleInfo {
+            print("""
+            🔍 [Preprocess] Scale info:
+            scale = \(scale.scale)
+            padX  = \(scale.padX)
+            padY  = \(scale.padY)
+            """)
         }
 
         // BUILD MODEL INPUT
         let input = bestInput(
             image: resized,
             iouThreshold: iouThreshold,
-            confidenceThreshold: confThreshold)
+            confidenceThreshold: confThreshold
+        )
+
+        print("""
+        📦 [Model Input]
+        IOU threshold        = \(iouThreshold)
+        Confidence threshold = \(confThreshold)
+        """)
 
         // PREDICT
+        let start = CFAbsoluteTimeGetCurrent()
+
         guard let output = try? model.prediction(input: input) else {
+            print("❌ [Model] Prediction failed")
             completion([], 0)
             return
         }
 
+        let inferenceTime = (CFAbsoluteTimeGetCurrent() - start) * 1000
+        print("⚡️ [Model] Prediction succeeded in \(String(format: "%.2f", inferenceTime)) ms")
+
+        print("""
+        📊 [Model Output]
+        coordinates shape = \(output.coordinates.shape)
+        confidence shape  = \(output.confidence.shape)
+        """)
+
         // DECODE
-        let dets = decodeDetections(
+        let decoded = decodeDetections(
             coords: output.coordinates,
             conf: output.confidence,
             originalSize: pixelBuffer.size,
             scaleInfo: Letterbox.currentScaleInfo
         )
 
+        print("📦 [Decode] Total decoded detections (pre-NMS): \(decoded.count)")
+
         // NMS
         let final = NMS.run(
-            detections: dets,
-            iouThreshold: Float(iouThreshold))
+            detections: decoded,
+            iouThreshold: Float(iouThreshold)
+        )
+
+        print("✂️ [NMS] Detections after NMS: \(final.count)")
+
+        final.enumerated().forEach { index, det in
+            print("""
+            🎯 [Final \(index)]
+            rect       = \(det.rect)
+            confidence = \(det.confidence)
+            center     = \(det.center)
+            """)
+        }
 
         // STABILIZER
         let stabilized = stabilizer.update(rawCount: final.count)
 
-        // COMPLETE
+        print("""
+        🧮 [Stabilizer]
+        raw count        = \(final.count)
+        stabilized count = \(stabilized)
+        """)
+
+        print("✅ [Detect] Detection cycle complete\n")
+
         completion(final, stabilized)
     }
+
 
     private func decodeDetections(
         coords: MLMultiArray,

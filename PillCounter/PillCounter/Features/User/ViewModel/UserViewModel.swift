@@ -12,6 +12,7 @@ import CoreData
 @MainActor  // decalaring this as an main actor since we will change the colors on the app launch.
 class UserViewModel: ObservableObject {
     // MARK: - APP STORAGE
+    let pillDataLocalStorage = PillsDataLocalStorage.shared
     // get the access token from the app storage
     @AppStorage(AppStorageManager.AppStorageKeys.accessToken) var accessToken:
         String = ""
@@ -20,6 +21,13 @@ class UserViewModel: ObservableObject {
     @AppStorage(AppStorageManager.AppStorageKeys.userEmail) var userEmail:
         String = ""
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userID: String = ""
+    
+    @AppStorage(AppStorageManager.AppStorageKeys.pmsHostName)
+    var pmsHostName: String = ""
+
+    @AppStorage(AppStorageManager.AppStorageKeys.pillCounterHostName)
+    var pillCounterHostName: String = ""
+
 
     // MARK: PUBLISHED VARIABLES
     // general loading
@@ -83,8 +91,6 @@ class UserViewModel: ObservableObject {
     // settings repo
     let settingsRepo = SettingsRepository.shared
     
-    private var frcRegularPartial: NSFetchedResultsController<PillCountTransactionEntity>!
-     private var frcRegularCompleted: NSFetchedResultsController<PillCountTransactionEntity>!
 
     
 
@@ -115,6 +121,9 @@ class UserViewModel: ObservableObject {
                     } else {
                         self.isForceUpdate = false
                     }
+                    
+                    self.pmsHostName = response.data?.hl7Config?.pmsHostName ?? ""
+                    self.pillCounterHostName = response.data?.hl7Config?.pillCounterHostName ?? ""
                 }
 
             } catch {
@@ -609,7 +618,6 @@ class UserViewModel: ObservableObject {
 
     // MARK: - DELETE USER PROFILE
     func deleteUserProfile() async {
-
         isLoading = true
         defer { isLoading = false }
 
@@ -623,7 +631,13 @@ class UserViewModel: ObservableObject {
             }
 
         } catch {
-            print("❌ Failed to delete user profile: \(error)")
+            print("Failed to delete user profile: \(error)")
         }
+    }
+    
+    
+    func getTransactionEntity(by txnId: Int64) -> PillCountTransactionEntity? {
+        guard txnId > 0 else { return nil }
+        return pillDataLocalStorage.fetchPillCountTransactionByTransactionId(txnId: txnId)
     }
 }

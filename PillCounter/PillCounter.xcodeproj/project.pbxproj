@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		799F7DED2F31EB15008701B3 /* android-server.p12 in Resources */ = {isa = PBXBuildFile; fileRef = 799F7DEC2F31EB15008701B3 /* android-server.p12 */; };
+		799F80902F334E4D008701B3 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 799F808F2F334E4D008701B3 /* ComposeApp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +74,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				799F80902F334E4D008701B3 /* ComposeApp in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -134,6 +136,7 @@
 			);
 			name = PillCounter;
 			packageProductDependencies = (
+				799F808F2F334E4D008701B3 /* ComposeApp */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -220,6 +223,9 @@
 			);
 			mainGroup = 473A48EC2EB4F11200EEA905;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				799F80972F337B9D008701B3 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
 			projectDirPath = "";
@@ -649,6 +655,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		799F80972F337B9D008701B3 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		799F808F2F334E4D008701B3 /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ComposeApp;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 473A48ED2EB4F11200EEA905 /* Project object */;
 }

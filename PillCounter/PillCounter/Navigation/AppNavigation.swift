@@ -92,5 +92,6 @@ struct AppNavigation: View {
         .onChange(of: colorScheme) { _, newValue in
             appColors.updateSystemAppearance(newValue == .dark)
         }
+        
     }
 }

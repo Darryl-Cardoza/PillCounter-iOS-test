@@ -105,6 +105,7 @@ struct PillCounterApp: App {
             .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhaseChange(newPhase)
             }
+        
         }
 
     }

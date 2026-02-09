@@ -29,19 +29,33 @@ struct CountHistoryView: View {
     // MARK: - EDIT/DELETE STATE
     @State private var isEditing: Bool = false
     @State private var selectedTxnIds: Set<Int64> = []
+    @State private var selectedFilter: TransactionFilter = .all
 
     let title: String
 
     // Filter Logic
     var filteredTransactions: [PillCountTransactionEntity] {
+        let baseList: [PillCountTransactionEntity]
+
         if searchText.isEmpty {
-            return userViewModel.historyCountTransactions
+            baseList = userViewModel.historyCountTransactions
         } else {
-            return userViewModel.historyCountTransactions.filter { txn in
+            baseList = userViewModel.historyCountTransactions.filter { txn in
                 let drugName = txn.drug?.drug_name ?? ""
                 return drugName.localizedCaseInsensitiveContains(searchText)
             }
         }
+        
+        switch selectedFilter {
+          case .all:
+              return baseList
+
+          case .pms:
+              return baseList.filter { $0.isComingFromPms }
+
+          case .nonPms:
+              return baseList.filter { !$0.isComingFromPms }
+          }
     }
 
     // Helper to get the actual transaction objects for the selected IDs
@@ -60,6 +74,67 @@ struct CountHistoryView: View {
             selectedTxnIds.contains($0.txn_id)
         }
     }
+    
+    enum TransactionFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case pms = "PMS"
+        case nonPms = "Non PMS"
+
+        var id: String { rawValue }
+    }
+    
+    private var filterTabs: some View {
+        HStack {
+            Spacer()
+
+            HStack(spacing: 12) {
+                ForEach(TransactionFilter.allCases) { filter in
+                    FilterTabButton(
+                        title: filter.rawValue,
+                        isSelected: selectedFilter == filter
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedFilter = filter
+                            selectedTxnIds.removeAll()
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        
+    }
+
+
+    struct FilterTabButton: View {
+        let title: String
+        let isSelected: Bool
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(isSelected ? .white : .white.opacity(0.8))
+                    .frame(width: 90, height: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(isSelected ? AppColors.shared.primary : Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(
+                                        isSelected ? Color.cyan : Color.gray.opacity(0.4),
+                                        lineWidth: isSelected ? 2 : 1
+                                    )
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+
 
     var body: some View {
         ZStack {
@@ -216,6 +291,10 @@ struct CountHistoryView: View {
     // MARK: - CONTENT VIEW
     private var contentView: some View {
         VStack {
+            
+            filterTabs
+
+            
             if isEditing {
                 HStack {
 
@@ -251,6 +330,7 @@ struct CountHistoryView: View {
                                     ? " / \(txn.target_count)" : ""),
                             icon: "ellipsis",
                             barcodeImagePath: txn.barcode_image,
+                            isComingFromPms: txn.isComingFromPms,
                             onIconTap: {
                                 // Only allow menu options if NOT editing
                                 if !isEditing {
@@ -297,7 +377,8 @@ struct CountHistoryView: View {
         date: String,
         trailingText: String,
         icon: String,
-        barcodeImagePath: String?, // 1. Add this parameter
+        barcodeImagePath: String?,
+        isComingFromPms:Bool = false,
         onIconTap: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 16) {
@@ -321,21 +402,32 @@ struct CountHistoryView: View {
                 imagePath: barcodeImagePath
             )
             
-            // 3. TEXT INFO
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(appColors.text)
                     .lineLimit(1)
-                
-                Text(date)
-                    .font(.system(size: 12))
-                    .foregroundColor(appColors.text)
-                    .lineLimit(1)
+
+                HStack(spacing: 10) {
+                    Text(date)
+                        .font(.system(size: 12))
+                        .foregroundColor(appColors.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+
+                    if isComingFromPms {
+                        Text("PMS")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(appColors.primary)
+                            .fixedSize()
+                    }
+                }
             }
-            
-            Spacer()
-            
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+
+       
             // 4. TRAILING INFO & ACTION
             Text(trailingText)
                 .font(.subheadline)

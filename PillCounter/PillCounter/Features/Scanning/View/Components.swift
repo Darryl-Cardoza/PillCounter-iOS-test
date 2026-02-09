@@ -537,7 +537,6 @@ struct BottonControlsViewForTransactionList: View {
                 Text("Total Count")
                     .font(.caption)
                     .foregroundColor(appColors.text)
-                    .padding(.top, 15)
 
                 HStack(spacing: 4) {
                     Text("\(totalCount)")
@@ -557,10 +556,9 @@ struct BottonControlsViewForTransactionList: View {
                     countType: countType,
                     appColors: appColors
                 )
-                .padding(.top, 20)
+                .padding(.top, 60)
             }
         }
-        .padding(.top, 8)
     }
     private func scrollToLast(_ proxy: ScrollViewProxy) {
         guard !details.isEmpty else { return }
@@ -597,7 +595,9 @@ struct BottomControlsViewHeader: View {
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
+                        .padding(.top, 30)
                 }
+
             } else {
                 ZStack {
                     // Layer 1: The Text (Centered)

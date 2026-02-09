@@ -21,6 +21,7 @@ final class Hl7ServiceManager {
 
     private let server: HL7TLSServer
     private let parser = Hl7Parser()
+    var imageServer: ImageWebServer?
 
     // MARK: - Client
 
@@ -30,7 +31,7 @@ final class Hl7ServiceManager {
 
     private(set) var isClientConnected = false
 
-    // 🔴 REQUIRED for streaming ACK parsing
+    // REQUIRED for streaming ACK parsing
     private var receiveBuffer = Data()
 
     // MARK: - Events
@@ -78,9 +79,11 @@ final class Hl7ServiceManager {
                 self?.listener?.onAckSent(messageId: messageId)
             }
         )
-
+        imageServer = ImageWebServer()
+           imageServer?.start()
         listener?.onServerStarted(port: Int(port))
         listener?.onBonjourRegistered(serviceName: serviceName)
+        
 
         print("[HL7][SERVER] Started on port \(port)")
     }
@@ -88,6 +91,8 @@ final class Hl7ServiceManager {
     func stop() {
         print("[HL7][SERVER] Stopping")
         server.stop()
+        imageServer?.stop()
+
         listener?.onServiceStopped()
     }
 

@@ -267,7 +267,6 @@ extension OPillCountView {
                 if let compositeImage =
                     cameraService.captureSnapshotWithOverlays()
                 {
-                    // 2. Save to Disk (Implementation below)
                     savedPath = PhotoFileManager.shared.saveImage(
                         compositeImage)
                 }
@@ -566,9 +565,9 @@ extension OPillCountView {
                                     ?? .FIXED)
                         })
                     
-                    if pillScanViewModel.selectedTransaction?.isComingFromPms == true {
-                        pillScanViewModel.observePendingHl7Transactions()
-                    }
+//                    if pillScanViewModel.selectedTransaction?.isComingFromPms == true {
+//                        pillScanViewModel.observePendingHl7Transactions()
+//                    }
                 }
             }
         )

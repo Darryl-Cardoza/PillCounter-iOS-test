@@ -53,6 +53,7 @@ public enum HamburgerMenuFLow: Hashable, Codable {
     case History
     case profile
     case settings
+    case unsyncedTransaction
     case HistoryTransactionDetail
 }
 
@@ -61,23 +62,23 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
     case RegularCount
     case Profile
     case History
+    case UnsyncedTransaction
     case Settings
     case Logout
 
     public var id: String { title }
 
     var title: String {
-
         switch self {
-        case .FixedCount:
-            return NSLocalizedString("FIXED_COUNT_TITLE", comment: "")
-        case .RegularCount:
-            return NSLocalizedString("REGULAR_COUNT_TITLE", comment: "")
-        case .Profile: return NSLocalizedString("PROFILE", comment: "")
-        case .History: return NSLocalizedString("HISTORY", comment: "")
-        case .Settings: return NSLocalizedString("SETTINGS", comment: "")
-        case .Logout: return NSLocalizedString("LOGOUT", comment: "")
-
+            case .FixedCount:
+                return NSLocalizedString("FIXED_COUNT_TITLE", comment: "")
+            case .RegularCount:
+                return NSLocalizedString("REGULAR_COUNT_TITLE", comment: "")
+            case .Profile: return NSLocalizedString("PROFILE", comment: "")
+            case .History: return NSLocalizedString("HISTORY", comment: "")
+            case .UnsyncedTransaction:return NSLocalizedString("Unsynced Transactions", comment: "")
+            case .Settings: return NSLocalizedString("SETTINGS", comment: "")
+            case .Logout: return NSLocalizedString("LOGOUT", comment: "")
         }
     }
 
@@ -88,6 +89,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
         case .RegularCount: return "regular_count_icon"
         case .Profile: return "profile_icon"
         case .History: return "history_icon"
+        case .UnsyncedTransaction: return "unsync_icon"
         case .Settings: return "settings_icon"
         case .Logout: return "logout_icon"
         }
@@ -157,3 +159,6 @@ public enum InputValidation {
     case email
     case npi
 }
+
+
+

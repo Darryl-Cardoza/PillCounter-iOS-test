@@ -20,6 +20,7 @@ struct ThumbnailImageView: View {
     let borderWidth: CGFloat
     let placeholderImageName: String
     let placeholderSize: CGSize
+    let isFromPms: Bool
 
     // MARK: - ENVIRONMENT
     @EnvironmentObject private var appColors: AppColors
@@ -29,11 +30,12 @@ struct ThumbnailImageView: View {
         imagePath: String?,
         width: CGFloat = 70,
         height: CGFloat = 50,
-        cornerRadius: CGFloat = 12,
+        cornerRadius: CGFloat = 4,
         borderColor: Color? = nil,
         borderWidth: CGFloat = 1,
         placeholderImageName: String = "placeholder_history",
-        placeholderSize: CGSize = CGSize(width: 25, height: 25)
+        placeholderSize: CGSize = CGSize(width: 25, height: 25),
+        isFromPms: Bool = false
     ) {
         self.imagePath = imagePath
         self.width = width
@@ -43,6 +45,7 @@ struct ThumbnailImageView: View {
         self.borderWidth = borderWidth
         self.placeholderImageName = placeholderImageName
         self.placeholderSize = placeholderSize
+        self.isFromPms = isFromPms
     }
 
     // MARK: - BODY
@@ -52,7 +55,6 @@ struct ThumbnailImageView: View {
                 !path.isEmpty,
                 let loadedImage = PhotoFileManager.shared.loadImage(from: path)
             {
-
                 loadedImage
                     .resizable()
                     .scaledToFill()
@@ -64,19 +66,31 @@ struct ThumbnailImageView: View {
                     )
 
             } else {
-
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(appColors.text.opacity(0.8), lineWidth: borderWidth)
-                    .frame(width: width, height: height)
-                    .overlay(
-                        Image(placeholderImageName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(
-                                width: placeholderSize.width,
-                                height: placeholderSize.height
-                            )
-                    )
+                
+                if isFromPms {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(appColors.text.opacity(0.8), lineWidth: borderWidth)
+                        .frame(width: width, height: height)
+                        .overlay(
+                            Text("PMS")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(appColors.secondary)
+                        )
+                }else{
+                    
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(appColors.text.opacity(0.8), lineWidth: borderWidth)
+                        .frame(width: width, height: height)
+                        .overlay(
+                            Image(placeholderImageName)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(
+                                    width: placeholderSize.width,
+                                    height: placeholderSize.height
+                                )
+                        )
+                }
             }
         }
     }

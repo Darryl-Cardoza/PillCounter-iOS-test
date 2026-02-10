@@ -55,6 +55,8 @@ class PillScanViewModel: ObservableObject {
     
     @Published var showPmsNdcMismatchPopup = false
     
+ 
+    
     private var cancellables = Set<AnyCancellable>()
 
 
@@ -572,6 +574,25 @@ class PillScanViewModel: ObservableObject {
         self.targetCount = ["", "", "", ""]
     }
     
+    
+    @MainActor
+    func autofillDrugNameIfAvailable(for ndc: String) {
+        guard ndc.count >= 20 else { return }
+
+        let storage = PillsDataLocalStorage.shared
+
+        if let drug = storage.getPillByNdc(by: ndc),
+           let drugName = drug.drug_name,
+           !drugName.isEmpty {
+
+            // Auto-fill ONLY if user has not typed anything
+            if drugNameMannuallyEntered.isEmpty {
+                drugNameMannuallyEntered = drugName
+            }
+        }
+    }
+
+    
     // Message handling for transaction coming from pms
     typealias HL7SimpleCallback = (Bool) -> Void
 
@@ -742,13 +763,12 @@ class PillScanViewModel: ObservableObject {
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }
+    
 
-    
-    
     
     func observePendingHl7Transactions() {
         print("pending transcatin observe called")
-        print("pending transaction \(pillDataLocalStorage.getPendingHl7TxnOnce())")
+        print("pending transaction \(pillDataLocalStorage.getPendingHl7Txn())")
            pillDataLocalStorage
                .observePendingHl7Transactions()
                .receive(on: DispatchQueue.main)

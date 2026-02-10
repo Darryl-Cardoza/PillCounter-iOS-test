@@ -130,6 +130,8 @@ final class AppStorageManager {
             defaults.setValue(newValue, forKey: AppStorageKeys.pillCounterHostName)
         }
     }
+    
+ 
 
     // MARK: - Add email
     func addEmail(_ email: String) {

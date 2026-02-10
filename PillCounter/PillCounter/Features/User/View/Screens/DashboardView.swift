@@ -18,6 +18,12 @@ struct DashboardView: View {
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = true
+    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable) var isHl7Enable:
+        Bool = false
+
+
+    
+    
     // MARK: - LOCAL STATE
     // This ensures we only redirect once per session (prevents infinite loop on Skip)
     @State private var hasCheckedNewUser: Bool = false
@@ -210,7 +216,11 @@ struct DashboardView: View {
                 }
             },
             showBackButton: false,
-            showHamburgerMenu: true
+            showHamburgerMenu: true,
+            showPmsConnectionButton: isHl7Enable,
+            pmsConnectionState : userViewModel.pmsConnectionState
+  
+
         )
         .onAppear {
             
@@ -230,7 +240,6 @@ struct DashboardView: View {
                 }
             }
         }
-     
     }
 }
 

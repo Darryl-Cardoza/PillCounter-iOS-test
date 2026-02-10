@@ -43,7 +43,13 @@ struct HamburgerMenuView: View {
         .customPopup(isPresented: $showLogoutPopup) {
             logoutPopUp
         }
+        .onAppear {
+            Task {
+                await userViewModel.getUnsyncedTransactions()
+            }
+        }
     }
+      
 
     // MARK: - LOGOUT POP UP
     private var logoutPopUp: some View {
@@ -179,9 +185,13 @@ struct HamburgerMenuView: View {
         case .History:
             Text("\(storedHistoryOption)")
                 .foregroundStyle(appColors.text)
-                // In landscape, we add padding. In portrait, it naturally aligns right.
                 .padding(.horizontal, isLandscape ? 10 : 0)
 
+        case .UnsyncedTransaction:
+            Text("\(userViewModel.unsyncedTransactions.count)")
+                .foregroundStyle(appColors.text)
+                .padding(.horizontal, isLandscape ? 10 : 0)
+              
         case .FixedCount:
             countButtonsRow(
                 completedCount: userViewModel
@@ -201,7 +211,7 @@ struct HamburgerMenuView: View {
                                 .login(.dashboard(.fixedCountPartial))))
                     }
                 }
-            )
+            ).padding(.horizontal,0)
 
         case .RegularCount:
             countButtonsRow(
@@ -242,7 +252,7 @@ struct HamburgerMenuView: View {
         isLandscape: Bool,
         onPartialTap: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             // Landscape: Buttons align Right. Portrait: Buttons fill width.
             if isLandscape { Spacer() }
 
@@ -263,8 +273,10 @@ struct HamburgerMenuView: View {
                 iconColor: primaryIconColor
             )
             // Portrait: Button takes equal available space
-            .frame(maxWidth: isLandscape ? nil : .infinity)
+            .frame(maxWidth: isLandscape ? nil : 133)
 
+            
+            
             PillCountingButton(
                 iconName: "partial",
                 title:
@@ -280,7 +292,7 @@ struct HamburgerMenuView: View {
                 iconColor: primaryIconColor
             )
             // Portrait: Button takes equal available space
-            .frame(maxWidth: isLandscape ? nil : .infinity)
+            .frame(maxWidth: isLandscape ? nil : 150)
         }
     }
 
@@ -292,7 +304,11 @@ struct HamburgerMenuView: View {
             router.navigate(
                 to: .authentication(
                     .login(.dashboard(.pillCount(.barcodeScanning)))))
-
+            
+        case .UnsyncedTransaction:
+            router.navigate(
+                to: .authentication(.user(.userSettings(.unsyncedTransaction))))
+            
         case .Settings:
             router.navigate(
                 to: .authentication(.user(.userSettings(.settings))))

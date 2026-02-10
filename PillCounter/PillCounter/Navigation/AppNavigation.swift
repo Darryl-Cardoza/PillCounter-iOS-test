@@ -17,6 +17,7 @@ struct AppNavigation: View {
     var body: some View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height
+
             NavigationStack(path: $router.navigationPath) {
                 Group {
                     if isLoggedIn {
@@ -27,7 +28,7 @@ struct AppNavigation: View {
                 }
                 .navigationDestination(for: PillCounterFlow.self) {
                     destination in
-                    switch destination {
+                switch destination {
                     case .authentication(.login(.LoginEmail)):
                         LoginEmailView()
                             .navigationBarBackButtonHidden(true)
@@ -61,8 +62,12 @@ struct AppNavigation: View {
 
                     case .authentication(.user(.hamburgerMenu)):
                         HamburgerMenuView()
+                        .navigationBarBackButtonHidden(true)
+                    
+                    case .authentication(.user(.userSettings(.unsyncedTransaction))):
+                        UnsyncedTransactionView()
                             .navigationBarBackButtonHidden(true)
-
+                    
                     case .authentication(.user(.userSettings(.profile))):
                         UserProfileScreen()
                             .navigationBarBackButtonHidden(true)

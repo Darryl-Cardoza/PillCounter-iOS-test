@@ -368,8 +368,8 @@ extension QRBarcodeScannerView {
                     disabled: false,
                     text: $pillScanViewModel.ndcNumber,
                     keyboardType: .phonePad,
-                    validation: .phone,
-                    maxLength: 10,
+                    validation: .none,
+                    maxLength: 20,
                     field: .ndcNumber,
                     focusedField: $focusedField
                 )
@@ -491,12 +491,13 @@ extension QRBarcodeScannerView {
                 disabled: false,
                 text: $pillScanViewModel.ndcNumber,
                 keyboardType: .phonePad,
-                validation: .phone,
-                maxLength: 10,
+                validation: .none,
+                maxLength: 20,
                 field: .ndcNumber,
                 focusedField: $focusedField
             )
-
+            
+//
             // Drug Name
             Text("Drug Name:")
                 .foregroundStyle(appColors.text)

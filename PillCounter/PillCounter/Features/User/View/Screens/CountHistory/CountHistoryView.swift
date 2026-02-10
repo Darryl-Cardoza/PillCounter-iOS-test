@@ -116,15 +116,15 @@ struct CountHistoryView: View {
             Button(action: action) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : .white.opacity(0.8))
+                    .foregroundColor(AppColors.shared.text)
                     .frame(width: 90, height: 36)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(isSelected ? AppColors.shared.primary : Color.clear)
+                            .fill(isSelected ? AppColors.shared.primary :   Color.black.opacity(0.45))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10)
                                     .stroke(
-                                        isSelected ? Color.cyan : Color.gray.opacity(0.4),
+                                        .clear,
                                         lineWidth: isSelected ? 2 : 1
                                     )
                             )
@@ -155,7 +155,7 @@ struct CountHistoryView: View {
                             Button {
                                 toggleSelectAll()
                             } label: {
-                                HStack(spacing: 8) {
+                                HStack(spacing: 12) {
                                     // Visual representation of Select All state
                                     Image(
                                         systemName: areAllSelected
@@ -293,6 +293,7 @@ struct CountHistoryView: View {
         VStack {
             
             filterTabs
+                .padding(.vertical, 5)
 
             
             if isEditing {
@@ -330,7 +331,7 @@ struct CountHistoryView: View {
                                     ? " / \(txn.target_count)" : ""),
                             icon: "ellipsis",
                             barcodeImagePath: txn.barcode_image,
-                            isComingFromPms: txn.isComingFromPms,
+                            isFromPms: txn.isComingFromPms,
                             onIconTap: {
                                 // Only allow menu options if NOT editing
                                 if !isEditing {
@@ -378,7 +379,7 @@ struct CountHistoryView: View {
         trailingText: String,
         icon: String,
         barcodeImagePath: String?,
-        isComingFromPms:Bool = false,
+        isFromPms:Bool = false,
         onIconTap: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 16) {
@@ -399,10 +400,11 @@ struct CountHistoryView: View {
             
             // 2. IMAGE LOGIC
             ThumbnailImageView(
-                imagePath: barcodeImagePath
+                imagePath: barcodeImagePath,
+                isFromPms: isFromPms
             )
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(name)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(appColors.text)
@@ -416,9 +418,9 @@ struct CountHistoryView: View {
                         .lineLimit(1)
                         .layoutPriority(1)
 
-                    if isComingFromPms {
+                    if isFromPms {
                         Text("PMS")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundColor(appColors.primary)
                             .fixedSize()
                     }
@@ -449,7 +451,7 @@ struct CountHistoryView: View {
         .background(
             colorScheme == .dark ? Color.black.opacity(0.8) : Color.white
         )
-        .cornerRadius(14)
+        .cornerRadius(10)
         .animation(.spring(), value: isEditing)
     }
 
@@ -596,5 +598,6 @@ struct CountHistoryView: View {
             }
         }
         .frame(width: 250)
+        .padding(.vertical)
     }
 }

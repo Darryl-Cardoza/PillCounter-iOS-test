@@ -34,22 +34,22 @@ struct CameraContentView: View {
 
                     DetectionOverlay(cameraService: cameraService)
                         .ignoresSafeArea()
-                    
-                    VStack {
-                        HStack {
-                            Spacer()
-                            
-                            PillCountingToggleButton(
-                                isOn: $isAutoOrManual,
-                                onColor: appColors.secondary,
-                                offColor: Color.black.opacity(0.5)
-                            )
-                            .padding(.trailing, 16)
-                            .padding(.top, 16)
-                        }
-                        
-                        Spacer()
-                    }
+                    //Toggle
+//                    VStack {
+//                        HStack {
+//                            Spacer()
+//                            
+//                            PillCountingToggleButton(
+//                                isOn: $isAutoOrManual,
+//                                onColor: appColors.secondary,
+//                                offColor: Color.black.opacity(0.5)
+//                            )
+//                            .padding(.trailing, 16)
+//                            .padding(.top, 16)
+//                        }
+//                        
+//                        Spacer()
+//                    }
                     .padding(.top, isLandscape ? 0 : 30)
 
                     ZoomControlView(cameraService: cameraService)
@@ -85,8 +85,12 @@ struct ZoomControlView: View {
 
             VStack(spacing: 8) {
                 Text(String(format: "%.1fx", cameraService.zoomFactor))
-                    .font(.caption)
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(appColors.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Capsule())
 
                 GeometryReader { geo in
                     ZStack {

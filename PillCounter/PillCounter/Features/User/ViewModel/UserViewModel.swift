@@ -77,6 +77,10 @@ class UserViewModel: ObservableObject {
 
     // maintenance
     @Published var isMaintenance: Bool = false
+    
+    @Published var unsyncedTransactions: [PillCountTransactionEntity] = []
+
+    @Published var pmsConnectionState: PmsConnectionState = .disconnected
 
     // MARK: DATABASE
     // get the user db
@@ -639,5 +643,18 @@ class UserViewModel: ObservableObject {
     func getTransactionEntity(by txnId: Int64) -> PillCountTransactionEntity? {
         guard txnId > 0 else { return nil }
         return pillDataLocalStorage.fetchPillCountTransactionByTransactionId(txnId: txnId)
+    }
+    
+    
+    @MainActor
+    func getUnsyncedTransactions() async {
+            self.unsyncedTransactions = pillDataLocalStorage.getPendingHl7Txn()
+     
+    }
+
+    
+    //For showing pms connection status
+    func setPmsConnected(_ isConnected: Bool) {
+        pmsConnectionState = isConnected ? .connected : .disconnected
     }
 }

@@ -68,7 +68,7 @@ extension PillsDataLocalStorage {
     }
     
     
-    func getPendingHl7TxnOnce() -> [PillCountTransactionEntity] {
+    func getPendingHl7Txn() -> [PillCountTransactionEntity] {
 
         let request: NSFetchRequest<PillCountTransactionEntity> =
             PillCountTransactionEntity.fetchRequest()

@@ -134,7 +134,7 @@ struct PillCounterInputField: View {
 
         case .email:
             filtered = value.lowercased()
-
+            
         case .none:
             break
         }

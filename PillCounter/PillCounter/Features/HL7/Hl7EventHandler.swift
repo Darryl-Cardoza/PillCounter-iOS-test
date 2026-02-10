@@ -61,10 +61,9 @@ final class Hl7EventHandler: Hl7EventListener {
         print("ACK sent | id=\(messageId)")
     }
 
-    func onAckReceived(messageId: String) {
-        print("ACK received | id=\(messageId)")
+    func onAckReceived(messageId: String?, ackCode: String) {
         Task { @MainActor in
-            Hl7ServiceController.shared.onAckReceived(messageId: messageId)
+            Hl7ServiceController.shared.onAckReceived(messageId: messageId,ackCode: ackCode)
         }
     }
 
@@ -74,6 +73,7 @@ final class Hl7EventHandler: Hl7EventListener {
         print("HL7 client connected")
         Task { @MainActor in
             Hl7ServiceController.shared.onClientConnected()
+            userViewModel.setPmsConnected(true)
         }
         
         HL7NotificationManager.show(
@@ -85,6 +85,10 @@ final class Hl7EventHandler: Hl7EventListener {
 
     func onClientDisconnected() {
         print("HL7 client disconnected")
+    
+        Task{ @MainActor in
+            userViewModel.setPmsConnected(false)
+        }
     }
 
     // MARK: - Error

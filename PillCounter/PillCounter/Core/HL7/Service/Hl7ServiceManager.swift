@@ -83,7 +83,6 @@ final class Hl7ServiceManager {
            imageServer?.start()
         listener?.onServerStarted(port: Int(port))
         listener?.onBonjourRegistered(serviceName: serviceName)
-        
 
         print("[HL7][SERVER] Started on port \(port)")
     }
@@ -287,14 +286,27 @@ final class Hl7ServiceManager {
         }
 
         let fields = msa.components(separatedBy: "|")
-        guard fields.count > 2 else {
+
+        guard fields.count >= 2 else {
             print("[HL7][CLIENT] Invalid MSA segment")
             return
         }
 
-        let messageId = fields[2]
-        print("[HL7][CLIENT] ACK received for messageId=\(messageId)")
+        let ackCode = fields[safe: 1] ?? ""
+        let messageIdRaw = fields.count > 2 ? fields[2] : nil
+        let messageId = messageIdRaw?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        listener?.onAckReceived(messageId: messageId)
+        print("[HL7][CLIENT] ACK received code=\(ackCode) messageId=\(messageId ?? "nil")")
+
+        listener?.onAckReceived(
+            messageId: messageId?.isEmpty == true ? nil : messageId,
+            ackCode: ackCode
+        )
+    }
+
+}
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

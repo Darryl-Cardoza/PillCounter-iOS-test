@@ -30,6 +30,8 @@ final class Hl7ServiceManager {
     private let clientQueue = DispatchQueue(label: "com.pillcounter.hl7.client")
 
     private(set) var isClientConnected = false
+    private var heartbeatTimer: DispatchSourceTimer?
+
 
     // REQUIRED for streaming ACK parsing
     private var receiveBuffer = Data()
@@ -57,36 +59,43 @@ final class Hl7ServiceManager {
 
     // MARK: - Server Lifecycle
 
-    func start() throws {
-        print("[HL7][SERVER] Starting HL7 service")
+//    func start() throws {
+//        print("[HL7][SERVER] Starting HL7 service")
+//
+//        listener?.onServiceStarted()
+//
+//        try server.start(
+//            serviceName: serviceName,
+//            serviceType: serviceType,
+//            onMessage: { [weak self] raw, messageId in
+//                guard let self else { return }
+//                print("[HL7][SERVER] Message received id=\(messageId)")
+//                let parsed = self.parser.parse(hl7Message: raw)
+//                self.listener?.onMessageReceived(
+//                    message: parsed,
+//                    messageId: messageId
+//                )
+//            },
+//            onAckSent: { [weak self] messageId in
+//                print("[HL7][SERVER] ACK sent id=\(messageId)")
+//                self?.listener?.onAckSent(messageId: messageId)
+//            }
+//        )
+//        imageServer = ImageWebServer()
+//           imageServer?.start()
+//        listener?.onServerStarted(port: Int(port))
+//        listener?.onBonjourRegistered(serviceName: serviceName)
+//
+//        print("[HL7][SERVER] Started on port \(port)")
+//    }
 
-        listener?.onServiceStarted()
-
-        try server.start(
-            serviceName: serviceName,
-            serviceType: serviceType,
-            onMessage: { [weak self] raw, messageId in
-                guard let self else { return }
-                print("[HL7][SERVER] Message received id=\(messageId)")
-                let parsed = self.parser.parse(hl7Message: raw)
-                self.listener?.onMessageReceived(
-                    message: parsed,
-                    messageId: messageId
-                )
-            },
-            onAckSent: { [weak self] messageId in
-                print("[HL7][SERVER] ACK sent id=\(messageId)")
-                self?.listener?.onAckSent(messageId: messageId)
-            }
-        )
-        imageServer = ImageWebServer()
-           imageServer?.start()
-        listener?.onServerStarted(port: Int(port))
-        listener?.onBonjourRegistered(serviceName: serviceName)
-
-        print("[HL7][SERVER] Started on port \(port)")
+    
+    func start() {
+        print("[HL7] Starting CLIENT first")
+        startClient()
     }
 
+    
     func stop() {
         print("[HL7][SERVER] Stopping")
         server.stop()
@@ -104,13 +113,16 @@ final class Hl7ServiceManager {
             guard let self else { return }
 
             print("[HL7][CLIENT] Service resolved name=\(name) host=\(host) port=\(port)")
+
+            // Stop browsing only while connecting
             self.discovery.stopBrowsing()
+
             self.connectClient(host: host, port: port)
         }
 
-        print("[HL7][CLIENT] Browsing for service type: \(pmsServiceType)")
         discovery.startBrowsing(serviceType: pmsServiceType)
     }
+
 
     func disconnectClient() {
         print("[HL7][CLIENT] Disconnect requested")
@@ -119,6 +131,7 @@ final class Hl7ServiceManager {
         isClientConnected = false
         receiveBuffer.removeAll()
         listener?.onClientDisconnected()
+        stopHeartbeat()
     }
 
     // MARK: - Client Connection
@@ -172,15 +185,21 @@ final class Hl7ServiceManager {
 
         switch state {
         case .ready:
-            print("[HL7][CLIENT] Connection READY")
+            print(" CLIENT READY — STARTING SERVER")
             isClientConnected = true
             listener?.onClientConnected()
+            startHeartbeat()
             startReceiving()
+            startServerIfNeeded()
+
+
 
         case .failed(let error):
             print("[HL7][CLIENT] Connection FAILED error=\(error)")
             isClientConnected = false
             listener?.onClientDisconnected()
+            stop()
+
 
         case .waiting(let error):
             print("[HL7][CLIENT] Connection WAITING error=\(error)")
@@ -189,11 +208,101 @@ final class Hl7ServiceManager {
             print("[HL7][CLIENT] Connection CANCELLED")
             isClientConnected = false
             listener?.onClientDisconnected()
+            restartBrowsing()
+            stop()
+
 
         default:
             break
         }
     }
+    
+    private func startHeartbeat() {
+        heartbeatTimer?.cancel()
+
+        let timer = DispatchSource.makeTimerSource(queue: clientQueue)
+        timer.schedule(deadline: .now() + 10, repeating: 10)
+
+        timer.setEventHandler { [weak self] in
+            self?.sendHeartbeat()
+        }
+
+        timer.resume()
+        heartbeatTimer = timer
+
+        print("[HL7][CLIENT] Heartbeat started")
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.cancel()
+        heartbeatTimer = nil
+        print("[HL7][CLIENT] Heartbeat stopped")
+    }
+    
+    private func sendHeartbeat() {
+        guard let connection = clientConnection else { return }
+
+        let ping = "MSH\r"
+        let framed = MLLP.frame(ping)
+
+        connection.send(
+            content: framed,
+            contentContext: .defaultMessage,
+            isComplete: true,
+            completion: .contentProcessed { [weak self] error in
+                if let error {
+                    print("[HL7][CLIENT] Heartbeat failed: \(error)")
+                    self?.disconnectClient()
+                    self?.restartBrowsing()
+                } else {
+                    print("[HL7][CLIENT] Heartbeat OK")
+                }
+            }
+        )
+    }
+
+  
+    
+    private var isServerRunning = false
+
+    private func startServerIfNeeded() {
+
+        guard !isServerRunning else { return }
+
+        do {
+            print("[HL7][SERVER] Starting after client verified")
+
+            try server.start(
+                serviceName: serviceName,
+                serviceType: serviceType,
+                onMessage: { [weak self] raw, messageId in
+                    guard let self else { return }
+                    let parsed = self.parser.parse(hl7Message: raw)
+                    self.listener?.onMessageReceived(
+                        message: parsed,
+                        messageId: messageId
+                    )
+                },
+                onAckSent: { [weak self] messageId in
+                    self?.listener?.onAckSent(messageId: messageId)
+                }
+            )
+
+            imageServer = ImageWebServer()
+            imageServer?.start()
+
+            isServerRunning = true
+
+            listener?.onServerStarted(port: Int(port))
+            listener?.onBonjourRegistered(serviceName: serviceName)
+
+            print("[HL7][SERVER] Started")
+
+        } catch {
+            print("[HL7][SERVER] Failed to start: \(error)")
+        }
+    }
+
 
     // MARK: - Sending
 
@@ -303,6 +412,17 @@ final class Hl7ServiceManager {
             ackCode: ackCode
         )
     }
+    
+    private func restartBrowsing() {
+        print("[HL7][CLIENT] Restarting discovery...")
+
+        discovery.stopBrowsing()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            self.startClient()
+        }
+    }
+
 
 }
 private extension Array {

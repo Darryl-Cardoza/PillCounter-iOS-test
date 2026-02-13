@@ -34,7 +34,7 @@ final class PillsDataLocalStorage {
             return
         }
 
-        // now if the pill data is found.
+        // now if the pill data is found.HL7MessageBuilder
         // save the pill data in the local db.
 
         let entity = DrugMasterEntity(context: mainThreadContext)
@@ -696,7 +696,6 @@ final class PillsDataLocalStorage {
                     🗑️ Deleted: \(txn.is_deleted)
                        isComingFromPms \(txn.isComingFromPms)
                        isSynced \(txn.isSynced)
-                       Status \(txn.status)
                     ---------------------------------
                     ------------------
                     """)

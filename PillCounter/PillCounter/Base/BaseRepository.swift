@@ -22,7 +22,7 @@ protocol BaseRepositoryProtocol {
 }
 
 extension BaseRepositoryProtocol {
-    static var shouldBypassSSL: Bool { return true }
+    static var shouldBypassSSL: Bool { return false }
 
     // MARK: - Perform Request
     static func performRequest<T: Decodable>(
@@ -55,7 +55,7 @@ extension BaseRepositoryProtocol {
         logRequest(request, body: body)
 
         // ------------------------------------------------------------------
-        // 🔄 SESSION SELECTION (SSL BYPASS LOGIC)
+        // SESSION SELECTION (SSL BYPASS LOGIC)
         // ------------------------------------------------------------------
         let session: URLSession
         if shouldBypassSSL {

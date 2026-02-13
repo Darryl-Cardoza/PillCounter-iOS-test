@@ -275,10 +275,8 @@ extension QRBarcodeScannerView {
                 Task { @MainActor in
                     pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue)
 
-                    if router.selectedPillScanningType == .FIXED,
-
-                       let fixedCount = pillScanViewModel.getFixedCount(),
-                       fixedCount <= 0 {
+                    if router.selectedPillScanningType == .FIXED{
+                        
                         showPillTargetCountPopup = true
                         isFromScanning = true
                         // Note: For fixed flow, we might hold onto capturedImage in a @State

@@ -560,7 +560,6 @@ struct CountHistoryView: View {
                                             )
                                         )
                                     )
-                                    Hl7ServiceController.shared.startClient()
                                 } else {
                                     router.navigate(
                                         to: .authentication(

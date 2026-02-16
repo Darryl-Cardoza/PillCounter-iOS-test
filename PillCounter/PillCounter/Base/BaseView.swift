@@ -18,6 +18,9 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
     // MARK: - CONFIGURATION PROPERTIES
     let showBackButton: Bool
     let showHamburgerMenu: Bool
+    let showPmsConnectionButton : Bool
+    let pmsConnectionState: PmsConnectionState
+
     let title: String
 
     // MARK: - CONFIRMATION PROPERTIES
@@ -41,15 +44,19 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
     
     // MARK: - STATE
     @State private var keyboardHeight: CGFloat = 0
+    @State private var animatePulse = false
+
 
     // MARK: - MAIN INIT
-    init(
+    init( 
         topRatio: CGFloat = 0.5,
         @ViewBuilder topContent: @escaping () -> TopContent,
         @ViewBuilder bottomContent: @escaping () -> BottomContent,
         @ViewBuilder headerActions: @escaping () -> HeaderActions,
         showBackButton: Bool = false,
         showHamburgerMenu: Bool = false,
+        showpmsConnectionButton: Bool = false,
+        pmsConnectionState: PmsConnectionState = .disconnected,
         title: String = "",
         confirmBack: Bool = false,
         confirmTitle: String? = nil,
@@ -66,6 +73,8 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         self.headerActions = headerActions
         self.showBackButton = showBackButton
         self.showHamburgerMenu = showHamburgerMenu
+        self.showPmsConnectionButton = showpmsConnectionButton
+        self.pmsConnectionState = pmsConnectionState
         self.title = title
         self.confirmBack = confirmBack
         self.confirmTitle = confirmTitle
@@ -116,6 +125,8 @@ extension BaseView where HeaderActions == EmptyView {
         @ViewBuilder bottomContent: @escaping () -> BottomContent,
         showBackButton: Bool = false,
         showHamburgerMenu: Bool = false,
+        showPmsConnectionButton: Bool = false,
+        pmsConnectionState:PmsConnectionState = .notAvailable,
         title: String = "",
         confirmBack: Bool = false,
         confirmTitle: String? = nil,
@@ -131,6 +142,8 @@ extension BaseView where HeaderActions == EmptyView {
             headerActions: { EmptyView() },
             showBackButton: showBackButton,
             showHamburgerMenu: showHamburgerMenu,
+            showpmsConnectionButton: showPmsConnectionButton,
+            pmsConnectionState: pmsConnectionState,
             title: title,
             confirmBack: confirmBack,
             confirmTitle: confirmTitle,
@@ -193,6 +206,28 @@ extension BaseView {
                     alignment: .topLeading
                 )
             }
+            
+            
+            if showPmsConnectionButton {
+                HStack {
+                    pmsConnectionStatusButton
+                        .scaleEffect(1)
+                        .padding(8)
+                }
+                .padding(
+                    .top,
+                    isLandscape
+                        ? 0
+                        : max(geometry.safeAreaInsets.top + 10, 40)
+                )
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .topLeading
+                )
+            }
+            
+        
 
             // 2. RIGHT SIDE: Header Actions + Hamburger
             HStack(spacing: 16) {
@@ -226,6 +261,8 @@ extension BaseView {
 
 // MARK: - COMPONENT BUILDERS
 extension BaseView {
+    
+
 
     private var backButton: some View {
         Button {
@@ -290,6 +327,71 @@ extension BaseView {
                 .padding(12)
         }
         .transition(.opacity)
+    }
+    
+//    
+//    private var pmsConnectionStatusButton: some View {
+//        Button {
+//            // action
+//        } label: {
+//            Image("pms_icon")
+//                .font(.system(size: 2, weight: .bold))
+//        }
+//    }
+    var pmsConnectionStatusButton: some View {
+        Button {
+            // optional action
+        } label: {
+            Image("pms_icon")
+                .renderingMode(.template)
+                .foregroundColor(pmsIconColor)
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+                .scaleEffect(
+                    pmsConnectionState == .connecting
+                    ? (animatePulse ? 1.15 : 1.0)
+                    : 1.0
+                )
+                .onAppear {
+                    if pmsConnectionState == .connecting {
+                        startPulse()
+                    }
+                }
+                .onChange(of: pmsConnectionState) { _, newValue in
+                    if newValue == .connecting {
+                        startPulse()
+                    } else {
+                        animatePulse = false
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func startPulse() {
+        withAnimation(
+            .easeInOut(duration: 0.6)
+                .repeatForever(autoreverses: true)
+        ) {
+            animatePulse = true
+        }
+    }
+
+
+    private var pmsIconColor: Color {
+        switch pmsConnectionState {
+        case .connected:
+            return AppColors.shared.primary
+            
+        case .disconnected:
+            return .gray
+            
+        case .connecting:
+            return AppColors.shared.primary
+            
+        case .notAvailable:
+            return .gray
+        }
     }
 
     private func hamburgerMenu(in geometry: GeometryProxy) -> some View {

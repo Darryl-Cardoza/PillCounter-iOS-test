@@ -84,6 +84,8 @@ struct QRBarcodeScannerView: View {
             BaseView(
                 topRatio: 0.7,  // Full screen for camera
                 topContent: {
+                    GeometryReader { geo in
+
                     ZStack(alignment: .bottom) {
                         // 1. Camera Layer
                         if cameraManager.isAuthorized {
@@ -98,17 +100,29 @@ struct QRBarcodeScannerView: View {
                             Color.black
                         }
                         
-                        scanInstructionOverlay
-                            .padding(.horizontal, 80)
-                            .padding(.bottom, 20)
-
-                        // 2. Scanned Data Card (Overlay)
-                        if !cameraManager.scannedCode.isEmpty {
-                            scannedCodeCard
-                                .padding(.bottom, 40)
+                        if cameraManager.scannedCode.isEmpty {
+                            BarcodeScanBox()
+                                .position(
+                                    x: geo.size.width / 2,
+                                    y: geo.size.height / 2
+                                )
+                        }
+                        VStack {
+                            Spacer()
+                            scanInstructionOverlay
+                                .padding(.horizontal, 80)
+                                .padding(.bottom, 20)
+                            
+                            // 2. Scanned Data Card (Overlay)
+                            if !cameraManager.scannedCode.isEmpty {
+                                scannedCodeCard
+                                    .padding(.bottom, 40)
+                            }
                         }
                     }
+                }
                 },
+                
                 bottomContent: {
                     bottomContent
                 },
@@ -198,6 +212,39 @@ struct QRBarcodeScannerView: View {
             }
         }
     }
+    
+    
+    struct BarcodeScanBox: View {
+        @State private var animate = false
+
+        var body: some View {
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            AppColors.shared.primary,
+                            AppColors.shared.secondary,
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 3
+                )
+                .frame(width: 180, height: 180)
+                .scaleEffect(animate ? 1.05 : 0.95)
+                .opacity(animate ? 1 : 0.6)
+                .onAppear {
+                    withAnimation(
+                        .easeInOut(duration: 0.8)
+                            .repeatForever(autoreverses: true)
+                    ) {
+                        animate = true
+                    }
+                }
+                .allowsHitTesting(false)
+        }
+    }
+
 
 }
 
@@ -228,10 +275,8 @@ extension QRBarcodeScannerView {
                 Task { @MainActor in
                     pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue)
 
-                    if router.selectedPillScanningType == .FIXED,
-
-                       let fixedCount = pillScanViewModel.getFixedCount(),
-                       fixedCount <= 0 {
+                    if router.selectedPillScanningType == .FIXED{
+                        
                         showPillTargetCountPopup = true
                         isFromScanning = true
                         // Note: For fixed flow, we might hold onto capturedImage in a @State
@@ -321,8 +366,8 @@ extension QRBarcodeScannerView {
                     disabled: false,
                     text: $pillScanViewModel.ndcNumber,
                     keyboardType: .phonePad,
-                    validation: .phone,
-                    maxLength: 10,
+                    validation: .none,
+                    maxLength: 20,
                     field: .ndcNumber,
                     focusedField: $focusedField
                 )
@@ -444,12 +489,13 @@ extension QRBarcodeScannerView {
                 disabled: false,
                 text: $pillScanViewModel.ndcNumber,
                 keyboardType: .phonePad,
-                validation: .phone,
-                maxLength: 10,
+                validation: .none,
+                maxLength: 20,
                 field: .ndcNumber,
                 focusedField: $focusedField
             )
-
+            
+//
             // Drug Name
             Text("Drug Name:")
                 .foregroundStyle(appColors.text)
@@ -536,6 +582,9 @@ extension QRBarcodeScannerView {
         .background(appColors.primaryBackground)
         .cornerRadius(24)
     }
+    
+
+
 
 
     private var scannedCodeCard: some View {

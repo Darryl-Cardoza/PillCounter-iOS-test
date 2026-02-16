@@ -34,22 +34,22 @@ struct CameraContentView: View {
 
                     DetectionOverlay(cameraService: cameraService)
                         .ignoresSafeArea()
-                    
-                    VStack {
-                        HStack {
-                            Spacer()
-                            
-                            PillCountingToggleButton(
-                                isOn: $isAutoOrManual,
-                                onColor: appColors.secondary,
-                                offColor: Color.black.opacity(0.5)
-                            )
-                            .padding(.trailing, 16)
-                            .padding(.top, 16)
-                        }
-                        
-                        Spacer()
-                    }
+                    //Toggle
+//                    VStack {
+//                        HStack {
+//                            Spacer()
+//                            
+//                            PillCountingToggleButton(
+//                                isOn: $isAutoOrManual,
+//                                onColor: appColors.secondary,
+//                                offColor: Color.black.opacity(0.5)
+//                            )
+//                            .padding(.trailing, 16)
+//                            .padding(.top, 16)
+//                        }
+//                        
+//                        Spacer()
+//                    }
                     .padding(.top, isLandscape ? 0 : 30)
 
                     ZoomControlView(cameraService: cameraService)
@@ -85,8 +85,12 @@ struct ZoomControlView: View {
 
             VStack(spacing: 8) {
                 Text(String(format: "%.1fx", cameraService.zoomFactor))
-                    .font(.caption)
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(appColors.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.5))
+                    .clipShape(Capsule())
 
                 GeometryReader { geo in
                     ZStack {
@@ -537,7 +541,6 @@ struct BottonControlsViewForTransactionList: View {
                 Text("Total Count")
                     .font(.caption)
                     .foregroundColor(appColors.text)
-                    .padding(.top, 15)
 
                 HStack(spacing: 4) {
                     Text("\(totalCount)")
@@ -557,10 +560,9 @@ struct BottonControlsViewForTransactionList: View {
                     countType: countType,
                     appColors: appColors
                 )
-                .padding(.top, 20)
+                .padding(.top, 60)
             }
         }
-        .padding(.top, 8)
     }
     private func scrollToLast(_ proxy: ScrollViewProxy) {
         guard !details.isEmpty else { return }
@@ -597,7 +599,9 @@ struct BottomControlsViewHeader: View {
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
+                        .padding(.top, 30)
                 }
+
             } else {
                 ZStack {
                     // Layer 1: The Text (Centered)

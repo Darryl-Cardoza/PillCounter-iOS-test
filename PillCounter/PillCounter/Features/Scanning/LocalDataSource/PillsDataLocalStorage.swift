@@ -34,7 +34,7 @@ final class PillsDataLocalStorage {
             return
         }
 
-        // now if the pill data is found.
+        // now if the pill data is found.HL7MessageBuilder
         // save the pill data in the local db.
 
         let entity = DrugMasterEntity(context: mainThreadContext)
@@ -323,19 +323,24 @@ final class PillsDataLocalStorage {
 
     // fetch all the transaction fixed partial only.
     func fetchAllTransactionFixedOrRegularPartial(
-        for user: UserEntity, countType: CountType
-    ) -> [PillCountTransactionEntity]? {
+        for user: UserEntity,
+        countType: CountType
+    ) -> [PillCountTransactionEntity] {
 
         let request: NSFetchRequest<PillCountTransactionEntity> =
             PillCountTransactionEntity.fetchRequest()
 
         request.predicate = NSPredicate(
-            format:
-                "user == %@ AND is_deleted == false AND count_type == %@ AND status == %@",
+            format: "user == %@ AND is_deleted == false AND count_type == %@ AND status == %@",
             user,
             countType.rawValue,
             CountStatus.PARTIAL.rawValue
         )
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "isComingFromPms", ascending: false),
+            NSSortDescriptor(key: "created_at", ascending: false)
+        ]
 
         return (try? mainThreadContext.fetch(request)) ?? []
     }
@@ -691,7 +696,6 @@ final class PillsDataLocalStorage {
                     🗑️ Deleted: \(txn.is_deleted)
                        isComingFromPms \(txn.isComingFromPms)
                        isSynced \(txn.isSynced)
-                       Status \(txn.status)
                     ---------------------------------
                     ------------------
                     """)

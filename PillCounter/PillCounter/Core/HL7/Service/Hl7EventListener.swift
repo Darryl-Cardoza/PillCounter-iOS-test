@@ -31,5 +31,5 @@ protocol Hl7EventListener: AnyObject {
     
     func onClientDisconnected()
     
-    func onAckReceived(messageId: String)
+    func onAckReceived(messageId: String? , ackCode: String)
 }

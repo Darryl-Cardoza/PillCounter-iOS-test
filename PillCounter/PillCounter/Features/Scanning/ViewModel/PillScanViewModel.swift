@@ -55,12 +55,12 @@ class PillScanViewModel: ObservableObject {
     
     @Published var showPmsNdcMismatchPopup = false
     
+ 
+    
     private var cancellables = Set<AnyCancellable>()
 
 
-    init() {
-        observePendingHl7Transactions()
-    }
+    
 
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
@@ -200,14 +200,20 @@ class PillScanViewModel: ObservableObject {
     }
 
     func getFixedCount() -> Int32? {
-        guard let txn = selectedTransaction,
-              txn.isComingFromPms
-        else {
+        guard let txn = selectedTransaction else {
+            print("ℹ️ [COUNT] No transaction selected")
             return nil
         }
-        print("target count \(txn.target_count)")
+
+        guard txn.isComingFromPms else {
+            print("ℹ️ [COUNT] Not PMS transaction → skipping fixed count validation")
+            return nil
+        }
+
+        print("🎯 [COUNT] Target count from PMS: \(txn.target_count)")
         return txn.target_count
     }
+
 
 
     private func generateUniqueDrugId() -> Int64 {
@@ -423,10 +429,7 @@ class PillScanViewModel: ObservableObject {
         {
             self.currentTransaction = latest
         }
-        
-        if selectedTransaction?.isComingFromPms == true {
-            Hl7ServiceController.shared.startClient()
-        }
+
     }
 
     // create a func to get all the transactions of the current transaction.
@@ -572,6 +575,25 @@ class PillScanViewModel: ObservableObject {
         self.targetCount = ["", "", "", ""]
     }
     
+    
+    @MainActor
+    func autofillDrugNameIfAvailable(for ndc: String) {
+        guard ndc.count >= 20 else { return }
+
+        let storage = PillsDataLocalStorage.shared
+
+        if let drug = storage.getPillByNdc(by: ndc),
+           let drugName = drug.drug_name,
+           !drugName.isEmpty {
+
+            // Auto-fill ONLY if user has not typed anything
+            if drugNameMannuallyEntered.isEmpty {
+                drugNameMannuallyEntered = drugName
+            }
+        }
+    }
+
+    
     // Message handling for transaction coming from pms
     typealias HL7SimpleCallback = (Bool) -> Void
 
@@ -638,7 +660,7 @@ class PillScanViewModel: ObservableObject {
         inboundType: CountType,
         callback: HL7SimpleCallback? = nil
     ) async {
-        
+    
         guard let inventory = message.inventoryItems.first else {
             print("Regular Count: No RXE medication found")
             return
@@ -742,24 +764,4 @@ class PillScanViewModel: ObservableObject {
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }
-
-    
-    
-    
-    func observePendingHl7Transactions() {
-        print("pending transcatin observe called")
-        print("pending transaction \(pillDataLocalStorage.getPendingHl7TxnOnce())")
-           pillDataLocalStorage
-               .observePendingHl7Transactions()
-               .receive(on: DispatchQueue.main)
-               .sink { txns in
-                   guard !txns.isEmpty else { return }
-
-                   print("Pending HL7 txns detected: \(txns.count)")
-
-                   // ONLY trigger connection
-                   Hl7ServiceController.shared.startClient()
-               }
-               .store(in: &cancellables)
-       }
 }

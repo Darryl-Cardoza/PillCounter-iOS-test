@@ -5,7 +5,6 @@
 //  Created by Bhushan Patil on 04/02/26.
 //  Hl7ServiceController.swift
 //  PillCounter
-//
 
 import Foundation
 import SwiftUI
@@ -16,7 +15,7 @@ final class Hl7ServiceController: ObservableObject {
 
     static let shared = Hl7ServiceController()
 
-    // MARK: - App State
+    // MARK: - App Storage
 
     @AppStorage(AppStorageManager.AppStorageKeys.isLoggedIn)
     private var isLoggedIn: Bool = false
@@ -35,19 +34,28 @@ final class Hl7ServiceController: ObservableObject {
     private let pillDataLocalStorage = PillsDataLocalStorage.shared
     private var cancellables = Set<AnyCancellable>()
 
-    // MARK: - HL7 Infra
+    // MARK: - HL7 Layer
 
     private var hl7Manager: Hl7ServiceManager?
     private var hl7Handler: Hl7EventHandler?
 
-    // Track in-flight messages (messageId → txnId)
-    private var sendingQueue: [Int64] = []
-    // Prevent duplicate resend
-    private var hasResentPending = false
+    // MARK: - Send Queue
+
+    /// Ordered queue of transactions waiting to be ACK'd by PMS.
+    private var sendingQueue: [PillCountTransactionEntity] = []
+
+    /// The single transaction currently in-flight (waiting for ACK).
+    private var currentTxn: PillCountTransactionEntity?
+    private var currentMessageId: String?
+
+    private var retryCount = 0
+    private let maxRetries = 3
+
+    // MARK: - Init
 
     private init() {}
 
-    // MARK: - Binding (called once from SwiftUI root)
+    // MARK: - Bind (called once from SwiftUI root)
 
     func bind(
         pillScanViewModel: PillScanViewModel,
@@ -63,23 +71,27 @@ final class Hl7ServiceController: ObservableObject {
 
     // MARK: - Entry Point
 
+    /// Called whenever app state changes (login, HL7 toggle, etc.)
     func evaluate() {
         guard shouldStartService else {
             stopService()
             return
         }
 
-        startServiceIfNeeded()
+        startHl7Services()
+        observePendingTransactions()
     }
 
     private var shouldStartService: Bool {
         isLoggedIn && isHl7Enabled && !SecurityManager.isDeviceCompromised()
     }
 
-    // MARK: - Service Lifecycle
+    // MARK: - Start / Stop
 
-    private func startServiceIfNeeded() {
+    private func startHl7Services() {
         guard hl7Manager == nil, let handler = hl7Handler else { return }
+
+        print("[HL7CTRL] Starting HL7 services")
 
         hl7Manager = Hl7ServiceManager(
             port: 2575,
@@ -88,21 +100,17 @@ final class Hl7ServiceController: ObservableObject {
             pmsServiceType: pmsHostName,
             listener: handler
         )
-
-        do {
-            try hl7Manager?.start()
-        } catch {
-            print("❌ Failed to start HL7 service: \(error)")
-        }
+        // Hl7ServiceManager internally starts NWPathMonitor → NWBrowser → Client → Server
     }
 
     private func stopService() {
+        print("[HL7CTRL] Stopping HL7 services")
         hl7Manager?.stop()
         hl7Manager = nil
-        hasResentPending = false
+        resetQueueState()
     }
 
-    // MARK: - Observe Pending Transactions (Android Flow.collect)
+    // MARK: - Observe Pending Transactions
 
     private var isObservingPending = false
 
@@ -115,114 +123,152 @@ final class Hl7ServiceController: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] txns in
                 guard let self else { return }
-
-                guard !txns.isEmpty else {
-                    self.hasResentPending = false
-                    return
-                }
-
-                print("Pending HL7 txns detected: \(txns.count)")
-                self.startClient()
+                print("[HL7CTRL] Pending txns observed: \(txns.count)")
+                // Actual sending is triggered in onClientConnected.
+                // This observer is for UI/state awareness only.
             }
             .store(in: &cancellables)
     }
 
+    // MARK: - Events from Hl7EventHandler
 
-    // MARK: - Client Control
-
-    func startClient() {
-        guard let hl7Manager else {
-            print("HL7 service not running")
-            return
-        }
-        hl7Manager.startClient()
-    }
-
-    func stopClient() {
-        hl7Manager?.disconnectClient()
-        hasResentPending = false
-    }
-
-    // MARK: - EVENTS (called from Hl7EventHandler)
-
-    /// PMS connected
+    /// PMS client connection is ready — load and start sending pending transactions.
     func onClientConnected() {
+        print("[HL7CTRL] Client connected — loading pending transactions")
         resendPendingHl7Transactions()
     }
 
-    func onAckReceived(messageId: String) {
+    /// ACK received from PMS.
+    func onAckReceived(messageId: String?, ackCode: String) {
+        let ackMsgId = messageId?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        print("[HL7][ACK] received")
+        print("[HL7][ACK] messageId=\(ackMsgId ?? "nil") code=\(ackCode)")
 
-        guard !sendingQueue.isEmpty else {
-            print("[HL7][ACK] No pending txn to sync")
+        guard let txn = currentTxn else {
+            print("[HL7][ACK] No in-flight txn — ignoring ACK")
             return
         }
 
-        let syncedTxnId = sendingQueue.removeFirst()
+        // NACK → retry / move to end
+        guard ackCode == "AA" else {
+            print("[HL7][ACK] NACK received")
+            handleSendFailure()
+            return
+        }
 
-        print("[HL7][ACK] Syncing txnId =", syncedTxnId)
+        // If PMS sent a messageId, it must match what we sent
+        if let ackId = ackMsgId, !ackId.isEmpty {
+            guard let inflightId = currentMessageId, ackId == inflightId else {
+                print("[HL7][ACK] MessageId mismatch — ignoring ACK")
+                return
+            }
+        } else {
+            print("[HL7][ACK] No messageId in ACK — accepting (single in-flight rule)")
+        }
 
-        pillDataLocalStorage.updateTransactionSynced(txnId: syncedTxnId)
+        // Mark synced in persistence
+        pillDataLocalStorage.updateTransactionSynced(txnId: txn.txn_id)
+        print("[HL7][ACK] Txn \(txn.txn_id) marked synced")
 
-        // Send next message automatically
+        // Advance queue
+        sendingQueue.removeFirst()
+        currentTxn = nil
+        currentMessageId = nil
+        retryCount = 0
+
         sendNextIfPossible()
     }
 
+    /// ACK timeout — treat same as send failure.
+    func onAckTimeout() {
+        print("[HL7CTRL] ACK timeout")
+        handleSendFailure()
+    }
 
-    // MARK: - Resend Logic (Android resendPendingHl7Transactions)
+    // MARK: - Send Queue Logic
+
     private func resendPendingHl7Transactions() {
-        let pending = pillDataLocalStorage.getPendingHl7TxnOnce()
+        let pending = pillDataLocalStorage.getPendingHl7Txn()
 
         guard !pending.isEmpty else {
-            print("[HL7] No pending transactions")
+            print("[HL7CTRL] No pending transactions")
             return
         }
 
-        // Build FIFO queue
-        sendingQueue = pending.map { $0.txn_id }
+        print("[HL7CTRL] Queuing \(pending.count) pending transaction(s)")
 
-        print("[HL7] Sending queue:", sendingQueue)
+        sendingQueue = pending
+        currentTxn = nil
+        currentMessageId = nil
+        retryCount = 0
 
         sendNextIfPossible()
     }
 
-    
     private func sendNextIfPossible() {
-        guard let nextTxnId = sendingQueue.first else {
-            print("[HL7] Queue empty, nothing to send")
+        // Already waiting for an ACK
+        guard currentTxn == nil else {
+            print("[HL7CTRL] In-flight txn exists — waiting for ACK")
             return
         }
 
-        guard let txn = pillDataLocalStorage
-            .fetchPillCountTransactionByTransactionId(txnId: nextTxnId) else {
-            sendingQueue.removeFirst()
-            sendNextIfPossible()
+        guard !sendingQueue.isEmpty else {
+            print("[HL7CTRL] All transactions processed")
             return
         }
 
-        let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
-        let hl7 = buildHl7Message(from: txn, messageId: messageId)
-
-        print("[HL7] Sending txnId =", txn.txn_id)
-        hl7Manager?.sendClientHL7(hl7)
+        let txn = sendingQueue.first!
+        sendTransaction(txn)
     }
-    
 
-    // MARK: - Send HL7
     private func sendTransaction(_ txn: PillCountTransactionEntity) {
+        currentTxn = txn
+        retryCount += 1
+
         let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
+        currentMessageId = messageId
+
         let hl7 = buildHl7Message(from: txn, messageId: messageId)
+
+        print("[HL7CTRL] Sending txnId=\(txn.txn_id) attempt=\(retryCount)/\(maxRetries)")
         hl7Manager?.sendClientHL7(hl7)
-        print("HL7 sent | txnId=\(txn.txn_id) | messageId=\(messageId)")
     }
 
-    
+    private func handleSendFailure() {
+        guard let txn = currentTxn else { return }
+
+        if retryCount < maxRetries {
+            print("[HL7CTRL] Retrying txnId=\(txn.txn_id) attempt \(retryCount + 1)/\(maxRetries)")
+            sendTransaction(txn)
+            return
+        }
+
+        // Max retries exhausted → move to end of queue, try others
+        print("[HL7CTRL] Max retries for txnId=\(txn.txn_id) — moving to end of queue")
+
+        sendingQueue.removeFirst()
+        sendingQueue.append(txn)
+
+        currentTxn = nil
+        currentMessageId = nil
+        retryCount = 0
+
+        sendNextIfPossible()
+    }
+
+    private func resetQueueState() {
+        sendingQueue.removeAll()
+        currentTxn = nil
+        currentMessageId = nil
+        retryCount = 0
+    }
+
+    // MARK: - HL7 Message Builder
+
     private func buildHl7Message(
         from txn: PillCountTransactionEntity,
         messageId: String
     ) -> String {
-
         let timestamp = hl7Timestamp()
 
         let msh = [
@@ -243,10 +289,12 @@ final class Hl7ServiceController: ObservableObject {
 
         return msh + "\r"
     }
+
+    
+    
     private func hl7Timestamp() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMddHHmmss"
         return formatter.string(from: Date())
     }
-
 }

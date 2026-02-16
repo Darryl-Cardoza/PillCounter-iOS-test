@@ -105,3 +105,72 @@ struct PillCountingButton: View {
         .buttonStyle(.plain)
     }
 }
+
+
+
+struct PillCountingTextButtonWithoutBg: View {
+
+    let iconName: String?
+    let title: String
+    let action: () -> Void
+    let textColor: Color
+    let iconColor: Color?
+
+    var font: Font
+    var horizontalPadding: CGFloat
+    var verticalPadding: CGFloat
+    var iconSize: CGFloat
+
+    init(
+        iconName: String? = nil,
+        title: String,
+        textColor: Color = .primary,
+        font: Font = .system(size: 16, weight: .medium),
+        horizontalPadding: CGFloat = 0,
+        verticalPadding: CGFloat = 14,
+        iconSize: CGFloat = 20,
+        action: @escaping () -> Void,
+        iconColor: Color? = nil
+    ) {
+        self.iconName = iconName
+        self.title = title
+        self.textColor = textColor
+        self.font = font
+        self.horizontalPadding = horizontalPadding
+        self.verticalPadding = verticalPadding
+        self.iconSize = iconSize
+        self.action = action
+        self.iconColor = iconColor
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if let iconName = iconName, !iconName.isEmpty {
+                    Group {
+                        if let iconColor = iconColor {
+                            Image(iconName)
+                                .resizable()
+                                .renderingMode(.template)
+                                .foregroundColor(iconColor)
+                        } else {
+                            Image(iconName)
+                                .resizable()
+                        }
+                    }
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+                }
+
+                Text(title)
+                    .font(font)
+                    .foregroundColor(textColor)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
+            .contentShape(Rectangle()) // tap area preserved
+        }
+        .buttonStyle(.plain)
+    }
+}

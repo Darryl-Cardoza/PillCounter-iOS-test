@@ -144,7 +144,7 @@ struct UserHistoryView: View {
                                     .resizable()
                                     .scaledToFit()
                             )
-                    }
+                    }.padding(.trailing,20)
 
                     Button {
                         showDeleteConfirmation = true

@@ -76,8 +76,8 @@ struct AppNavigation: View {
                         UserSettingsView()
                             .navigationBarBackButtonHidden(true)
 
-                    case .authentication(.user(.userSettings(.History))):
-                        UserHistoryView()
+                    case .authentication(.user(.userSettings(.History(let filterType)))):
+                        UserHistoryView(filterType: filterType)
                             .navigationBarBackButtonHidden(true)
 
                     // before navigating to this screen make sure to set the current transaction of the pill scan view model to the selected transaction.

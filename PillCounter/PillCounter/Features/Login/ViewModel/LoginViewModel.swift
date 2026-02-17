@@ -198,7 +198,6 @@ class LoginViewModel: ObservableObject {
                 isOtpVerificationSuccess = true
                 isLoggedIn = true
                 isHl7Enabled = verifyOTPresult.data?.user?.isHl7Enabled ?? false
-                print("isHL7Enabled \(isHl7Enabled)")
                 // store the access token and refresh token to the app storage or user defaults.
                 // saving the user email to user defaults too.
                 accessToken = verifyOTPresult.data?.accessToken ?? ""
@@ -233,6 +232,7 @@ class LoginViewModel: ObservableObject {
         isLoading = true
 
         defer { isLoading = false }
+        AppStorageManager.shared.logout()
 
         do {
             let logoutResult = try await loginrepo.logout(
@@ -241,7 +241,6 @@ class LoginViewModel: ObservableObject {
             if logoutResult.isSuccess ?? false {
                 errorMessage = nil
                 isLogoutSucces = true
-                AppStorageManager.shared.logout()
             }
 
             Task { @MainActor in

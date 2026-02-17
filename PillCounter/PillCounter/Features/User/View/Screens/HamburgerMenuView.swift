@@ -15,10 +15,12 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var loginViewModel: LoginViewModel
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
-    
+
     @State private var showLogoutPopup: Bool = false
     
     @AppStorage(AppStorageManager.AppStorageKeys.saveHistoryOption)
+    
+
     
     private var storedHistoryOption: String = SaveHistoryOption.default.rawValue
     
@@ -62,12 +64,11 @@ struct HamburgerMenuView: View {
             showLogoutPopup = false
         } onConfirm: {
             Task {
+                router.setRoot(
+                    to: .authentication(.login(.LoginEmail)))
                 await loginViewModel.logout()
-                if loginViewModel.isLogoutSucces {
-                    showLogoutPopup = false
-                    router.setRoot(
-                        to: .authentication(.login(.LoginEmail)))
-                }
+                
+                showLogoutPopup = false
             }
         }
     }
@@ -204,12 +205,10 @@ struct HamburgerMenuView: View {
                 primaryIconColor: appColors.secondary,
                 isLandscape: isLandscape,
                 onPartialTap: {
-                    if userViewModel.fixedCountTransactionPartialCount > 0 {
                         router.selectedPillScanningType = .FIXED
                         router.navigate(
                             to: .authentication(
                                 .login(.dashboard(.fixedCountPartial))))
-                    }
                 }
             ).padding(.horizontal,0)
 
@@ -225,12 +224,10 @@ struct HamburgerMenuView: View {
                 primaryIconColor: appColors.primary,
                 isLandscape: isLandscape,
                 onPartialTap: {
-                    if userViewModel.regularCountTransactionPartialCount > 0 {
                         router.selectedPillScanningType = .REGULAR
                         router.navigate(
                             to: .authentication(
                                 .login(.dashboard(.regularCountPartial))))
-                    }
                 }
             )
 
@@ -254,7 +251,7 @@ struct HamburgerMenuView: View {
     ) -> some View {
         HStack(spacing: 10) {
             // Landscape: Buttons align Right. Portrait: Buttons fill width.
-            if isLandscape { Spacer() }
+            if isLandscape { Spacer(minLength: 0) }
 
             PillCountingButton(
                 iconName: "tick_icon_pink",
@@ -268,13 +265,15 @@ struct HamburgerMenuView: View {
                 verticalPadding: 0,
                 iconSize: 16,
                 action: {
-                    router.navigate(to: .authentication(.user(.userSettings(.History))))
+                    router.navigate(to: .authentication(.user(.userSettings(.History(.all)))))
                 },
                 iconColor: primaryIconColor
             )
-            // Portrait: Button takes equal available space
-            .frame(maxWidth: isLandscape ? nil : 133)
+            .fixedSize()
+            .frame(minWidth: isLandscape ? 130 : nil)
 
+            
+            if !isLandscape {Spacer()}
             
             
             PillCountingButton(
@@ -285,15 +284,15 @@ struct HamburgerMenuView: View {
                 backgroundColor: partialBg,
                 font: .system(size: 14, weight: .semibold),
                 cornerRadius: 32,
-                horizontalPadding: isLandscape ? 16 : 0,
+                horizontalPadding:  0,
                 verticalPadding: 8,
                 iconSize: 16,
                 action: onPartialTap,
                 iconColor: primaryIconColor
             )
-            // Portrait: Button takes equal available space
-            .frame(maxWidth: isLandscape ? nil : 150)
+            .frame(maxWidth:150)
         }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - MENU ACTION HANDLER
@@ -328,7 +327,7 @@ struct HamburgerMenuView: View {
             router.navigate(to: .authentication(.user(.userSettings(.profile))))
 
         case .History:
-            router.navigate(to: .authentication(.user(.userSettings(.History))))
+            router.navigate(to: .authentication(.user(.userSettings(.History(.all)))))
 
         }
     }

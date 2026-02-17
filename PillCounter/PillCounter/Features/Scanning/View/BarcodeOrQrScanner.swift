@@ -12,7 +12,7 @@ import SwiftUI
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
     @ObservedObject var cameraManager: CameraViewModel
-
+    
     func makeUIView(context: Context) -> CameraPreviewView {
         let view = CameraPreviewView()
         view.session = session
@@ -102,11 +102,12 @@ struct QRBarcodeScannerView: View {
                         
                         if cameraManager.scannedCode.isEmpty {
                             BarcodeScanBox()
-                                .position(
-                                    x: geo.size.width / 2,
-                                    y: geo.size.height / 2
-                                )
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .overlay(alignment: .center) {
+                                    BarcodeScanBox()
+                                }
                         }
+
                         VStack {
                             Spacer()
                             scanInstructionOverlay
@@ -175,6 +176,7 @@ struct QRBarcodeScannerView: View {
                 scanTimeoutTask?.cancel()
             }
         }
+        
 //        // MARK: - POPUPS
 //        .customPopup(isPresented: $showMannualEntryPopup) {
 //            mannualEntryPopup
@@ -886,3 +888,9 @@ extension QRBarcodeScannerView {
 }
 
 
+@discardableResult
+func DLOG(_ msg: String) -> Bool {
+    print("🧭 [Scanner] \(msg)")
+    return true
+}
+    

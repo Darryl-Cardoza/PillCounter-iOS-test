@@ -21,7 +21,6 @@ class UserViewModel: ObservableObject {
     @AppStorage(AppStorageManager.AppStorageKeys.userEmail) var userEmail:
         String = ""
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userID: String = ""
-    
     @AppStorage(AppStorageManager.AppStorageKeys.pmsHostName)
     var pmsHostName: String = ""
 
@@ -30,7 +29,7 @@ class UserViewModel: ObservableObject {
 
 
     // MARK: PUBLISHED VARIABLES
-    // general loading
+    // general loading  
     @Published var isLoading: Bool = false
 
     // user details
@@ -94,8 +93,7 @@ class UserViewModel: ObservableObject {
 
     // settings repo
     let settingsRepo = SettingsRepository.shared
-    
-
+ 
     
 
     // MARK: MOBILE SETTINGS
@@ -143,6 +141,8 @@ class UserViewModel: ObservableObject {
     // MARK: GET USER
     // get user info
     func getUser() async {
+        
+        print("UserID \(     userID)")
 
         isLoading = true
         
@@ -151,7 +151,7 @@ class UserViewModel: ObservableObject {
         if !userID.isEmpty,
            let localUser = userLocalDB.getUserByUserId(by: userID) {
             
-            let name = Formatter.segregateName(from: localUser.name ?? "")
+           let name = Formatter.segregateName(from: localUser.name ?? "")
             
             // Populate UI from local DB
             firstName = name.firstName
@@ -309,32 +309,67 @@ class UserViewModel: ObservableObject {
 
     // MARK: TRANSACTION BY DATE
     // get user's transactions filtered by date.
-    func getTransactionsByDate(selectedDate: Date) async {
+    func getTransactionsByDate(
+        selectedDate: Date,
+        filter: HistoryFilterType
+    ) async {
+        
+        print("get Transcation by date \(selectedDate) \(filter)")
+
         guard let user = userLocalDB.getUserByUserId(by: userID) else {
             print("❌ no user found in the local DB")
             self.filteredTransactionsOfUserByDate = []
             return
         }
 
-        // convert the start of the date to start-of-day Int 64
+        // MARK: Date range
         let startOfDay = Calendar.current.startOfDay(for: selectedDate)
-        let endOfDay = Calendar.current.date(
-            byAdding: .day, value: 1, to: startOfDay)!
+        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)!
 
-        // FIX: Multiply by 1000 to match the Milliseconds stored in your DB
         let startTimestamp = Int64(startOfDay.timeIntervalSince1970 * 1000)
         let endTimestamp = Int64(endOfDay.timeIntervalSince1970 * 1000)
 
-        filteredTransactionsOfUserByDate =
+        // STEP 1: Get all transactions of that date
+        let allTransactions =
             userLocalDB.getTransactionsForUserFilteredByDate(
                 for: user,
                 startDateTs: startTimestamp,
                 endDateTs: endTimestamp
             )
 
-        await fetchAndSetHistoryTransactions(
-            user: user, startTs: startTimestamp, endTs: endTimestamp)
+        // STEP 2: Apply business filter
+        let finalTransactions: [PillCountTransactionEntity]
+
+        switch filter {
+
+        case .all:
+            finalTransactions = allTransactions
+
+        case .regular:
+            finalTransactions = allTransactions.filter { txn in
+                txn.count_type == CountType.REGULAR.rawValue &&
+                (
+                    txn.status == CountStatus.COMPLETED.rawValue ||
+                    txn.status == CountStatus.FORCE_COMPLETED.rawValue
+                )
+            }
+
+        case .fixed:
+            finalTransactions = allTransactions.filter { txn in
+                txn.count_type == CountType.FIXED.rawValue &&
+                (
+                    txn.status == CountStatus.COMPLETED.rawValue ||
+                    txn.status == CountStatus.FORCE_COMPLETED.rawValue
+                )
+            }
+        }
+
+        // STEP 3: assign to UI
+        await MainActor.run {
+            self.filteredTransactionsOfUserByDate = finalTransactions
+        }
     }
+
 
     // MARK: ALL PARTIAL TRANSACTIONS
     // get user's fixed count partial transactoins
@@ -375,7 +410,8 @@ class UserViewModel: ObservableObject {
     
     // MARK: - SOFT DELETE ALL TRANSACTIONS FOR A DATE
     func softDeleteTransactionsForSelectedDate(
-        selectedDate: Date
+        selectedDate: Date,
+        filter: HistoryFilterType
     ) async {
 
         let transactionsToDelete = filteredTransactionsOfUserByDate
@@ -387,7 +423,7 @@ class UserViewModel: ObservableObject {
         }
 
         // Refresh UI after deletion
-        await getTransactionsByDate(selectedDate: selectedDate)
+        await getTransactionsByDate(selectedDate: selectedDate,filter:filter)
     }
 
     // MARK: - FORCE COMPLETE TRANSACTION
@@ -657,4 +693,9 @@ class UserViewModel: ObservableObject {
     func setPmsConnected(_ isConnected: Bool) {
         pmsConnectionState = isConnected ? .connected : .disconnected
     }
+    
+    
+    
+    
+
 }

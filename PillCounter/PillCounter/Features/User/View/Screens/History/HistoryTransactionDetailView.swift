@@ -273,9 +273,31 @@ struct HistoryTransactionDetailView: View {
 
             VStack {
                 // Note: You can also use the calculated total here if you have it
-                Text("\(transaction.map { getTotalPillCount(for: $0) } ?? 0)")
-                    .foregroundStyle(appColors.secondary)
-                    .font(.system(size: 34, weight: .bold))
+                let isFixed = transaction?.count_type == CountType.FIXED.rawValue
+                let targetCount = transaction?.target_count ?? 0
+                
+                if isFixed {
+                    Text("\(transaction.map { getTotalPillCount(for: $0) } ?? 0)")
+                         .foregroundStyle(appColors.secondary)
+                         .font(.system(size: 32, weight: .bold))
+                         .padding(.bottom, -6)
+
+                     Rectangle()
+                         .fill(appColors.secondary)
+                         .frame(width: 70, height: 2)
+
+                     Text("\(targetCount)")
+                         .foregroundStyle(appColors.secondary)
+                         .font(.system(size: 32, weight: .bold))
+                         .padding(.top, -6)
+                         .padding(.bottom,3)
+                } else {
+                    Text("\(transaction.map { getTotalPillCount(for: $0) } ?? 0)")
+                        .foregroundStyle(appColors.secondary)
+                        .font(.system(size: 34, weight: .bold))
+                }
+                
+              
 
                 Text("TOTAL COUNT")
                     .foregroundStyle(appColors.primary)

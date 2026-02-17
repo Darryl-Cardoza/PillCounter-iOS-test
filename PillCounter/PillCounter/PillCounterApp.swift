@@ -24,6 +24,7 @@ struct PillCounterApp: App {
     @StateObject private var pillScanViewModel = PillScanViewModel()
     @StateObject private var userViewModel = UserViewModel()
 
+
     private let isCompromised: Bool
 
     init() {
@@ -48,7 +49,6 @@ struct PillCounterApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-
                 // 1️⃣ Security violation (highest priority)
                 if !securityState.isSecure {
                     SecurityViolationView()
@@ -113,7 +113,6 @@ struct PillCounterApp: App {
 
 // MARK: - SECURITY HANDLING
 extension PillCounterApp {
-
     private func startSecurityMonitoring() {
         SecurityMonitor.shared.startMonitoring {
             DispatchQueue.main.async {

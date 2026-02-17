@@ -22,6 +22,9 @@ struct UserHistoryView: View {
     @EnvironmentObject private var router: Router
 
     @StateObject private var pdfService = PDFShareService.shared
+    
+    let filterType: HistoryFilterType
+
 
     // MARK: MAIN VIEW
     var body: some View {
@@ -50,24 +53,24 @@ struct UserHistoryView: View {
         }
         .onAppear {
             Task {
-                // 1. On App Launch/View Appear, load the "1 Week/1 Month" range default
                 await userViewModel.getTransactionsByDate(
-                    selectedDate: selectedDate)
-
-                // Allow a small delay before enabling the calendar listener to avoid instant override
-                try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5s
+                    selectedDate: selectedDate,
+                    filter: filterType
+                )
+                try? await Task.sleep(nanoseconds: 500_000_000)
             }
         }
-        .onChange(of: selectedDate) { oldValue, newValue in
-            // Only fetch specific date if the user actually interacts with calendar
-            // and we aren't in the initialization phase
+
+        .onChange(of: selectedDate) { _, newValue in
             Task {
-                // Otherwise, load specific single-day data
                 await userViewModel.getTransactionsByDate(
-                    selectedDate: newValue)
+                    selectedDate: newValue,
+                    filter: filterType
+                )
             }
-
         }
+
+
         .customPopup(isPresented: $showDeleteConfirmation) {
             deleteConfirmationPopUp
         }
@@ -88,7 +91,8 @@ struct UserHistoryView: View {
                 // delete all the transactions for that date.
                 Task {
                     await userViewModel.softDeleteTransactionsForSelectedDate(
-                        selectedDate: selectedDate
+                        selectedDate: selectedDate,
+                        filter: filterType
                     )
                     showDeleteConfirmation = false
                 }
@@ -272,9 +276,17 @@ struct TransactionRow: View {
             let targetCount = txn.target_count
 
             let notes = txn.note
+         
+            let isRegular = (txn.count_type == CountType.REGULAR.rawValue)
+
+            let displayText = isRegular
+                ? "\(count)"
+                : "\(count) / \(targetCount)"
+
+            
 
             HStack(spacing: 15) {
-                if targetCount != count {
+                if targetCount != count && txn.status ==  "partial" {
                     Image("partial")
                         .resizable()
                         .scaledToFit()
@@ -300,9 +312,11 @@ struct TransactionRow: View {
                         )
                 }
 
-                Text("\(count)")
+                Text(displayText)
                     .foregroundColor(appColors.text)
                     .fontWeight(.bold)
+
+            
             }
             .padding(.trailing)
         }

@@ -219,18 +219,28 @@ final class PillsDataLocalStorage {
 
     // soft delete the transaction
     func softDeleteTransaction(txnId: Int64) {
-        guard
-            let transaction = fetchPillCountTransactionByTransactionId(
-                txnId: txnId)
-        else {
-            print("❌ no transaction found.")
+
+        print("➡️ DB Delete Request for txnId:", txnId)
+
+        guard let transaction = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("❌ DB ERROR: no transaction found for id \(txnId)")
             return
         }
+
+        print("""
+        🧹 Soft Deleting Transaction
+        ID: \(transaction.txn_id)
+        Type: \(transaction.count_type ?? "nil")
+        Status: \(transaction.status ?? "nil")
+        Old is_deleted: \(transaction.is_deleted)
+        """)
 
         transaction.is_deleted = true
         transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
 
         CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("✅ DB Saved txnId:", txnId)
     }
 
     // get all fixed partial count

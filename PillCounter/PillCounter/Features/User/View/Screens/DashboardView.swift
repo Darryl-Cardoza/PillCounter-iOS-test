@@ -82,7 +82,7 @@ struct DashboardView: View {
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
-                                    router.navigate(to: .authentication(.user(.userSettings(.History))))
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
                                 },
                                 iconColor: appColors.secondary
                             )
@@ -96,10 +96,7 @@ struct DashboardView: View {
                                 textColor: appColors.secondary,
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
-                                    // some action to be performed like opening or navigating
-
-                                    if userViewModel.fixedCountTransactionPartialCount > 0 {
-                                        
+                                    // some action to be performed like opening or navigatin
                                         router.selectedPillScanningType = .FIXED
                                         
                                         router.navigate(
@@ -107,8 +104,6 @@ struct DashboardView: View {
                                                 .login(
                                                     .dashboard(.fixedCountPartial)))
                                         )
-                                        
-                                    }
                                 },
                                 iconColor: appColors.secondary
                             )
@@ -176,7 +171,7 @@ struct DashboardView: View {
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
-                                    router.navigate(to: .authentication(.user(.userSettings(.History))))
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular)))))
                                 },
                                 iconColor: appColors.primary
                             )
@@ -191,8 +186,6 @@ struct DashboardView: View {
                                 action: {
                                     // some action to be performed like opening or navigating
                                     // need to set this as regular.
-
-                                    if userViewModel.regularCountTransactionPartialCount > 0 {
                                         router.selectedPillScanningType = .REGULAR
                                         
                                         router.navigate(
@@ -200,7 +193,6 @@ struct DashboardView: View {
                                                 .login(
                                                     .dashboard(.regularCountPartial)
                                                 )))
-                                    }
                                     
                                 },
                                 iconColor: appColors.primary

@@ -45,4 +45,11 @@ final class CoreDataManager {
             }
         }
     }
+    
+    func resetContext() {
+        container.viewContext.performAndWait {
+            container.viewContext.reset()
+        }
+    }
+
 }

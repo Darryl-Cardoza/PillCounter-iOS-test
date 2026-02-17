@@ -190,6 +190,7 @@ final class AppStorageManager {
 
     // MARK: Logout
     func logout() {
+        print("🔴 BEFORE LOGOUT userId =", defaults.string(forKey: AppStorageKeys.userId) ?? "nil")
         defaults.removeObject(forKey: AppStorageKeys.accessToken)
         defaults.removeObject(forKey: AppStorageKeys.refreshToken)
         defaults.removeObject(forKey: AppStorageKeys.rememberMe)
@@ -200,5 +201,6 @@ final class AppStorageManager {
         defaults.removeObject(forKey: AppStorageKeys.isHl7Enable)
         defaults.removeObject(forKey: AppStorageKeys.pmsHostName)
         defaults.removeObject(forKey: AppStorageKeys.pillCounterHostName)
+        print("🟢 AFTER LOGOUT userId =", defaults.string(forKey: AppStorageKeys.userId) ?? "nil")
     }
 }

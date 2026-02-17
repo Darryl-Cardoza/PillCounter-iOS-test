@@ -47,10 +47,10 @@ public enum UserFlow: Hashable, Codable {
     case userSettings(HamburgerMenuFLow)
 }
 
+
+
 public enum HamburgerMenuFLow: Hashable, Codable {
-    //    case fixedCount
-    //    case regularCount
-    case History
+    case History(HistoryFilterType)
     case profile
     case settings
     case unsyncedTransaction
@@ -80,6 +80,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
             case .Settings: return NSLocalizedString("SETTINGS", comment: "")
             case .Logout: return NSLocalizedString("LOGOUT", comment: "")
         }
+        
     }
 
     var iconName: String {
@@ -159,6 +160,21 @@ public enum InputValidation {
     case email
     case npi
 }
+    
 
-
-
+public enum HistoryFilterType: String, Codable, Hashable {
+    case all
+    case fixed
+    case regular
+    
+    var title: String {
+          switch self {
+          case .all:
+              return NSLocalizedString("HISTORY", comment: "")
+          case .fixed:
+              return "Fixed Count History"
+          case .regular:
+              return "Quick Count History"
+          }
+      }
+}

@@ -251,7 +251,7 @@ class PillScanViewModel: ObservableObject {
         }
 
         // if not found in the db then call the api
-
+        
         do {
 
             let getDrugResult = try await userRepo.getDrug(ndc: ndc)
@@ -764,4 +764,36 @@ class PillScanViewModel: ObservableObject {
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }
+    
+    
+    // MARK: - HARD LOGOUT RESET
+    @MainActor
+    func resetState() {
+
+        // Cancel any Combine pipelines
+        cancellables.removeAll()
+
+        // Clear user session reference
+        userId = ""
+
+        // Drug / scan state
+        drugName = nil
+        drugNameMannuallyEntered = ""
+        isDrugFound = nil
+        mannualDrugCreated = nil
+        ndcNumber = ""
+
+        // Counting
+        targetCount = ["", "", "", ""]
+        note = ""
+
+        // Transactions
+        currentTransaction = nil
+        currentTransactionTransactionDetails = nil
+        selectedTransaction = nil
+
+        // PMS related
+        showPmsNdcMismatchPopup = false
+    }
+
 }

@@ -14,6 +14,11 @@ struct AppNavigation: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var appColors: AppColors
 
+    @State private var isLandscape: Bool = {
+        let o = UIDevice.current.orientation
+        if o.isValidInterfaceOrientation { return o.isLandscape }
+        return UIScreen.main.bounds.width > UIScreen.main.bounds.height
+    }()
     var body: some View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height

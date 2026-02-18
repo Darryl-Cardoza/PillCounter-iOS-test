@@ -35,6 +35,9 @@ class LoginViewModel: ObservableObject {
         Bool = false
     
     @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable)
+    
+
+    
     var isHl7Enabled: Bool = false
 
     // for successful sending of the otp and navigate to the next screen.
@@ -219,11 +222,13 @@ class LoginViewModel: ObservableObject {
                     verifyOTPresult.message
                     ?? "Something went wrong. Please try again later."
             }
+            userEmail = ""
         } catch let error {
             isLoading = false
             isOtpVerificationSuccess = false
             errorMessage = "Something went wrong."
             print("Error: \(error)")
+            userEmail = ""
         }
     }
 
@@ -232,8 +237,6 @@ class LoginViewModel: ObservableObject {
         isLoading = true
 
         defer { isLoading = false }
-        AppStorageManager.shared.logout()
-
         do {
             let logoutResult = try await loginrepo.logout(
                 refreshToken: refreshToken)
@@ -277,5 +280,39 @@ class LoginViewModel: ObservableObject {
         } catch _ {
             errorMessage = "Something went wrong!"
         }
+    }
+    
+    @MainActor
+    func resetState() {
+
+        // Stop timers
+        resendTimer?.invalidate()
+        resendTimer = nil
+
+        // User input
+        userEmail = ""
+        otp = ["", "", "", ""]
+        isChecked = false
+
+        // Flags
+        errorMessage = nil
+        resendOTPSent = false
+        isOtpSent = false
+        isOtpVerificationSuccess = false
+        isLoading = false
+        isLogoutSucces = false
+
+        // Cooldown
+        resendCooldown = 60
+        isResendDisabled = true
+    
+        userEmailToSaveInUserDefaults = ""
+        isRememberMe = false
+        isLoggedIn = false
+        isNewUser = false
+        isHl7Enabled = false
+
+        // Reload saved emails from storage (after logout cleared them)
+        userSavedEmails = AppStorageManager.shared.userSavedEmails
     }
 }

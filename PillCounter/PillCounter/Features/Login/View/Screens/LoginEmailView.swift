@@ -12,7 +12,6 @@ struct LoginEmailView: View {
     @EnvironmentObject private var loginViewModel: LoginViewModel
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var appColors: AppColors
-
     // MARK: - STATES
     @State private var email: String = ""
     @State private var password: String = ""
@@ -58,7 +57,8 @@ struct LoginEmailView: View {
                                 }
                             }
                         },
-                        validation: .email
+                        validation: .email,
+                        maxLength: nil
                     )
 
                     // error message

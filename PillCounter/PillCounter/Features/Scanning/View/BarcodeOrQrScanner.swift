@@ -34,6 +34,8 @@ struct CameraPreview: UIViewRepresentable {
             }
         }
 
+    
+        
         override class var layerClass: AnyClass {
             AVCaptureVideoPreviewLayer.self
         }
@@ -60,8 +62,9 @@ struct QRBarcodeScannerView: View {
     @StateObject private var cameraManager = CameraViewModel()
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     
-    @Environment(\.isLandscape) private var isLandscape
-
+    @Environment(\.isLandscape) private var environmentIsLandscape
+    @State private var stableIsLandscape: Bool = false
+    @State private var landscapeDebounceTask: Task<Void, Never>? = nil
     // UI States
     @State private var showScannedData = false
     @State private var showMannualEntryPopup: Bool = false
@@ -136,6 +139,38 @@ struct QRBarcodeScannerView: View {
                 UIApplication.hideKeyboard()
             }
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                KeyboardAccessoryView(
+                    text: Binding(
+                        get: {
+                            switch focusedField {
+                            case .ndcNumber:
+                                return pillScanViewModel.ndcNumber
+                            case .drugName:
+                                return pillScanViewModel.drugNameMannuallyEntered
+                            default:
+                                return ""
+                            }
+                        },
+                        set: { newValue in
+                            switch focusedField {
+                            case .ndcNumber:
+                                pillScanViewModel.ndcNumber = newValue
+                            case .drugName:
+                                pillScanViewModel.drugNameMannuallyEntered = newValue
+                            default:
+                                break
+                            }
+                        }
+                    )
+                ) {
+                    focusedField = nil
+                }
+            }
+        }
+        .ignoresSafeArea(.keyboard)
+
         .onAppear {
             // Reset ViewModel state so we are ready for a NEW transaction
             pillScanViewModel.resetScanningState()
@@ -175,6 +210,22 @@ struct QRBarcodeScannerView: View {
             if isShown {
                 scanTimeoutTask?.cancel()
             }
+        }
+        .onChange(of: environmentIsLandscape) { _, newValue in
+            landscapeDebounceTask?.cancel()
+            landscapeDebounceTask = Task {
+                // Wait 300ms — real rotation takes longer, keyboard flicker is ~16ms
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        stableIsLandscape = newValue
+                    }
+                }
+            }
+        }
+        .onAppear {
+            stableIsLandscape = environmentIsLandscape // sync on first appear
+            // ... rest of your existing onAppear code
         }
         
 //        // MARK: - POPUPS
@@ -390,6 +441,7 @@ extension QRBarcodeScannerView {
                     text: $pillScanViewModel.drugNameMannuallyEntered,
                     keyboardType: .default,
                     validation: .none,
+                    maxLength: nil,
                     field: .drugName,
                     focusedField: $focusedField
                 )
@@ -469,7 +521,7 @@ extension QRBarcodeScannerView {
 
     private var bottomContent: some View {
         Group {
-            if isLandscape {
+            if stableIsLandscape {
                 landscapeBottomContent
             } else {
                 portraitBottomContent
@@ -510,6 +562,7 @@ extension QRBarcodeScannerView {
                 text: $pillScanViewModel.drugNameMannuallyEntered,
                 keyboardType: .default,
                 validation: .none,
+                maxLength: nil,
                 field: .drugName,
                 focusedField: $focusedField
             )
@@ -678,7 +731,8 @@ extension QRBarcodeScannerView {
                 disabled: false,
                 text: $pillScanViewModel.drugNameMannuallyEntered,
                 keyboardType: .default,
-                validation: .none
+                validation: .none,
+                maxLength: nil
             )
             .padding(.horizontal)
 
@@ -695,7 +749,8 @@ extension QRBarcodeScannerView {
                 disabled: false,
                 text: $pillScanViewModel.ndcNumber,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .phone,
+                maxLength: nil
             )
             .padding(.horizontal)
 

@@ -22,7 +22,7 @@ struct PillCounterInputField: View {
     var onSubmit: (() -> Void)? = nil
 
     var validation: InputValidation = .none
-    var maxLength: Int? = nil
+    let maxLength: Int?
 
     // Detect the current color scheme (light or dark)
     @Environment(\.colorScheme) var colorScheme
@@ -69,28 +69,14 @@ struct PillCounterInputField: View {
                             FocusModifier(field: field, focusedField: focusedField)
                         )
                         .onChange(of: text) { oldValue, newValue in
+                            print("PRofile Tedxt \(maxLength)")
                             text = validateInput(newValue)
                         }
                         //                        .onSubmit {
                         //                            onSubmit?()
                         //                        }
                         .disabled(disabled)
-                        .toolbar {
-                            if isFocused {
-                                ToolbarItem(placement: .keyboard) {
-                                    KeyboardAccessoryView(text: $text) {
-                                        UIApplication.shared.sendAction(
-                                            #selector(
-                                                UIResponder.resignFirstResponder
-                                            ),
-                                            to: nil,
-                                            from: nil,
-                                            for: nil
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                
                 }
             }
             .padding(.leading, 10)
@@ -117,34 +103,34 @@ struct PillCounterInputField: View {
         .cornerRadius(8)
     }
 
-    private func validateInput(_ value: String) -> String {
-        var filtered = value
+        private func validateInput(_ value: String) -> String {
+            var filtered = value
 
-        switch validation {
-        case .name:
-            filtered = value.filter {
-                $0.isLetter || $0.isNumber || $0.isWhitespace
+            switch validation {
+            case .name:
+                filtered = value.filter {
+                    $0.isLetter || $0.isNumber || $0.isWhitespace
+                }
+
+            case .phone:
+                filtered = value.filter { $0.isNumber }
+
+            case .npi:
+                filtered = value.filter { $0.isNumber }
+
+            case .email:
+                filtered = value.lowercased()
+                
+            case .none:
+                break
             }
 
-        case .phone:
-            filtered = value.filter { $0.isNumber }
+            if let maxLength, filtered.count > maxLength {
+                 filtered = String(filtered.prefix(maxLength))
+             }
 
-        case .npi:
-            filtered = value.filter { $0.isNumber }
-
-        case .email:
-            filtered = value.lowercased()
-            
-        case .none:
-            break
+            return filtered
         }
-
-        if let maxLength, filtered.count > maxLength {
-            filtered = String(filtered.prefix(maxLength))
-        }
-
-        return filtered
-    }
 
 }
 

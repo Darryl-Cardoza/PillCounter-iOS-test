@@ -110,7 +110,9 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
                         .zIndex(100)
                 }
             }
+            
         }
+        
         .background(appColors.secondaryBackground)
         .ignoresSafeArea()
         .environment(\.dynamicTypeSize, .medium)

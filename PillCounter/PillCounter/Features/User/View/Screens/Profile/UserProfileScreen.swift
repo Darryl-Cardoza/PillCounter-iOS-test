@@ -129,7 +129,8 @@ struct UserProfileScreen: View {
                 placeholder: "",
                 disabled: false,
                 text: $userViewModel.pharmacyName,
-                validation: .none
+                validation: .none,
+                maxLength: nil
             )
 
             Text(NSLocalizedString("PHONE_NUMBER", comment: ""))
@@ -141,7 +142,8 @@ struct UserProfileScreen: View {
                 disabled: false,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .phone,
+                maxLength: nil
             )
 
             Text(NSLocalizedString("EMAIL", comment: ""))
@@ -151,7 +153,8 @@ struct UserProfileScreen: View {
                 imageName: nil,
                 placeholder: "",
                 disabled: true,
-                text: $userViewModel.email
+                text: $userViewModel.email,
+                maxLength: nil
             )
 
             Text(NSLocalizedString("NPI_ID", comment: ""))
@@ -163,7 +166,8 @@ struct UserProfileScreen: View {
                 disabled: false,
                 text: $userViewModel.npiID,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .phone,
+                maxLength: nil
             )
         }
     }
@@ -197,7 +201,8 @@ struct UserProfileScreen: View {
                 placeholder: "",
                 disabled: false,
                 text: $userViewModel.pharmacyName,
-                validation: .none
+                validation: .none,
+                maxLength: nil
             )
 
             Text(NSLocalizedString("EMAIL", comment: ""))
@@ -207,7 +212,8 @@ struct UserProfileScreen: View {
                 imageName: nil,
                 placeholder: "",
                 disabled: true,
-                text: $userViewModel.email
+                text: $userViewModel.email,
+                maxLength: nil      
             )
         }
     }
@@ -235,7 +241,8 @@ struct UserProfileScreen: View {
                 disabled: false,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .phone,
+                maxLength: 10
             )
 
             Text(NSLocalizedString("NPI_ID", comment: ""))
@@ -247,7 +254,8 @@ struct UserProfileScreen: View {
                 disabled: false,
                 text: $userViewModel.npiID,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .npi,
+                maxLength: 10
             )
         }
     }

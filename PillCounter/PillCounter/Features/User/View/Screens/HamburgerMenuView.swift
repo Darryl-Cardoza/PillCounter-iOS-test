@@ -15,6 +15,7 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var loginViewModel: LoginViewModel
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
+    @EnvironmentObject private var pillScanViewModel: PillScanViewModel
 
     @State private var showLogoutPopup: Bool = false
     
@@ -69,6 +70,11 @@ struct HamburgerMenuView: View {
                 await loginViewModel.logout()
                 
                 showLogoutPopup = false
+                AppLogoutManager.performLogout(
+                    userVM: userViewModel,
+                    pillScanVM: pillScanViewModel,
+                    loginViewModel: loginViewModel
+                )
             }
         }
     }
@@ -204,6 +210,7 @@ struct HamburgerMenuView: View {
                 partialBg: appColors.primaryBackground,
                 primaryIconColor: appColors.secondary,
                 isLandscape: isLandscape,
+                isFixed: true,
                 onPartialTap: {
                         router.selectedPillScanningType = .FIXED
                         router.navigate(
@@ -223,6 +230,7 @@ struct HamburgerMenuView: View {
                 partialBg: appColors.primaryBackground,
                 primaryIconColor: appColors.primary,
                 isLandscape: isLandscape,
+                isFixed: false,
                 onPartialTap: {
                         router.selectedPillScanningType = .REGULAR
                         router.navigate(
@@ -247,8 +255,10 @@ struct HamburgerMenuView: View {
         partialBg: Color,
         primaryIconColor: Color,
         isLandscape: Bool,
+        isFixed: Bool,
         onPartialTap: @escaping () -> Void
     ) -> some View {
+        let historyType: HistoryFilterType = if (isFixed){  .fixed} else{ .regular}
         HStack(spacing: 10) {
             // Landscape: Buttons align Right. Portrait: Buttons fill width.
             if isLandscape { Spacer(minLength: 0) }
@@ -265,12 +275,12 @@ struct HamburgerMenuView: View {
                 verticalPadding: 0,
                 iconSize: 16,
                 action: {
-                    router.navigate(to: .authentication(.user(.userSettings(.History(.all)))))
+                    router.navigate(to: .authentication(.user(.userSettings(.History(historyType)))))
                 },
                 iconColor: primaryIconColor
             )
             .fixedSize()
-            .frame(minWidth: isLandscape ? 130 : nil)
+            .frame(minWidth: isLandscape ? 150 : nil)
 
             
             if !isLandscape {Spacer()}

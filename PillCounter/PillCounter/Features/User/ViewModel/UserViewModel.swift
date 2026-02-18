@@ -203,6 +203,8 @@ class UserViewModel: ObservableObject {
                 }
 
             }
+            getAllTransactionsAndFilterByCountType()
+
         } catch let error {
             print("Error: \(error)")
         }
@@ -694,8 +696,43 @@ class UserViewModel: ObservableObject {
         pmsConnectionState = isConnected ? .connected : .disconnected
     }
     
-    
-    
-    
+    // MARK: - HARD RESET (called on logout)
+    @MainActor
+    func resetState() {
+        // AppStorage backed vars
+        userEmail = ""
+        userID = ""
+        pmsHostName = ""
+        pillCounterHostName = ""
 
+        // Loading & flags
+        isLoading = false
+        isForceUpdate = false
+        isMaintenance = false
+        isProfileUpdated = false
+        pmsConnectionState = .disconnected
+
+        // Profile
+        userProfileDetails = nil
+        fullName = ""
+        firstName = ""
+        lastName = ""
+        email = ""
+        phoneNumber = ""
+        pharmacyName = ""
+        npiID = ""
+
+        // Transactions
+        historyCountTransactions = []
+        filteredTransactionsOfUserByDate = []
+        actualCountedPillsForTheTransactions = [:]
+        historyTotalTransactionsCount = 0
+        currentTransactionTxnId = nil
+        unsyncedTransactions = []
+
+        fixedCountTransactionCompletedCount = 0
+        fixedCountTransactionPartialCount = 0
+        regularCountTransactionCompletedCount = 0
+        regularCountTransactionPartialCount = 0
+    }
 }

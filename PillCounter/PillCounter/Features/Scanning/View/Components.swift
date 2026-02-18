@@ -627,12 +627,12 @@ struct BottomControlsViewHeader: View {
         Button {
             onResetPills()
         } label: {
-            Image("reset_pills")
+            Image("delete")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 36, height: 36)
                 .overlay(appColors.primary)
-                .mask(Image("reset_pills").resizable().scaledToFit())
+                .mask(Image("delete").resizable().scaledToFit())
         }
     }
 

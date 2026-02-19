@@ -69,7 +69,6 @@ struct PillCounterInputField: View {
                             FocusModifier(field: field, focusedField: focusedField)
                         )
                         .onChange(of: text) { oldValue, newValue in
-                            print("PRofile Tedxt \(maxLength)")
                             text = validateInput(newValue)
                         }
                         //                        .onSubmit {

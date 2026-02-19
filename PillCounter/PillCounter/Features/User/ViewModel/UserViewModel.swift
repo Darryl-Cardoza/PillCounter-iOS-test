@@ -312,11 +312,11 @@ class UserViewModel: ObservableObject {
     // MARK: TRANSACTION BY DATE
     // get user's transactions filtered by date.
     func getTransactionsByDate(
-        selectedDate: Date,
+        startDate: Date,
+        endDate: Date,
         filter: HistoryFilterType
     ) async {
         
-        print("get Transcation by date \(selectedDate) \(filter)")
 
         guard let user = userLocalDB.getUserByUserId(by: userID) else {
             print("❌ no user found in the local DB")
@@ -325,8 +325,12 @@ class UserViewModel: ObservableObject {
         }
 
         // MARK: Date range
-        let startOfDay = Calendar.current.startOfDay(for: selectedDate)
-        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)!
+        let startOfDay = Calendar.current.startOfDay(for: startDate)
+
+         let endOfDay = Calendar.current.date(
+             byAdding: DateComponents(day: 1, second: -1),
+             to: Calendar.current.startOfDay(for: endDate)
+         )!
 
         let startTimestamp = Int64(startOfDay.timeIntervalSince1970 * 1000)
         let endTimestamp = Int64(endOfDay.timeIntervalSince1970 * 1000)
@@ -351,8 +355,7 @@ class UserViewModel: ObservableObject {
             finalTransactions = allTransactions.filter { txn in
                 txn.count_type == CountType.REGULAR.rawValue &&
                 (
-                    txn.status == CountStatus.COMPLETED.rawValue ||
-                    txn.status == CountStatus.FORCE_COMPLETED.rawValue
+                    txn.status == CountStatus.COMPLETED.rawValue
                 )
             }
 
@@ -360,8 +363,7 @@ class UserViewModel: ObservableObject {
             finalTransactions = allTransactions.filter { txn in
                 txn.count_type == CountType.FIXED.rawValue &&
                 (
-                    txn.status == CountStatus.COMPLETED.rawValue ||
-                    txn.status == CountStatus.FORCE_COMPLETED.rawValue
+                    txn.status == CountStatus.COMPLETED.rawValue
                 )
             }
         }
@@ -377,7 +379,6 @@ class UserViewModel: ObservableObject {
     // get user's fixed count partial transactoins
     func getAllPartialTransactions(countType: CountType) async {
         guard let user = userLocalDB.getUserByUserId(by: userID) else {
-            print("❌ no user found in the local DB")
             self.historyCountTransactions = []
             return
         }
@@ -412,7 +413,8 @@ class UserViewModel: ObservableObject {
     
     // MARK: - SOFT DELETE ALL TRANSACTIONS FOR A DATE
     func softDeleteTransactionsForSelectedDate(
-        selectedDate: Date,
+        startDate: Date,
+        endDate: Date,
         filter: HistoryFilterType
     ) async {
 
@@ -420,12 +422,13 @@ class UserViewModel: ObservableObject {
 
         guard !transactionsToDelete.isEmpty else { return }
 
+        
         for txn in transactionsToDelete {
             pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
         }
 
         // Refresh UI after deletion
-        await getTransactionsByDate(selectedDate: selectedDate,filter:filter)
+        await getTransactionsByDate(startDate: startDate,endDate: endDate,filter:filter)
     }
 
     // MARK: - FORCE COMPLETE TRANSACTION

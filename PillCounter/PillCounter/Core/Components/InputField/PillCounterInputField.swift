@@ -75,12 +75,25 @@ struct PillCounterInputField: View {
                         //                            onSubmit?()
                         //                        }
                         .disabled(disabled)
+                        .toolbar {
+                            if isFocused {
+                                ToolbarItem(placement: .keyboard) {
+                                    KeyboardAccessoryView(text: $text) {
+                                        UIApplication.shared.sendAction(
+                                            #selector(UIResponder.resignFirstResponder),
+                                            to: nil,
+                                            from: nil,
+                                            for: nil
+                                        )
+                                    }
+                                }
+                            }
+                        }
                 
                 }
             }
             .padding(.leading, 10)
             .foregroundColor(appColors.text)
-
             if showDropdownMenu {
                 Menu {
                     Picker(selection: $text, label: EmptyView()) {

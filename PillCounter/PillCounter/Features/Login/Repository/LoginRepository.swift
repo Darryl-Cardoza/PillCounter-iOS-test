@@ -48,13 +48,13 @@ final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
         )
     }
     
-    func verifyOTP(email: String, otp: String) async throws -> VerifyOTPResponse {
-        
+    func verifyOTP(email: String, otp: String,) async throws -> VerifyOTPResponse {
+
         let body: [String: Any] = [
             "email": email,
-            "otp": otp
+            "otp": otp,
+            "fcm_token": ""
         ]
-        
         return try await Self.performRequest(
             url: APIConstants.verifyOTP,
             method: .post,

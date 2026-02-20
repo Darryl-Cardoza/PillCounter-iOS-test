@@ -38,7 +38,6 @@ struct LoginEmailView: View {
                         dropdownData: loginViewModel.userSavedEmails,
                         onSubmit: {
                             Task {
-
                                 errorMessage = nil
                                 guard
                                     Validation.isValidEmail(
@@ -82,12 +81,8 @@ struct LoginEmailView: View {
                     // Login Button
                     Button(action: {
                         errorMessage = nil
-                        guard
-                            Validation.isValidEmail(
-                                loginViewModel.userEmail)
-                        else {
-                            errorMessage = NSLocalizedString(
-                                "EMAIL_ERROR_MESSAGE", comment: "")
+                        if let validationKey = Validation.validateEmail(loginViewModel.userEmail) {
+                            loginViewModel.errorMessage = NSLocalizedString(validationKey, comment: "")
                             return
                         }
                         Task {

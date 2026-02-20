@@ -22,6 +22,7 @@ final class CameraViewModel: NSObject, ObservableObject {
     private let session = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "camera.viewmodel.session.queue")
     private var isConfigured = false
+    private var hasScanned = false
 
     // MARK: - INPUT / OUTPUTS
     private var videoInput: AVCaptureDeviceInput?
@@ -198,6 +199,20 @@ final class CameraViewModel: NSObject, ObservableObject {
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
+    
+    func restartSession() {
+        sessionQueue.async {
+            self.hasScanned = false
+            if self.session.isRunning {
+                self.session.stopRunning()
+            }
+            self.session.startRunning()
+        }
+        DispatchQueue.main.async {
+            self.scannedCode = ""
+            self.codeType = ""
+        }
+    }
 }
 
 // MARK: - PHOTO DELEGATE
@@ -230,11 +245,12 @@ extension CameraViewModel: AVCaptureMetadataOutputObjectsDelegate {
                         didOutput metadataObjects: [AVMetadataObject],
                         from connection: AVCaptureConnection) {
 
-        guard
-            let object = metadataObjects.first
-                as? AVMetadataMachineReadableCodeObject,
-            let value = object.stringValue
+        guard !hasScanned,
+              let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let value = object.stringValue
         else { return }
+
+        hasScanned = true
 
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 

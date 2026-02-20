@@ -228,69 +228,92 @@ class PillScanViewModel: ObservableObject {
 
         return Int64(newId)
     }
+    func log(_ message: String) {
+        print("🧪 [ManualPillFlow] \(message)")
+    }
 
     func manuallyEnteredPill(
-        ndc: String, countType: CountType, isFixedCount: Bool = false, enteredDrugName:String?=nil
+        ndc: String,
+        countType: CountType,
+        isFixedCount: Bool = false,
+        enteredDrugName: String? = nil
     ) async {
-        
 
-        // check in the database first
-        if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(
-            by: ndc)
-        {
+        log("START manuallyEnteredPill | ndc=\(ndc) | countType=\(countType) | isFixed=\(isFixedCount)")
+
+        // ---------------- DB CHECK ----------------
+        if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(by: ndc) {
+            log("Drug found in LOCAL DB | drugId=\(drugFoundInLocalStorage.drug_id)")
+
             isDrugFound = true
             drugName = enteredDrugName ?? drugFoundInLocalStorage.drug_name
-            // after the drug is found from the db we create a new transaction.
+
             await createTransaction(
-                drugId: drugFoundInLocalStorage.drug_id, countType: countType)
+                drugId: drugFoundInLocalStorage.drug_id,
+                countType: countType
+            )
+
+            log("Transaction created from LOCAL DB | txnId=\(currentTransaction?.txn_id ?? -1)")
+
             getAllTransactionDetailsOfTheCurrentTransaction()
+
             if countType == .FIXED {
+                log("Applying FIXED target count (local)")
                 updateTargetCountForCurrentTransaction()
             }
+
             return
         }
 
-        // if not found in the db then call the api
-        
-        do {
+        log("Drug NOT in local DB → calling API")
 
+        // ---------------- API CALL ----------------
+        do {
             let getDrugResult = try await userRepo.getDrug(ndc: ndc)
 
+            log("API response received | success=\(getDrugResult.isSuccess ?? false)")
+
             if getDrugResult.isSuccess ?? false {
+
                 isDrugFound = true
                 drugName = getDrugResult.data?.genericName ?? "Loading..."
 
-                // generating new drug id for each pill
                 let drugId = generateUniqueDrugId()
-
-                // on success if the result has data in it then only store that data in the db. other wise return and ask the user to enter the ndc number manually.
+                log("Generated new drugId from API = \(drugId)")
 
                 if getDrugResult.data != nil {
-                    // background task to save pill in background.
+                    log("Saving API drug to DB in background")
+
                     Task(priority: .background) {
                         self.pillDataLocalStorage.savePill(
                             from: getDrugResult,
                             ndc: ndc,
                             drugId: drugId
                         )
+                        self.log("Background save completed (API)")
                     }
                 }
-                // create transaction for the pill if we get the details of the pill from api.
-                // drug id is being generated in the view model since saving of the pill in db should be in the background and the logic generation should be in the view model.
-                // also for creating the transaction we would be needing the drug id.
+
                 await createTransaction(drugId: drugId, countType: countType)
+                log("Transaction created from API | txnId=\(currentTransaction?.txn_id ?? -1)")
+
                 if isFixedCount {
+                    log("Applying FIXED target count (API)")
                     updateTargetCountForCurrentTransaction()
                 }
+
                 getAllTransactionDetailsOfTheCurrentTransaction()
 
             } else {
+                // ---------------- MANUAL FALLBACK ----------------
+                log("API success=false → manual drug creation")
+
                 isDrugFound = false
                 mannualDrugCreated = true
-                
                 drugName = drugNameMannuallyEntered
 
                 let drugId = generateUniqueDrugId()
+                log("Generated manual drugId = \(drugId)")
 
                 Task(priority: .background) {
                     self.pillDataLocalStorage.saveManualPill(
@@ -298,25 +321,32 @@ class PillScanViewModel: ObservableObject {
                         drugId: drugId,
                         drugName: drugNameMannuallyEntered
                     )
+                    self.log("Background save completed (Manual)")
                 }
 
                 await createTransaction(drugId: drugId, countType: countType)
-                
+                log("Transaction created (manual fallback) | txnId=\(currentTransaction?.txn_id ?? -1)")
+
                 if countType == .FIXED {
-                    self.updateTargetCountForCurrentTransaction()
+                    log("Applying FIXED target count (manual fallback)")
+                    updateTargetCountForCurrentTransaction()
                 }
 
                 getAllTransactionDetailsOfTheCurrentTransaction()
             }
 
-        } catch let error {
-            DispatchQueue.main.async {
-                self.isDrugFound = nil
-                print("Error: \(error)")
+        } catch {
+            // ---------------- ERROR FALLBACK ----------------
+            log("API ERROR → manual fallback | error=\(error.localizedDescription)")
 
+            DispatchQueue.main.async {
+
+                self.isDrugFound = nil
                 self.mannualDrugCreated = true
+                self.drugName = self.drugNameMannuallyEntered
 
                 let drugId = self.generateUniqueDrugId()
+                self.log("Generated manual drugId after error = \(drugId)")
 
                 Task(priority: .background) {
                     self.pillDataLocalStorage.saveManualPill(
@@ -324,24 +354,24 @@ class PillScanViewModel: ObservableObject {
                         drugId: drugId,
                         drugName: self.drugNameMannuallyEntered
                     )
+                    self.log("Background save completed (Error fallback)")
                 }
-                
-                self.drugName = self.drugNameMannuallyEntered
 
                 Task {
-                    await self.createTransaction(
-                        drugId: drugId, countType: countType)
-                    
+                    await self.createTransaction(drugId: drugId, countType: countType)
+                    self.log("Transaction created (error fallback) | txnId=\(self.currentTransaction?.txn_id ?? -1)")
+
                     if countType == .FIXED {
+                        self.log("Applying FIXED target count (error fallback)")
                         self.updateTargetCountForCurrentTransaction()
                     }
                 }
 
                 self.getAllTransactionDetailsOfTheCurrentTransaction()
-
             }
         }
     }
+
 
     // create transaction for every new transaction that user scans the barcode or enters the ndc or the gtin number manually.
     func createTransaction(

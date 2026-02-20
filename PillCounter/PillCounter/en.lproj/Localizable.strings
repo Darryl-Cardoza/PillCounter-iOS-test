@@ -17,12 +17,14 @@
 "LOGIN_BUTTON" = "LOGIN";
 "EMAIL_INPUT_FIELD_PLACEHOLDER" = "Email";
 "EMAIL_ERROR_MESSAGE" = "Please enter your email address." ;
+"EMAIL_ERROR_INVALID" = "Please enter correct email address.";
 
 // MARK: - OTP VERIFICATION SCREEN
 
 "CODE_SENT_TEXT" = "Security code has been sent to";
 "RESEND_CODE" = "Resend code";
 "VERIFY_BUTTON" = "VERIFY";
+"ERROR_INVALID_OTP" = "";
 
 // MARK: - DASHBOARD
 

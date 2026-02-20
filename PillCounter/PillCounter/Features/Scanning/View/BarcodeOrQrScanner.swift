@@ -62,7 +62,7 @@ struct QRBarcodeScannerView: View {
     @StateObject private var cameraManager = CameraViewModel()
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     
-    @Environment(\.isLandscape) private var environmentIsLandscape
+    @Environment(\.isLandscape) private var isLandscape
     @State private var stableIsLandscape: Bool = false
     @State private var landscapeDebounceTask: Task<Void, Never>? = nil
     // UI States
@@ -85,7 +85,7 @@ struct QRBarcodeScannerView: View {
     var body: some View {
         ZStack {
             BaseView(
-                topRatio: 0.7,  // Full screen for camera
+                topRatio: 0.7,
                 topContent: {
                     GeometryReader { geo in
 
@@ -118,10 +118,7 @@ struct QRBarcodeScannerView: View {
                                 .padding(.bottom, 20)
                             
                             // 2. Scanned Data Card (Overlay)
-                            if !cameraManager.scannedCode.isEmpty {
-                                scannedCodeCard
-                                    .padding(.bottom, 40)
-                            }
+
                         }
                     }
                 }
@@ -129,7 +126,7 @@ struct QRBarcodeScannerView: View {
                 
                 bottomContent: {
                     bottomContent
-                },
+                }               ,
                 headerActions: {},
                 showBackButton: true,
                 showHamburgerMenu: false,  // We have a manual entry button instead
@@ -139,38 +136,36 @@ struct QRBarcodeScannerView: View {
                 UIApplication.hideKeyboard()
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                KeyboardAccessoryView(
-                    text: Binding(
-                        get: {
-                            switch focusedField {
-                            case .ndcNumber:
-                                return pillScanViewModel.ndcNumber
-                            case .drugName:
-                                return pillScanViewModel.drugNameMannuallyEntered
-                            default:
-                                return ""
-                            }
-                        },
-                        set: { newValue in
-                            switch focusedField {
-                            case .ndcNumber:
-                                pillScanViewModel.ndcNumber = newValue
-                            case .drugName:
-                                pillScanViewModel.drugNameMannuallyEntered = newValue
-                            default:
-                                break
-                            }
-                        }
-                    )
-                ) {
-                    focusedField = nil
-                }
-            }
-        }
-        .ignoresSafeArea(.keyboard)
-
+//        .toolbar {
+//            ToolbarItemGroup(placement: .keyboard) {
+//                KeyboardAccessoryView(
+//                    text: Binding(
+//                        get: {
+//                            switch focusedField {
+//                            case .ndcNumber:
+//                                return pillScanViewModel.ndcNumber
+//                            case .drugName:
+//                                return pillScanViewModel.drugNameMannuallyEntered
+//                            default:
+//                                return ""
+//                            }
+//                        },
+//                        set: { newValue in
+//                            switch focusedField {
+//                            case .ndcNumber:
+//                                pillScanViewModel.ndcNumber = newValue
+//                            case .drugName:
+//                                pillScanViewModel.drugNameMannuallyEntered = newValue
+//                            default:
+//                                break
+//                            }
+//                        }
+//                    )
+//                ) {
+//                    focusedField = nil
+//                }
+//            }
+//        }
         .onAppear {
             // Reset ViewModel state so we are ready for a NEW transaction
             pillScanViewModel.resetScanningState()
@@ -211,22 +206,12 @@ struct QRBarcodeScannerView: View {
                 scanTimeoutTask?.cancel()
             }
         }
-        .onChange(of: environmentIsLandscape) { _, newValue in
-            landscapeDebounceTask?.cancel()
-            landscapeDebounceTask = Task {
-                // Wait 300ms — real rotation takes longer, keyboard flicker is ~16ms
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                if !Task.isCancelled {
-                    await MainActor.run {
-                        stableIsLandscape = newValue
-                    }
-                }
+        .onChange(of: showPillTargetCountPopup) { _, newValue in
+            if newValue == false {
+                restartFullScannerFlow()
             }
         }
-        .onAppear {
-            stableIsLandscape = environmentIsLandscape // sync on first appear
-            // ... rest of your existing onAppear code
-        }
+
         
 //        // MARK: - POPUPS
 //        .customPopup(isPresented: $showMannualEntryPopup) {
@@ -424,6 +409,7 @@ extension QRBarcodeScannerView {
                     field: .ndcNumber,
                     focusedField: $focusedField
                 )
+   
                 .frame(maxWidth: .infinity)
             }
             .padding(.top, 30)
@@ -445,6 +431,7 @@ extension QRBarcodeScannerView {
                     field: .drugName,
                     focusedField: $focusedField
                 )
+
                 .frame(maxWidth: .infinity)
             }
             
@@ -662,10 +649,13 @@ extension QRBarcodeScannerView {
                 Spacer()
 
                 Button(action: {
+                    cameraManager.startSession()
+
                     cameraManager.scannedCode = ""
                     cameraManager.codeType = ""
-                    // Restart session if user cancels the card
-                    cameraManager.startSession()
+                    isFromScanning = false
+                    tempCapturedImage = nil
+
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.white)
@@ -830,7 +820,7 @@ extension QRBarcodeScannerView {
                 Spacer()
 
                 Button {
-                    showPillTargetCountPopup = false
+                    restartFullScannerFlow()
                 } label: {
                     Image(systemName: "xmark")
                         .resizable()
@@ -861,6 +851,7 @@ extension QRBarcodeScannerView {
                         pillScanViewModel.targetCount = ["", "", "", ""]
                         showMannualEntryPopup = false
                         showPillTargetCountPopup = false
+                        restartFullScannerFlow()
                     }
                 )
 
@@ -939,6 +930,18 @@ extension QRBarcodeScannerView {
                 cameraManager.startSession()
             }
         )
+    }
+    
+    private func restartFullScannerFlow() {
+        pillScanViewModel.resetScanningState()
+        showScannedData = false
+        showMannualEntryPopup = false
+        showPillTargetCountPopup = false
+        isFromScanning = false
+        scannedData = nil
+        tempCapturedImage = nil
+        cameraManager.restartSession()
+        startScanTimeout()
     }
 }
 

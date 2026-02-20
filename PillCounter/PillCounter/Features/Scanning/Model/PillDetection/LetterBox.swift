@@ -30,13 +30,7 @@ final class Letterbox {
         let w = frame.extent.width
         let h = frame.extent.height
 
-        if debug {
-            print("""
-            📸 [Letterbox] Incoming frame
-            width  = \(w)
-            height = \(h)
-            """)
-        }
+     
 
         // SCALE
         let scale = min(
@@ -57,19 +51,6 @@ final class Letterbox {
             padY: padY
         )
 
-        if debug {
-            print("""
-            📐 [Letterbox] Scale calculation
-            targetSize = \(targetSize)
-            scale      = \(scale)
-
-            resized width  = \(newW)
-            resized height = \(newH)
-
-            padX = \(padX)
-            padY = \(padY)
-            """)
-        }
 
         // RESIZE + PAD
         let resized = frame
@@ -95,9 +76,6 @@ final class Letterbox {
         )
 
         guard let output = buffer else {
-            if debug {
-                print("❌ [Letterbox] Failed to create output pixel buffer")
-            }
             return nil
         }
 
@@ -113,14 +91,6 @@ final class Letterbox {
             colorSpace: CGColorSpaceCreateDeviceRGB()
         )
 
-        if debug {
-            print("""
-            🧱 [Letterbox] Output buffer sent to model
-            width  = \(CVPixelBufferGetWidth(output))
-            height = \(CVPixelBufferGetHeight(output))
-            format = BGRA
-            """)
-        }
 
         return output
     }

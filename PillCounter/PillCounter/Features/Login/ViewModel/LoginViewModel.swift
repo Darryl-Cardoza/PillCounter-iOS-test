@@ -175,12 +175,18 @@ class LoginViewModel: ObservableObject {
         errorMessage = nil
         let otpString = otp.joined()
 
+        print("🔵 [VERIFY OTP] Started")
+        print("📧 Email:", userEmail)
+        print("🔢 OTP Entered:", otpString)
+
         if otpString.isEmpty {
+            print("⚠️ OTP is empty")
             errorMessage = "Please enter the OTP."
             return
         }
 
         if otpString.count < 4 {
+            print("⚠️ OTP less than 4 digits")
             errorMessage = "Invalid OTP."
             return
         }
@@ -188,50 +194,57 @@ class LoginViewModel: ObservableObject {
         isLoading = true
 
         do {
-
             defer { isLoading = false }
 
-            let verifyOTPresult = try await loginrepo.verifyOTP(
-                email: userEmail, otp: otpString)
+            print("🚀 Sending OTP to backend...")
 
-            otp = ["", "", "", ""]
+            let verifyOTPresult = try await loginrepo.verifyOTP(
+                email: userEmail,
+                otp: otpString
+            )
+
+            print("✅ Backend Response Received")
+            print("📦 isSuccess:", verifyOTPresult.isSuccess ?? false)
+            print("💬 message:", verifyOTPresult.message ?? "nil")
 
             if verifyOTPresult.isSuccess ?? false {
-                errorMessage = nil
+
+                print("🎉 OTP VERIFIED SUCCESSFULLY")
+
+                otp = ["", "", "", ""]
+
                 isOtpVerificationSuccess = true
                 isLoggedIn = true
                 isHl7Enabled = verifyOTPresult.data?.user?.isHl7Enabled ?? false
-                // store the access token and refresh token to the app storage or user defaults.
-                // saving the user email to user defaults too.
+
                 accessToken = verifyOTPresult.data?.accessToken ?? ""
                 refreshToken = verifyOTPresult.data?.refreshToken ?? ""
                 userEmailToSaveInUserDefaults = userEmail
 
                 let expiresInSeconds = TimeInterval(
-                    verifyOTPresult.data?.expiresIn ?? 86400)
+                    verifyOTPresult.data?.expiresIn ?? 86400
+                )
                 let expiryDate = Date().addingTimeInterval(expiresInSeconds)
                 AppStorageManager.shared.tokenExpiryTimestamp =
                     expiryDate.timeIntervalSince1970
-                
-                
+
                 await MainActor.run {
                     Hl7ServiceController.shared.evaluate()
                 }
+
             } else {
+                print("❌ OTP VERIFICATION FAILED")
                 errorMessage =
                     verifyOTPresult.message
-                    ?? "Something went wrong. Please try again later."
+                    ?? "Invalid OTP. Please try again."
             }
-            userEmail = ""
-        } catch let error {
-            isLoading = false
+
+        } catch {
+            print("🔥 VERIFY OTP THREW ERROR:", error)
             isOtpVerificationSuccess = false
-            errorMessage = "Something went wrong."
-            print("Error: \(error)")
-            userEmail = ""
+            errorMessage = "Unable to verify OTP. Please try again."
         }
     }
-
     // MARK: LOGOUT
     func logout() async {
         isLoading = true
@@ -262,7 +275,6 @@ class LoginViewModel: ObservableObject {
 
         errorMessage = nil
 
-        otp = ["", "", "", ""]
 
         defer { isLoading = false }
         // show some toast message to user to confirm that otp was resent.
@@ -271,48 +283,14 @@ class LoginViewModel: ObservableObject {
 
             if result.isSuccess ?? false {
                 resendOTPSent = true
-                errorMessage = nil
+                errorMessage = "A new OTP has been sent."
                 startResendTimer()
-                // show toast message to user
+                otp = ["", "", "", ""]
             } else {
                 errorMessage = result.message ?? "Something went wrong!"
             }
         } catch _ {
             errorMessage = "Something went wrong!"
         }
-    }
-    
-    @MainActor
-    func resetState() {
-
-        // Stop timers
-        resendTimer?.invalidate()
-        resendTimer = nil
-
-        // User input
-        userEmail = ""
-        otp = ["", "", "", ""]
-        isChecked = false
-
-        // Flags
-        errorMessage = nil
-        resendOTPSent = false
-        isOtpSent = false
-        isOtpVerificationSuccess = false
-        isLoading = false
-        isLogoutSucces = false
-
-        // Cooldown
-        resendCooldown = 60
-        isResendDisabled = true
-    
-        userEmailToSaveInUserDefaults = ""
-        isRememberMe = false
-        isLoggedIn = false
-        isNewUser = false
-        isHl7Enabled = false
-
-        // Reload saved emails from storage (after logout cleared them)
-        userSavedEmails = AppStorageManager.shared.userSavedEmails
     }
 }

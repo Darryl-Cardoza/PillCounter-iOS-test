@@ -30,7 +30,7 @@ final class PillDetectionService {
     private let model = PillDetector.shared.model
     private let inputSize: CGFloat = 640
     private let iouThreshold: Double = 0.75
-    private let confThreshold: Double = 0.87
+    private let confThreshold: Double = 0.7
 
     private let stabilizer = CountStabilizer(windowSize: 7)
 

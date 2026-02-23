@@ -236,21 +236,36 @@ extension OPillCountView {
                 }
 
                 if router.selectedPillScanningType == .FIXED {
-                    if pillScanViewModel.getTotalPillCountOfCurrentTransaction()
-                        == pillScanViewModel.currentTransaction?.target_count
-                        ?? 0
-                    {
 
+                    guard let target = pillScanViewModel.currentTransaction?.target_count else {
+                        return
+                    }
+
+                    let currentTotal = pillScanViewModel.getTotalPillCountOfCurrentTransaction()
+                    let newTotal = currentTotal + cameraService.stableCount
+
+                    // If already completed
+                    if currentTotal == target {
                         showToast = true
+                        isZeroOrTargetNotReached = false
+
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             showToast = false
-                            isZeroOrTargetNotReached = false
                         }
+                        return
+                    }
 
+                    //  If adding exceeds target
+                    if newTotal > target {
+                        showToast = true
+                        isZeroOrTargetNotReached = false
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            showToast = false
+                        }
                         return
                     }
                 }
-                
                 isAddDisabled = true
                 lastAddedCount = cameraService.stableCount
                 showSuccessAnimation = true
@@ -276,7 +291,7 @@ extension OPillCountView {
                     pillCount: Int32(cameraService.stableCount),
                     imagePath: savedPath
                 )
-            },
+                },
             onComplete: {
                 if addNoteSettings {
                     showNoteOption = true
@@ -413,6 +428,8 @@ extension OPillCountView {
             )
         }
     }
+    
+
 
     // Popup showing details of a specific saved count.
     private var showTransactionDetail: some View {

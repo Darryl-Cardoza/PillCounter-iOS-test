@@ -89,6 +89,7 @@ struct PillCounterInputField: View {
                                 }
                             }
                         }
+//                        .keyboardAdaptive()
                 
                 }
             }

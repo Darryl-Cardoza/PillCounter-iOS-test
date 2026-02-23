@@ -231,153 +231,181 @@ class PillScanViewModel: ObservableObject {
     func log(_ message: String) {
         print("🧪 [ManualPillFlow] \(message)")
     }
-
+    
+    
     func manuallyEnteredPill(
+           ndc: String, countType: CountType, isFixedCount: Bool = false
+       ) async {
+
+           // check in the database first
+           if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(
+               by: ndc)
+           {
+               isDrugFound = true
+               drugName = drugFoundInLocalStorage.drug_name
+               // after the drug is found from the db we create a new transaction.
+               await createTransaction(
+                   drugId: drugFoundInLocalStorage.drug_id, countType: countType)
+               getAllTransactionDetailsOfTheCurrentTransaction()
+               if countType == .FIXED {
+                   updateTargetCountForCurrentTransaction()
+               }
+               return
+           }
+
+           // if not found in the db then call the api
+
+           do {
+               let getDrugResult = try await userRepo.getDrug(ndc: ndc)
+
+               if getDrugResult.isSuccess ?? false {
+                   isDrugFound = true
+                   drugName = getDrugResult.data?.genericName ?? "Loading..."
+
+                   // generating new drug id for each pill
+                   let drugId = generateUniqueDrugId()
+
+                   // on success if the result has data in it then only store that data in the db. other wise return and ask the user to enter the ndc number manually.
+
+                   if getDrugResult.data != nil {
+                       // background task to save pill in background.
+                       Task(priority: .background) {
+                           self.pillDataLocalStorage.savePill(
+                               from: getDrugResult,
+                               ndc: ndc,
+                               drugId: drugId
+                           )
+                       }
+                   }
+                   // create transaction for the pill if we get the details of the pill from api.
+                   // drug id is being generated in the view model since saving of the pill in db should be in the background and the logic generation should be in the view model.
+                   // also for creating the transaction we would be needing the drug id.
+                   await createTransaction(drugId: drugId, countType: countType)
+                   if isFixedCount {
+                       updateTargetCountForCurrentTransaction()
+                   }
+                   getAllTransactionDetailsOfTheCurrentTransaction()
+
+               } else {
+                   isDrugFound = false
+                   mannualDrugCreated = true
+                   
+                   drugName = drugNameMannuallyEntered
+
+                   let drugId = generateUniqueDrugId()
+
+                   Task(priority: .background) {
+                       self.pillDataLocalStorage.saveManualPill(
+                           ndc: ndc,
+                           drugId: drugId,
+                           drugName: drugNameMannuallyEntered
+                       )
+                   }
+
+                   await createTransaction(drugId: drugId, countType: countType)
+                   
+                   if countType == .FIXED {
+                       self.updateTargetCountForCurrentTransaction()
+                   }
+
+                   getAllTransactionDetailsOfTheCurrentTransaction()
+               }
+
+           } catch let error {
+               DispatchQueue.main.async {
+                   self.isDrugFound = nil
+                   print("Error: \(error)")
+
+                   self.mannualDrugCreated = true
+
+                   let drugId = self.generateUniqueDrugId()
+
+                   Task(priority: .background) {
+                       self.pillDataLocalStorage.saveManualPill(
+                           ndc: ndc,
+                           drugId: drugId,
+                           drugName: self.drugNameMannuallyEntered
+                       )
+                   }
+                   
+                   self.drugName = self.drugNameMannuallyEntered
+
+                   Task {
+                       await self.createTransaction(
+                           drugId: drugId,
+                           countType: countType
+                       )
+                       if countType == .FIXED {
+                           self.updateTargetCountForCurrentTransaction()
+                       }
+                   }
+
+                   self.getAllTransactionDetailsOfTheCurrentTransaction()
+
+               }
+           }
+       }
+
+    func manualEntryDirectUpsert(
         ndc: String,
-        countType: CountType,
-        isFixedCount: Bool = false,
-        enteredDrugName: String? = nil
+        drugName: String,
+        countType: CountType
     ) async {
 
-        log("START manuallyEnteredPill | ndc=\(ndc) | countType=\(countType) | isFixed=\(isFixedCount)")
+        let trimmedNdc = ndc.trimmingCharacters(in: .whitespaces)
+        let trimmedDrugName = drugName.trimmingCharacters(in: .whitespaces)
 
-        // ---------------- DB CHECK ----------------
-        if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(by: ndc) {
-            log("Drug found in LOCAL DB | drugId=\(drugFoundInLocalStorage.drug_id)")
-
-            isDrugFound = true
-            drugName = enteredDrugName ?? drugFoundInLocalStorage.drug_name
-
-            await createTransaction(
-                drugId: drugFoundInLocalStorage.drug_id,
-                countType: countType
-            )
-
-            log("Transaction created from LOCAL DB | txnId=\(currentTransaction?.txn_id ?? -1)")
-
-            getAllTransactionDetailsOfTheCurrentTransaction()
-
-            if countType == .FIXED {
-                log("Applying FIXED target count (local)")
-                updateTargetCountForCurrentTransaction()
-            }
-
+        guard !trimmedNdc.isEmpty else {
             return
         }
 
-        log("Drug NOT in local DB → calling API")
+        var drugIdToUse: Int64
 
-        // ---------------- API CALL ----------------
-        do {
-            let getDrugResult = try await userRepo.getDrug(ndc: ndc)
+        // Check if drug already exists in DB
+        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: trimmedNdc) {
 
-            log("API response received | success=\(getDrugResult.isSuccess ?? false)")
+            // Use existing drug
+            drugIdToUse = existingDrug.drug_id
+            self.drugName = existingDrug.drug_name
 
-            if getDrugResult.isSuccess ?? false {
+        } else {
 
-                isDrugFound = true
-                drugName = getDrugResult.data?.genericName ?? "Loading..."
+            //  Create new drug entry
+            drugIdToUse = generateUniqueDrugId()
 
-                let drugId = generateUniqueDrugId()
-                log("Generated new drugId from API = \(drugId)")
+            pillDataLocalStorage.saveManualPill(
+                ndc: trimmedNdc,
+                drugId: drugIdToUse,
+                drugName: trimmedDrugName
+            )
 
-                if getDrugResult.data != nil {
-                    log("Saving API drug to DB in background")
-
-                    Task(priority: .background) {
-                        self.pillDataLocalStorage.savePill(
-                            from: getDrugResult,
-                            ndc: ndc,
-                            drugId: drugId
-                        )
-                        self.log("Background save completed (API)")
-                    }
-                }
-
-                await createTransaction(drugId: drugId, countType: countType)
-                log("Transaction created from API | txnId=\(currentTransaction?.txn_id ?? -1)")
-
-                if isFixedCount {
-                    log("Applying FIXED target count (API)")
-                    updateTargetCountForCurrentTransaction()
-                }
-
-                getAllTransactionDetailsOfTheCurrentTransaction()
-
-            } else {
-                // ---------------- MANUAL FALLBACK ----------------
-                log("API success=false → manual drug creation")
-
-                isDrugFound = false
-                mannualDrugCreated = true
-                drugName = drugNameMannuallyEntered
-
-                let drugId = generateUniqueDrugId()
-                log("Generated manual drugId = \(drugId)")
-
-                Task(priority: .background) {
-                    self.pillDataLocalStorage.saveManualPill(
-                        ndc: ndc,
-                        drugId: drugId,
-                        drugName: drugNameMannuallyEntered
-                    )
-                    self.log("Background save completed (Manual)")
-                }
-
-                await createTransaction(drugId: drugId, countType: countType)
-                log("Transaction created (manual fallback) | txnId=\(currentTransaction?.txn_id ?? -1)")
-
-                if countType == .FIXED {
-                    log("Applying FIXED target count (manual fallback)")
-                    updateTargetCountForCurrentTransaction()
-                }
-
-                getAllTransactionDetailsOfTheCurrentTransaction()
-            }
-
-        } catch {
-            // ---------------- ERROR FALLBACK ----------------
-            log("API ERROR → manual fallback | error=\(error.localizedDescription)")
-
-            DispatchQueue.main.async {
-
-                self.isDrugFound = nil
-                self.mannualDrugCreated = true
-                self.drugName = self.drugNameMannuallyEntered
-
-                let drugId = self.generateUniqueDrugId()
-                self.log("Generated manual drugId after error = \(drugId)")
-
-                Task(priority: .background) {
-                    self.pillDataLocalStorage.saveManualPill(
-                        ndc: ndc,
-                        drugId: drugId,
-                        drugName: self.drugNameMannuallyEntered
-                    )
-                    self.log("Background save completed (Error fallback)")
-                }
-
-                Task {
-                    await self.createTransaction(drugId: drugId, countType: countType)
-                    self.log("Transaction created (error fallback) | txnId=\(self.currentTransaction?.txn_id ?? -1)")
-
-                    if countType == .FIXED {
-                        self.log("Applying FIXED target count (error fallback)")
-                        self.updateTargetCountForCurrentTransaction()
-                    }
-                }
-
-                self.getAllTransactionDetailsOfTheCurrentTransaction()
-            }
+            self.drugName = trimmedDrugName
         }
+
+        // Create transaction (ONLY for selected drug)
+        await createTransaction(
+            drugId: drugIdToUse,
+            countType: countType
+        )
+
+        //  Update target if FIXED
+        if countType == .FIXED {
+            updateTargetCountForCurrentTransaction()
+        }
+
+        //  Refresh details
+        getAllTransactionDetailsOfTheCurrentTransaction()
+
+        // Trigger navigation state
+        self.isDrugFound = true
+        self.mannualDrugCreated = true
     }
-
-
     // create transaction for every new transaction that user scans the barcode or enters the ndc or the gtin number manually.
     func createTransaction(
-        drugId: Int64, countType: CountType, barcodeImage: UIImage? = nil,
+        drugId: Int64, countType: CountType,
+        barcodeImage: UIImage? = nil,
         isComingFromPms:Bool = false,
-        targetCount: Int32? = nil
+        drugName: String? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.
@@ -404,8 +432,7 @@ class PillScanViewModel: ObservableObject {
             countType: countType,
             barcodeImagePath: savedPath,
             isComingFromPms: isComingFromPms,
-            targetCount: targetCount
-        
+            drugName: drugName,
         )
 
         // step 3: set the latest transaction as current transaction.
@@ -754,8 +781,7 @@ class PillScanViewModel: ObservableObject {
             await createTransaction(
                 drugId: existingDrug.drug_id,
                 countType: countType,
-                isComingFromPms: true,
-                targetCount: targetCount
+                isComingFromPms: true
             )
 
             if countType == .FIXED {
@@ -785,7 +811,6 @@ class PillScanViewModel: ObservableObject {
             drugId: drugId,
             countType: countType,
             isComingFromPms: true,
-            targetCount: targetCount
         )
 
         if countType == .FIXED {
@@ -811,7 +836,6 @@ class PillScanViewModel: ObservableObject {
         drugNameMannuallyEntered = ""
         isDrugFound = nil
         mannualDrugCreated = nil
-        ndcNumber = ""
 
         // Counting
         targetCount = ["", "", "", ""]

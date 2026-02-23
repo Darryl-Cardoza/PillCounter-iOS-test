@@ -103,8 +103,7 @@ final class PillsDataLocalStorage {
         countType: CountType,
         barcodeImagePath: String,
         isComingFromPms: Bool? = nil,
-        drugName:String? = nil,
-        targetCount:Int32? = nil
+        drugName:String? = nil
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -137,8 +136,7 @@ final class PillsDataLocalStorage {
         // set is hl7 or normal transaction and isSynced false
         entity.isComingFromPms = isComingFromPms ?? false
         entity.isSynced = false
-        entity.target_count = targetCount ?? 0
-        
+    
 
         entity.user = user
         print(
@@ -271,7 +269,6 @@ final class PillsDataLocalStorage {
             CountType.FIXED.rawValue,
             [
                 CountStatus.COMPLETED.rawValue,
-                CountStatus.FORCE_COMPLETED.rawValue
             ]
         )
 
@@ -306,7 +303,6 @@ final class PillsDataLocalStorage {
             CountType.REGULAR.rawValue,
             [
                 CountStatus.COMPLETED.rawValue,
-                CountStatus.FORCE_COMPLETED.rawValue
             ]
         )
 
@@ -318,7 +314,6 @@ final class PillsDataLocalStorage {
     func fetechLatestTransactionOfUser(for user: UserEntity)
         -> PillCountTransactionEntity?
     {
-
         // make the fetch request
         let request: NSFetchRequest<PillCountTransactionEntity> =
             PillCountTransactionEntity.fetchRequest()

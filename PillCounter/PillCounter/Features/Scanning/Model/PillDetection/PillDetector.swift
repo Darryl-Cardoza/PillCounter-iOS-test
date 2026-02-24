@@ -23,12 +23,10 @@ final class PillDetector {
 
     // load model
     private func loadModel() {
-
         do {
-
             let config = MLModelConfiguration()
             
-            config.computeUnits = .cpuAndGPU
+            config.computeUnits = .cpuOnly
             
             let mlModel = try best(configuration: config)
             self.model = mlModel

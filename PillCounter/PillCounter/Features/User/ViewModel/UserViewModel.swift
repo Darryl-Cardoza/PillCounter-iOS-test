@@ -141,23 +141,14 @@ class UserViewModel: ObservableObject {
     // MARK: GET USER
     // get user info
     func getUser() async {
-
-        print("🟡 [User] getUser() called")
-
         isLoading = true
-        print("🟢 [User] isLoading = true")
-
         defer {
             isLoading = false
-            print("🟢 [User] isLoading = false")
         }
-
-        print("🔎 [User] Checking local DB for userID: \(userID)")
 
         if !userID.isEmpty,
            let localUser = userLocalDB.getUserByUserId(by: userID) {
 
-            print("📦 [User] Local user found in DB")
 
             let name = Formatter.segregateName(from: localUser.name ?? "")
 
@@ -167,34 +158,24 @@ class UserViewModel: ObservableObject {
             email = localUser.email ?? ""
             pharmacyName = localUser.pharmacy_name ?? ""
             npiID = localUser.npi_id ?? ""
+            phoneNumber = localUser.phone_number ?? ""
 
-            print("📝 [User] Populated UI from local DB:")
-            print("   • firstName: \(firstName)")
-            print("   • lastName: \(lastName)")
-            print("   • email: \(email)")
-            print("   • pharmacyName: \(pharmacyName)")
-            print("   • npiID: \(npiID)")
 
-            print("📊 [User] Fetching transactions (local flow)")
+
             getAllTransactionsAndFilterByCountType()
 
             return
         }
 
-        print("🌐 [User] Local user not found. Calling API...")
 
         do {
-
-            print("📊 [User] Fetching transactions before API call")
             getAllTransactionsAndFilterByCountType()
 
             let currentAppVersion =
                 Bundle.main.infoDictionary?["CFBundleShortVersionString"]
                 as? String ?? "Unknown"
 
-            print("📦 [User] API Request Params:")
-            print("   • appVersion: \(currentAppVersion)")
-            print("   • accessToken exists: \(!accessToken.isEmpty)")
+
 
             let getUserResult = try await userRepo.getUser(
                 accessToken: accessToken,
@@ -202,42 +183,31 @@ class UserViewModel: ObservableObject {
                 fcmToken: ""
             )
 
-            print("📡 [User] API Response received")
-            print("   • isSuccess: \(String(describing: getUserResult.isSuccess))")
 
             if getUserResult.isSuccess ?? false {
 
-                print("✅ [User] User fetch successful")
 
                 email = userEmail
 
                 if let user = getUserResult.data?.profile {
                     userProfileDetails = user
-                    print("📝 [User] Populating editable fields from API profile")
                     populateEditableFields(from: user)
                 }
 
                 userID = getUserResult.data?.profile?.userId ?? ""
-                print("🆔 [User] userID set to: \(userID)")
 
                 if let userId = userProfileDetails?.userId,
                    userLocalDB.getUserByUserId(by: userId) == nil {
-
-                    print("💾 [User] Saving new user to local DB")
                     userLocalDB.saveUser(from: getUserResult)
-                } else {
-                    print("ℹ️ [User] User already exists in DB. Skipping save.")
                 }
 
             } else {
-                print("❌ [User] API returned failure")
             }
 
-            print("📊 [User] Fetching transactions after API call")
             getAllTransactionsAndFilterByCountType()
 
         } catch {
-            print("🔥 [User] Error fetching user: \(error.localizedDescription)")
+            print(" [User] Error fetching user: \(error.localizedDescription)")
         }
     }
     // private func for profile screen fields

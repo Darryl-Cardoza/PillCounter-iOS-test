@@ -77,7 +77,8 @@ class PillScanViewModel: ObservableObject {
 
         if gtin.isEmpty { return }
         
-        
+        print("Captured Image \(image)")
+
        
         // 1. Generate a potential ID (only used if we create a NEW drug)
         var drugIdToUse = generateUniqueDrugId()
@@ -418,11 +419,24 @@ class PillScanViewModel: ObservableObject {
 
         // Save Image using Helper if it exists
         var savedPath = ""
+
         if let img = barcodeImage {
+            print("📸 Barcode image exists")
+
             if let path = PhotoFileManager.shared.saveImage(img) {
                 savedPath = path
+                print("✅ Image saved successfully")
+                print("📂 Saved Path: \(path)")
+            } else {
+                print("❌ Failed to save image")
             }
+
+        } else {
+            print("⚠️ barcodeImage is nil")
         }
+
+        print("🗂 Final Image Path Being Sent To DB: \(savedPath)")
+
 
         // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
         // we now call the db function to create the transaction.

@@ -17,6 +17,9 @@ final class CameraViewModel: NSObject, ObservableObject {
     @Published var isAuthorized: Bool = false
     @Published var error: String?
     @Published private(set) var currentCameraOrientation: UIDeviceOrientation = .portrait
+    
+    let decoder = BarcodeAndQRDecoder()
+
 
     // MARK: - SESSION CORE
     private let session = AVCaptureSession()
@@ -250,10 +253,14 @@ extension CameraViewModel: AVCaptureMetadataOutputObjectsDelegate {
               let value = object.stringValue
         else { return }
 
-        hasScanned = true
 
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 
+        let decodedGs1Value = decoder.decode(value)
+        let gtin = decodedGs1Value.gtin ?? ""
+        if gtin.isEmpty { return }
+    
+        hasScanned = true   
         scannedCode = value
         codeType = object.type.rawValue
     }

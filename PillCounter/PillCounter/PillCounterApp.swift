@@ -23,7 +23,7 @@ struct PillCounterApp: App {
         ConfirmationDialogueManager()
     @StateObject private var pillScanViewModel = PillScanViewModel()
     @StateObject private var userViewModel = UserViewModel()
-
+    @StateObject private var toastManager = ToastManager()
 
     private let isCompromised: Bool
 
@@ -66,28 +66,55 @@ struct PillCounterApp: App {
 
                     // 4️⃣ Normal App
                 } else {
-                    AppNavigation()
-                        .font(.system(size: 16))
-                        .environment(\.dynamicTypeSize, .medium)
-                        .environmentObject(router)
-                        .environmentObject(loginViewModel)
-                        .environmentObject(userViewModel)
-                        .environmentObject(appColors)
-                        .environmentObject(confirmationDialogueManager)
-                        .environmentObject(pillScanViewModel)
-                        .onAppear {
-                            startSecurityMonitoring()
-                        }
-                        .task {
-                            userViewModel.loadMobileThemeSettings()
-
-                            Task.detached(priority: .background) {
-                                await MainActor.run {
-                                    PillsDataLocalStorage.shared
-                                        .cleanUpOldHistory()
+                    ZStack{
+                        AppNavigation()
+                            .font(.system(size: 16))
+                            .environment(\.dynamicTypeSize, .medium)
+                            .environmentObject(router)
+                            .environmentObject(loginViewModel)
+                            .environmentObject(userViewModel)
+                            .environmentObject(appColors)
+                            .environmentObject(confirmationDialogueManager)
+                            .environmentObject(pillScanViewModel)
+                            .environmentObject(toastManager)
+                            .onAppear {
+                                startSecurityMonitoring()
+                            }
+                            .task {
+                                userViewModel.loadMobileThemeSettings()
+                                
+                                Task.detached(priority: .background) {
+                                    await MainActor.run {
+                                        PillsDataLocalStorage.shared
+                                            .cleanUpOldHistory()
+                                    }
                                 }
                             }
+                        //show toast when succefully updated profile date
+                        if toastManager.isShowing {
+                            VStack {
+                                Spacer()
+
+                                HStack(spacing: 10) {
+                                    Image("app_icon")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 24, height: 24)
+
+                                    Text(toastManager.message)
+                                        .font(.subheadline)
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(Color.black.opacity(0.8))
+                                .cornerRadius(10)
+                                .padding(.bottom, 32)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                            .animation(.easeInOut, value: toastManager.isShowing)
                         }
+                    }
                 }
             }
             .onAppear {

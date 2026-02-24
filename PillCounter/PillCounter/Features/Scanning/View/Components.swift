@@ -84,7 +84,8 @@ struct ZoomControlView: View {
             Spacer()
 
             VStack(spacing: 8) {
-            
+           
+                Spacer()
 
                 GeometryReader { geo in
                     let width = geo.size.width

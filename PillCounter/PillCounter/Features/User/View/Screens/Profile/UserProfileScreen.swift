@@ -13,6 +13,7 @@ struct UserProfileScreen: View {
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var appColors: AppColors
+    @EnvironmentObject private var toastManager: ToastManager
 
     @State private var showDeleteConfirmation: Bool = false
 
@@ -57,6 +58,8 @@ struct UserProfileScreen: View {
                     PillCountingLoader()
                 }
             }
+            
+       
         }
         .onAppear {
             Task {
@@ -319,12 +322,14 @@ struct UserProfileScreen: View {
     private func onSaveTapped() {
         Task {
             await userViewModel.updateUserProfile()
-
+            toastManager.show(message: "Profile updated successfully.")
             if userViewModel.isProfileUpdated {
                 // New user flow completed
                 isNewUser = false
                 userViewModel.isProfileUpdated = false
                 router.navigateBack()
+            }else{
+                toastManager.show(message: "Failed to update profile. Please try again.")
             }
         }
     }

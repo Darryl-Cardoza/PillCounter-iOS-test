@@ -65,6 +65,7 @@ struct QRBarcodeScannerView: View {
     @Environment(\.isLandscape) private var isLandscape
     @State private var stableIsLandscape: Bool = false
     @State private var landscapeDebounceTask: Task<Void, Never>? = nil
+    
     // UI States
     @State private var showScannedData = false
     @State private var showMannualEntryPopup: Bool = false
@@ -77,7 +78,7 @@ struct QRBarcodeScannerView: View {
     private let labelWidth: CGFloat = 110
     
     @State private var scanTimeoutTask: Task<Void, Never>?
-    private let scanTimeoutSeconds: UInt64 = 6   // ⏱ configurable (5–8s ideal)
+    private let scanTimeoutSeconds: UInt64 = 6
     
     @FocusState private var focusedField: InputField?
 
@@ -91,6 +92,7 @@ struct QRBarcodeScannerView: View {
 
                     ZStack(alignment: .bottom) {
                         // 1. Camera Layer
+                        // if permission granted show CameraPreview
                         if cameraManager.isAuthorized {
                             CameraPreview(
                                 session: cameraManager.getSession(),
@@ -100,9 +102,11 @@ struct QRBarcodeScannerView: View {
                             // However, BaseView usually ignores safe area, so this will fill nicely.
                         } else {
                             // Fallback/Loading background
+                            // Permission is not granted
                             Color.black
                         }
                         
+                        // The SquareBreathing Box in camera view
                         if cameraManager.scannedCode.isEmpty {
                             BarcodeScanBox()
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -111,6 +115,7 @@ struct QRBarcodeScannerView: View {
                                 }
                         }
 
+                        //ScanBarcode overlay box
                         VStack {
                             Spacer()
                             scanInstructionOverlay
@@ -125,6 +130,7 @@ struct QRBarcodeScannerView: View {
                 },
                 
                 bottomContent: {
+                    // ManualNdc and drug name box
                     bottomContent
                 }               ,
                 headerActions: {},
@@ -185,10 +191,6 @@ struct QRBarcodeScannerView: View {
                 restartFullScannerFlow()
             }
         }
-//        // MARK: - POPUPS
-//        .customPopup(isPresented: $showMannualEntryPopup) {
-//            mannualEntryPopup
-//        }
         .customPopup(isPresented: $showPillTargetCountPopup) {
             mannulaEntryTargetCount
         }
@@ -223,7 +225,7 @@ struct QRBarcodeScannerView: View {
         }
     }
     
-    
+
     struct BarcodeScanBox: View {
         @State private var animate = false
 
@@ -254,8 +256,6 @@ struct QRBarcodeScannerView: View {
                 .allowsHitTesting(false)
         }
     }
-
-
 }
 
 // MARK: - LOGIC EXTENSIONS
@@ -270,10 +270,15 @@ extension QRBarcodeScannerView {
             if pillScanViewModel.isDrugFound != nil { return }
             if isFromScanning { return }  // Simple flag check
 
+
+            
             // 2. Capture the Photo
             cameraManager.captureImage { capturedImage in
 
                 self.tempCapturedImage = capturedImage
+                
+                print("Captured Image \(capturedImage)")
+                print("Captured Image2 \(tempCapturedImage)")
 
                 // 3. Stop session after capture is done
                 cameraManager.stopSession()
@@ -313,7 +318,7 @@ extension QRBarcodeScannerView {
                                 rawValueFromBarcodeOrQr: newValue,
                                 countType: router.selectedPillScanningType
                                 ?? .FIXED,
-                                image: tempCapturedImage  // Pass the image here!
+                                image: tempCapturedImage  
                             )
                         }
                     }
@@ -449,7 +454,6 @@ extension QRBarcodeScannerView {
                         verticalPadding: 18,
                         iconSize: 0,
                         action: {
-                            
                             guard !pillScanViewModel.ndcNumber
                                 .trimmingCharacters(in: .whitespacesAndNewlines)
                                 .isEmpty else {
@@ -475,7 +479,8 @@ extension QRBarcodeScannerView {
                                             rawValueFromBarcodeOrQr: scannedData
                                             ?? "",
                                             countType: router
-                                                .selectedPillScanningType ?? .FIXED
+                                                .selectedPillScanningType ?? .FIXED,
+                                            image: tempCapturedImage
                                         )
                                     } else {
                                         await pillScanViewModel.manualEntryDirectUpsert(
@@ -509,7 +514,6 @@ extension QRBarcodeScannerView {
                 portraitBottomContent
             }
         }
-//        .keyboardAdaptive()
     }
     
     private var landscapeBottomContent: some View {
@@ -804,7 +808,8 @@ extension QRBarcodeScannerView {
                                         rawValueFromBarcodeOrQr: scannedData
                                             ?? "",
                                         countType: router
-                                            .selectedPillScanningType ?? .FIXED
+                                            .selectedPillScanningType ?? .FIXED,
+                                        
                                     )
                                 } else {
                                     await pillScanViewModel.manuallyEnteredPill(
@@ -900,7 +905,8 @@ extension QRBarcodeScannerView {
                                         rawValueFromBarcodeOrQr: scannedData
                                         ?? "",
                                         countType: router
-                                            .selectedPillScanningType ?? .FIXED
+                                            .selectedPillScanningType ?? .FIXED,
+                                        image: tempCapturedImage
                                        )
                                    } else {
                                        await pillScanViewModel.manualEntryDirectUpsert(
@@ -946,7 +952,7 @@ extension QRBarcodeScannerView {
         showPillTargetCountPopup = false
         isFromScanning = false
         scannedData = nil
-        tempCapturedImage = nil
+//        tempCapturedImage = nil
         cameraManager.restartSession()
         startScanTimeout()
     }
@@ -959,3 +965,4 @@ func DLOG(_ msg: String) -> Bool {
     return true
 }
     
+

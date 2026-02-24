@@ -77,24 +77,26 @@ struct ZoomControlView: View {
     @EnvironmentObject var appColors: AppColors
 
     private let minZoom: CGFloat = 1.0
-    private let maxZoom: CGFloat = 5.0
+    private let maxZoom: CGFloat = 2.0
 
     var body: some View {
         VStack {
             Spacer()
 
             VStack(spacing: 8) {
-                Text(String(format: "%.1fx", cameraService.zoomFactor))
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(appColors.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.black.opacity(0.5))
-                    .clipShape(Capsule())
+            
 
                 GeometryReader { geo in
-                    ZStack {
-                        // Native slider
+                    let width = geo.size.width
+
+                    let horizontalPadding: CGFloat = 16   // slider internal padding
+                    let usableWidth = width - (horizontalPadding * 2)
+
+                    let percentage = (cameraService.zoomFactor - minZoom) / (maxZoom - minZoom)
+                    let thumbX = horizontalPadding + (usableWidth * percentage)
+
+                    ZStack(alignment: .leading) {
+
                         Slider(
                             value: Binding(
                                 get: { cameraService.zoomFactor },
@@ -108,23 +110,29 @@ struct ZoomControlView: View {
                         )
                         .tint(appColors.secondary)
 
-                        // Invisible tap layer
+                        Text(String(format: "%.1fx", cameraService.zoomFactor))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(appColors.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Capsule())
+                            .position(x: thumbX, y: -5)  
+
                         Rectangle()
                             .fill(Color.clear)
                             .contentShape(Rectangle())
                             .gesture(
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { value in
-                                        let x = value.location.x
-                                        let width = geo.size.width
-
-                                        guard width > 0 else { return }
+                                        guard usableWidth > 0 else { return }
 
                                         let percentage = min(
-                                            max(x / width, 0), 1)
-                                        let zoom =
-                                            minZoom + (maxZoom - minZoom)
-                                            * percentage
+                                            max((value.location.x - horizontalPadding) / usableWidth, 0),
+                                            1
+                                        )
+
+                                        let zoom = minZoom + (maxZoom - minZoom) * percentage
 
                                         cameraService.setZoom(zoom)
                                         cameraService.resetInactivityTimer()
@@ -132,7 +140,7 @@ struct ZoomControlView: View {
                             )
                     }
                 }
-                .frame(height: 44)
+                .frame(height: 60)                .frame(height: 60)                .frame(height: 44)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)

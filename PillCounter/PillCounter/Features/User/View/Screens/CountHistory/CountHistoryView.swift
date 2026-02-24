@@ -106,7 +106,6 @@ struct CountHistoryView: View {
         
     }
 
-
     struct FilterTabButton: View {
         let title: String
         let isSelected: Bool
@@ -116,24 +115,26 @@ struct CountHistoryView: View {
             Button(action: action) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppColors.shared.text)
+                    .foregroundColor(
+                        isSelected
+                        ? AppColors.shared.primary
+                        : AppColors.shared.text
+                    )
                     .frame(width: 90, height: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(isSelected ? AppColors.shared.primary :   Color.black.opacity(0.45))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(
-                                        .clear,
-                                        lineWidth: isSelected ? 2 : 1
-                                    )
+                    .background(Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                isSelected
+                                ? AppColors.shared.primary
+                                : AppColors.shared.text,
+                                lineWidth: 1
                             )
                     )
             }
             .buttonStyle(.plain)
         }
     }
-
 
 
     var body: some View {

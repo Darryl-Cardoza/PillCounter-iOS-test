@@ -34,6 +34,8 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
     let backButtonBackground: Color?
     let headerActionsBackground: Color?
     
+    let allowKeyboardResize: Bool
+    
     let onBack: (() -> Void)?
 
     // MARK: - ENVIRONMENT
@@ -45,6 +47,8 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
     // MARK: - STATE
     @State private var keyboardHeight: CGFloat = 0
     @State private var animatePulse = false
+    
+    
 
 
     // MARK: - MAIN INIT
@@ -65,6 +69,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         confirmButtonText: String? = nil,
         backButtonBackground: Color? = nil,
         headerActionsBackground: Color? = nil,
+        allowKeyboardResize: Bool = false,  // Added for barcodescan view bottom content
         onBack: (() -> Void)? = nil
     ) {
         self.topRatio = topRatio
@@ -83,6 +88,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         self.confirmButtonText = confirmButtonText
         self.backButtonBackground = backButtonBackground
         self.headerActionsBackground = headerActionsBackground
+        self.allowKeyboardResize = allowKeyboardResize
         self.onBack = onBack
     }
 
@@ -114,7 +120,12 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         }
         
         .background(appColors.secondaryBackground)
-        .ignoresSafeArea()
+        .ignoresSafeArea(
+            allowKeyboardResize ?
+            .container :
+            .all,
+            edges: allowKeyboardResize ? [.top, .leading, .trailing] : .all
+        )
         .environment(\.dynamicTypeSize, .medium)
     }
 }
@@ -177,13 +188,25 @@ extension BaseView {
                 )
                 .clipped()
 
-            bottomContent()
-                .frame(
-                    width: isLandscape
-                        ? size.width * (1 - topRatio) : size.width,
-                    height: isLandscape
-                        ? size.height : size.height * (1 - topRatio)
-                )
+            if allowKeyboardResize {
+                bottomContent()
+                    .frame(
+                        width: isLandscape
+                            ? size.width * (1 - topRatio)
+                            : size.width
+                    )
+                    .frame(maxHeight: .infinity)
+            } else {
+                bottomContent()
+                    .frame(
+                        width: isLandscape
+                            ? size.width * (1 - topRatio)
+                            : size.width,
+                        height: isLandscape
+                            ? size.height
+                            : size.height * (1 - topRatio)
+                    )
+            }
         }
     }
 

@@ -51,3 +51,4 @@ struct MaxWidthPreferenceKey: PreferenceKey {
         value = max(value, nextValue())
     }
 }
+

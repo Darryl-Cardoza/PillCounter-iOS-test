@@ -56,8 +56,7 @@ struct LoginEmailView: View {
                                 }
                             }
                         },
-                        validation: .email,
-                        maxLength: nil
+                        validation: .email
                     )
 
                     // error message

@@ -85,7 +85,6 @@ final class UserLocalDataSource {
     // get user by user id.
     func getUserByUserId(by userId: String) -> UserEntity? {
 
-        print("🟡 DB: Fetching user with id =", userId)
 
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user_id == %@", userId)
@@ -95,9 +94,6 @@ final class UserLocalDataSource {
             let result = try mainThreadContext.fetch(request)
 
             if let user = result.first {
-                print("🟢 DB: User FOUND → id:", user.user_id ?? "nil")
-                print("🟢 DB: name:", user.name ?? "nil")
-                print("🟢 DB: txn count:", (user.transactions as? Set<PillCountTransactionEntity>)?.count ?? 0)
                 return user
             } else {
                 print("🔴 DB: No user found for id =", userId)
@@ -114,19 +110,14 @@ final class UserLocalDataSource {
     // get all users
     func getAllUsers() -> [UserEntity] {
 
-        print("🟡 DB: Fetching ALL users")
 
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
 
         do {
             let users = try mainThreadContext.fetch(request)
 
-            print("🟢 DB: Total users found =", users.count)
 
             for user in users {
-                print("   ↳ User:", user.user_id ?? "nil",
-                      "| name:", user.name ?? "nil",
-                      "| txns:", (user.transactions as? Set<PillCountTransactionEntity>)?.count ?? 0)
             }
 
             return users

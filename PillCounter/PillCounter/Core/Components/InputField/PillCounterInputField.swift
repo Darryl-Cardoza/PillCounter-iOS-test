@@ -22,7 +22,7 @@ struct PillCounterInputField: View {
     var onSubmit: (() -> Void)? = nil
 
     var validation: InputValidation = .none
-    let maxLength: Int?
+    var maxLength: Int? = nil
 
     // Detect the current color scheme (light or dark)
     @Environment(\.colorScheme) var colorScheme
@@ -75,22 +75,20 @@ struct PillCounterInputField: View {
                         //                            onSubmit?()
                         //                        }
                         .disabled(disabled)
-                        .toolbar {
-                            if isFocused {
-                                ToolbarItem(placement: .keyboard) {
-                                    KeyboardAccessoryView(text: $text) {
-                                        UIApplication.shared.sendAction(
-                                            #selector(UIResponder.resignFirstResponder),
-                                            to: nil,
-                                            from: nil,
-                                            for: nil
-                                        )
-                                    }
-                                }
-                            }
-                        }
-//                        .keyboardAdaptive()
-                
+//                        .toolbar {
+//                            if isFocused {
+//                                ToolbarItem(placement: .keyboard) {
+//                                    KeyboardAccessoryView(text: $text) {
+//                                        UIApplication.shared.sendAction(
+//                                            #selector(UIResponder.resignFirstResponder),
+//                                            to: nil,
+//                                            from: nil,
+//                                            for: nil
+//                                        )
+//                                    }
+//                                }
+//                            }
+//                        }                
                 }
             }
             .padding(.leading, 10)

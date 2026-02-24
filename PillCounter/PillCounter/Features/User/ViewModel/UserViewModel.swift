@@ -141,75 +141,105 @@ class UserViewModel: ObservableObject {
     // MARK: GET USER
     // get user info
     func getUser() async {
-        
-        print("UserID \(     userID)")
+
+        print("🟡 [User] getUser() called")
 
         isLoading = true
-        
-        defer { isLoading = false }
-        
+        print("🟢 [User] isLoading = true")
+
+        defer {
+            isLoading = false
+            print("🟢 [User] isLoading = false")
+        }
+
+        print("🔎 [User] Checking local DB for userID: \(userID)")
+
         if !userID.isEmpty,
            let localUser = userLocalDB.getUserByUserId(by: userID) {
-            
-           let name = Formatter.segregateName(from: localUser.name ?? "")
-            
-            // Populate UI from local DB
+
+            print("📦 [User] Local user found in DB")
+
+            let name = Formatter.segregateName(from: localUser.name ?? "")
+
             firstName = name.firstName
             lastName = name.lastName
-            
+
             email = localUser.email ?? ""
             pharmacyName = localUser.pharmacy_name ?? ""
             npiID = localUser.npi_id ?? ""
-            
+
+            print("📝 [User] Populated UI from local DB:")
+            print("   • firstName: \(firstName)")
+            print("   • lastName: \(lastName)")
+            print("   • email: \(email)")
+            print("   • pharmacyName: \(pharmacyName)")
+            print("   • npiID: \(npiID)")
+
+            print("📊 [User] Fetching transactions (local flow)")
             getAllTransactionsAndFilterByCountType()
-            
+
             return
         }
 
+        print("🌐 [User] Local user not found. Calling API...")
+
         do {
 
-            // get the current statuses of the transactions
+            print("📊 [User] Fetching transactions before API call")
             getAllTransactionsAndFilterByCountType()
 
             let currentAppVersion =
                 Bundle.main.infoDictionary?["CFBundleShortVersionString"]
                 as? String ?? "Unknown"
 
+            print("📦 [User] API Request Params:")
+            print("   • appVersion: \(currentAppVersion)")
+            print("   • accessToken exists: \(!accessToken.isEmpty)")
+
             let getUserResult = try await userRepo.getUser(
                 accessToken: accessToken,
                 currentAppVersion: currentAppVersion,
-                fcmToken: ""  // needs to be generated on app launch. and passed in here.
+                fcmToken: ""
             )
 
+            print("📡 [User] API Response received")
+            print("   • isSuccess: \(String(describing: getUserResult.isSuccess))")
+
             if getUserResult.isSuccess ?? false {
+
+                print("✅ [User] User fetch successful")
+
                 email = userEmail
+
                 if let user = getUserResult.data?.profile {
                     userProfileDetails = user
+                    print("📝 [User] Populating editable fields from API profile")
                     populateEditableFields(from: user)
                 }
 
-                // save the user id to app storage.
                 userID = getUserResult.data?.profile?.userId ?? ""
+                print("🆔 [User] userID set to: \(userID)")
 
-                // save to db only if the user that has logged in is not present.
-                // condition : getting the user id from the response of the api.
-                // if the user with the user id is not there in the db then save the user in db
-                // else do not save the user to db. we will update the user. (using the update function of db).
                 if let userId = userProfileDetails?.userId,
-                    userLocalDB.getUserByUserId(by: userId) == nil
-                {
-                    // saved in the background thread
+                   userLocalDB.getUserByUserId(by: userId) == nil {
+
+                    print("💾 [User] Saving new user to local DB")
                     userLocalDB.saveUser(from: getUserResult)
+                } else {
+                    print("ℹ️ [User] User already exists in DB. Skipping save.")
                 }
 
+            } else {
+                print("❌ [User] API returned failure")
             }
+
+            print("📊 [User] Fetching transactions after API call")
             getAllTransactionsAndFilterByCountType()
 
-        } catch let error {
-            print("Error: \(error)")
+        } catch {
+            print("🔥 [User] Error fetching user: \(error.localizedDescription)")
         }
     }
-
     // private func for profile screen fields
     private func populateEditableFields(from user: UserProfile) {
         let fullName = user.fullName ?? ""
@@ -228,13 +258,16 @@ class UserViewModel: ObservableObject {
 
     // MARK: UPDATE USER PROFILE
     // update user profile
-    func updateUserProfile() async {
-
-        if !hasUserProfileChanged() { return }
+    func updateUserProfile() async {    
+        if !hasUserProfileChanged() {
+            return
+        }
 
         isLoading = true
 
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+        }
 
         do {
 
@@ -245,27 +278,40 @@ class UserViewModel: ObservableObject {
                 npiID: npiID,
                 isProfileComplete: true,
                 avatarURL: "",
-                notificationsEnabled: false,  // notifications permission check and accordingly update it.
-                language: "",  // what should be passed in the language.
-                timezone: ""  // also what should be passed in the timezone // does this means local timezone ?
+                notificationsEnabled: false,
+                language: "",
+                timezone: ""
+            )
+            let updateUserProfileResult = try await userRepo.updateUserProfile(
+                request: request,
+                accessToken: accessToken
             )
 
-            let updateUserProfileResult = try await userRepo.updateUserProfile(
-                request: request, accessToken: accessToken)
-
             if updateUserProfileResult.isSuccess ?? false {
+
                 isProfileUpdated = true
+
                 let previousUserProfileDetails = userProfileDetails
                 userProfileDetails =
                     updateUserProfileResult.data?.profile
-                    ?? previousUserProfileDetails  // fallback to what was earlier stored in user details.
+                    ?? previousUserProfileDetails
+                
+                if !userID.isEmpty {
+                    let fullName = "\(firstName) \(lastName)"
+
+                    userLocalDB.updateUser(userId: userID, field: .name, value: fullName)
+                    userLocalDB.updateUser(userId: userID, field: .email, value: email)
+                    userLocalDB.updateUser(userId: userID, field: .pharmacyName, value: pharmacyName)
+                    userLocalDB.updateUser(userId: userID, field: .phoneNumber, value: phoneNumber)
+                    userLocalDB.updateUser(userId: userID, field: .npiId, value: npiID)
+                }
+
+            } else {
             }
 
-        } catch let error {
-            print("Error: \(error)")
+        } catch {
         }
     }
-
     // func to check if any updates were there in the profile.
     private func hasUserProfileChanged() -> Bool {
         guard let original = userProfileDetails else { return true }  // if no original data, treat as changed

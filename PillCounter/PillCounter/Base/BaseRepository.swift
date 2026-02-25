@@ -22,7 +22,7 @@ protocol BaseRepositoryProtocol {
 }
 
 extension BaseRepositoryProtocol {
-    static var shouldBypassSSL: Bool { return false }
+    static var shouldBypassSSL: Bool { return true }
 
     // MARK: - Perform Request
     static func performRequest<T: Decodable>(
@@ -92,9 +92,6 @@ extension BaseRepositoryProtocol {
                     } catch {
                         throw APIError.parsingError
                     }
-                case 400:
-                    return try JSONDecoder().decode(T.self, from: data)
-                    
                 case 401:
                     throw APIError.unauthorized
                 case 403:

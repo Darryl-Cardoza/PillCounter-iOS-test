@@ -62,7 +62,6 @@ struct DashboardView: View {
                             Text("FIXED_COUNT_SUBTITLE")
                                 .foregroundStyle(appColors.text)
                             
-                            Spacer()
                         }
                         
                         HStack {

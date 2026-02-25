@@ -175,18 +175,12 @@ class LoginViewModel: ObservableObject {
         errorMessage = nil
         let otpString = otp.joined()
 
-        print("🔵 [VERIFY OTP] Started")
-        print("📧 Email:", userEmail)
-        print("🔢 OTP Entered:", otpString)
-
         if otpString.isEmpty {
-            print("⚠️ OTP is empty")
             errorMessage = "Please enter the OTP."
             return
         }
 
         if otpString.count < 4 {
-            print("⚠️ OTP less than 4 digits")
             errorMessage = "Invalid OTP."
             return
         }
@@ -196,20 +190,15 @@ class LoginViewModel: ObservableObject {
         do {
             defer { isLoading = false }
 
-            print("🚀 Sending OTP to backend...")
 
             let verifyOTPresult = try await loginrepo.verifyOTP(
                 email: userEmail,
                 otp: otpString
             )
 
-            print("✅ Backend Response Received")
-            print("📦 isSuccess:", verifyOTPresult.isSuccess ?? false)
-            print("💬 message:", verifyOTPresult.message ?? "nil")
 
             if verifyOTPresult.isSuccess ?? false {
 
-                print("🎉 OTP VERIFIED SUCCESSFULLY")
 
                 otp = ["", "", "", ""]
 
@@ -233,14 +222,12 @@ class LoginViewModel: ObservableObject {
                 }
 
             } else {
-                print("❌ OTP VERIFICATION FAILED")
                 errorMessage =
                     verifyOTPresult.message
                     ?? "Invalid OTP. Please try again."
             }
 
         } catch {
-            print("🔥 VERIFY OTP THREW ERROR:", error)
             isOtpVerificationSuccess = false
             errorMessage = "Unable to verify OTP. Please try again."
         }

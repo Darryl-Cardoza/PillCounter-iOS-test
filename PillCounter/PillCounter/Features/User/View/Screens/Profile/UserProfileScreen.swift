@@ -45,9 +45,11 @@ struct UserProfileScreen: View {
                 bottomContent: {
                     EmptyView()
                 },
-                showBackButton: !isNewUser,
+                headerActions: { EmptyView() },
+                showBackButton: false,
                 showHamburgerMenu: false,
-                title: NSLocalizedString("PROFILE", comment: "")
+                title: NSLocalizedString("PROFILE", comment: ""),
+                allowKeyboardResize: true,
             )
 
             if userViewModel.isLoading {
@@ -335,43 +337,80 @@ struct UserProfileScreen: View {
     }
 
     private func profileScreenLandscape() -> some View {
-        VStack(spacing: 20) {
-            Spacer().frame(height: SafeAreaInsets.top + 20)
-            landscapeProfileColums
+        VStack(spacing: 0) {
+
+            profileHeader
+
+            ScrollView {
+                VStack(spacing: 20) {
+
+                    HStack(alignment: .top, spacing: 20) {
+                        leftProfileColumn
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        rightProfileColumn
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    HStack {
+                        Spacer()
+                        actionButtons
+                        Spacer()
+                    }
+                    .padding(.bottom, 20)
+                }
                 .padding(.horizontal)
-
-            HStack {
-                Spacer()
-                actionButtons
-                Spacer()
             }
-            .padding(.horizontal)
-
         }
-        .padding(.horizontal, SafeAreaInsets.leading)
-        .keyboardAdaptive()
+        .background(appColors.primaryBackground)
     }
-
     private func profileScreenPotrait() -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Spacer().frame(height: 100)
+        VStack(spacing: 0) {
 
-            potraitProfileColums
+            profileHeader
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+
+                    Spacer().frame(height: 20)
+
+                    potraitProfileColums
+
+                    Spacer().frame(height: 30)
+                    actionButtons
+                    
+                }
+                .padding(.horizontal)
+            }
+        }
+        .background(appColors.primaryBackground)
+    }
+    
+    private var profileHeader: some View {
+        HStack {
+            if !isNewUser {
+                Button {
+                    router.navigateBack()
+                } label: {
+                    HStack {
+                        Image("back_icon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+
+                        Text(NSLocalizedString("PROFILE", comment: ""))
+                            .font(.headline)
+                            .foregroundStyle(appColors.text)
+                    }
+                }
+            }
 
             Spacer()
-
-            HStack {
-                Spacer()
-                actionButtons
-                Spacer()
-            }
-            .padding(.bottom)
         }
+        .padding(.top, SafeAreaInsets.top + 10)
         .padding(.horizontal)
-        .background(appColors.primaryBackground)
-        .keyboardAdaptive()
+        .padding(.vertical,8)
     }
-
 }
 
 #Preview {

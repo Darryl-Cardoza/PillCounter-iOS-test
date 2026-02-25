@@ -252,15 +252,16 @@ extension CameraViewModel: AVCaptureMetadataOutputObjectsDelegate {
               let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               let value = object.stringValue
         else { return }
+        
+        hasScanned = true
 
 
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 
-        let decodedGs1Value = decoder.decode(value)
-        let gtin = decodedGs1Value.gtin ?? ""
-        if gtin.isEmpty { return }
-    
-        hasScanned = true   
+//        let decodedGs1Value = decoder.decode(value)
+//        let gtin = decodedGs1Value.gtin ?? ""
+//        if gtin.isEmpty { return }
+//    
         scannedCode = value
         codeType = object.type.rawValue
     }

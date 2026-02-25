@@ -277,8 +277,6 @@ extension QRBarcodeScannerView {
 
                 self.tempCapturedImage = capturedImage
                 
-                print("Captured Image \(capturedImage)")
-                print("Captured Image2 \(tempCapturedImage)")
 
                 // 3. Stop session after capture is done
                 cameraManager.stopSession()
@@ -303,7 +301,6 @@ extension QRBarcodeScannerView {
                         // BUT, based on your previous code, 'scannedPill' is called in the ELSE block
                         // or passed later. Let's handle the REGULAR case first.
                     } else {
-                        
                         if(pillScanViewModel.selectedTransaction?.isComingFromPms == true){
                              pillScanViewModel.scnnedPmsPill(
                                 rawValueFromBarcodeOrQr: newValue,

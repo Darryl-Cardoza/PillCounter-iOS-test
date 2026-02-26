@@ -77,8 +77,6 @@ class PillScanViewModel: ObservableObject {
 
         if gtin.isEmpty { return }
         
-        print("Captured Image \(image)")
-
        
         // 1. Generate a potential ID (only used if we create a NEW drug)
         var drugIdToUse = generateUniqueDrugId()

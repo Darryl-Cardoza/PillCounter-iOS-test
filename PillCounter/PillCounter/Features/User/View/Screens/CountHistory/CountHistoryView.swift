@@ -31,6 +31,8 @@ struct CountHistoryView: View {
     @State private var selectedTxnIds: Set<Int64> = []
     @State private var selectedFilter: TransactionFilter = .all
 
+    @State private var pendingAction: TransactionAction?
+    
     let title: String
 
     // Filter Logic
@@ -182,7 +184,7 @@ struct CountHistoryView: View {
                             HStack(spacing: 20) {
                                 // Delete Button (Only active if items are selected)
                                 Button {
-                                    performBatchDelete()
+                                    pendingAction = .multiDelete(selectedTxnIds)
                                 } label: {
                                     Text("Delete")
                                         .font(.system(size: 16, weight: .bold))
@@ -286,6 +288,17 @@ struct CountHistoryView: View {
             .customPopup(isPresented: $showMenuOptions) {
                 menuOptions
             }
+            .customPopup(
+                isPresented: Binding(
+                    get: { pendingAction != nil },
+                    set: { if !$0 { pendingAction = nil } }
+                )
+            ) {
+                if pendingAction != nil {
+                    commonConfirmationDialog
+                }
+            }
+   
         }
     }
 
@@ -494,6 +507,8 @@ struct CountHistoryView: View {
             }
         }
     }
+    
+
 
     // MARK: - MENU OPTIONS (Existing)
     private var menuOptions: some View {
@@ -549,10 +564,10 @@ struct CountHistoryView: View {
                         case .resume:
                             if let txnId = selectedTransasctionId,
                                let txn = userViewModel.getTransactionEntity(by: txnId) {
-
+                                
                                 userViewModel.currentTransactionTxnId = txnId
                                 pillScanViewmodel.selectedTransaction = txn.isComingFromPms ? txn : nil
-
+                                
                                 if txn.isComingFromPms && (txn.barcode_image?.isEmpty ?? true) {
                                     router.navigate(
                                         to: .authentication(
@@ -570,27 +585,18 @@ struct CountHistoryView: View {
                                         )
                                     )
                                 }
-
+                                
                             } else {
                                 print("Resume failed: transaction ID or entity missing")
                             }
                         case .delete:
-                            Task {
-                                await userViewModel
-                                    .softDeleteTheSelectedTransaction(
-                                        transactionId: selectedTransasctionId
-                                            ?? 0,
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED
-                                    )
+                            if let txnId = selectedTransasctionId {
+                                pendingAction = .delete(txnId)
                             }
+
                         case .forceComplete:
-                            Task {
-                                await userViewModel.forceCompleteTheSelectedTransaction(
-                                    txnId: selectedTransasctionId ?? 0,
-                                    countType: router
-                                        .selectedPillScanningType ?? .FIXED
-                                )
+                            if let txnId = selectedTransasctionId {
+                                pendingAction = .forceComplete(txnId)
                             }
                         }
                     }
@@ -600,4 +606,103 @@ struct CountHistoryView: View {
         .frame(width: 250)
         .padding(.vertical)
     }
+    
+    // Confirmation Dialogs
+    private var commonConfirmationDialog: some View {
+  
+        ConfirmationDialogue(
+            title: dialogTitle,
+            message: dialogMessage,
+            cancelButtonText: "CANCEL",
+            confirmButtonText: confirmButtonTitle,
+            onCancel: {
+                pendingAction = nil
+            },
+            onConfirm: {
+                handleConfirmedAction()
+            }
+        )
+    }
+    
+    private var dialogTitle: String {
+        switch pendingAction {
+        case .delete:
+            return "Confirm Delete"
+        case .forceComplete:
+            return "Force Complete"
+        case .multiDelete:
+            return "Delete Selected"
+        case .none:
+            return ""
+        }
+    }
+
+    private var dialogMessage: String {
+        switch pendingAction {
+        case .delete:
+            return "Are you sure you want to delete this transaction?"
+        case .forceComplete:
+            return "Are you sure you want to force complete this transaction?"
+        case .multiDelete:
+            return "Are you sure you want to delete selected transactions?"
+        case .none:
+            return ""
+        }
+    }
+
+    private var confirmButtonTitle: String {
+        switch pendingAction {
+        case .delete, .multiDelete:
+            return "DELETE"
+        case .forceComplete:
+            return "CONFIRM"
+        case .none:
+            return ""
+        }
+    }
+    
+    //Handle Action
+    private func handleConfirmedAction() {
+        guard let action = pendingAction else { return }
+
+        pendingAction = nil
+
+        switch action {
+
+        case .delete(let id):
+            Task {
+                await userViewModel.softDeleteTheSelectedTransaction(
+                    transactionId: id,
+                    countType: router.selectedPillScanningType ?? .FIXED
+                )
+            }
+
+        case .forceComplete(let id):
+            Task {
+                await userViewModel.forceCompleteTheSelectedTransaction(
+                    txnId: id,
+                    countType: router.selectedPillScanningType ?? .FIXED
+                )
+            }
+
+        case .multiDelete(let ids):
+            Task {
+                await userViewModel.softDeleteMultipleTransactions(
+                    txnIds: ids,
+                    countType: router.selectedPillScanningType ?? .FIXED
+                )
+
+                await MainActor.run {
+                    isEditing = false
+                    selectedTxnIds.removeAll()
+                }
+            }
+        }
+    }}
+
+
+enum TransactionAction {
+    case delete(Int64)
+    case forceComplete(Int64)
+    case multiDelete(Set<Int64>)
 }

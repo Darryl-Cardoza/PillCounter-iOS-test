@@ -263,8 +263,7 @@ extension QRBarcodeScannerView {
 
     private func handleScannedCode(_ newValue: String) {
         if !newValue.isEmpty {
-            // 1. Immediately pause session to freeze preview (optional visual effect)
-            // cameraManager.stopSession() // You can stop here or let it run to capture
+
 
             // Prevent duplicates
             if pillScanViewModel.isDrugFound != nil { return }
@@ -274,7 +273,15 @@ extension QRBarcodeScannerView {
             
             // 2. Capture the Photo
             cameraManager.captureImage { capturedImage in
-
+                
+                // Do not proceed when camera does not captured image
+                guard let capturedImage else {
+                    DispatchQueue.main.async {
+                        cameraManager.restartSession()
+                    }
+                    return
+                }
+                
                 self.tempCapturedImage = capturedImage
                 
 
@@ -451,6 +458,7 @@ extension QRBarcodeScannerView {
                         verticalPadding: 18,
                         iconSize: 0,
                         action: {
+                            //Validate NDC
                             guard !pillScanViewModel.ndcNumber
                                 .trimmingCharacters(in: .whitespacesAndNewlines)
                                 .isEmpty else {

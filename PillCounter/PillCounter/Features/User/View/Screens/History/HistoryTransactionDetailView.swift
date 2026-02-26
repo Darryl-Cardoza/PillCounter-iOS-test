@@ -21,7 +21,9 @@ struct HistoryTransactionDetailView: View {
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
 
     @StateObject private var pdfService = PDFShareService.shared
-
+//    @State private var showFullScreenImage = false
+    @State private var fullScreenImage: Image?
+    
     // MARK: - BODY
     var body: some View {
         ZStack {
@@ -64,6 +66,22 @@ struct HistoryTransactionDetailView: View {
 
                     PillCountingLoader()
                 }
+            }
+        }
+
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { fullScreenImage != nil },
+                set: { if !$0 { fullScreenImage = nil } }
+            )
+        ) {
+            if let image = fullScreenImage {
+                FullScreenImageView(
+                    image:  image,
+                    onDismiss: {
+                        fullScreenImage = nil
+                    }
+                )
             }
         }
         .onAppear {
@@ -267,8 +285,16 @@ struct HistoryTransactionDetailView: View {
                 placeholderImageName: "placeholder_history",
                 placeholderSize: CGSize(width: 25, height: 25)
             )
-            .environmentObject(appColors)
+            .onTapGesture {
+                if let path = transaction?.barcode_image,
+                   let loadedImage = PhotoFileManager.shared.loadImage(from: path) {
 
+                    fullScreenImage = loadedImage
+                }
+            }
+            .environmentObject(appColors)
+            
+        
             Spacer()
 
             VStack {
@@ -466,6 +492,13 @@ struct HistoryTransactionDetailView: View {
                     .background(appColors.primary)
                     .clipShape(Circle())
                     .padding(8)
+            }
+            .onTapGesture {
+                if let path = detail.image_path,
+                   let loadedImage = PhotoFileManager.shared.loadImage(from: path) {
+
+                    fullScreenImage = loadedImage
+                }
             }
         }
         .cornerRadius(16)

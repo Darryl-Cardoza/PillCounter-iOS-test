@@ -55,8 +55,7 @@ class PillScanViewModel: ObservableObject {
     
     @Published var showPmsNdcMismatchPopup = false
     
- 
-    
+
     private var cancellables = Set<AnyCancellable>()
 
 
@@ -67,11 +66,11 @@ class PillScanViewModel: ObservableObject {
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
     func scannedPill(
-        rawValueFromBarcodeOrQr: String, countType: CountType,
+        rawValueFromBarcodeOrQr: String,
+        countType: CountType,
         image: UIImage? = nil
-    )
-        async
-    {
+    ) async {
+        
         let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
         let gtin = decodedGs1Value.gtin ?? ""
 
@@ -92,7 +91,10 @@ class PillScanViewModel: ObservableObject {
             drugIdToUse = drugFoundInLocalStorage.drug_id
 
             await createTransaction(
-                drugId: drugIdToUse, countType: countType, barcodeImage: image)
+                drugId: drugIdToUse,
+                countType: countType,
+                barcodeImage: image
+            )
             getAllTransactionDetailsOfTheCurrentTransaction()
             isDrugFound = true
             if countType == .FIXED {
@@ -119,7 +121,10 @@ class PillScanViewModel: ObservableObject {
 
                 // Create transaction using the NEW ID (since we just saved it)
                 await createTransaction(
-                    drugId: drugIdToUse, countType: countType)
+                    drugId: drugIdToUse,
+                    countType: countType,
+                    barcodeImage: image
+                )
 
                 if countType == .FIXED {
                     updateTargetCountForCurrentTransaction()
@@ -839,9 +844,6 @@ class PillScanViewModel: ObservableObject {
 
         // Cancel any Combine pipelines
         cancellables.removeAll()
-
-        // Clear user session reference
-        userId = ""
 
         // Drug / scan state
         drugName = nil

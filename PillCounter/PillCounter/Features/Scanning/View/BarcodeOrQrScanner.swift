@@ -262,18 +262,21 @@ struct QRBarcodeScannerView: View {
 extension QRBarcodeScannerView {
 
     private func handleScannedCode(_ newValue: String) {
+
         if !newValue.isEmpty {
 
 
             // Prevent duplicates
-            if pillScanViewModel.isDrugFound != nil { return }
-            if isFromScanning { return }  // Simple flag check
+            if pillScanViewModel.isDrugFound != nil {
+                return
+            }
+
+            if isFromScanning {
+                return
+            }
 
 
-            
-            // 2. Capture the Photo
             cameraManager.captureImage { capturedImage in
-                
                 // Do not proceed when camera does not captured image
                 guard let capturedImage else {
                     DispatchQueue.main.async {
@@ -281,9 +284,9 @@ extension QRBarcodeScannerView {
                     }
                     return
                 }
-                
+
+
                 self.tempCapturedImage = capturedImage
-                
 
                 // 3. Stop session after capture is done
                 cameraManager.stopSession()
@@ -291,38 +294,29 @@ extension QRBarcodeScannerView {
                 // 4. Update UI
                 showScannedData = true
                 scannedData = newValue
-                
-                Task { @MainActor in
-                    pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue)
 
-                    if router.selectedPillScanningType == .FIXED{
-                        
+                Task { @MainActor in
+                    pillScanViewModel.checkIsNdcMatch(
+                        rawValueFromBarcodeOrQr: newValue
+                    )
+
+
+                    if router.selectedPillScanningType == .FIXED {
                         showPillTargetCountPopup = true
                         isFromScanning = true
-                        // Note: For fixed flow, we might hold onto capturedImage in a @State
-                        // if you want to pass it later, but here we usually pass it immediately
-                        // if we are creating the transaction now.
-                        // Assuming Fixed flow creates transaction AFTER target input?
-                        // If so, store 'capturedImage' in a State var.
 
-                        // BUT, based on your previous code, 'scannedPill' is called in the ELSE block
-                        // or passed later. Let's handle the REGULAR case first.
                     } else {
-                        if(pillScanViewModel.selectedTransaction?.isComingFromPms == true){
-                             pillScanViewModel.scnnedPmsPill(
+                        if pillScanViewModel.selectedTransaction?.isComingFromPms == true {
+                            pillScanViewModel.scnnedPmsPill(
                                 rawValueFromBarcodeOrQr: newValue,
-                                countType: router.selectedPillScanningType
-                                ?? .FIXED,
+                                countType: router.selectedPillScanningType ?? .FIXED,
                                 image: tempCapturedImage
                             )
-                        }else{
-                            
-                            // 5. Call ViewModel with Image
+                        } else {
                             await pillScanViewModel.scannedPill(
                                 rawValueFromBarcodeOrQr: newValue,
-                                countType: router.selectedPillScanningType
-                                ?? .FIXED,
-                                image: tempCapturedImage  
+                                countType: router.selectedPillScanningType ?? .FIXED,
+                                image: tempCapturedImage
                             )
                         }
                     }
@@ -330,7 +324,6 @@ extension QRBarcodeScannerView {
             }
         }
     }
-
     private func handleMannualEntryDrug(_ newValue: Bool?) {
         switch newValue {
         case false:
@@ -510,7 +503,6 @@ extension QRBarcodeScannerView {
             .cornerRadius(24)
         }
     
-
     private var bottomContent: some View {
         Group {
             if stableIsLandscape {
@@ -797,37 +789,35 @@ extension QRBarcodeScannerView {
                     horizontalPadding: 32,
                     verticalPadding: 14,
                     iconSize: 0,
-                        action: {
-
+                    action: {
                         if pillScanViewModel.ndcNumber.isEmpty {
                             return
                         }
 
                         if router.selectedPillScanningType == .FIXED {
                             showPillTargetCountPopup = true
+
                         } else {
                             Task {
                                 if isFromScanning {
                                     isFromScanning = false
                                     await pillScanViewModel.scannedPill(
-                                        rawValueFromBarcodeOrQr: scannedData
-                                            ?? "",
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED,
-                                        
+                                        rawValueFromBarcodeOrQr: scannedData ?? "",
+                                        countType: router.selectedPillScanningType ?? .FIXED,
+                                        image: tempCapturedImage
                                     )
                                 } else {
                                     await pillScanViewModel.manuallyEnteredPill(
                                         ndc: pillScanViewModel.ndcNumber,
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED
+                                        countType: router.selectedPillScanningType ?? .FIXED
                                     )
+
                                 }
+
                                 showMannualEntryPopup = false
                             }
                         }
-                    }
-                )
+                    }                )
             }
         }
         .frame(width: 300)
@@ -891,41 +881,40 @@ extension QRBarcodeScannerView {
                        iconSize: 0,
                        action: {
                            manualEntryError = nil
-                        
-                           let joinedTargetCount = pillScanViewModel.targetCount
-                               .joined()
 
-                
+                           let joinedTargetCount = pillScanViewModel.targetCount.joined()
+
+
                            guard let targetValue = Int(joinedTargetCount),
-                               targetValue > 0
+                                 targetValue > 0
                            else {
-                               // Target count is 0 (e.g. "0000") or invalid
                                return
                            }
                            Task {
                                if router.selectedPillScanningType == .FIXED {
                                    if isFromScanning {
                                        isFromScanning = false
+
                                        await pillScanViewModel.scannedPill(
-                                        rawValueFromBarcodeOrQr: scannedData
-                                        ?? "",
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED,
-                                        image: tempCapturedImage
+                                           rawValueFromBarcodeOrQr: scannedData ?? "",
+                                           countType: router.selectedPillScanningType ?? .FIXED,
+                                           image: tempCapturedImage
                                        )
+
+
                                    } else {
                                        await pillScanViewModel.manualEntryDirectUpsert(
-                                        ndc: pillScanViewModel.ndcNumber,
-                                        drugName: pillScanViewModel.drugNameMannuallyEntered,
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED,
+                                           ndc: pillScanViewModel.ndcNumber,
+                                           drugName: pillScanViewModel.drugNameMannuallyEntered,
+                                           countType: router.selectedPillScanningType ?? .FIXED
                                        )
                                    }
+
                                    showMannualEntryPopup = false
                                    showPillTargetCountPopup = false
+
                                }
                            }
-                           //                        pillScanViewModel.targetCount = ["", "", "", ""]
                        }
                    )
                }
@@ -957,7 +946,6 @@ extension QRBarcodeScannerView {
         showPillTargetCountPopup = false
         isFromScanning = false
         scannedData = nil
-//        tempCapturedImage = nil
         cameraManager.restartSession()
         startScanTimeout()
     }

@@ -715,6 +715,10 @@ class UserViewModel: ObservableObject {
         pmsConnectionState = isConnected ? .connected : .disconnected
     }
     
+    func clearLocalData() {
+        pillDataLocalStorage.clearAllLocalData()
+    }
+    
     // MARK: - HARD RESET (called on logout)
     @MainActor
     func resetState() {

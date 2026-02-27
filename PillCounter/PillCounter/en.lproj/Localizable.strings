@@ -72,6 +72,12 @@
 // MARK: USER SETTINGS VIEW
 "TOGGLE_BUTTON_TEXT" = "Always ask to add Notes";
 "SAVE_HISTORY" = "Save history for";
+"REQUIRED_DOUBLE_COUNT" = "Require Double Counts";
+"REQUIRED_BACK_COUNT" = "Require Back Counts";
+"REQUIRED_ADJUST_REASON" = "Require Adjust Reasons";
+"HAPTIC_FEEDBACK" = "Haptic Feedback";
+"SOUND_FEEDBACK" = "Sound Feedback";
+"CLEAR_ALL_LOCAL_DATA" = "Clear All Local Data";
 
 
 // MARK: ERROR

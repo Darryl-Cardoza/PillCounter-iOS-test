@@ -49,6 +49,7 @@ struct HamburgerMenuView: View {
         .onAppear {
             Task {
                 await userViewModel.getUnsyncedTransactions()
+                userViewModel.getAllTransactionsAndFilterByCountType()
             }
         }
     }

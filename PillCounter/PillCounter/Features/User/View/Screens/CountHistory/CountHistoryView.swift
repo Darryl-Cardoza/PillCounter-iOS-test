@@ -406,7 +406,7 @@ struct CountHistoryView: View {
                         set: { _ in toggleSelection(for: txnId) }
                     ),
                     size: 20,
-                    tintColor: appColors.primary
+                    tintColor: appColors.primary,
                 )
                 .padding(.trailing, 4)
                 .transition(.move(edge: .leading).combined(with: .opacity))

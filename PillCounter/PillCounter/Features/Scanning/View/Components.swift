@@ -297,6 +297,14 @@ struct CountAddButtonView: View {
             ) {
                 trimValue = 1
             }
+            DispatchQueue.main.asyncAfter(deadline: .now()) {
+                 guard isAnimating else { return }
+
+                 FeedbackManager.shared.triggerDetectionFeedback(
+                     isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
+                     isSoundEnabled: AppStorageManager.shared.isSoundEnabled
+                 )
+             }
         } else {
             // Stop state: Full Circle Visible immediately
             withAnimation(.linear(duration: 0.2)) {

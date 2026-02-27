@@ -680,7 +680,52 @@ final class PillsDataLocalStorage {
         print("[DB][SYNC] After update → isSynced =", txn.isSynced)
     }
 
-    
+    func clearAllLocalData() {
+        
+        let context = mainThreadContext
+        let fileManager = FileManager.default
+        
+        do {
+            print("🧹 Clearing ALL local data...")
+            
+            // MARK: 1️⃣ Delete All Transaction Details
+            let detailFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
+            let detailDelete = NSBatchDeleteRequest(fetchRequest: detailFetch)
+            try context.execute(detailDelete)
+            
+            // MARK: 2️⃣ Delete All Transactions
+            let txnFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionEntity.fetchRequest()
+            let txnDelete = NSBatchDeleteRequest(fetchRequest: txnFetch)
+            try context.execute(txnDelete)
+            
+            // MARK: 3️⃣ Delete All Drugs
+            let drugFetch: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
+            let drugDelete = NSBatchDeleteRequest(fetchRequest: drugFetch)
+            try context.execute(drugDelete)
+            
+            // MARK: 4️⃣ Delete All Images from Documents Directory
+            if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+                let files = try fileManager.contentsOfDirectory(at: documentsURL, includingPropertiesForKeys: nil)
+                
+                for fileURL in files {
+                    try? fileManager.removeItem(at: fileURL)
+                }
+                
+                print("🗂 All local image files removed.")
+            }
+            
+            // MARK: 5️⃣ Reset Transaction ID Counters
+            UserDefaults.standard.removeObject(forKey: "txnTransactionIdCounter")
+            UserDefaults.standard.removeObject(forKey: "txnDetailIdCounter")
+            
+            try context.save()
+            
+            print("✅ All local data cleared successfully.")
+            
+        } catch {
+            print("❌ Failed to clear local data:", error)
+        }
+    }
     
     // MARK: DEBUGGING
     func debugPrintAllTransactions() {

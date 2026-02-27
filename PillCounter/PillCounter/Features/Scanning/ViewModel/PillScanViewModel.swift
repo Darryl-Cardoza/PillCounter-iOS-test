@@ -58,7 +58,8 @@ class PillScanViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
-
+    // To Manager Controlled Drug Step
+    @Published var currentControlledStep: ControlledStep = .empty
     
 
     // func to get the value from the barcode and check in the db

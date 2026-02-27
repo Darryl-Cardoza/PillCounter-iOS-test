@@ -71,7 +71,7 @@
 
 // MARK: USER SETTINGS VIEW
 "TOGGLE_BUTTON_TEXT" = "Always ask to add Notes";
-"SAVE_HISTORY" = "Save history for";
+"SAVE_HISTORY" = "Save History For";
 "REQUIRED_DOUBLE_COUNT" = "Require Double Counts";
 "REQUIRED_BACK_COUNT" = "Require Back Counts";
 "REQUIRED_ADJUST_REASON" = "Require Adjust Reasons";

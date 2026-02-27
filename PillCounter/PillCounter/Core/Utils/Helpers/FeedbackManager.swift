@@ -12,7 +12,7 @@ final class FeedbackManager {
 
     static let shared = FeedbackManager()
 
-    private let impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
+    private let impactGenerator = UIImpactFeedbackGenerator(style: .heavy)
 
     private init() {
         impactGenerator.prepare()
@@ -33,12 +33,10 @@ final class FeedbackManager {
     ) {
         if isHapticEnabled {
             vibrate()
-            print("Vibrate")
         }
 
         if isSoundEnabled {
             playShutterSound()
-            print("Shutter sound")
         }
     }
 }

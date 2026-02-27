@@ -57,14 +57,19 @@ struct OPillCountView: View {
                 topRatio: 0.7,
                 topContent: {
                     // Using .id ensures SwiftUI recognizes this as a persistent view
-                    CameraContentView(cameraService: cameraService)
-                        .environment(\.colorScheme, .light)
-                        .id("camera-content")
-                        .onTapGesture {
-                            isPaused = false
-                            cameraService.resetInactivityTimer()
-                            cameraService.resumeIfPaused()
-                        }
+               
+                    
+                    CameraContentView(
+                        cameraService: cameraService,
+                        pillCountInstructionType: pillScanViewModel.currentControlledStep.displayText
+                    )
+                    .environment(\.colorScheme, .light)
+                    .id("camera-content")
+                    .onTapGesture {
+                        isPaused = false
+                        cameraService.resetInactivityTimer()
+                        cameraService.resumeIfPaused()
+                    }
                 },
                 bottomContent: {
                     controlsContent
@@ -289,9 +294,10 @@ extension OPillCountView {
                 // 3. Add transaction with image path
                 pillScanViewModel.addTransactionDetailToCurrentTransaction(
                     pillCount: Int32(cameraService.stableCount),
-                    imagePath: savedPath
+                    imagePath: savedPath,
+                    type: pillScanViewModel.currentControlledStep.rawValue
                 )
-                },
+            },
             onComplete: {
                 if addNoteSettings {
                     showNoteOption = true
@@ -456,7 +462,6 @@ extension OPillCountView {
                     let loadedImage = PhotoFileManager.shared.loadImage(
                         from: image)
                 {
-
                     loadedImage
                         .resizable()
                         .scaledToFill()
@@ -580,7 +585,8 @@ extension OPillCountView {
                                     .txn_id ?? 0,
                                 countType: router.selectedPillScanningType
                                     ?? .FIXED)
-                        })
+                        }
+                    )
                 }
             }
         )

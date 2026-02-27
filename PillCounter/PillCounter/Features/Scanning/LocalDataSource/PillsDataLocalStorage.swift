@@ -225,20 +225,12 @@ final class PillsDataLocalStorage {
             return
         }
 
-        print("""
-        🧹 Soft Deleting Transaction
-        ID: \(transaction.txn_id)
-        Type: \(transaction.count_type ?? "nil")
-        Status: \(transaction.status ?? "nil")
-        Old is_deleted: \(transaction.is_deleted)
-        """)
 
         transaction.is_deleted = true
         transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
 
         CoreDataManager.shared.save(context: mainThreadContext)
 
-        print("✅ DB Saved txnId:", txnId)
     }
 
     // get all fixed partial count

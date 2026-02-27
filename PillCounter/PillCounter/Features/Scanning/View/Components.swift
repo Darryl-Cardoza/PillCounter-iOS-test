@@ -15,6 +15,8 @@ struct CameraContentView: View {
     @State private var isAutoOrManual: Bool = false // this variable is to handle the auto detection capture.
     @Environment(\.isLandscape) private var isLandscape
 
+    var pillCountInstructionType : String? = nil
+    
     var body: some View {
         ZStack {
             // CAMERA + OVERLAY
@@ -31,28 +33,38 @@ struct CameraContentView: View {
                         cameraService.start()
                     }
                     .onDisappear { cameraService.stop() }
-
+  
+  
                     DetectionOverlay(cameraService: cameraService)
                         .ignoresSafeArea()
                     //Toggle
-//                    VStack {
-//                        HStack {
-//                            Spacer()
-//                            
-//                            PillCountingToggleButton(
-//                                isOn: $isAutoOrManual,
-//                                onColor: appColors.secondary,
-//                                offColor: Color.black.opacity(0.5)
-//                            )
-//                            .padding(.trailing, 16)
-//                            .padding(.top, 16)
-//                        }
-//                        
-//                        Spacer()
-//                    }
-                    .padding(.top, isLandscape ? 0 : 30)
-
-                    ZoomControlView(cameraService: cameraService)
+                    //                    VStack {
+                    //                        HStack {
+                    //                            Spacer()
+                    //
+                    //                            PillCountingToggleButton(
+                    //                                isOn: $isAutoOrManual,
+                    //                                onColor: appColors.secondary,
+                    //                                offColor: Color.black.opacity(0.5)
+                    //                            )
+                    //                            .padding(.trailing, 16)
+                    //                            .padding(.top, 16)
+                    //                        }
+                    //
+                    //                        Spacer()
+                    //                    }
+                        .padding(.top, isLandscape ? 0 : 30)
+                    
+                    VStack {
+                        ZoomControlView(cameraService: cameraService)
+                        if let instruction = pillCountInstructionType {
+                            HStack {
+                                Spacer()
+                                PillCountInstructionOverlay(text: instruction)
+                                Spacer()
+                            }.padding(.vertical,10)
+                        }
+                    }
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -144,11 +156,29 @@ struct ZoomControlView: View {
                 .frame(height: 60)                .frame(height: 60)                .frame(height: 44)
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.vertical, 5)
             .cornerRadius(14)
-            .padding(.bottom, 16)
         }
         .allowsHitTesting(!cameraService.isPausedDueToInactivity)
+    }
+}
+
+struct PillCountInstructionOverlay: View {
+
+    let text: String
+    var backgroundOpacity: Double = 0.5
+    var cornerRadius: CGFloat = 24
+
+    var body: some View {
+        Text(text)
+            .font(.headline)
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                Color.black.opacity(backgroundOpacity)
+            )
+            .cornerRadius(cornerRadius)
     }
 }
 

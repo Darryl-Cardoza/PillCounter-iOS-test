@@ -91,6 +91,11 @@ struct AppNavigation: View {
                         HistoryTransactionDetailView()
                             .navigationBarBackButtonHidden(true)
 
+                    case .authentication(
+                        .login(.dashboard(.pillCount(.controlledDrug(.vialCount))))):
+                        VialCaptureView()
+                            .navigationBarBackButtonHidden(true)
+                    
                     }
                 }
             }

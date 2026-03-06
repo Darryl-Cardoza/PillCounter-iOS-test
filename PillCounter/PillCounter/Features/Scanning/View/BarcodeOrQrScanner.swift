@@ -61,6 +61,7 @@ struct QRBarcodeScannerView: View {
     @EnvironmentObject private var appColors: AppColors
     @StateObject private var cameraManager = CameraViewModel()
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
+    @EnvironmentObject private var userViewModel : UserViewModel
     
     @Environment(\.isLandscape) private var isLandscape
     @State private var stableIsLandscape: Bool = false
@@ -89,51 +90,56 @@ struct QRBarcodeScannerView: View {
                 topRatio: 0.7,
                 topContent: {
                     GeometryReader { geo in
-
-                    ZStack(alignment: .bottom) {
-                        // 1. Camera Layer
-                        // if permission granted show CameraPreview
-                        if cameraManager.isAuthorized {
-                            CameraPreview(
-                                session: cameraManager.getSession(),
-                                cameraManager: cameraManager
-                            )
-                            // We don't use ignoresSafeArea here because BaseView controls the frame.
-                            // However, BaseView usually ignores safe area, so this will fill nicely.
-                        } else {
-                            // Fallback/Loading background
-                            // Permission is not granted
-                            Color.black
-                        }
                         
-                        // The SquareBreathing Box in camera view
-                        if cameraManager.scannedCode.isEmpty {
-                            BarcodeScanBox()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .overlay(alignment: .center) {
-                                    BarcodeScanBox()
-                                }
-                        }
-
-                        //ScanBarcode overlay box
-                        VStack {
-                            Spacer()
-                            scanInstructionOverlay
-                                .padding(.horizontal, 80)
-                                .padding(.bottom, 20)
+                        ZStack(alignment: .bottom) {
+                            // 1. Camera Layer
+                            // if permission granted show CameraPreview
+                            if cameraManager.isAuthorized {
+                                CameraPreview(
+                                    session: cameraManager.getSession(),
+                                    cameraManager: cameraManager
+                                )
+                                // We don't use ignoresSafeArea here because BaseView controls the frame.
+                                // However, BaseView usually ignores safe area, so this will fill nicely.
+                            } else {
+                                // Fallback/Loading background
+                                // Permission is not granted
+                                Color.black
+                            }
                             
-                            // 2. Scanned Data Card (Overlay)
-
+                            // The SquareBreathing Box in camera view
+                            if cameraManager.scannedCode.isEmpty {
+                                BarcodeScanBox()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .overlay(alignment: .center) {
+                                        BarcodeScanBox()
+                                    }
+                            }
+                            
+                            // Show Step Row If activeTransaction is null show normal
+                            ControlledStepRow(
+                                activeSteps: ControlledFlowConfig.activeSteps(txn: pillScanViewModel.selectedTransaction),
+                                currentStep: .scan
+                            )
                         }
                     }
-                }
                 },
                 
                 bottomContent: {
-                    // ManualNdc and drug name box
                     bottomContent
                 }               ,
-                headerActions: {},
+                headerActions: {
+                    let instruction = ControlledStep.scan.displayText
+                    
+                    if !instruction.isEmpty {
+                        HStack {
+                            Spacer()
+                            PillCountInstructionOverlay(text: instruction)
+                            Spacer()
+                        }
+                        .padding(.vertical, 10)
+                    }
+                },
                 showBackButton: true,
                 showHamburgerMenu: false,  // We have a manual entry button instead
                 title: "" , // No title for scanner, usually cleaner
@@ -142,6 +148,7 @@ struct QRBarcodeScannerView: View {
             .onTapGesture {
                 UIApplication.hideKeyboard()
             }
+            
         }
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 0)
@@ -149,10 +156,8 @@ struct QRBarcodeScannerView: View {
         .onAppear {
             // Reset ViewModel state so we are ready for a NEW transaction
             pillScanViewModel.resetScanningState()
-            
             cameraManager.configureInitialOrientation()
             cameraManager.startObservingOrientation()
-
             // Reset local UI state\
             showScannedData = false
             isFromScanning = false
@@ -166,6 +171,8 @@ struct QRBarcodeScannerView: View {
         .onDisappear {
             cameraManager.stopSession()
             pillScanViewModel.ndcNumber = ""
+            pillScanViewModel.selectedTransaction = nil
+            pillScanViewModel.targetCount = ["","","",""]
             pillScanViewModel.drugNameMannuallyEntered = ""
         }
         // MARK: - LOGIC HANDLERS
@@ -276,7 +283,7 @@ extension QRBarcodeScannerView {
             }
 
 
-            cameraManager.captureImage { capturedImage in
+            cameraManager.captureImage  { capturedImage in
                 // Do not proceed when camera does not captured image
                 guard let capturedImage else {
                     DispatchQueue.main.async {
@@ -296,17 +303,16 @@ extension QRBarcodeScannerView {
                 scannedData = newValue
 
                 Task { @MainActor in
-                    pillScanViewModel.checkIsNdcMatch(
-                        rawValueFromBarcodeOrQr: newValue
-                    )
+                    guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
 
-
-                    if router.selectedPillScanningType == .FIXED {
+                    
+                    if router.selectedPillScanningType == .FIXED
+                        && pillScanViewModel.selectedTransaction?.target_count == nil
+                    {
                         showPillTargetCountPopup = true
                         isFromScanning = true
-
                     } else {
-                        if pillScanViewModel.selectedTransaction?.isComingFromPms == true {
+                        if pillScanViewModel.selectedTransaction?.isComingFromPms == true  {
                             pillScanViewModel.scnnedPmsPill(
                                 rawValueFromBarcodeOrQr: newValue,
                                 countType: router.selectedPillScanningType ?? .FIXED,
@@ -364,144 +370,144 @@ enum InputField: Hashable {
 extension QRBarcodeScannerView {
     
     private var portraitBottomContent: some View {
+        
+        VStack(spacing: 16) {
             
-            VStack(spacing: 16) {
+            // NDC Number row
+            HStack(spacing: 12) {
+                Text("NDC Number:")
+                    .foregroundStyle(appColors.text)
+                    .frame(width: labelWidth, alignment: .leading)
                 
-                // NDC Number row
-                HStack(spacing: 12) {
-                    Text("NDC Number:")
-                        .foregroundStyle(appColors.text)
-                        .frame(width: labelWidth, alignment: .leading)
-                    
-                    PillCounterInputField(
-                        imageName: nil,
-                        placeholder: "",
-                        disabled: false,
-                        text: $pillScanViewModel.ndcNumber,
-                        keyboardType: .phonePad,
-                        validation: .none,
-                        maxLength: 11,
-                        field: .ndcNumber,
-                        focusedField: $focusedField
-                    )
-                    .frame(maxWidth: .infinity)
-                    
-                    
-                }
-                .padding(.top, 30)
-                
-                HStack(spacing: 12) {
-                    Text("Drug Name:")
-                        .foregroundStyle(appColors.text)
-                        .frame(width: labelWidth, alignment: .leading)
-                    
-                    PillCounterInputField(
-                        imageName: nil,
-                        placeholder: "",
-                        disabled: false,
-                        text: $pillScanViewModel.drugNameMannuallyEntered,
-                        keyboardType: .default,
-                        validation: .none,
-                        field: .drugName,
-                        focusedField: $focusedField
-                    )
-                    
-                    .frame(maxWidth: .infinity)
-                }
+                PillCounterInputField(
+                    imageName: nil,
+                    placeholder: "",
+                    disabled: false,
+                    text: $pillScanViewModel.ndcNumber,
+                    keyboardType: .phonePad,
+                    validation: .none,
+                    maxLength: 11,
+                    field: .ndcNumber,
+                    focusedField: $focusedField
+                )
+                .frame(maxWidth: .infinity)
                 
                 
-                if let manualEntryError {
-                    Text(manualEntryError)
-                        .foregroundColor(.red)
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
+            }
+            .padding(.top, 30)
+            
+            HStack(spacing: 12) {
+                Text("Drug Name:")
+                    .foregroundStyle(appColors.text)
+                    .frame(width: labelWidth, alignment: .leading)
                 
-                HStack(spacing: 16) {
-                    PillCountingButton(
-                        iconName: nil,
-                        title: "CANCEL",
-                        textColor: appColors.text,
-                        backgroundColor: appColors.primaryBackground,
-                        borderColor: appColors.primary,
-                        font: .system(size: 12, weight: .semibold),
-                        cornerRadius: 30,
-                        horizontalPadding: 32,
-                        verticalPadding: 18,
-                        iconSize: 0,
-                        action: {
-                            router.navigateBack()
-                            pillScanViewModel.ndcNumber = ""
-                            pillScanViewModel.drugName = ""
-                            pillScanViewModel.drugNameMannuallyEntered = ""
-                            showMannualEntryPopup = false
-                        }
-                    )
-                    
-                    PillCountingButton(
-                        iconName: nil,
-                        title: "OK",
-                        textColor: .white,
-                        backgroundColor: appColors.primary,
-                        borderColor: .clear,
-                        font: .system(size: 12, weight: .regular),
-                        cornerRadius: 30,
-                        horizontalPadding: 32,
-                        verticalPadding: 18,
-                        iconSize: 0,
-                        action: {
-                            //Validate NDC
-                            guard !pillScanViewModel.ndcNumber
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                                .isEmpty else {
-                                manualEntryError = "NDC is required."
-                                return
-                            }
-                            
-                            // Validate Drug Name
-                            guard !pillScanViewModel.drugNameMannuallyEntered
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                                .isEmpty else {
-                                manualEntryError = "Drug name is required."
-                                return
-                            }
-                            
-                            if router.selectedPillScanningType == .FIXED {
-                                showPillTargetCountPopup = true
-                            } else {
-                                Task {
-                                    if isFromScanning {
-                                        isFromScanning = false
-                                        await pillScanViewModel.scannedPill(
-                                            rawValueFromBarcodeOrQr: scannedData
-                                            ?? "",
-                                            countType: router
-                                                .selectedPillScanningType ?? .FIXED,
-                                            image: tempCapturedImage
-                                        )
-                                    } else {
-                                        await pillScanViewModel.manualEntryDirectUpsert(
-                                            ndc: pillScanViewModel.ndcNumber,
-                                            drugName: pillScanViewModel.drugNameMannuallyEntered,
-                                            countType: router
-                                                .selectedPillScanningType ?? .FIXED
-                                        )
-                                    }
-                                    showMannualEntryPopup = false
-                                }
-                            }
-                        }
-                    )
-                }
-                .padding(.top, 8)
+                PillCounterInputField(
+                    imageName: nil,
+                    placeholder: "",
+                    disabled: false,
+                    text: $pillScanViewModel.drugNameMannuallyEntered,
+                    keyboardType: .default,
+                    validation: .none,
+                    field: .drugName,
+                    focusedField: $focusedField
+                )
+                
+                .frame(maxWidth: .infinity)
             }
             
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 20)
-            .background(appColors.primaryBackground)
-            .cornerRadius(24)
+            
+            if let manualEntryError {
+                Text(manualEntryError)
+                    .foregroundColor(.red)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            HStack(spacing: 16) {
+                PillCountingButton(
+                    iconName: nil,
+                    title: "CANCEL",
+                    textColor: appColors.text,
+                    backgroundColor: appColors.primaryBackground,
+                    borderColor: appColors.primary,
+                    font: .system(size: 12, weight: .semibold),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 18,
+                    iconSize: 0,
+                    action: {
+                        router.navigateBack()
+                        pillScanViewModel.ndcNumber = ""
+                        pillScanViewModel.drugName = ""
+                        pillScanViewModel.drugNameMannuallyEntered = ""
+                        showMannualEntryPopup = false
+                    }
+                )
+                
+                PillCountingButton(
+                    iconName: nil,
+                    title: "OK",
+                    textColor: .white,
+                    backgroundColor: appColors.primary,
+                    borderColor: .clear,
+                    font: .system(size: 12, weight: .regular),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 18,
+                    iconSize: 0,
+                    action: {
+                        //Validate NDC
+                        guard !pillScanViewModel.ndcNumber
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty else {
+                            manualEntryError = "NDC is required."
+                            return
+                        }
+                        
+                        // Validate Drug Name
+                        guard !pillScanViewModel.drugNameMannuallyEntered
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty else {
+                            manualEntryError = "Drug name is required."
+                            return
+                        }
+                        
+                        if router.selectedPillScanningType == .FIXED {
+                            showPillTargetCountPopup = true
+                        } else {
+                            Task {
+                                if isFromScanning {
+                                    isFromScanning = false
+                                    await pillScanViewModel.scannedPill(
+                                        rawValueFromBarcodeOrQr: scannedData
+                                        ?? "",
+                                        countType: router
+                                            .selectedPillScanningType ?? .FIXED,
+                                        image: tempCapturedImage
+                                    )
+                                } else {
+                                    await pillScanViewModel.manualEntryDirectUpsert(
+                                        ndc: pillScanViewModel.ndcNumber,
+                                        drugName: pillScanViewModel.drugNameMannuallyEntered,
+                                        countType: router
+                                            .selectedPillScanningType ?? .FIXED
+                                    )
+                                }
+                                showMannualEntryPopup = false
+                            }
+                        }
+                    }
+                )
+            }
+            .padding(.top, 8)
         }
+        
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 20)
+        .background(appColors.primaryBackground)
+        .cornerRadius(24)
+    }
     
     private var bottomContent: some View {
         Group {
@@ -512,6 +518,8 @@ extension QRBarcodeScannerView {
             }
         }
     }
+    
+
     
     private var landscapeBottomContent: some View {
         VStack(spacing: 14) {
@@ -894,14 +902,11 @@ extension QRBarcodeScannerView {
                                if router.selectedPillScanningType == .FIXED {
                                    if isFromScanning {
                                        isFromScanning = false
-
                                        await pillScanViewModel.scannedPill(
                                            rawValueFromBarcodeOrQr: scannedData ?? "",
                                            countType: router.selectedPillScanningType ?? .FIXED,
                                            image: tempCapturedImage
                                        )
-
-
                                    } else {
                                        await pillScanViewModel.manualEntryDirectUpsert(
                                            ndc: pillScanViewModel.ndcNumber,
@@ -914,6 +919,8 @@ extension QRBarcodeScannerView {
                                    showPillTargetCountPopup = false
 
                                }
+                               
+                               pillScanViewModel.markNdcVerified()
                            }
                        }
                    )

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct OPillCountView: View {
-
+    
     // MARK: - ENVIRONMENT
     @Environment(\.isLandscape) private var isLandscape
     @Environment(\.scenePhase) private var scenePhase
@@ -47,6 +47,8 @@ struct OPillCountView: View {
     @State private var isAddDisabled: Bool = false
     @State private var showSuccessAnimation: Bool = false
     @State private var lastAddedCount: Int = 0
+    
+    @State private var showStepCompletionPopup: Bool = false
 
     // MARK: - BODY
     var body: some View {
@@ -57,11 +59,8 @@ struct OPillCountView: View {
                 topRatio: 0.7,
                 topContent: {
                     // Using .id ensures SwiftUI recognizes this as a persistent view
-               
-                    
                     CameraContentView(
-                        cameraService: cameraService,
-                        pillCountInstructionType: pillScanViewModel.currentControlledStep.displayText
+                        cameraService: cameraService
                     )
                     .environment(\.colorScheme, .light)
                     .id("camera-content")
@@ -74,9 +73,20 @@ struct OPillCountView: View {
                 bottomContent: {
                     controlsContent
                 },
+                headerActions: {
+                    let instruction = pillScanViewModel.currentControlledStep.displayText
+
+                    if !instruction.isEmpty {
+                        HStack {
+                            Spacer()
+                            PillCountInstructionOverlay(text: instruction)
+                            Spacer()
+                        }
+                        .padding(.vertical, 10)
+                    }
+                },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: NSLocalizedString("PILL_COUNT_HEADER", comment: ""),
                 onBack: {
                     router.setRoot(
                         to: .authentication(.login(.dashboard(.dashboardHome))))
@@ -127,12 +137,16 @@ struct OPillCountView: View {
         .ignoresSafeArea(.keyboard)
         .onDisappear {
             // Clean up transaction reference when leaving
-            pillScanViewModel.currentTransaction = nil
-            pillScanViewModel.currentTransactionTransactionDetails = nil
-            pillScanViewModel.note = ""
-
+            if !pillScanViewModel.isNavigatingToVial {
+                pillScanViewModel.currentTransaction = nil
+                pillScanViewModel.currentTransactionTransactionDetails = nil
+                pillScanViewModel.note = ""
+                pillScanViewModel.currentControlledStep = .scan
+                pillScanViewModel.currentControlledTargetCount = nil
+            }
             cameraService.stop()
         }
+        
         .onTapGesture {
             if !cameraService.isPausedDueToInactivity {
                 isPaused = false
@@ -143,7 +157,6 @@ struct OPillCountView: View {
         .onAppear {
             // Load transaction if missing
             initializeTransaction()
-
             cameraService.configureInitialOrientation()
             cameraService.startObservingOrientation()
         }
@@ -182,6 +195,29 @@ struct OPillCountView: View {
                 deleteAllTransactionDetailsForCurrentTransaction
             }
         )
+        .customPopup(isPresented: $showStepCompletionPopup) {
+            showStepCompletion
+        }
+        .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
+            if show {
+                showConfirmCompletionPopup = true
+            }
+        }
+        .onChange(of: pillScanViewModel.shouldNavigateToVial) { _, shouldNavigate in
+            if shouldNavigate {
+                router.navigate(
+                    to: .authentication(
+                        .login(
+                            .dashboard(
+                                .pillCount(.controlledDrug(.vialCount))
+                            )
+                        )
+                    )
+                )
+
+                pillScanViewModel.shouldNavigateToVial = false
+            }
+        }
         .fullScreenCover(isPresented: $showFullScreenImage) {
             FullScreenImageView(
                 image: fullScreenImage,
@@ -230,8 +266,8 @@ extension OPillCountView {
             isAddButtonDisabled: isAddDisabled,
             onAddPill: {
 
-                guard !isAddDisabled else { return }
-                
+                guard !isAddDisabled else { return }        
+
                 cameraService.resetInactivityTimer()
                 cameraService.resumeIfPaused()
 
@@ -240,7 +276,31 @@ extension OPillCountView {
                     return
                 }
 
-                if router.selectedPillScanningType == .FIXED {
+                let isControlled = pillScanViewModel.currentTransaction?.is_controlled == true
+                let countType = router.selectedPillScanningType ?? .FIXED
+
+                // -------- CONTROLLED FLOW --------
+                if isControlled {
+
+                    let stepTotal = Int(pillScanViewModel.getTotalCuntForCurrentStep())
+                    let newTotal = stepTotal + cameraService.stableCount
+                    let stepTarget = pillScanViewModel.currentControlledTargetCount ?? 0
+
+                    if stepTarget > 0 && newTotal > stepTarget {
+
+                        showToast = true
+                        isZeroOrTargetNotReached = false
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            showToast = false
+                        }
+
+                        return
+                    }
+                }
+
+                // -------- NORMAL FIXED FLOW --------
+                else if countType == .FIXED {
 
                     guard let target = pillScanViewModel.currentTransaction?.target_count else {
                         return
@@ -249,66 +309,82 @@ extension OPillCountView {
                     let currentTotal = pillScanViewModel.getTotalPillCountOfCurrentTransaction()
                     let newTotal = currentTotal + cameraService.stableCount
 
-                    // If already completed
-                    if currentTotal == target {
+                    if currentTotal == target || newTotal > target {
+
                         showToast = true
                         isZeroOrTargetNotReached = false
 
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             showToast = false
                         }
-                        return
-                    }
 
-                    //  If adding exceeds target
-                    if newTotal > target {
-                        showToast = true
-                        isZeroOrTargetNotReached = false
-
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            showToast = false
-                        }
                         return
                     }
                 }
+
+                // -------- SAVE TRANSACTION --------
+
                 isAddDisabled = true
                 lastAddedCount = cameraService.stableCount
                 showSuccessAnimation = true
-                
-                // 6. Reset UI after 3 seconds
+
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                     isAddDisabled = false
                     showSuccessAnimation = false
                 }
 
-                // 1. Capture the composite image
                 var savedPath: String? = nil
 
-                if let compositeImage =
-                    cameraService.captureSnapshotWithOverlays()
-                {
-                    savedPath = PhotoFileManager.shared.saveImage(
-                        compositeImage)
+                if let compositeImage = cameraService.captureSnapshotWithOverlays() {
+                    savedPath = PhotoFileManager.shared.saveImage(compositeImage)
                 }
 
-                // 3. Add transaction with image path
                 pillScanViewModel.addTransactionDetailToCurrentTransaction(
                     pillCount: Int32(cameraService.stableCount),
                     imagePath: savedPath,
-                    type: pillScanViewModel.currentControlledStep.rawValue
+                    type: isControlled ? pillScanViewModel.currentControlledStep.rawValue : nil
                 )
             },
             onComplete: {
+
+                let isControlled = pillScanViewModel.currentTransaction?.is_controlled == true
+                let countType = router.selectedPillScanningType ?? .FIXED
+
+                // -------- CONTROLLED FLOW --------
+                if isControlled {
+
+                    let stepTotal = Int(pillScanViewModel.getTotalCuntForCurrentStep())
+
+                    guard pillScanViewModel.canCompleteStep(scannedCount: stepTotal) else {
+
+                        showToast = true
+                        isZeroOrTargetNotReached = false
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            showToast = false
+                        }
+
+                        return
+                    }
+
+//                    pillScanViewModel.handleStepCompletion()
+                    showStepCompletionPopup = true
+                    return
+                }
+
+                // -------- NORMAL FLOW --------
+
                 if addNoteSettings {
                     showNoteOption = true
                 } else {
-                    if pillScanViewModel.getTotalPillCountOfCurrentTransaction()
-                        > 0
-                    {
+
+                    if pillScanViewModel.getTotalPillCountOfCurrentTransaction() > 0 {
                         showConfirmCompletionPopup = true
                     } else {
+
                         showToast = true
                         isZeroOrTargetNotReached = true
+
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             showToast = false
                             isZeroOrTargetNotReached = false
@@ -331,11 +407,15 @@ extension OPillCountView {
     // Async task to fetch transaction data on load.
     private func initializeTransaction() {
         Task {
+
             if pillScanViewModel.currentTransaction == nil {
-                await pillScanViewModel.getCurrentTransaction(
-                    txnId: userViewModel.currentTransactionTxnId ?? 0
-                )
+                let txnId = userViewModel.currentTransactionTxnId ?? 0
+                await pillScanViewModel.getCurrentTransaction(txnId: txnId)
             }
+
+            pillScanViewModel.getControlledStep(
+                pillCountTxn: pillScanViewModel.currentTransaction
+            )
         }
     }
 }
@@ -588,6 +668,23 @@ extension OPillCountView {
                         }
                     )
                 }
+            }
+        )
+    }
+    
+    private var showStepCompletion: some View {
+        ConfirmationDialogue(
+            title: "Confirm Step Completion",
+            message: "Are you sure you want to complete this step?",
+            cancelButtonText: "CANCEL",
+            confirmButtonText: "OK",
+            onCancel: {
+                showStepCompletionPopup = false
+            },
+            onConfirm: {
+                showStepCompletionPopup = false
+
+                pillScanViewModel.handleStepCompletion()
             }
         )
     }

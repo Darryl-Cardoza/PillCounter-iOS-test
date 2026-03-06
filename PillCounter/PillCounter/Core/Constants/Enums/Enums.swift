@@ -40,6 +40,11 @@ public enum DashboardFlow: Hashable, Codable {
 public enum ScanningFlow: Codable, Hashable {
     case barcodeScanning
     case pillCountView
+    case controlledDrug(ControlFlow)
+}
+
+public enum ControlFlow: Hashable, Codable {
+    case vialCount
 }
 
 public enum UserFlow: Hashable, Codable {
@@ -177,4 +182,32 @@ public enum HistoryFilterType: String, Codable, Hashable {
               return "Quick Count History"
           }
       }
+}
+
+
+enum ControlledStep: String, CaseIterable {
+    
+    case scan = "SCAN"
+    case containerInitiate = "CONTAINER_INITIATE"
+    case targetVerification = "TARGET_VERIFICATION"
+    case targetReverification = "TARGET_REVERIFICATION"
+    case vial = "VIAL"
+    case containerPending = "CONTAINER_PENDING"
+    
+    var displayText: String {
+        switch self {
+        case .scan:
+            return "Scan Container QR Code"
+        case .containerInitiate:
+            return "Count all pills from container"
+        case .targetVerification:
+            return "Count Prescribed quantity"
+        case .targetReverification:
+            return "Recount Prescribed Quantity."
+        case .vial:
+            return "Take picture of the counted Pills Vial"
+        case .containerPending:
+            return "Count all remaining Pills from Container"
+        }
+    }
 }

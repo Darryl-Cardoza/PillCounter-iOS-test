@@ -103,7 +103,9 @@ final class PillsDataLocalStorage {
         countType: CountType,
         barcodeImagePath: String,
         isComingFromPms: Bool? = nil,
-        drugName:String? = nil
+        drugName:String? = nil,
+        targetCount: Int32? = nil,
+        isControlled: Bool? = nil
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -137,7 +139,9 @@ final class PillsDataLocalStorage {
         entity.isComingFromPms = isComingFromPms ?? false
         entity.isSynced = false
     
-
+        entity.target_count = targetCount ?? 0
+        entity.is_controlled = isControlled ?? false
+        entity.is_ndc_verfied = false
         entity.user = user
         print(
             "User → id: \(user.user_id ?? ""), name: \(user.name ?? "-"), email: \(user.email ?? "-")"
@@ -719,6 +723,103 @@ final class PillsDataLocalStorage {
         }
     }
     
+
+    
+    // For Controlled Drug
+    func getTransactionDetailsForStep(
+        txnId: Int64,
+        step: ControlledStep
+    ) -> [PillCountTransactionDetailsEntity] {
+        
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> =
+            PillCountTransactionDetailsEntity.fetchRequest()
+        
+        request.predicate = NSPredicate(
+            format: "txn_id == %lld AND type == %@ AND is_deleted == false",
+            txnId,
+            step.rawValue
+        )
+        
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "created_at", ascending: true)
+        ]
+        
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
+    
+    func getTotalCountForStep(
+        txnId: Int64,
+        step: ControlledStep
+    ) -> Int32 {
+        
+        let details = getTransactionDetailsForStep(
+            txnId: txnId,
+            step: step
+        )
+        
+        return details.reduce(Int32(0)) { total, item in
+            total + item.pill_count
+        }
+    }
+    
+    func getLastCompletedStep(txnId: Int64) -> ControlledStep? {
+
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> =
+            PillCountTransactionDetailsEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "txn_id == %lld AND is_deleted == false",
+            txnId
+        )
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "created_at", ascending: false)
+        ]
+
+        request.fetchLimit = 1
+
+        guard
+            let detail = try? mainThreadContext.fetch(request).first,
+            let type = detail.type,
+            let step = ControlledStep(rawValue: type)
+        else {
+            return nil
+        }
+
+        return step
+    }
+    
+    func getContainerPendingTarget(txnId: Int64) -> Int32 {
+
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            return 0
+        }
+
+        let containerCount = getTotalCountForStep(
+            txnId: txnId,
+            step: .containerInitiate
+        )
+
+        let target = txn.target_count
+
+        return max(containerCount - target, 0)
+    }
+    
+    func updateNdcVerified(txnId: Int64, verified: Bool) {
+
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("❌ No transaction found for txnId \(txnId)")
+            return
+        }
+
+        txn.is_ndc_verfied = verified
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("✅ NDC verification updated for txnId \(txnId) → \(verified)")
+    }
+    
     // MARK: DEBUGGING
     func debugPrintAllTransactions() {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
@@ -738,6 +839,7 @@ final class PillsDataLocalStorage {
                     🗑️ Deleted: \(txn.is_deleted)
                        isComingFromPms \(txn.isComingFromPms)
                        isSynced \(txn.isSynced)
+                       isControlled \(txn.is_controlled)
                     ---------------------------------
                     ------------------
                     """)

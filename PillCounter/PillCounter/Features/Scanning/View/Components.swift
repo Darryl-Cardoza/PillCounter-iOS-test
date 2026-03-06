@@ -12,10 +12,11 @@ import SwiftUI
 struct CameraContentView: View {
     @ObservedObject var cameraService: CameraService
     @EnvironmentObject var appColors: AppColors
+    @EnvironmentObject var pillScanViewModel: PillScanViewModel
     @State private var isAutoOrManual: Bool = false // this variable is to handle the auto detection capture.
     @Environment(\.isLandscape) private var isLandscape
+    
 
-    var pillCountInstructionType : String? = nil
     
     var body: some View {
         ZStack {
@@ -56,14 +57,20 @@ struct CameraContentView: View {
                         .padding(.top, isLandscape ? 0 : 30)
                     
                     VStack {
-                        ZoomControlView(cameraService: cameraService)
-                        if let instruction = pillCountInstructionType {
-                            HStack {
-                                Spacer()
-                                PillCountInstructionOverlay(text: instruction)
-                                Spacer()
-                            }.padding(.vertical,10)
-                        }
+//                        ZoomControlView(cameraService: cameraService)
+                     
+                        ControlledStepRow(
+                            activeSteps: ControlledFlowConfig.activeSteps(txn: pillScanViewModel.currentTransaction),
+                            currentStep: pillScanViewModel.currentControlledStep
+                        )
+                    }
+                    
+                    VStack {
+                        Spacer()
+                        ZoomControlViewVertical(
+                            cameraService: cameraService
+                        )
+                        Spacer()
                     }
                 } else {
                     ProgressView()
@@ -163,6 +170,71 @@ struct ZoomControlView: View {
     }
 }
 
+struct ZoomControlViewVertical: View {
+
+    @ObservedObject var cameraService: CameraService
+    @EnvironmentObject var appColors: AppColors
+
+    private let minZoom: CGFloat = 1.0
+    private let maxZoom: CGFloat = 2.0
+
+    private let trackWidth:  CGFloat = 2
+    private let thumbSize:   CGFloat = 22
+    private let verticalPadding: CGFloat = 50
+
+    var body: some View {
+
+        GeometryReader { geo in
+            let height       = geo.size.height
+            let usableHeight = height - (verticalPadding * 2)
+            let percentage   = (cameraService.zoomFactor - minZoom) / (maxZoom - minZoom)
+            // top = maxZoom, bottom = minZoom
+            let thumbY       = height - verticalPadding - (usableHeight * percentage)
+
+            ZStack {
+
+                // ── White vertical track line ──
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: trackWidth, height: usableHeight)
+                    .position(x: geo.size.width / 2, y: height / 2)
+
+                // ── Pink circular thumb ──
+                Circle()
+                    .fill(appColors.secondary)
+                    .frame(width: thumbSize, height: thumbSize)
+                    .position(x: geo.size.width / 2, y: thumbY)
+
+                // ── Invisible drag overlay ──
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                guard usableHeight > 0 else { return }
+
+                                let pct = min(
+                                    max(
+                                        (height - verticalPadding - value.location.y) / usableHeight,
+                                        0
+                                    ),
+                                    1
+                                )
+
+                                let zoom = minZoom + (maxZoom - minZoom) * pct
+                                cameraService.setZoom(zoom)
+                                cameraService.resetInactivityTimer()
+                            }
+                    )
+            }
+        }
+        .frame(width: 44)
+        .padding(.vertical, 60)
+        .allowsHitTesting(!cameraService.isPausedDueToInactivity)
+    }
+}
+
 struct PillCountInstructionOverlay: View {
 
     let text: String
@@ -179,6 +251,7 @@ struct PillCountInstructionOverlay: View {
                 Color.black.opacity(backgroundOpacity)
             )
             .cornerRadius(cornerRadius)
+    
     }
 }
 
@@ -200,7 +273,24 @@ struct BottomControlsView: View {
     @State private var showHistoryOrScanPillIcon: Bool = false
 
     @EnvironmentObject private var router: Router
+    
+    var targetCount: Int32 {
+        if pillScanViewModel.currentTransaction?.is_controlled == true {
+            return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
+        } else {
+            return pillScanViewModel.currentTransaction?.target_count ?? 0
+        }
+    }
 
+    var completeCount: Int {
+        if pillScanViewModel.currentTransaction?.is_controlled == true {
+            return Int( pillScanViewModel.getTotalCuntForCurrentStep())
+        }else{
+            return   pillScanViewModel
+                .getTotalPillCountOfCurrentTransaction()
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
 
@@ -221,8 +311,9 @@ struct BottomControlsView: View {
                             .currentTransactionTransactionDetails ?? [],
                         appColors: appColors,
                         countType: router.selectedPillScanningType ?? .FIXED,
-                        targetCount: pillScanViewModel.currentTransaction?
-                            .target_count ?? 0,
+//                        targetCount: pillScanViewModel.currentTransaction?
+//                            .target_count ?? 0,
+                        targetCount: targetCount ,
                         onTap: onTransactionDetailTapped,
                         isLandscape: isLandscape
                     )
@@ -231,11 +322,10 @@ struct BottomControlsView: View {
                     BottomControlsViewBodyForPillScan(
                         appColors: appColors,
                         countType: router.selectedPillScanningType ?? .FIXED,
-                        targetCount: pillScanViewModel.currentTransaction?
-                            .target_count ?? 0,
-                        currentTotalCount:
-                            pillScanViewModel
-                            .getTotalPillCountOfCurrentTransaction(),
+//                        targetCount: pillScanViewModel.currentTransaction?
+//                            .target_count ?? 0,
+                        targetCount: targetCount,
+                        currentTotalCount: completeCount,
                         currentScanningCount: cameraService.stableCount,
                         onAddPills: onAddPill,
                         onCompleteScan: onComplete,
@@ -484,51 +574,54 @@ struct BottomControlsViewBodyForPillScan: View {
 
 // MARK: TOTAL COUNT VIEW
 struct TotalCountView: View {
+    
     let currentTotalCount: Int
     let targetCount: Int32?
     let countType: CountType
     let appColors: AppColors
+    
+    private var showTarget: Bool {
+        countType == .FIXED && (targetCount ?? 0) > 0
+    }
 
     var body: some View {
+        
         VStack(spacing: 6) {
 
-            if countType == .REGULAR {
+            if !showTarget {
                 Spacer()
             }
 
             // Current Total
             Text("\(currentTotalCount)")
                 .foregroundStyle(appColors.primary)
-                .font(
-                    .system(size: countType == .FIXED ? 26 : 30, weight: .bold))
+                .font(.system(size: showTarget ? 26 : 30, weight: .bold))
 
-            // Divider (ONLY for FIXED + target exists)
-            if countType == .FIXED, targetCount != nil {
+            // Divider
+            if showTarget {
                 Rectangle()
                     .fill(appColors.primary)
                     .frame(width: 65, height: 1.5)
             }
 
-            // Target Count (ONLY for FIXED)
-            if countType == .FIXED, let targetCount {
-                Text("\(targetCount)")
+            // Target
+            if showTarget {
+                Text("\(targetCount ?? 0)")
                     .foregroundStyle(appColors.primary)
                     .font(.system(size: 20, weight: .bold))
             }
 
-            if countType == .REGULAR {
+            if !showTarget {
                 Spacer().frame(height: 10)
             }
 
-            // Label
             Text("Total Count")
                 .foregroundStyle(appColors.text)
-                .font(.system(size: 16))  // Changed to 16 to match "All Done" text
+                .font(.system(size: 16))
                 .padding(.top, 8)
         }
     }
 }
-
 // MARK: LIST BOTTOM
 struct BottonControlsViewForTransactionList: View {
 

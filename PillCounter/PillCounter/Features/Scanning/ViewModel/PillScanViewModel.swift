@@ -52,6 +52,8 @@ class PillScanViewModel: ObservableObject {
 
     // get the user id
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
+    let doubleCountRequired = AppStorageManager.shared.isDoubleCountRequired
+    let backCountRequired = AppStorageManager.shared.isBackCountRequired
     
     @Published var showPmsNdcMismatchPopup = false
     
@@ -59,8 +61,11 @@ class PillScanViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     // To Manager Controlled Drug Step
-    @Published var currentControlledStep: ControlledStep = .empty
-    
+    @Published var currentControlledStep: ControlledStep = .scan
+    @Published var currentControlledTargetCount: Int? = nil
+    @Published var shouldNavigateToVial = false
+    @Published var showCompletionPopup = false
+    @Published var isNavigatingToVial = false
 
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
@@ -179,21 +184,44 @@ class PillScanViewModel: ObservableObject {
         }
     }
     
-    func checkIsNdcMatch(
-        rawValueFromBarcodeOrQr: String,
-    ){
-        let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
-        let gtin = decodedGs1Value.gtin ?? ""    
-        if let expectedNdc = getExpectedPmsNdc(),
-           expectedNdc != gtin {
-            print("Mismatch: expectedNdc: \(String(describing: getExpectedPmsNdc())), gtin: \(gtin)")
-            showPmsNdcMismatchPopup = true
-            return
-        }else{
-            print("Match: expectedNdc: \(String(describing: getExpectedPmsNdc())), gtin: \(gtin)")
+    func checkIsNdcMatch(rawValueFromBarcodeOrQr: String) -> Bool {
+
+        let decoded = decoder.decode(rawValueFromBarcodeOrQr)
+        let gtin = decoded.gtin ?? ""
+
+        // If no expected NDC → allow scan
+        guard let expectedNdc = getExpectedPmsNdc() else {
+            return true
         }
+
+        print("expected ndc \(expectedNdc) matches with scanned ndc \(gtin)")
+
+        if expectedNdc != gtin {
+            showPmsNdcMismatchPopup = true
+            return false
+        }
+        markNdcVerified()
+  
+        return true
     }
     
+    func markNdcVerified() {
+        print("🔵 markNdcVerified() called")
+
+        if let txnId = selectedTransaction?.txn_id {
+            print("🟢 Transaction ID found: \(txnId)")
+            print("🟡 Updating NDC verification to TRUE")
+
+            PillsDataLocalStorage.shared.updateNdcVerified(
+                txnId: txnId,
+                verified: true
+            )
+
+            print("✅ NDC verification updated successfully for txnId: \(txnId)")
+        } else {
+            print("❌ Failed to update NDC verification: Transaction ID is nil")
+        }
+    }
     
     func getExpectedPmsNdc() -> String? {
         guard let txn = selectedTransaction,
@@ -410,6 +438,8 @@ class PillScanViewModel: ObservableObject {
         drugId: Int64, countType: CountType,
         barcodeImage: UIImage? = nil,
         isComingFromPms:Bool = false,
+        isControlled:Bool? = nil,
+        targetCount: Int32? = nil,
         drugName: String? = nil
     ) async {
         // creating the transaction for the pill.
@@ -429,8 +459,6 @@ class PillScanViewModel: ObservableObject {
 
             if let path = PhotoFileManager.shared.saveImage(img) {
                 savedPath = path
-                print("✅ Image saved successfully")
-                print("📂 Saved Path: \(path)")
             } else {
                 print("❌ Failed to save image")
             }
@@ -451,7 +479,10 @@ class PillScanViewModel: ObservableObject {
             barcodeImagePath: savedPath,
             isComingFromPms: isComingFromPms,
             drugName: drugName,
+            targetCount: targetCount,
+            isControlled: isControlled // temporary true
         )
+    
 
         // step 3: set the latest transaction as current transaction.
         if let latest = pillDataLocalStorage.fetechLatestTransactionOfUser(
@@ -597,11 +628,32 @@ class PillScanViewModel: ObservableObject {
     }
 
     // func to get the current transaction
+//    func getCurrentTransaction(txnId: Int64) async {
+//        // Fetch transaction
+//        currentTransaction =
+//            pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
+//                txnId: txnId)
+//
+//        // Set drug name
+//        drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
+//
+//        // Fetch details
+//        getAllTransactionDetailsOfTheCurrentTransaction()
+//
+//        let count = currentTransactionTransactionDetails?.count ?? 0
+//
+//        if count > 0 {
+//            let totalPills = getTotalPillCountOfCurrentTransaction()
+//        }
+//    }
+
     func getCurrentTransaction(txnId: Int64) async {
+
         // Fetch transaction
         currentTransaction =
             pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
-                txnId: txnId)
+                txnId: txnId
+            )
 
         // Set drug name
         drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
@@ -613,9 +665,10 @@ class PillScanViewModel: ObservableObject {
 
         if count > 0 {
             let totalPills = getTotalPillCountOfCurrentTransaction()
+            print("Total pills counted: \(totalPills)")
         }
     }
-
+    
     // soft delete the pill transaction detail of the current transaction.
     func softDeleteCurrentTransactionSelectedTransactionDetail(
         txnDetailId: Int64
@@ -721,10 +774,11 @@ class PillScanViewModel: ObservableObject {
         print("Fixed Count Drug Info: \(ndc), name='\(drugName)' count\(targetCount)")
 
         await processHl7DrugAndCreateTransaction(
-            ndc: ndc,
-            drugName: drugName,
-            countType: inboundType,
-            targetCount: Int32(targetCount)
+//            ndc: ndc,
+//            drugName: drugName,
+//            countType: inboundType,
+//            targetCount: Int32(targetCount)
+            ndc: "00365862598059", drugName: "Paracetamol 500mg", countType: .FIXED, targetCount: Int32(30),
         )
         callback?(true)
     }
@@ -789,53 +843,49 @@ class PillScanViewModel: ObservableObject {
 
         print("🧾 HL7 Drug Processing → NDC: \(ndc), Name: \(drugName)")
 
-        // Check DrugMaster (local DB)
+        var drugIdToUse: Int64
+
+        // 1️⃣ Check if drug exists
         if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
 
             print("Drug found in DrugMaster (id: \(existingDrug.drug_id))")
 
+            drugIdToUse = existingDrug.drug_id
             self.drugName = existingDrug.drug_name
 
-            await createTransaction(
-                drugId: existingDrug.drug_id,
-                countType: countType,
-                isComingFromPms: true
-            )
+        } else {
 
-            if countType == .FIXED {
-                updateTargetCountForCurrentTransaction()
-            }
+            // 2️⃣ Create new drug synchronously
+            drugIdToUse = generateUniqueDrugId()
 
-            getAllTransactionDetailsOfTheCurrentTransaction()
-            return
-        }
+            print("Drug not found — creating new DrugMaster entry")
 
-        // Not found → create new DrugMaster entry
-        let drugId = generateUniqueDrugId()
-
-        print("Drug not found — creating new DrugMaster entry")
-
-        Task(priority: .background) {
-            self.pillDataLocalStorage.saveManualPill(
+            pillDataLocalStorage.saveManualPill(
                 ndc: ndc,
-                drugId: drugId,
+                drugId: drugIdToUse,
                 drugName: drugName
             )
+
+            self.drugName = drugName
         }
 
-        self.drugName = drugName
-
+        // 3️⃣ Create transaction
         await createTransaction(
-            drugId: drugId,
+            drugId: drugIdToUse,
             countType: countType,
             isComingFromPms: true,
+            isControlled: true,
+            targetCount: targetCount,
+            drugName: drugName
         )
 
+        // 4️⃣ Refresh transaction details
+        getAllTransactionDetailsOfTheCurrentTransaction()
+
+        // 5️⃣ Update target count if fixed
         if countType == .FIXED {
             updateTargetCountForCurrentTransaction()
         }
-
-        getAllTransactionDetailsOfTheCurrentTransaction()
     }
     
     
@@ -865,4 +915,248 @@ class PillScanViewModel: ObservableObject {
         showPmsNdcMismatchPopup = false
     }
 
+}
+
+
+//Controlled Drug
+extension PillScanViewModel{
+    
+    var activeTransaction: PillCountTransactionEntity? {
+
+        if let currentTransaction {
+            log("Using currentTransaction id: \(currentTransaction.txn_id)")
+            return currentTransaction
+        }
+
+        if let selectedTransaction {
+            log("Using selectedTransaction id: \(selectedTransaction.txn_id)")
+            return selectedTransaction
+        }
+
+        log("❌ No active transaction found")
+        return nil
+    }
+
+
+    
+    
+    func getCurrentControlledTransaction(txnId: Int64) async {
+
+        // Fetch transaction
+        currentTransaction =
+        pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
+            txnId: txnId
+        )
+
+        // Drug name
+        drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
+
+        // Load details
+        getAllTransactionDetailsOfTheCurrentTransaction()
+
+        // Restore correct step
+        getControlledStep()
+
+        // Calculate target for step
+        updateControlledTargetCount()
+    }
+    
+    
+    // MARK: - Update Target Count
+    
+
+    
+    func updateControlledTargetCount() {
+
+        guard let txn = currentTransaction else { return }
+        log("❌ updateControlledTargetCount: transaction missing")
+
+        let target = Int(txn.target_count)
+        log("Updating target for step \(currentControlledStep.rawValue) target \(target)")
+
+        let txnId = txn.txn_id
+
+        switch currentControlledStep {
+            
+        case .scan:
+            currentControlledTargetCount = 0
+            
+        case .containerInitiate:
+            currentControlledTargetCount = 0
+
+        case .targetVerification,
+             .targetReverification,
+             .vial:
+            currentControlledTargetCount = target
+
+        case .containerPending:
+
+            let containerCount =
+            pillDataLocalStorage.getTotalCountForStep(
+                txnId: txnId,
+                step: .containerInitiate
+            )
+
+            currentControlledTargetCount =
+            max(Int(containerCount) - target, 0)
+        }
+    }
+    
+    func canCompleteStep(scannedCount: Int) -> Bool {
+
+        guard let txn = currentTransaction else { return false }
+
+        let target = Int(txn.target_count)
+
+        switch currentControlledStep {
+
+        case .containerInitiate:
+            return scannedCount > 0
+
+        case .targetVerification:
+            return scannedCount == target
+
+        case .targetReverification:
+            return scannedCount == target
+
+        case .containerPending:
+
+            let containerCount =
+            pillDataLocalStorage.getTotalCountForStep(
+                txnId: txn.txn_id,
+                step: .containerInitiate
+            )
+
+            let expected = Int(containerCount) - target
+
+            return scannedCount == expected
+        case .vial:
+            return scannedCount > 0
+
+        default:
+            return false
+        }
+    }
+    
+    func getTotalCuntForCurrentStep() -> Int32 {
+
+        guard let txnId = currentTransaction?.txn_id else {
+            log("❌ getTotalCuntForCurrentStep: txn missing")
+            return 0
+        }
+
+        let total = pillDataLocalStorage.getTotalCountForStep(
+            txnId: txnId,
+            step: currentControlledStep
+        )
+
+        log("Total count for step \(currentControlledStep.rawValue): \(total)")
+
+        return total
+    }
+    
+    
+    // Get Last saved Controlled Step
+    func getLastSavedControlledStep() -> ControlledStep? {
+        guard let txn = selectedTransaction else { return nil }
+        return pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id)
+    }
+    
+    
+    // Get which Controlled step is now
+    func getControlledStep(pillCountTxn: PillCountTransactionEntity? = nil) {
+
+        guard let txn = pillCountTxn else {
+            print("❌ getControlledStep: Transaction is nil")
+            return
+        }
+
+        print("🔍 getControlledStep called for txnId: \(txn.txn_id)")
+        print("🔍 isControlled: \(txn.is_controlled)")
+
+        let steps = ControlledFlowConfig.activeSteps(txn: txn)
+        print("📋 Active steps: \(steps.map { $0.rawValue })")
+
+        // Fetch last saved step
+        guard let lastStep = pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id) else {
+
+            print("⚪️ No last step found in DB")
+
+            if txn.is_controlled == true {
+                currentControlledStep = .containerInitiate
+                print("➡️ Starting step set to CONTAINER_INITIATE")
+            } else {
+                currentControlledStep = .targetVerification
+                print("➡️ Starting step set to TARGET_VERIFICATION")
+            }
+
+            updateControlledTargetCount()
+            return
+        }
+
+        print("📌 Last completed step from DB: \(lastStep.rawValue)")
+
+        // -------- SPECIAL CASE : VIAL --------
+        if lastStep == .vial {
+
+            print("📸 Last step was VIAL")
+
+            if steps.contains(.containerPending) {
+                currentControlledStep = .containerPending
+                print("➡️ Moving to next step: CONTAINER_PENDING")
+            } else {
+                currentControlledStep = .containerPending
+                print("➡️ Vial is final step")
+            }
+
+            updateControlledTargetCount()
+            return
+        }
+
+        // -------- NORMAL STEP FLOW --------
+        currentControlledStep = lastStep
+
+        print("➡️ Restoring step: \(currentControlledStep.rawValue)")
+
+        updateControlledTargetCount()
+
+        print("🎯 Target count updated for step: \(currentControlledStep.rawValue)")
+    }
+    
+    
+    // When step completed
+    func handleStepCompletion() {
+
+        guard let txn = currentTransaction else {
+            return
+        }
+
+        log("Completing step: \(currentControlledStep.rawValue)")
+
+        let steps = ControlledFlowConfig.activeSteps(txn: txn)
+
+        guard let currentIndex = steps.firstIndex(of: currentControlledStep) else {
+            return
+        }
+
+        // Check if last step
+        if currentIndex == steps.count - 1 {
+            showCompletionPopup = true   // same popup used for normal flow
+            return
+        }
+
+        // Move to next step
+        let next = steps[currentIndex + 1]
+
+        log("Next step: \(next.rawValue)")
+
+        currentControlledStep = next
+
+        updateControlledTargetCount()
+
+        if next == .vial {
+            isNavigatingToVial = true
+            shouldNavigateToVial = true
+        }
+    }
 }

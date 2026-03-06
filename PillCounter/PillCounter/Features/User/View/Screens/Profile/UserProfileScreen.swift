@@ -323,10 +323,20 @@ struct UserProfileScreen: View {
 
     private func onSaveTapped() {
         Task {
+            if !userViewModel.phoneNumber.isEmpty {
+                if userViewModel.phoneNumber.count != 10 {
+                    toastManager.show(message: "Phone number must be exactly 10 digits.")
+                    return
+                }
+
+                if !CharacterSet.decimalDigits.isSuperset(of: CharacterSet(charactersIn: userViewModel.phoneNumber)) {
+                    toastManager.show(message: "Phone number must contain only digits.")
+                    return
+                }
+            }
             await userViewModel.updateUserProfile()
             toastManager.show(message: "Profile updated successfully.")
             if userViewModel.isProfileUpdated {
-                // New user flow completed
                 isNewUser = false
                 userViewModel.isProfileUpdated = false
                 router.navigateBack()

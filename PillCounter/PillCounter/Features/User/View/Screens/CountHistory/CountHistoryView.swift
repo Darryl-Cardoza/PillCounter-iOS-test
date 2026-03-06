@@ -566,9 +566,28 @@ struct CountHistoryView: View {
                                let txn = userViewModel.getTransactionEntity(by: txnId) {
                                 
                                 userViewModel.currentTransactionTxnId = txnId
-                                pillScanViewmodel.selectedTransaction = txn.isComingFromPms ? txn : nil
+                                pillScanViewmodel.selectedTransaction = txn.isComingFromPms ? txn : nil // Resumed Transaction 
                                 
-                                if txn.isComingFromPms && (txn.barcode_image?.isEmpty ?? true) {
+                                // Txn is Controlled drug
+                                if txn.isComingFromPms && txn.is_controlled{
+                                     let lastStep = pillScanViewmodel.getLastSavedControlledStep()
+                                     // Last step is nil go to scan screen else count screen
+                                    if lastStep == nil && txn.is_ndc_verfied == false{
+                                         router.navigate(
+                                             to: .authentication(
+                                                 .login(.dashboard(.pillCount(.barcodeScanning)))
+                                             )
+                                         )
+                                     } else {
+                                         router.navigate(
+                                             to: .authentication(
+                                                 .login(.dashboard(.pillCount(.pillCountView)))
+                                             )
+                                         )
+                                     }
+                                }
+
+                                else if txn.isComingFromPms && txn.is_ndc_verfied{
                                     router.navigate(
                                         to: .authentication(
                                             .login(

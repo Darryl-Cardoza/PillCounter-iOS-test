@@ -123,7 +123,6 @@ final class Hl7ServiceController: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] txns in
                 guard let self else { return }
-                print("[HL7CTRL] Pending txns observed: \(txns.count)")
                 // Actual sending is triggered in onClientConnected.
                 // This observer is for UI/state awareness only.
             }

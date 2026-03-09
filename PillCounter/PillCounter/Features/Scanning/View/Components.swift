@@ -160,7 +160,8 @@ struct ZoomControlView: View {
                             )
                     }
                 }
-                .frame(height: 60)                .frame(height: 60)                .frame(height: 44)
+                .frame(height: 60)
+                .frame(height: 44)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 5)
@@ -258,6 +259,7 @@ struct PillCountInstructionOverlay: View {
 // MARK: - BOTTOM CONTROLS VIEW
 // The container for the pill info, count display, and buttons.
 struct BottomControlsView: View {
+    
     let isLandscape: Bool
     let pillScanViewModel: PillScanViewModel
     let cameraService: CameraService
@@ -269,7 +271,6 @@ struct BottomControlsView: View {
     let onTransactionDetailTapped: (PillCountTransactionDetailsEntity) -> Void
     @Binding var showTransactionDetails: Bool
     @Binding var isPaused: Bool
-
     @State private var showHistoryOrScanPillIcon: Bool = false
 
     @EnvironmentObject private var router: Router
@@ -952,4 +953,53 @@ struct ConfettiParticle: Identifiable {
     let color: Color
     let size: CGFloat
     var opacity: Double
+}
+
+
+struct VialBottomContentView: View {
+    
+    let appColors: AppColors
+    
+    var body: some View {
+        HStack (spacing: 90){
+        
+            
+            // Redo
+            VStack(spacing: 10) {
+                Image("redo_icon")
+                    .foregroundColor(appColors.primary)
+                
+                Text("Redo")
+                    .font(.caption)
+                    .foregroundColor(appColors.text)
+            }
+            
+            
+            // Camera Button
+            ZStack {
+                Circle()
+                    .fill(appColors.primary)
+                    .frame(width: 70, height: 70)
+                
+                Image(systemName: "camera")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundColor(appColors.text)
+            }
+            
+            
+            // Done
+            VStack(spacing: 10) {
+                Image("done_icon")
+                    .foregroundColor(appColors.primary)
+                
+                Text("Done")
+                    .font(.caption)
+                    .foregroundColor(appColors.text)
+            }
+            
+        }
+        .padding(.vertical, 25)
+        .padding(.horizontal)
+     
+    }
 }

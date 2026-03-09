@@ -80,4 +80,11 @@
 "CLEAR_ALL_LOCAL_DATA" = "Clear All Local Data";
 
 
+
+//POPUPS
+"GENERIC_EQUIVALENT_SCANNED"  = "GENERIC EQUIVALENT SCANNED";
+"GENERIC_EQUIVALENT_SUBTITLE" = "Scanned item is a generic equivalent to the speficied drug";
+"DO_YOU_WANT_SUBSTITUE" = "Do you want to substitute?";
+
+
 // MARK: ERROR

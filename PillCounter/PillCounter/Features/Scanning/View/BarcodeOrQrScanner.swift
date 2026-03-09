@@ -117,10 +117,10 @@ struct QRBarcodeScannerView: View {
                             }
                             
                             // Show Step Row If activeTransaction is null show normal
-                            ControlledStepRow(
-                                activeSteps: ControlledFlowConfig.activeSteps(txn: pillScanViewModel.selectedTransaction),
-                                currentStep: .scan
-                            )
+//                            ControlledStepRow(
+//                                activeSteps: ControlledFlowConfig.activeSteps(txn: pillScanViewModel.selectedTransaction),
+//                                currentStep: .scan
+//                            )
                         }
                     }
                 },
@@ -147,6 +147,17 @@ struct QRBarcodeScannerView: View {
             )
             .onTapGesture {
                 UIApplication.hideKeyboard()
+            }
+            
+            
+            //ShowLoader when loading api
+            if pillScanViewModel.isCheckingNdc {
+                ZStack {
+                    Color.black.opacity(0.5)
+                        .ignoresSafeArea()
+
+                    PillCountingLoader()
+                }
             }
             
         }
@@ -201,8 +212,11 @@ struct QRBarcodeScannerView: View {
         .customPopup(isPresented: $showPillTargetCountPopup) {
             mannulaEntryTargetCount
         }
-        .customPopup(isPresented: $pillScanViewModel.showPmsNdcMismatchPopup) {
-            showNdcMismatachDialog
+        .customPopup(
+            isPresented: $pillScanViewModel.showNdcEquivalencePopup,
+            dismissOnBackgroundTap: false
+        ) {
+            showNdcEquivalencePopup
         }
     }
     
@@ -305,7 +319,6 @@ extension QRBarcodeScannerView {
                 Task { @MainActor in
                     guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
 
-                    
                     if router.selectedPillScanningType == .FIXED
                         && pillScanViewModel.selectedTransaction?.target_count == nil
                     {
@@ -929,30 +942,72 @@ extension QRBarcodeScannerView {
            .frame(width: 300)
        }
     
-    private var showNdcMismatachDialog: some View {
+    
+    private var showNdcEquivalencePopup: some View {
         ConfirmationDialogue(
-            title: "Medication Mismatch",
-            message: "The scanned NDC does not match the prescription received \nPlease verify the drug and scan again.",
+            title: pillScanViewModel.isNdcEquivalent
+                ? NSLocalizedString("GENERIC_EQUIVALENT_SCANNED", comment: "")
+                : "Ndc Not Matched" ,
+
+            secondTitle: pillScanViewModel.isNdcEquivalent
+                ? NSLocalizedString("DO_YOU_WANT_SUBSTITUE", comment: "")
+                : "Rescan Required",
+
+            message: pillScanViewModel.isNdcEquivalent
+                ? NSLocalizedString("GENERIC_EQUIVALENT_SUBTITLE", comment: "")
+                : "The scanned ndc is does not match",
+
             cancelButtonText: "Cancel",
-            confirmButtonText: "Rescan",
+
+            confirmButtonText: pillScanViewModel.isNdcEquivalent
+                ? "Substitute"
+                : "Rescan",
+
+            showSecondTitle: true,
+            showSingleConfirmButton: !pillScanViewModel.isNdcEquivalent,
             onCancel: {
-                pillScanViewModel.showPmsNdcMismatchPopup = false
-                router.navigateBack()
+                pillScanViewModel.showNdcEquivalencePopup = false
+                restartFullScannerFlow()
             },
+
             onConfirm: {
-                pillScanViewModel.showPmsNdcMismatchPopup = false
-                cameraManager.startSession()
+                if pillScanViewModel.isNdcEquivalent {
+                    guard let scannedData else { return }
+
+                    Task { @MainActor in
+
+                        if tempCapturedImage == nil {
+                            cameraManager.captureImage { capturedImage in
+                                tempCapturedImage = capturedImage
+                            }
+                        }
+
+                        pillScanViewModel.scnnedPmsPill(
+                            rawValueFromBarcodeOrQr: scannedData,
+                            countType: router.selectedPillScanningType ?? .FIXED,
+                            image: tempCapturedImage
+                        )
+
+                        pillScanViewModel.markNdcVerified()
+                        pillScanViewModel.showNdcEquivalencePopup = false
+                    }
+
+                } else {
+                    restartFullScannerFlow()
+                    pillScanViewModel.showNdcEquivalencePopup = false
+                }
             }
         )
     }
     
     private func restartFullScannerFlow() {
-//        pillScanViewModel.resetScanningState()
         showScannedData = false
         showMannualEntryPopup = false
         showPillTargetCountPopup = false
         isFromScanning = false
         scannedData = nil
+        cameraManager.scannedCode = ""
+        cameraManager.codeType = ""
         cameraManager.restartSession()
         startScanTimeout()
     }
@@ -964,5 +1019,3 @@ func DLOG(_ msg: String) -> Bool {
     print("[Scanner] \(msg)")
     return true
 }
-    
-

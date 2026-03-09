@@ -12,9 +12,12 @@ struct ConfirmationDialogue: View {
     @EnvironmentObject private var appColors: AppColors
 
     let title: String
+    var secondTitle: String = ""
     let message: String
     let cancelButtonText: String
     let confirmButtonText: String
+    var showSecondTitle: Bool = false
+    var showSingleConfirmButton: Bool = false
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -22,7 +25,7 @@ struct ConfirmationDialogue: View {
         VStack(spacing: 15) {
 
             Text(title)
-                .font(.headline)
+                .font(showSecondTitle ? .title3 : .headline)
                 .foregroundStyle(appColors.text)
                 .multilineTextAlignment(.center)
 
@@ -31,22 +34,17 @@ struct ConfirmationDialogue: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(appColors.text)
 
-            HStack(spacing: 16) {
+            if showSecondTitle {
+                Text(secondTitle)
+                    .font(.headline)
+                    .foregroundStyle(appColors.text)
+                    .multilineTextAlignment(.center)
+            }
 
-                PillCountingButton(
-                    iconName: nil,
-                    title: cancelButtonText.uppercased(),
-                    textColor: appColors.text,
-                    backgroundColor: appColors.primaryBackground,
-                    borderColor: appColors.primary,
-                    font: .system(size: 12, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 14,
-                    iconSize: 0,
-                    action: onCancel
-                )
+            
+            if showSingleConfirmButton {
 
+                // single centered button
                 PillCountingButton(
                     iconName: nil,
                     title: confirmButtonText.uppercased(),
@@ -55,11 +53,45 @@ struct ConfirmationDialogue: View {
                     borderColor: .clear,
                     font: .system(size: 12, weight: .regular),
                     cornerRadius: 30,
-                    horizontalPadding: 32,
+                    horizontalPadding: 40,
                     verticalPadding: 14,
                     iconSize: 0,
                     action: onConfirm
                 )
+
+            } else {
+
+                // normal two buttons
+                HStack(spacing: 16) {
+
+                    PillCountingButton(
+                        iconName: nil,
+                        title: cancelButtonText.uppercased(),
+                        textColor: appColors.text,
+                        backgroundColor: appColors.primaryBackground,
+                        borderColor: appColors.primary,
+                        font: .system(size: 12, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 32,
+                        verticalPadding: 14,
+                        iconSize: 0,
+                        action: onCancel
+                    )
+
+                    PillCountingButton(
+                        iconName: nil,
+                        title: confirmButtonText.uppercased(),
+                        textColor: appColors.text,
+                        backgroundColor: appColors.primary,
+                        borderColor: .clear,
+                        font: .system(size: 12, weight: .regular),
+                        cornerRadius: 30,
+                        horizontalPadding: 32,
+                        verticalPadding: 14,
+                        iconSize: 0,
+                        action: onConfirm
+                    )
+                }
             }
         }
         .frame(width: 275)

@@ -54,11 +54,15 @@ class PillScanViewModel: ObservableObject {
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
     let doubleCountRequired = AppStorageManager.shared.isDoubleCountRequired
     let backCountRequired = AppStorageManager.shared.isBackCountRequired
-    
-    @Published var showPmsNdcMismatchPopup = false
-    
+        
 
     private var cancellables = Set<AnyCancellable>()
+    
+    
+    //Controlled Drug Repository
+    let controlledRepo  = ControlledRepository.shared
+
+    
 
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
@@ -67,6 +71,14 @@ class PillScanViewModel: ObservableObject {
     @Published var showCompletionPopup = false
     @Published var isNavigatingToVial = false
 
+    // Controlled drug Equivalence
+    @Published var isCheckingNdc: Bool = false
+    @Published var ndcComparisonResponse: NdcComparisonResponse?
+    @Published var isNdcEquivalent: Bool = false
+    @Published var showNdcEquivalencePopup = false
+    
+    
+    
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
     // func to get the value from the barcode and check in the db
@@ -184,53 +196,6 @@ class PillScanViewModel: ObservableObject {
         }
     }
     
-    func checkIsNdcMatch(rawValueFromBarcodeOrQr: String) -> Bool {
-
-        let decoded = decoder.decode(rawValueFromBarcodeOrQr)
-        let gtin = decoded.gtin ?? ""
-
-        // If no expected NDC → allow scan
-        guard let expectedNdc = getExpectedPmsNdc() else {
-            return true
-        }
-
-        print("expected ndc \(expectedNdc) matches with scanned ndc \(gtin)")
-
-        if expectedNdc != gtin {
-            showPmsNdcMismatchPopup = true
-            return false
-        }
-        markNdcVerified()
-  
-        return true
-    }
-    
-    func markNdcVerified() {
-        print("🔵 markNdcVerified() called")
-
-        if let txnId = selectedTransaction?.txn_id {
-            print("🟢 Transaction ID found: \(txnId)")
-            print("🟡 Updating NDC verification to TRUE")
-
-            PillsDataLocalStorage.shared.updateNdcVerified(
-                txnId: txnId,
-                verified: true
-            )
-
-            print("✅ NDC verification updated successfully for txnId: \(txnId)")
-        } else {
-            print("❌ Failed to update NDC verification: Transaction ID is nil")
-        }
-    }
-    
-    func getExpectedPmsNdc() -> String? {
-        guard let txn = selectedTransaction,
-              txn.isComingFromPms
-        else {
-            return nil
-        }
-        return txn.drug?.ndc
-    }
 
     func getFixedCount() -> Int32? {
         guard let txn = selectedTransaction else {
@@ -778,7 +743,7 @@ class PillScanViewModel: ObservableObject {
 //            drugName: drugName,
 //            countType: inboundType,
 //            targetCount: Int32(targetCount)
-            ndc: "00365862598059", drugName: "Paracetamol 500mg", countType: .FIXED, targetCount: Int32(30),
+            ndc: "7288808000", drugName: "Paracetamol 500mg", countType: .FIXED, targetCount: Int32(30),
         )
         callback?(true)
     }
@@ -893,10 +858,8 @@ class PillScanViewModel: ObservableObject {
     @MainActor
     func resetState() {
 
-        // Cancel any Combine pipelines
         cancellables.removeAll()
 
-        // Drug / scan state
         drugName = nil
         drugNameMannuallyEntered = ""
         isDrugFound = nil
@@ -905,14 +868,16 @@ class PillScanViewModel: ObservableObject {
         // Counting
         targetCount = ["", "", "", ""]
         note = ""
-
         // Transactions
         currentTransaction = nil
         currentTransactionTransactionDetails = nil
         selectedTransaction = nil
+        
+        showNdcEquivalencePopup = false
+        isCheckingNdc = false
+        isNdcEquivalent = false
+        ndcComparisonResponse = nil
 
-        // PMS related
-        showPmsNdcMismatchPopup = false
     }
 
 }

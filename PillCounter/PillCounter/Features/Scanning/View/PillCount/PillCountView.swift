@@ -71,7 +71,12 @@ struct OPillCountView: View {
                     }
                 },
                 bottomContent: {
-                    controlsContent
+                    if pillScanViewModel.currentControlledStep == .vial {
+                        vialControlBottomView
+                    } else {
+//                        controlsContent
+                        vialControlBottomView
+                    }
                 },
                 headerActions: {
                     let instruction = pillScanViewModel.currentControlledStep.displayText
@@ -203,21 +208,6 @@ struct OPillCountView: View {
                 showConfirmCompletionPopup = true
             }
         }
-        .onChange(of: pillScanViewModel.shouldNavigateToVial) { _, shouldNavigate in
-            if shouldNavigate {
-                router.navigate(
-                    to: .authentication(
-                        .login(
-                            .dashboard(
-                                .pillCount(.controlledDrug(.vialCount))
-                            )
-                        )
-                    )
-                )
-
-                pillScanViewModel.shouldNavigateToVial = false
-            }
-        }
         .fullScreenCover(isPresented: $showFullScreenImage) {
             FullScreenImageView(
                 image: fullScreenImage,
@@ -265,8 +255,7 @@ extension OPillCountView {
             appColors: appColors,
             isAddButtonDisabled: isAddDisabled,
             onAddPill: {
-
-                guard !isAddDisabled else { return }        
+                guard !isAddDisabled else { return }
 
                 cameraService.resetInactivityTimer()
                 cameraService.resumeIfPaused()
@@ -346,7 +335,6 @@ extension OPillCountView {
                 )
             },
             onComplete: {
-
                 let isControlled = pillScanViewModel.currentTransaction?.is_controlled == true
                 let countType = router.selectedPillScanningType ?? .FIXED
 
@@ -402,6 +390,14 @@ extension OPillCountView {
             showTransactionDetails: $showTransactionHistory,
             isPaused: $isPaused
         )
+    }
+    
+    private var vialControlBottomView: some View{
+        VialBottomContentView(appColors: appColors)
+            .background(
+                RoundedRectangle(cornerRadius: 28)
+                    .fill(appColors.secondaryBackground)
+            )
     }
 
     // Async task to fetch transaction data on load.

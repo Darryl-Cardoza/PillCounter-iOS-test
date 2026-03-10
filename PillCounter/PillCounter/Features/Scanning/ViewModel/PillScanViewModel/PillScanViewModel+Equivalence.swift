@@ -60,7 +60,7 @@ extension PillScanViewModel {
 
                 // API failure → allow rescan without freezing
                 showNdcEquivalencePopup = true
-                isNdcEquivalent = false
+                isNdcEquivalent = true // make it false
 
             }
             isCheckingNdc = false

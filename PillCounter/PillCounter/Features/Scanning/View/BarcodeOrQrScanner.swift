@@ -976,25 +976,22 @@ extension QRBarcodeScannerView {
 
                     Task { @MainActor in
 
-                        if tempCapturedImage == nil {
-                            cameraManager.captureImage { capturedImage in
-                                tempCapturedImage = capturedImage
-                            }
-                        }
+                        guard let txnId = pillScanViewModel.selectedTransaction?.txn_id else { return }
 
-                        pillScanViewModel.scnnedPmsPill(
-                            rawValueFromBarcodeOrQr: scannedData,
+                        let image = tempCapturedImage
+
+                        await pillScanViewModel.updateSubstitutedDrug(
+                            txnId: txnId,
+                            rawValue: scannedData,
                             countType: router.selectedPillScanningType ?? .FIXED,
-                            image: tempCapturedImage
+                            image: image
                         )
 
                         pillScanViewModel.markNdcVerified()
                         pillScanViewModel.showNdcEquivalencePopup = false
                     }
-
                 } else {
                     restartFullScannerFlow()
-                    pillScanViewModel.showNdcEquivalencePopup = false
                 }
             }
         )

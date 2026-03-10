@@ -12,37 +12,27 @@ struct ControlledFlowConfig {
     static func activeSteps(
         txn: PillCountTransactionEntity? = nil
     ) -> [ControlledStep] {
-
-        print("🔍 ControlledFlowConfig.activeSteps called")
-
-        if let txn {
-            print("📦 Transaction id: \(txn.txn_id)")
-            print("💊 is_controlled: \(txn.is_controlled)")
-        } else {
-            print("⚠️ Transaction is nil")
-        }
+        
+        let pillLocalDB = PillsDataLocalStorage.shared
+        let drugType = pillLocalDB.fetchDrugById(txn?.drug_id ?? 0)?.drug_type
+        
+        
+        let drugSchedule = DrugSchedule(rawValue: drugType ?? "")
 
         // -------- NON CONTROLLED FLOW --------
         if txn?.is_controlled == nil || txn?.is_controlled == false  {
-
-            print("➡️ Non-controlled flow selected")
             let steps: [ControlledStep] = [
                 .scan,
                 .targetVerification
             ]
-
-            print("📋 Steps: \(steps.map { $0.rawValue })")
-
             return steps
         }
 
         // -------- CONTROLLED FLOW --------
         let doubleCountRequired = AppStorageManager.shared.isDoubleCountRequired
         let backCountRequired = AppStorageManager.shared.isBackCountRequired
+        let selectedSchedules = AppStorageManager.shared.selectedSchedules
 
-        print("🔐 Controlled flow selected")
-        print("🔁 Double count required: \(doubleCountRequired)")
-        print("📦 Back count required: \(backCountRequired)")
 
         var steps: [ControlledStep] = [
             .scan,
@@ -50,21 +40,24 @@ struct ControlledFlowConfig {
             .targetVerification
         ]
 
-        if doubleCountRequired {
-            print("➕ Adding TARGET_REVERIFICATION step")
-            steps.append(.targetReverification)
+        print("🔍 doubleCountRequired:", doubleCountRequired)
+        print("🔍 drugSchedule:", String(describing: drugSchedule))
+        print("🔍 selectedSchedules:", selectedSchedules)
+
+        if doubleCountRequired,
+           let drugSchedule,
+           selectedSchedules.contains(drugSchedule) {
+           print("✅ Double count condition satisfied → adding targetReverification")
+           steps.append(.targetReverification)
+        } else {
+            print("❌ Double count condition NOT satisfied")
         }
 
-        print("📸 Adding VIAL step")
         steps.append(.vial)
 
         if backCountRequired {
-            print("➕ Adding CONTAINER_PENDING step")
             steps.append(.containerPending)
         }
-
-        print("📋 Final Steps: \(steps.map { $0.rawValue })")
-
         return steps
     }
 }

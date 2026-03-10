@@ -153,16 +153,16 @@ final class AppStorageManager {
         }
     }
     
-    var selectedSchedules: Set<DrugSchedule> {
-        get {
-            let stored = defaults.stringArray(forKey: AppStorageKeys.selectedSchedules) ?? []
-            return Set(stored.compactMap { DrugSchedule(rawValue: $0) })
+        var selectedSchedules: Set<DrugSchedule> {
+            get {
+                let stored = defaults.stringArray(forKey: AppStorageKeys.selectedSchedules) ?? []
+                return Set(stored.compactMap { DrugSchedule(rawValue: $0) })
+            }
+            set {
+                let rawValues = newValue.map { $0.rawValue }
+                defaults.setValue(rawValues, forKey: AppStorageKeys.selectedSchedules)
+            }
         }
-        set {
-            let rawValues = newValue.map { $0.rawValue }
-            defaults.setValue(rawValues, forKey: AppStorageKeys.selectedSchedules)
-        }
-    }
     
     
     

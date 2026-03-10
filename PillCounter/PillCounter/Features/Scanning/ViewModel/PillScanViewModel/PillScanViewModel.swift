@@ -67,9 +67,7 @@ class PillScanViewModel: ObservableObject {
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
     @Published var currentControlledTargetCount: Int? = nil
-    @Published var shouldNavigateToVial = false
     @Published var showCompletionPopup = false
-    @Published var isNavigatingToVial = false
 
     // Controlled drug Equivalence
     @Published var isCheckingNdc: Bool = false
@@ -161,39 +159,70 @@ class PillScanViewModel: ObservableObject {
     
     
     func scnnedPmsPill(
-        rawValueFromBarcodeOrQr: String, countType: CountType,
+        rawValueFromBarcodeOrQr: String,
+        countType: CountType,
         image: UIImage? = nil
-    ){
+    ) {
+
+        print("📡 scnnedPmsPill triggered")
+
         let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
         let gtin = decodedGs1Value.gtin ?? ""
 
-        if gtin.isEmpty { return }
-        
-        // 1. Generate a potential ID (only used if we create a NEW drug)
+        print("🔍 Decoded GTIN:", gtin)
+
+        if gtin.isEmpty {
+            print("❌ GTIN empty → returning")
+            return
+        }
+
+        print("📸 Image received:", image != nil)
+
+        // Generate potential ID
         var drugIdToUse = generateUniqueDrugId()
-        if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(
-            by: gtin)
-        {
+
+        if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(by: gtin) {
+
+            print("✅ Drug found in local DB")
 
             drugName = drugFoundInLocalStorage.drug_name
 
-            // FIX: Use the EXISTING ID from the database
+            // Use existing ID
             drugIdToUse = drugFoundInLocalStorage.drug_id
+
+            print("💊 Drug ID used:", drugIdToUse)
+            print("🧾 Transaction ID:", selectedTransaction?.txn_id ?? 0)
+
             Task(priority: .background) {
+
+                print("🚀 Calling updateTransaction")
+
                 await updaetTransaction(
                     drugId: drugIdToUse,
                     countType: countType,
                     txnId: selectedTransaction?.txn_id ?? 0,
                     barcodeImage: image
                 )
+
+                print("✅ updateTransaction finished")
             }
+
             getAllTransactionDetailsOfTheCurrentTransaction()
+
             isDrugFound = true
+            print("🟢 isDrugFound set TRUE")
+
             if countType == .FIXED {
                 updateTargetCountForCurrentTransaction()
+                print("🎯 Target count updated")
             }
+
             return
         }
+
+        print("⚠️ Drug NOT found in local DB")
+
+        isDrugFound = true
     }
     
 
@@ -479,10 +508,20 @@ class PillScanViewModel: ObservableObject {
         // Save Image using Helper if it exists
         var savedPath = ""
         if let img = barcodeImage {
+
+            print("📸 Image size:", img.size)
+
             if let path = PhotoFileManager.shared.saveImage(img) {
                 savedPath = path
+                print("✅ Image saved at:", path)
+            } else {
+                print("❌ Failed to save image")
             }
+
+        } else {
+            print("⚠️ barcodeImage is nil")
         }
+
 
         // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
         // we now call the db function to create the transaction.
@@ -668,7 +707,6 @@ class PillScanViewModel: ObservableObject {
         self.targetCount = ["", "", "", ""]
     }
     
-    
     @MainActor
     func autofillDrugNameIfAvailable(for ndc: String) {
         guard ndc.count >= 20 else { return }
@@ -714,7 +752,6 @@ class PillScanViewModel: ObservableObject {
     }
     
     
-
     @MainActor
     private func createFixedHl7Transaction(
         message: CompleteHL7Message,
@@ -1118,10 +1155,47 @@ extension PillScanViewModel{
         currentControlledStep = next
 
         updateControlledTargetCount()
+    }
+    
+    //Update Drug Data
+    func updateSubstitutedDrug(
+        txnId: Int64,
+        rawValue: String,
+        countType: CountType,
+        image: UIImage?
+    ) async {
 
-        if next == .vial {
-            isNavigatingToVial = true
-            shouldNavigateToVial = true
+        let decoded = decoder.decode(rawValue)
+        let gtin = decoded.gtin ?? ""
+
+        guard !gtin.isEmpty else { return }
+
+        // create new drug
+        let drugId = generateUniqueDrugId()
+
+        pillDataLocalStorage.saveManualPill(
+            ndc: ndcComparisonResponse?.data?.scannedNdc.packageNdc ?? "",
+            drugId: drugId,
+            drugName: ndcComparisonResponse?.data?.scannedNdc.lookupName ?? "",
+            drugType: ndcComparisonResponse?.data?.scannedNdc.deaSchedule ?? "",
+        )
+
+        var savedPath = ""
+
+        if let img = image {
+            if let path = PhotoFileManager.shared.saveImage(img) {
+                savedPath = path
+            }
         }
+
+        pillDataLocalStorage.updateTransaction(
+            txnId: txnId,
+            drugId: drugId,
+            countType: countType,
+            targetCount: nil,
+            barcodeImagePath: savedPath
+        )
+
+        isDrugFound = true
     }
 }

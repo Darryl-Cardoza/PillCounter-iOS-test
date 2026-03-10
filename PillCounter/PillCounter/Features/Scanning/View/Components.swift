@@ -275,6 +275,7 @@ struct BottomControlsView: View {
 
     @EnvironmentObject private var router: Router
     
+    
     var targetCount: Int32 {
         if pillScanViewModel.currentTransaction?.is_controlled == true {
             return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
@@ -960,9 +961,19 @@ struct VialBottomContentView: View {
     
     let appColors: AppColors
     
+    var onRedo: () -> Void
+    var onCapture: () -> Void
+    var onDone: () -> Void
+    
+    @Environment(\.isLandscape) private var isLandscape
+
     var body: some View {
-        HStack (spacing: 90){
         
+        let layout = isLandscape
+        ? AnyLayout(VStackLayout(spacing: 70))
+        : AnyLayout(HStackLayout(spacing: 90))
+        
+        layout {
             
             // Redo
             VStack(spacing: 10) {
@@ -972,6 +983,9 @@ struct VialBottomContentView: View {
                 Text("Redo")
                     .font(.caption)
                     .foregroundColor(appColors.text)
+            }
+            .onTapGesture {
+                onRedo()
             }
             
             
@@ -985,6 +999,9 @@ struct VialBottomContentView: View {
                     .font(.system(size: 28, weight: .medium))
                     .foregroundColor(appColors.text)
             }
+            .onTapGesture {
+                onCapture()
+            }
             
             
             // Done
@@ -996,10 +1013,11 @@ struct VialBottomContentView: View {
                     .font(.caption)
                     .foregroundColor(appColors.text)
             }
-            
+            .onTapGesture {
+                onDone()
+            }
         }
         .padding(.vertical, 25)
         .padding(.horizontal)
-     
     }
 }

@@ -54,7 +54,8 @@ final class PillsDataLocalStorage {
     func saveManualPill(
         ndc: String,
         drugId: Int64,
-        drugName: String
+        drugName: String,
+        drugType: String = "",
     ) {
         let entity = DrugMasterEntity(context: mainThreadContext)
 
@@ -63,7 +64,7 @@ final class PillsDataLocalStorage {
         entity.drug_name = drugName
         entity.ndc = ndc
         entity.equivalence = ""
-        entity.drug_type = ""
+        entity.drug_type = drugType
 
         CoreDataManager.shared.save(context: mainThreadContext)
     }
@@ -818,6 +819,62 @@ final class PillsDataLocalStorage {
         CoreDataManager.shared.save(context: mainThreadContext)
 
         print("✅ NDC verification updated for txnId \(txnId) → \(verified)")
+    }
+    
+    // Update drugMaster data
+    func updateDrugMaster(
+        drugId: Int64,
+        drugName: String? = nil,
+        ndc: String? = nil,
+        equivalence: String? = nil,
+        drugType: String? = nil
+    ) {
+
+        guard let drug = fetchDrugById(drugId) else {
+            print("❌ Drug not found for id \(drugId)")
+            return
+        }
+
+        if let drugName {
+            drug.drug_name = drugName
+        }
+
+        if let ndc {
+            drug.ndc = ndc
+        }
+
+        if let equivalence {
+            drug.equivalence = equivalence
+        }
+
+        if let drugType {
+            drug.drug_type = drugType
+        }
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("✅ Drug updated for id \(drugId)")
+    }
+    
+    
+    func updateTransactionDrugId(
+        txnId: Int64,
+        drugId: Int64
+    ) {
+
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId),
+              let drug = fetchDrugById(drugId) else {
+            print("❌ Failed to update txn drug")
+            return
+        }
+
+        txn.drug_id = drugId
+        txn.drug = drug
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("✅ Transaction \(txnId) updated with new drug \(drugId)")
     }
     
     // MARK: DEBUGGING

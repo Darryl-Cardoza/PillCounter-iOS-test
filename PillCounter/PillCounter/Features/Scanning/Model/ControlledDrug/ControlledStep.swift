@@ -18,7 +18,6 @@ extension ControlledStep {
     ]
 
     func nextStep(in steps: [ControlledStep]) -> ControlledStep {
-
         guard let index = steps.firstIndex(of: self),
               index + 1 < steps.count
         else { return self }

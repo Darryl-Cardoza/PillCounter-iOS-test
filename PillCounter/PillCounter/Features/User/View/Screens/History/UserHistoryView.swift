@@ -282,7 +282,7 @@ struct UserHistoryView: View {
                             displayedTransactions,
                             id: \.txn_id
                         ) { txn in
-                            TransactionRow(txn: txn, appColors: appColors)
+                            TransactionRow(txn: txn, appColors: appColors,pillScanViewModel: pillScanViewModel)
                                 .onTapGesture {
                                     Task {
                                         await pillScanViewModel
@@ -332,14 +332,13 @@ struct UserHistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(appColors.secondaryBackground)
     }
-
-
 }
 
 // MARK: - Subview for Cleaner Code
 struct TransactionRow: View {
     let txn: PillCountTransactionEntity
     let appColors: AppColors
+    let pillScanViewModel: PillScanViewModel
 
     var body: some View {
         HStack(spacing: 16) {
@@ -363,11 +362,13 @@ struct TransactionRow: View {
 
             // Calculated Pill Count for this specific transaction
             // We need to sum the details for this row
-            let count =
-                (txn.pillCountTransactionDetails
-                as? Set<PillCountTransactionDetailsEntity>)?
-                .reduce(0) { $0 + Int($1.pill_count) } ?? 0
+//            let count =
+//                (txn.pillCountTransactionDetails
+//                as? Set<PillCountTransactionDetailsEntity>)?
+//                .reduce(0) { $0 + Int($1.pill_count) } ?? 0
 
+            
+            let count = getTotalPillCount(for: txn)
             let targetCount = txn.target_count
 
             let notes = txn.note
@@ -440,6 +441,18 @@ struct TransactionRow: View {
         formatter.dateFormat = "dd-MM-yyyy hh:mm a"
 
         return formatter.string(from: date)
+    }
+    
+    private func getTotalPillCount(for transaction: PillCountTransactionEntity)
+        -> Int
+    {
+        let detailsArray =
+            (transaction.pillCountTransactionDetails?.allObjects
+                as? [PillCountTransactionDetailsEntity]) ?? []
+        return pillScanViewModel.getTotalPillCountOfCurrentTransactionByType(
+            type:.targetVerification,
+            details: detailsArray
+        )
     }
 }
 

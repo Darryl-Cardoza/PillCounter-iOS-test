@@ -62,7 +62,6 @@ class PillScanViewModel: ObservableObject {
     //Controlled Drug Repository
     let controlledRepo  = ControlledRepository.shared
 
-    
 
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
@@ -74,7 +73,6 @@ class PillScanViewModel: ObservableObject {
     @Published var ndcComparisonResponse: NdcComparisonResponse?
     @Published var isNdcEquivalent: Bool = false
     @Published var showNdcEquivalencePopup = false
-    
     
     
     // func to get the value from the barcode and check in the db
@@ -164,63 +162,46 @@ class PillScanViewModel: ObservableObject {
         image: UIImage? = nil
     ) {
 
-        print("📡 scnnedPmsPill triggered")
 
         let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
         let gtin = decodedGs1Value.gtin ?? ""
 
-        print("🔍 Decoded GTIN:", gtin)
 
         if gtin.isEmpty {
-            print("❌ GTIN empty → returning")
             return
         }
 
-        print("📸 Image received:", image != nil)
 
         // Generate potential ID
         var drugIdToUse = generateUniqueDrugId()
 
         if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(by: gtin) {
 
-            print("✅ Drug found in local DB")
 
             drugName = drugFoundInLocalStorage.drug_name
 
             // Use existing ID
             drugIdToUse = drugFoundInLocalStorage.drug_id
 
-            print("💊 Drug ID used:", drugIdToUse)
-            print("🧾 Transaction ID:", selectedTransaction?.txn_id ?? 0)
-
             Task(priority: .background) {
-
-                print("🚀 Calling updateTransaction")
-
                 await updaetTransaction(
                     drugId: drugIdToUse,
                     countType: countType,
                     txnId: selectedTransaction?.txn_id ?? 0,
                     barcodeImage: image
                 )
-
-                print("✅ updateTransaction finished")
             }
 
             getAllTransactionDetailsOfTheCurrentTransaction()
 
             isDrugFound = true
-            print("🟢 isDrugFound set TRUE")
 
             if countType == .FIXED {
                 updateTargetCountForCurrentTransaction()
-                print("🎯 Target count updated")
             }
 
             return
         }
-
-        print("⚠️ Drug NOT found in local DB")
 
         isDrugFound = true
     }
@@ -228,16 +209,12 @@ class PillScanViewModel: ObservableObject {
 
     func getFixedCount() -> Int32? {
         guard let txn = selectedTransaction else {
-            print("ℹ️ [COUNT] No transaction selected")
             return nil
         }
 
         guard txn.isComingFromPms else {
-            print("ℹ️ [COUNT] Not PMS transaction → skipping fixed count validation")
             return nil
         }
-
-        print("🎯 [COUNT] Target count from PMS: \(txn.target_count)")
         return txn.target_count
     }
 
@@ -626,6 +603,25 @@ class PillScanViewModel: ObservableObject {
         let total = sourceDetails.reduce(0) { $0 + Int($1.pill_count) }
         return total
     }
+    
+    
+    func getTotalPillCountOfCurrentTransactionByType(
+        type: ControlledStep,
+        details: [PillCountTransactionDetailsEntity]? = nil
+    ) -> Int {
+
+        // Priority:
+        // 1. Parameter passed in function call
+        // 2. The @Published property 'currentTransactionTransactionDetails'
+        // 3. Empty array (safeguard)
+        let sourceDetails = details ?? currentTransactionTransactionDetails ?? []
+
+        let total = sourceDetails
+            .filter { $0.type == type.rawValue }
+            .reduce(0) { $0 + Int($1.pill_count) }
+
+        return total
+    }
 
     func updateNoteForCurrentTransaction(txn_id: Int64, note: String) {
         pillDataLocalStorage.updateNote(txnId: txn_id, note: note)
@@ -1004,7 +1000,8 @@ extension PillScanViewModel{
         }
     }
     
-    func canCompleteStep(scannedCount: Int) -> Bool {
+    // Check is this step can be completed or not
+    func canCompleteStep(stepTotal: Int) -> Bool {
 
         guard let txn = currentTransaction else { return false }
 
@@ -1013,32 +1010,31 @@ extension PillScanViewModel{
         switch currentControlledStep {
 
         case .containerInitiate:
-            return scannedCount > 0
+            return stepTotal > 0
 
         case .targetVerification:
-            return scannedCount == target
+            return stepTotal == target
 
         case .targetReverification:
-            return scannedCount == target
+            return stepTotal == target
 
         case .containerPending:
-
             let containerCount =
             pillDataLocalStorage.getTotalCountForStep(
                 txnId: txn.txn_id,
                 step: .containerInitiate
             )
-
             let expected = Int(containerCount) - target
-
-            return scannedCount == expected
+            return stepTotal == expected
+            
         case .vial:
-            return scannedCount > 0
+            return stepTotal > 0
 
         default:
             return false
         }
     }
+    
     
     func getTotalCuntForCurrentStep() -> Int32 {
 

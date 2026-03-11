@@ -11,8 +11,8 @@ extension PillScanViewModel {
     func checkIsNdcMatch(rawValueFromBarcodeOrQr: String) -> Bool {
 
         let decoded = decoder.decode(rawValueFromBarcodeOrQr)
-//        let scannedNdc = decoded.gtin ?? ""
-        let scannedNdc = "6076072720"
+        let scannedNdc = decoded.gtin ?? ""
+//        let scannedNdc = "6076072720"
 
         guard let expectedNdc = getExpectedPmsNdc() else {
             return true

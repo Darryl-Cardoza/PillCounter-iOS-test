@@ -50,6 +50,7 @@ struct OPillCountView: View {
     
     //Controlled Drug Step
     @State private var showStepCompletionPopup: Bool = false
+    @State private var showCountMismatchPopup: Bool = false
     
     // Vial View State
     @State private var vialCapturedImagePath: String? = nil
@@ -224,6 +225,9 @@ struct OPillCountView: View {
         )
         .customPopup(isPresented: $showStepCompletionPopup) {
             showStepCompletion
+        }
+        .customPopup(isPresented: $showCountMismatchPopup){
+            countMismatchDialog
         }
         .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
             if show {
@@ -425,8 +429,6 @@ extension OPillCountView {
         }
     }
     
-
-
     // Popup showing details of a specific saved count.
     private var showTransactionDetail: some View {
         VStack(spacing: 35) {
@@ -529,11 +531,20 @@ extension OPillCountView {
         .frame(width: 300)
     }
 
+//    private var isTransactionCompleted: Bool {
+//        pillScanViewModel.getTotalPillCountOfCurrentTransaction()
+//            == (pillScanViewModel.currentTransaction?.target_count ?? 0)
+//    }
+    
     private var isTransactionCompleted: Bool {
-        pillScanViewModel.getTotalPillCountOfCurrentTransaction()
-            == (pillScanViewModel.currentTransaction?.target_count ?? 0)
+        if  pillScanViewModel.currentTransaction?.isComingFromPms == true {
+             true
+        } else {
+            pillScanViewModel.getTotalPillCountOfCurrentTransactionByType(type: pillScanViewModel.currentControlledStep)
+            ==  Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
+        }
     }
-
+    
     private var confirmationMessage: String {
         let status =
             isTransactionCompleted
@@ -574,10 +585,27 @@ extension OPillCountView {
                                 txnId: pillScanViewModel.currentTransaction?
                                     .txn_id ?? 0,
                                 countType: router.selectedPillScanningType
-                                    ?? .FIXED)
+                                    ?? .FIXED
+                            )
                         }
                     )
                 }
+            }
+        )
+    }
+    
+    private var countMismatchDialog: some View {
+        ConfirmationDialogue(
+            title: "Count Mismatch",
+            message: "Do you want to still proceed",
+            cancelButtonText: "CANCEL",
+            confirmButtonText: "OK",
+            onCancel: {
+                showCountMismatchPopup = false
+            },
+            onConfirm: {
+                showNoteOption = true
+                showCountMismatchPopup = false
             }
         )
     }
@@ -679,6 +707,10 @@ extension OPillCountView {
                     verticalPadding: 14,
                     iconSize: 0,
                     action: {
+                        if pillScanViewModel.note == "" {
+                            errorMessageOfNote = "Please add a note"
+                            return
+                        }
                         showNoteOption = false
                         Task(priority: .background) {
                             pillScanViewModel.updateNoteForCurrentTransaction(
@@ -873,13 +905,11 @@ extension OPillCountView{
 
         // -------- CONTROLLED FLOW --------
         if isControlled {
-
             let stepTotal = Int(pillScanViewModel.getTotalCuntForCurrentStep())
             let newTotal = stepTotal + cameraService.stableCount
             let stepTarget = pillScanViewModel.currentControlledTargetCount ?? 0
 
             if stepTarget > 0 && newTotal > stepTarget {
-
                 showToast = true
                 isZeroOrTargetNotReached = false
 
@@ -934,32 +964,37 @@ extension OPillCountView{
         pillScanViewModel.addTransactionDetailToCurrentTransaction(
             pillCount: Int32(cameraService.stableCount),
             imagePath: savedPath,
-            type: isControlled ? pillScanViewModel.currentControlledStep.rawValue : nil
+            type: isControlled ? pillScanViewModel.currentControlledStep.rawValue : ControlledStep.targetVerification.rawValue
         )
     }
     
     private func handleComplete(){
         let isControlled = pillScanViewModel.currentTransaction?.is_controlled == true
-        let countType = router.selectedPillScanningType ?? .FIXED
+//        let countType = router.selectedPillScanningType ?? .FIXED
 
         // -------- CONTROLLED FLOW --------
         if isControlled {
 
             let stepTotal = Int(pillScanViewModel.getTotalCuntForCurrentStep())
 
-            guard pillScanViewModel.canCompleteStep(scannedCount: stepTotal) else {
+            guard pillScanViewModel.canCompleteStep(stepTotal: stepTotal) else {
+                
+                if pillScanViewModel.currentControlledStep == .containerPending {
+                    showCountMismatchPopup = true
+                    
+                }else {
+                    showToast = true
+                    isZeroOrTargetNotReached = false
 
-                showToast = true
-                isZeroOrTargetNotReached = false
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showToast = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        showToast = false
+                    }
                 }
-
+                
+              
                 return
             }
 
-//                    pillScanViewModel.handleStepCompletion()
             showStepCompletionPopup = true
             return
         }
@@ -969,7 +1004,6 @@ extension OPillCountView{
         if addNoteSettings {
             showNoteOption = true
         } else {
-
             if pillScanViewModel.getTotalPillCountOfCurrentTransaction() > 0 {
                 showConfirmCompletionPopup = true
             } else {
@@ -984,6 +1018,7 @@ extension OPillCountView{
             }
         }
     }
+    
     
     private func handleVialCapture() {
         guard let image = cameraService.captureSnapshotWithOverlays() else {
@@ -1028,7 +1063,7 @@ extension OPillCountView{
         }
         
         pillScanViewModel.addTransactionDetailToCurrentTransaction(
-            pillCount: 1,
+            pillCount: 0,
             imagePath: imagePath,
             type: ControlledStep.vial.rawValue
         )

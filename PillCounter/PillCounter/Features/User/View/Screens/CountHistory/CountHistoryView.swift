@@ -331,10 +331,16 @@ struct CountHistoryView: View {
                 VStack(spacing: 16) {
 
                     ForEach(filteredTransactions, id: \.txn_id) { txn in
-                        let counted =
-                            userViewModel.actualCountedPillsForTheTransactions[
-                                txn.txn_id] ?? 0
-
+//                        let counted =
+//                            userViewModel.actualCountedPillsForTheTransactions[
+//                                txn.txn_id] ?? 0
+                        
+                        let counted = pillScanViewmodel.getTotalPillCountOfCurrentTransactionByType(
+                            type: .targetVerification,
+                            details: (txn.pillCountTransactionDetails as? Set<PillCountTransactionDetailsEntity>).map { Array($0) }
+                        )
+                        
+                        
                         listItem(
                             txnId: txn.txn_id,  // Pass ID for selection logic
                             name: txn.drug?.drug_name ?? "N/A",

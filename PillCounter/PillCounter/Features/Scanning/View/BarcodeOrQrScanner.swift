@@ -343,6 +343,7 @@ extension QRBarcodeScannerView {
             }
         }
     }
+    
     private func handleMannualEntryDrug(_ newValue: Bool?) {
         switch newValue {
         case false:
@@ -1007,6 +1008,10 @@ extension QRBarcodeScannerView {
         cameraManager.codeType = ""
         cameraManager.restartSession()
         startScanTimeout()
+        pillScanViewModel.isCheckingNdc = false
+        pillScanViewModel.ndcComparisonResponse  = nil
+        pillScanViewModel.isNdcEquivalent = false
+        pillScanViewModel.showNdcEquivalencePopup = false
     }
 }
 

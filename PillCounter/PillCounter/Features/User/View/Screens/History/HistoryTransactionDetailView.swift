@@ -516,8 +516,10 @@ struct HistoryTransactionDetailView: View {
         let detailsArray =
             (transaction.pillCountTransactionDetails?.allObjects
                 as? [PillCountTransactionDetailsEntity]) ?? []
-        return pillScanViewModel.getTotalPillCountOfCurrentTransaction(
-            details: detailsArray)
+        return pillScanViewModel.getTotalPillCountOfCurrentTransactionByType(
+            type:.targetVerification,
+            details: detailsArray
+        )
     }
 
     private func generateAndSharePDF() {

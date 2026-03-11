@@ -40,17 +40,11 @@ struct ControlledFlowConfig {
             .targetVerification
         ]
 
-        print("🔍 doubleCountRequired:", doubleCountRequired)
-        print("🔍 drugSchedule:", String(describing: drugSchedule))
-        print("🔍 selectedSchedules:", selectedSchedules)
 
         if doubleCountRequired,
            let drugSchedule,
            selectedSchedules.contains(drugSchedule) {
-           print("✅ Double count condition satisfied → adding targetReverification")
            steps.append(.targetReverification)
-        } else {
-            print("❌ Double count condition NOT satisfied")
         }
 
         steps.append(.vial)

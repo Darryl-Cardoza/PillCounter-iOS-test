@@ -60,7 +60,7 @@ struct CameraContentView: View {
 //                        ZoomControlView(cameraService: cameraService)
                      
                         ControlledStepRow(
-                            activeSteps: ControlledFlowConfig.activeSteps(txn: pillScanViewModel.currentTransaction),
+                            activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                             currentStep: pillScanViewModel.currentControlledStep
                         )
                     }
@@ -277,7 +277,7 @@ struct BottomControlsView: View {
     
     
     var targetCount: Int32 {
-        if pillScanViewModel.currentTransaction?.is_controlled == true {
+        if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
         } else {
             return pillScanViewModel.currentTransaction?.target_count ?? 0
@@ -285,7 +285,7 @@ struct BottomControlsView: View {
     }
 
     var completeCount: Int {
-        if pillScanViewModel.currentTransaction?.is_controlled == true {
+        if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return Int( pillScanViewModel.getTotalCuntForCurrentStep())
         }else{
             return   pillScanViewModel

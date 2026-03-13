@@ -8,20 +8,12 @@
 
 
 extension ControlledStep {
+    func next(orderedSteps: [ControlledStep]) -> ControlledStep? {
+        guard let index = orderedSteps.firstIndex(of: self),
+              index + 1 < orderedSteps.count
+        else { return nil }
 
-    static let orderedSteps: [ControlledStep] = [
-        .containerInitiate,
-        .targetVerification,
-        .targetReverification,
-        .vial,
-        .containerPending
-    ]
-
-    func nextStep(in steps: [ControlledStep]) -> ControlledStep {
-        guard let index = steps.firstIndex(of: self),
-              index + 1 < steps.count
-        else { return self }
-        return steps[index + 1]
+        return orderedSteps[index + 1]
     }
 }
 

@@ -401,7 +401,7 @@ class UserViewModel: ObservableObject {
 
         self.historyCountTransactions =
             pillLocalDB.fetchAllTransactionFixedOrRegularPartial(
-                for: user, countType: countType) ?? []
+                for: user, countType: countType)
 
         self.actualCountedPillsForTheTransactions = [:]
 
@@ -452,9 +452,9 @@ class UserViewModel: ObservableObject {
     func forceCompleteTheSelectedTransaction(txnId: Int64, countType: CountType)
         async
     {
-
         pillLocalDB.updateTransactionStatus(
-            txnId: txnId, newStatus: .FORCE_COMPLETED)
+            txnId: txnId, newStatus: .FORCE_COMPLETED
+        )
 
         if countType == .FIXED {
             await getAllPartialTransactions(countType: .FIXED)

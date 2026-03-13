@@ -24,8 +24,8 @@ extension PillsDataLocalStorage {
         request.predicate = NSPredicate(
             format: """
             is_deleted == false
-            AND isComingFromPms == true
-            AND (isSynced == false OR isSynced == nil)
+            AND is_from_pms == true
+            AND (is_synced == false OR is_synced == nil)
             AND status IN %@ 
             """,
             [
@@ -76,8 +76,8 @@ extension PillsDataLocalStorage {
         request.predicate = NSPredicate(
             format: """
             is_deleted == false
-            AND isComingFromPms == true
-            AND (isSynced == false OR isSynced == nil)
+            AND is_from_pms == true
+            AND (is_synced == false OR is_synced == nil)
             AND status IN %@ 
             """,
             [

@@ -28,6 +28,9 @@ struct UserSettingsView: View {
     @State private var isSoundEnabled =
         AppStorageManager.shared.isSoundEnabled
     
+    @State private var isSpeechEnabled =
+        AppStorageManager.shared.isSpeechEnabled
+    
     @State private var selectedSchedules =
         AppStorageManager.shared.selectedSchedules
     
@@ -305,6 +308,17 @@ struct UserSettingsView: View {
                     AppStorageManager.shared.isHapticEnabled = newValue
                 }
                 
+                Divider().background(appColors.text)
+                
+                // MARK: Speech Instruction
+                ToggleRowView(
+                    title: NSLocalizedString("VOICE_INSTRUCTIONS", comment: ""),
+                    isOn: $isSpeechEnabled,
+                    onColor: Color(hex: "#FF699B")
+                ) { newValue in
+                    AppStorageManager.shared.isSpeechEnabled = newValue
+                }
+
                 Divider().background(appColors.text)
                 
                 HStack{

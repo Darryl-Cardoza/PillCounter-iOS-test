@@ -9,29 +9,21 @@ extension PillScanViewModel {
     
     //
     func checkIsNdcMatch(rawValueFromBarcodeOrQr: String) -> Bool {
-
+        
         let decoded = decoder.decode(rawValueFromBarcodeOrQr)
         let scannedNdc = decoded.gtin ?? ""
-//        let scannedNdc = "6076072720"
 
         guard let expectedNdc = getExpectedPmsNdc() else {
             return true
         }
-
         print("Expected NDC: \(expectedNdc)")
         print("Scanned NDC: \(scannedNdc)")
 
-        // SAME → verify and continue
-        if expectedNdc == scannedNdc {
-            markNdcVerified()
-        }
-
-        // DIFFERENT → check equivalence
         getControlledDrugInfo(
             targetNdc: expectedNdc,
             scannedNdc: scannedNdc
         )
-
+        
         return false
     }
     
@@ -55,12 +47,9 @@ extension PillScanViewModel {
                 showNdcEquivalencePopup = true
 
             } catch {
-
-                print("❌ NDC comparison API failed:", error)
-
                 // API failure → allow rescan without freezing
                 showNdcEquivalencePopup = true
-                isNdcEquivalent = true // make it false
+                isNdcEquivalent = false // make it false
 
             }
             isCheckingNdc = false
@@ -81,13 +70,12 @@ extension PillScanViewModel {
     // Get Only Pms transaction
     func getExpectedPmsNdc() -> String? {
         guard let txn = selectedTransaction,
-              txn.isComingFromPms,
+              txn.is_from_pms,
               let ndc = txn.drug?.ndc,
               !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
             return nil
         }
-        
         return ndc
     }
 }

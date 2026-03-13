@@ -19,8 +19,7 @@ struct PillCounterApp: App {
     @ObservedObject private var router = Router()
     @ObservedObject private var loginViewModel = LoginViewModel()
     @ObservedObject private var appColors = AppColors.shared
-    @ObservedObject private var confirmationDialogueManager =
-        ConfirmationDialogueManager()
+    @ObservedObject private var confirmationDialogueManager = ConfirmationDialogueManager()
     @StateObject private var pillScanViewModel = PillScanViewModel()
     @StateObject private var userViewModel = UserViewModel()
     @StateObject private var toastManager = ToastManager()

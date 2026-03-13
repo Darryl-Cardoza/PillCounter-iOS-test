@@ -131,10 +131,7 @@ struct UserHistoryView: View {
         .customPopup(isPresented: $showDeleteConfirmation) {
             deleteConfirmationPopUp
         }
-        
-        
     }
-    
     
     private func fetchTransactions() {
 

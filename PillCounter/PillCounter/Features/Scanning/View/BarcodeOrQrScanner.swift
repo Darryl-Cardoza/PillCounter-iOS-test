@@ -173,6 +173,8 @@ struct QRBarcodeScannerView: View {
             showScannedData = false
             isFromScanning = false
             scannedData = nil
+            
+            handleStepVoice(pillScanViewModel.currentControlledStep)
         }
         // MARK: - LIFECYCLE
         .task {
@@ -220,6 +222,12 @@ struct QRBarcodeScannerView: View {
         }
     }
     
+    private func handleStepVoice(_ step: ControlledStep) {
+        if step == .scan{
+            SpeechManager.shared.speak(step.displayText)
+        }
+    }
+    
     private var scanInstructionOverlay: some View {
         Text("Scan barcode / QR code")
             .font(.headline)
@@ -232,10 +240,8 @@ struct QRBarcodeScannerView: View {
     
     private func startScanTimeout() {
         scanTimeoutTask?.cancel()
-
         scanTimeoutTask = Task {
             try? await Task.sleep(nanoseconds: scanTimeoutSeconds * 1_000_000_000)
-
             // If still no scan → show manual entry
             if cameraManager.scannedCode.isEmpty &&
                pillScanViewModel.isDrugFound == nil {
@@ -296,7 +302,6 @@ extension QRBarcodeScannerView {
                 return
             }
 
-
             cameraManager.captureImage  { capturedImage in
                 // Do not proceed when camera does not captured image
                 guard let capturedImage else {
@@ -325,7 +330,7 @@ extension QRBarcodeScannerView {
                         showPillTargetCountPopup = true
                         isFromScanning = true
                     } else {
-                        if pillScanViewModel.selectedTransaction?.isComingFromPms == true  {
+                        if pillScanViewModel.selectedTransaction?.is_from_pms == true  {
                             pillScanViewModel.scnnedPmsPill(
                                 rawValueFromBarcodeOrQr: newValue,
                                 countType: router.selectedPillScanningType ?? .FIXED,
@@ -943,14 +948,13 @@ extension QRBarcodeScannerView {
            .frame(width: 300)
        }
     
-    
     private var showNdcEquivalencePopup: some View {
         ConfirmationDialogue(
-            title: pillScanViewModel.isNdcEquivalent
-                ? NSLocalizedString("GENERIC_EQUIVALENT_SCANNED", comment: "")
-                : "Ndc Not Matched" ,
+//            title: pillScanViewModel.isNdcEquivalent
+//                ? NSLocalizedString("GENERIC_EQUIVALENT_SCANNED", comment: "")
+//                : "Ndc Not Matched" ,
 
-            secondTitle: pillScanViewModel.isNdcEquivalent
+            title: pillScanViewModel.isNdcEquivalent
                 ? NSLocalizedString("DO_YOU_WANT_SUBSTITUE", comment: "")
                 : "Rescan Required",
 
@@ -964,7 +968,6 @@ extension QRBarcodeScannerView {
                 ? "Substitute"
                 : "Rescan",
 
-            showSecondTitle: true,
             showSingleConfirmButton: !pillScanViewModel.isNdcEquivalent,
             onCancel: {
                 pillScanViewModel.showNdcEquivalencePopup = false
@@ -997,6 +1000,8 @@ extension QRBarcodeScannerView {
             }
         )
     }
+    
+
     
     private func restartFullScannerFlow() {
         showScannedData = false

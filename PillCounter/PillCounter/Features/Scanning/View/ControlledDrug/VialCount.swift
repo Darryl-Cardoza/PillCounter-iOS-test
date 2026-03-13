@@ -45,7 +45,7 @@ struct VialCaptureView: View {
                 // 3. Bottom: step row + capture button
                 VStack(spacing: 0) {
                     ControlledStepRow(
-                        activeSteps: ControlledFlowConfig.activeSteps(txn: pillScanViewModel.currentTransaction),
+                        activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                         currentStep: .vial
                     )
                     

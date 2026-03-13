@@ -137,11 +137,10 @@ final class PillsDataLocalStorage {
         entity.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         
         // set is hl7 or normal transaction and isSynced false
-        entity.isComingFromPms = isComingFromPms ?? false
-        entity.isSynced = false
+        entity.is_from_pms = isComingFromPms ?? false
+        entity.is_synced = false
     
         entity.target_count = targetCount ?? 0
-        entity.is_controlled = isControlled ?? false
         entity.is_ndc_verfied = false
         entity.user = user
         print(
@@ -340,7 +339,7 @@ final class PillsDataLocalStorage {
         )
 
         request.sortDescriptors = [
-            NSSortDescriptor(key: "isComingFromPms", ascending: false),
+            NSSortDescriptor(key: "is_from_pms", ascending: false),
             NSSortDescriptor(key: "created_at", ascending: false)
         ]
 
@@ -638,7 +637,7 @@ final class PillsDataLocalStorage {
 
         // Update core fields
         entity.count_type = countType.rawValue
-        entity.isSynced = false
+        entity.is_synced = false
         
         // Update target count ONLY if provided
         if let targetCount {
@@ -666,15 +665,15 @@ final class PillsDataLocalStorage {
             return
         }
 
-        print("[DB][SYNC] Before update → isSynced =", txn.isSynced,
+        print("[DB][SYNC] Before update → isSynced =", txn.is_synced,
               "status =", txn.status ?? "nil")
 
-        txn.isSynced = true
+        txn.is_synced = true
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
 
         CoreDataManager.shared.save(context: mainThreadContext)
 
-        print("[DB][SYNC] After update → isSynced =", txn.isSynced)
+        print("[DB][SYNC] After update → isSynced =", txn.is_synced)
     }
 
     func clearAllLocalData() {
@@ -894,9 +893,8 @@ final class PillsDataLocalStorage {
                     📊 Status: \(txn.status ?? "nil")
                     🔢 Type: \(txn.count_type ?? "nil")
                     🗑️ Deleted: \(txn.is_deleted)
-                       isComingFromPms \(txn.isComingFromPms)
-                       isSynced \(txn.isSynced)
-                       isControlled \(txn.is_controlled)
+                       isComingFromPms \(txn.is_from_pms)
+                       isSynced \(txn.is_synced)
                     ---------------------------------
                     ------------------
                     """)

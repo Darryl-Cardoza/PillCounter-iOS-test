@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24512" systemVersion="25D125" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24512" systemVersion="25D2128" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
     <entity name="DrugMasterEntity" representedClassName="DrugMasterEntity" syncable="YES" codeGenerationType="class">
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -27,12 +27,11 @@
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="expiry" optional="YES" attributeType="String"/>
-        <attribute name="is_controlled" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_deleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="is_from_pms" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_ndc_verfied" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_substitute" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
-        <attribute name="isComingFromPms" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
-        <attribute name="isSynced" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="is_synced" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="local_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="lot_no" optional="YES" attributeType="String"/>
         <attribute name="note" optional="YES" attributeType="String"/>

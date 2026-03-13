@@ -66,9 +66,7 @@ class BarcodeAndQRDecoder: ObservableObject {
         // These do NOT contain GS1 AIs like (01)
         if raw.range(of: #"^\d{8,14}$"#, options: .regularExpression) != nil {
             let gtin14 = normalizeGTIN14(raw)
-
             let result = GS1BarcodeData(gtin: gtin14)
-
             return result
         }
 

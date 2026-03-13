@@ -36,6 +36,7 @@ final class AppStorageManager {
        static let isAdjustReasonRequired = "isAdjustReasonRequired"
        static let isHapticEnabled = "isHapticEnabled"
        static let isSoundEnabled = "isSoundEnabled"
+       static let isSpeechEnabled = "isSpeechEnabled"
        static let selectedSchedules = "selectedSchedules"
     }
 
@@ -153,16 +154,25 @@ final class AppStorageManager {
         }
     }
     
-        var selectedSchedules: Set<DrugSchedule> {
-            get {
-                let stored = defaults.stringArray(forKey: AppStorageKeys.selectedSchedules) ?? []
-                return Set(stored.compactMap { DrugSchedule(rawValue: $0) })
-            }
-            set {
-                let rawValues = newValue.map { $0.rawValue }
-                defaults.setValue(rawValues, forKey: AppStorageKeys.selectedSchedules)
-            }
+    var isSpeechEnabled: Bool {
+        get {
+            defaults.bool(forKey: AppStorageKeys.isSpeechEnabled)
         }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.isSpeechEnabled)
+        }
+    }
+    
+    var selectedSchedules: Set<DrugSchedule> {
+        get {
+            let stored = defaults.stringArray(forKey: AppStorageKeys.selectedSchedules) ?? []
+            return Set(stored.compactMap { DrugSchedule(rawValue: $0) })
+        }
+        set {
+            let rawValues = newValue.map { $0.rawValue }
+            defaults.setValue(rawValues, forKey: AppStorageKeys.selectedSchedules)
+        }
+    }
     
     
     

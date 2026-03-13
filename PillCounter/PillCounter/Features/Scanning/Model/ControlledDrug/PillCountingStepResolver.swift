@@ -1,15 +1,16 @@
 //
-//  ControlledFlowConfig.swift
+//  PillCountingStepResolver.swift
 //  PillCounter
 //
-//  Created by Bhushan Patil on 05/03/26.
+//  Created by Bhushan Patil on 13/03/26.
 //
+
 
 import Foundation
 
-struct ControlledFlowConfig {
+struct PillCountingStepResolver {
 
-    static func activeSteps(
+    static func getActiveSteps(
         txn: PillCountTransactionEntity? = nil
     ) -> [ControlledStep] {
         
@@ -18,15 +19,24 @@ struct ControlledFlowConfig {
         
         
         let drugSchedule = DrugSchedule(rawValue: drugType ?? "")
-
-        // -------- NON CONTROLLED FLOW --------
-        if txn?.is_controlled == nil || txn?.is_controlled == false  {
-            let steps: [ControlledStep] = [
+        
+        // ------ REGULAR COUNT FLOW -------
+        if txn?.is_from_pms == false  && txn?.count_type == CountType.REGULAR.rawValue {
+            return [
                 .scan,
                 .targetVerification
             ]
-            return steps
         }
+
+        // -------- NON CONTROLLED FLOW --------
+        if (txn?.is_from_pms == false  && txn?.count_type == CountType.FIXED.rawValue) || drugSchedule == nil  {
+            return [
+                .scan,
+                .targetVerification,
+                .vial
+            ]
+        }
+        
 
         // -------- CONTROLLED FLOW --------
         let doubleCountRequired = AppStorageManager.shared.isDoubleCountRequired
@@ -47,11 +57,13 @@ struct ControlledFlowConfig {
            steps.append(.targetReverification)
         }
 
-        steps.append(.vial)
 
         if backCountRequired {
             steps.append(.containerPending)
         }
+        
+        steps.append(.vial)
+
         return steps
     }
 }

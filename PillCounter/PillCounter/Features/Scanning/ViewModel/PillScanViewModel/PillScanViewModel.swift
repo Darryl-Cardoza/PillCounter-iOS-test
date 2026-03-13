@@ -212,7 +212,7 @@ class PillScanViewModel: ObservableObject {
             return nil
         }
 
-        guard txn.isComingFromPms else {
+        guard txn.is_from_pms else {
             return nil
         }
         return txn.target_count
@@ -776,7 +776,7 @@ class PillScanViewModel: ObservableObject {
 //            drugName: drugName,
 //            countType: inboundType,
 //            targetCount: Int32(targetCount)
-            ndc: "7288808000", drugName: "Paracetamol 500mg", countType: .FIXED, targetCount: Int32(30),
+            ndc: "6076072720", drugName: "Paracetamol 500mg", countType: .FIXED, targetCount: Int32(30),
         )
         callback?(true)
     }
@@ -793,12 +793,9 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-
         let ndc = inventory.substanceCode ?? ""
         let drugName = inventory.description
-        
-
-
+          
         print("Regular Count Drug Info: \(ndc), \(drugName)")
 
         await processHl7DrugAndCreateTransaction(
@@ -920,18 +917,14 @@ class PillScanViewModel: ObservableObject {
 extension PillScanViewModel{
     
     var activeTransaction: PillCountTransactionEntity? {
-
         if let currentTransaction {
-            log("Using currentTransaction id: \(currentTransaction.txn_id)")
             return currentTransaction
         }
 
         if let selectedTransaction {
-            log("Using selectedTransaction id: \(selectedTransaction.txn_id)")
             return selectedTransaction
         }
 
-        log("❌ No active transaction found")
         return nil
     }
 
@@ -1011,10 +1004,14 @@ extension PillScanViewModel{
 
         case .containerInitiate:
             return stepTotal > 0
-
+            
         case .targetVerification:
-            return stepTotal == target
-
+            if currentTransaction?.count_type == CountType.FIXED.rawValue {
+                return stepTotal == target
+            } else {
+                return stepTotal > 0
+            }
+            
         case .targetReverification:
             return stepTotal == target
 
@@ -1028,7 +1025,7 @@ extension PillScanViewModel{
             return stepTotal == expected
             
         case .vial:
-            return stepTotal > 0
+            return stepTotal == 0
 
         default:
             return false
@@ -1039,7 +1036,6 @@ extension PillScanViewModel{
     func getTotalCuntForCurrentStep() -> Int32 {
 
         guard let txnId = currentTransaction?.txn_id else {
-            log("❌ getTotalCuntForCurrentStep: txn missing")
             return 0
         }
 
@@ -1047,8 +1043,6 @@ extension PillScanViewModel{
             txnId: txnId,
             step: currentControlledStep
         )
-
-        log("Total count for step \(currentControlledStep.rawValue): \(total)")
 
         return total
     }
@@ -1065,91 +1059,52 @@ extension PillScanViewModel{
     func getControlledStep(pillCountTxn: PillCountTransactionEntity? = nil) {
 
         guard let txn = pillCountTxn else {
-            print("❌ getControlledStep: Transaction is nil")
             return
         }
 
-        print("🔍 getControlledStep called for txnId: \(txn.txn_id)")
-        print("🔍 isControlled: \(txn.is_controlled)")
-
-        let steps = ControlledFlowConfig.activeSteps(txn: txn)
-        print("📋 Active steps: \(steps.map { $0.rawValue })")
+        let steps = PillCountingStepResolver.getActiveSteps(txn: txn)
 
         // Fetch last saved step
         guard let lastStep = pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id) else {
-
-            print("⚪️ No last step found in DB")
-
-            if txn.is_controlled == true {
+            if txn.is_from_pms == true {
                 currentControlledStep = .containerInitiate
-                print("➡️ Starting step set to CONTAINER_INITIATE")
             } else {
                 currentControlledStep = .targetVerification
-                print("➡️ Starting step set to TARGET_VERIFICATION")
             }
 
             updateControlledTargetCount()
             return
         }
 
-        print("📌 Last completed step from DB: \(lastStep.rawValue)")
 
-        // -------- SPECIAL CASE : VIAL --------
-        if lastStep == .vial {
+//        if lastStep == .vial {
+//            if steps.contains(.containerPending) {
+//                currentControlledStep = .containerPending
+//            } else {
+//                currentControlledStep = .containerPending
+//            }
+//
+//            updateControlledTargetCount()
+//            return
+//        }
 
-            print("📸 Last step was VIAL")
-
-            if steps.contains(.containerPending) {
-                currentControlledStep = .containerPending
-                print("➡️ Moving to next step: CONTAINER_PENDING")
-            } else {
-                currentControlledStep = .containerPending
-                print("➡️ Vial is final step")
-            }
-
-            updateControlledTargetCount()
-            return
-        }
-
-        // -------- NORMAL STEP FLOW --------
         currentControlledStep = lastStep
-
-        print("➡️ Restoring step: \(currentControlledStep.rawValue)")
-
         updateControlledTargetCount()
-
-        print("🎯 Target count updated for step: \(currentControlledStep.rawValue)")
     }
     
     
     // When step completed
     func handleStepCompletion() {
-
         guard let txn = currentTransaction else {
             return
         }
-
-        log("Completing step: \(currentControlledStep.rawValue)")
-
-        let steps = ControlledFlowConfig.activeSteps(txn: txn)
+        let steps = PillCountingStepResolver.getActiveSteps(txn: txn)
 
         guard let currentIndex = steps.firstIndex(of: currentControlledStep) else {
             return
         }
-
-        // Check if last step
-        if currentIndex == steps.count - 1 {
-            showCompletionPopup = true   // same popup used for normal flow
-            return
-        }
-
-        // Move to next step
         let next = steps[currentIndex + 1]
-
-        log("Next step: \(next.rawValue)")
-
         currentControlledStep = next
-
         updateControlledTargetCount()
     }
     

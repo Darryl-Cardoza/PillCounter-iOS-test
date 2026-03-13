@@ -61,7 +61,7 @@ private extension UnsyncedTransactionView {
                                 "\(Formatter.getTimeString(from: txn.created_at))",
                             count: "\(txn.target_count)",
                             barcodeImagePath: txn.barcode_image,
-                            isFromPms: txn.isComingFromPms
+                            isFromPms: txn.is_from_pms
                         )
                     }
                     .padding(.top, 90)

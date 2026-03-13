@@ -667,43 +667,58 @@ extension OPillCountView {
             }
 
             HStack {
-                PillCountingButton(
-                    iconName: nil,
-                    title: "SKIP",
-                    textColor: appColors.text,
-                    backgroundColor: appColors.primaryBackground,
-                    borderColor: appColors.primary,
-                    font: .system(size: 12, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 14,
-                    iconSize: 0,
-                    action: {
-                        showNoteOption = false
-                        if (pillScanViewModel.currentTransaction?.target_count
-                            ?? 0)
-                            > pillScanViewModel
-                            .getTotalPillCountOfCurrentTransaction()
-                        {
-                            showConfirmCompletionPopup = true
-                        } else if pillScanViewModel.currentTransaction?
-                            .target_count ?? 0
-                            == pillScanViewModel
-                            .getTotalPillCountOfCurrentTransaction()
-                        {
-
-                            Task {
-                                await userViewModel
-                                    .completeTheSelectedTransaction(
-                                        txnId: pillScanViewModel
-                                            .currentTransaction?.txn_id ?? 0,
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED)
+                if pillScanViewModel.currentTransaction?.is_from_pms == false{
+                    PillCountingButton(
+                        iconName: nil,
+                        title: "SKIP",
+                        textColor: appColors.text,
+                        backgroundColor: appColors.primaryBackground,
+                        borderColor: appColors.primary,
+                        font: .system(size: 12, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 32,
+                        verticalPadding: 14,
+                        iconSize: 0,
+                        action : {
+                            showNoteOption = false
+                            Task(priority: .background) {
+                                await MainActor.run {
+                                    // Controlled drug → move to next step
+                                    if pillScanViewModel.currentTransaction?.is_from_pms == true {
+                                        pillScanViewModel.handleStepCompletion()
+                                    } else {
+                                        // Normal drug → completion popup
+                                        showConfirmCompletionPopup = true
+                                    }
+                                }
                             }
                         }
-                    }
-                )
-
+                        //                    action: {
+                        //                        showNoteOption = false
+                        //                        if (pillScanViewModel.currentTransaction?.target_count
+                        //                            ?? 0)
+                        //                            > pillScanViewModel
+                        //                            .getTotalPillCountOfCurrentTransaction()
+                        //                        {
+                        //                            showConfirmCompletionPopup = true
+                        //                        } else if pillScanViewModel.currentTransaction?
+                        //                            .target_count ?? 0
+                        //                            == pillScanViewModel
+                        //                            .getTotalPillCountOfCurrentTransaction()
+                        //                        {
+                        //
+                        //                            Task {
+                        //                                await userViewModel
+                        //                                    .completeTheSelectedTransaction(
+                        //                                        txnId: pillScanViewModel
+                        //                                            .currentTransaction?.txn_id ?? 0,
+                        //                                        countType: router
+                        //                                            .selectedPillScanningType ?? .FIXED)
+                        //                            }
+                        //                        }
+                        //                    }
+                     )
+                }
                 PillCountingButton(
                     iconName: nil,
                     title: "SAVE",

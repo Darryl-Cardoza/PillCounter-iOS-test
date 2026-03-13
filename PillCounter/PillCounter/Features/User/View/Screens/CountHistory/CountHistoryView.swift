@@ -335,12 +335,14 @@ struct CountHistoryView: View {
 ////                            userViewModel.actualCountedPillsForTheTransactions[
 ////                                txn.txn_id] ?? 0
 //                        
-////                        let counted = pillScanViewmodel.getTotalPillCountOfCurrentTransactionByType(
-////                            type: .targetVerification,
-////                            details: (txn.pillCountTransactionDetails as? Set<PillCountTransactionDetailsEntity>).map { Array($0) }
-////                        )
+//                        let details = Array(txn.pillCountTransactionDetails ?? [])
+//
+//                        let counted = pillScanViewmodel.getTotalPillCountOfCurrentTransactionByType(
+//                            type: .targetVerification,
+//                            details: details
+//                        )
 //                        
-////                        let counted = userViewModel.actualCountedPillsForTheTransactions[txn.txn_id] ?? 0
+//                        let counted = userViewModel.actualCountedPillsForTheTransactions[txn.txn_id] ?? 0
 //                        
 //                        
 //                        listItem(
@@ -392,6 +394,8 @@ struct CountHistoryView: View {
 //        .frame(maxWidth: .infinity, maxHeight: .infinity)
 //        .background(appColors.primaryBackground)
 //    }
+    
+    
     private var contentView: some View {
         VStack {
 

@@ -62,6 +62,9 @@ class PillScanViewModel: ObservableObject {
     //Controlled Drug Repository
     let controlledRepo  = ControlledRepository.shared
 
+    //Toast
+    @Published  var showToast: Bool = false
+    @Published  var toastMessage: String = ""
 
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
@@ -232,10 +235,10 @@ class PillScanViewModel: ObservableObject {
 
         return Int64(newId)
     }
+    
     func log(_ message: String) {
         print("🧪 [ManualPillFlow] \(message)")
     }
-    
     
     func manuallyEnteredPill(
            ndc: String, countType: CountType, isFixedCount: Bool = false
@@ -404,6 +407,7 @@ class PillScanViewModel: ObservableObject {
         self.isDrugFound = true
         self.mannualDrugCreated = true
     }
+    
     // create transaction for every new transaction that user scans the barcode or enters the ndc or the gtin number manually.
     func createTransaction(
         drugId: Int64, countType: CountType,
@@ -463,7 +467,6 @@ class PillScanViewModel: ObservableObject {
         }
     }
     
-    
     func updaetTransaction(
         drugId: Int64,
         countType: CountType,
@@ -520,10 +523,21 @@ class PillScanViewModel: ObservableObject {
     }
 
     // create a func to get all the transactions of the current transaction.
+//    func getAllTransactionDetailsOfTheCurrentTransaction() {
+//        currentTransactionTransactionDetails =
+//            pillDataLocalStorage.getTransactionDetailsByTransactionId(
+//                txnId: currentTransaction?.txn_id ?? 0)
+//    }
+//
+    
     func getAllTransactionDetailsOfTheCurrentTransaction() {
+        guard let txnId = currentTransaction?.txn_id else { return }
         currentTransactionTransactionDetails =
-            pillDataLocalStorage.getTransactionDetailsByTransactionId(
-                txnId: currentTransaction?.txn_id ?? 0)
+            PillsDataLocalStorage.shared
+                .getTransactionDetailsForStep(
+                    txnId: txnId,
+                    step: currentControlledStep
+                )
     }
 
     // function to add transaction detail to the current transaction.
@@ -688,7 +702,7 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        pillDataLocalStorage.softDeleteAllTransactionDetails(for: txnId)
+        pillDataLocalStorage.softDeleteTransactionDetailsForStep(txnId: txnId, step: currentControlledStep)
 
         // Refresh in-memory state to update UI
         getAllTransactionDetailsOfTheCurrentTransaction()
@@ -723,6 +737,16 @@ class PillScanViewModel: ObservableObject {
     
     // Message handling for transaction coming from pms
     typealias HL7SimpleCallback = (Bool) -> Void
+    
+    //ShowToastMessage
+    func showToastMessage(text: String) {
+        toastMessage = text
+        showToast = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            self.showToast = false
+        }
+    }
 
     
     func handleReceivedMessage(
@@ -755,32 +779,51 @@ class PillScanViewModel: ObservableObject {
         callback: HL7SimpleCallback? = nil
     ) async {
 
-        guard let component = message.components.first else {
-            print("Fixed Count: No RXC component found")
-            return
-        }
-        
-        guard let medication = message.medications.first else {
-            print("Fixed Count: No RXC component found")
+        guard let order = message.order else {
+            print("HL7 Error: Missing ORC segment")
+            callback?(false)
             return
         }
 
-        let ndc = component.ndcOrComponentCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let drugName = component.componentAmount ?? ""
-        let targetCount = medication.requestedQty ?? ""
+        let orderId = order.placerOrderId
+        print("PMS Order ID: \(orderId)")
 
-        print("Fixed Count Drug Info: \(ndc), name='\(drugName)' count\(targetCount)")
+        guard !message.medications.isEmpty else {
+            print("HL7 Error: No RXE medication segments")
+            callback?(false)
+            return
+        }
 
-        await processHl7DrugAndCreateTransaction(
-//            ndc: ndc,
-//            drugName: drugName,
-//            countType: inboundType,
-//            targetCount: Int32(targetCount)
-            ndc: "6076072720", drugName: "Paracetamol 500mg", countType: .FIXED, targetCount: Int32(30),
-        )
+        for medication in message.medications {
+
+            // RXE-2.1
+            let ndc = medication.drugCode.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // RXE-2.2
+            let drugName = medication.drugName
+
+            // RXE-3
+            let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
+
+            print("""
+            PMS HL7 Request
+            Order: \(orderId)
+            Drug: \(drugName)
+            NDC: \(ndc)
+            Target Count: \(targetCount)
+            """)
+
+            await processHl7DrugAndCreateTransaction(
+                ndc: ndc,
+                drugName: drugName,
+                countType: inboundType,
+                targetCount: targetCount
+            )
+        }
+
         callback?(true)
     }
-
+    
     @MainActor
     private func createRegularHl7Transaction(
         message: CompleteHL7Message,

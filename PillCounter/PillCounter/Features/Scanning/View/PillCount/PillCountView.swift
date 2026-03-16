@@ -35,10 +35,7 @@ struct OPillCountView: View {
 
     @State private var showTransactionHistory: Bool = true
 
-    @State private var showToast: Bool = false
 
-    //@State private var isZeroOrTargetNotReached: Bool = false
-    @State private var toastMessage: String = ""
 
     @State private var isPaused: Bool = false
 
@@ -72,17 +69,16 @@ struct OPillCountView: View {
                     // Using .id ensures SwiftUI recognizes this as a persistent view
                     ZStack {
                         CameraContentView(
-                            cameraService: cameraService
+                            cameraService: cameraService,
+                            isCameraEnabled: capturedVialImage == nil
                         )
                         .environment(\.colorScheme, .light)
 
                         if let capturedImage = capturedVialImage {
-
                             Image(uiImage: capturedImage)
                                 .resizable()
                                 .scaledToFill()
                                 .ignoresSafeArea()
-                                .rotationEffect(.degrees(90))
                                 .transition(.opacity)
                         }
 
@@ -122,17 +118,16 @@ struct OPillCountView: View {
                 }
             )
 
-            if showToast {
+            if pillScanViewModel.showToast  {
                 VStack {
                     Spacer()
-
                     HStack(spacing: 10) {
                         Image("app_icon")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 24, height: 24)
 
-                        Text(toastMessage)
+                        Text(pillScanViewModel.toastMessage)
                         .font(.subheadline)
                         .foregroundColor(.white)
                     }
@@ -143,7 +138,7 @@ struct OPillCountView: View {
                     .padding(.bottom, 32)  // distance from bottom
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .animation(.easeInOut, value: showToast)
+                .animation(.easeInOut, value: pillScanViewModel.showToast)
             }
             
             if showSuccessAnimation {
@@ -242,12 +237,15 @@ struct OPillCountView: View {
     
     private func handleStepVoice(_ step: ControlledStep) {
         SpeechManager.shared.speak(step.displayText)
+        pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
     }
+
 }
 
 
 // MARK: - SUBVIEWS & HELPERS
 extension OPillCountView {
+    
     private var pausedOverlay: some View {
         Color.black.opacity(0.6)
             .ignoresSafeArea()
@@ -260,6 +258,7 @@ extension OPillCountView {
                     Button {
                         cameraService.resumeIfPaused()
                         cameraService.resetInactivityTimer()
+                        handleStepVoice(pillScanViewModel.currentControlledStep)
                     } label: {
                         Text("Resume")
                             .font(.headline)
@@ -630,7 +629,6 @@ extension OPillCountView {
             },
             onConfirm: {
                 showStepCompletionPopup = false
-
                 pillScanViewModel.handleStepCompletion()
             }
         )
@@ -693,30 +691,6 @@ extension OPillCountView {
                                 }
                             }
                         }
-                        //                    action: {
-                        //                        showNoteOption = false
-                        //                        if (pillScanViewModel.currentTransaction?.target_count
-                        //                            ?? 0)
-                        //                            > pillScanViewModel
-                        //                            .getTotalPillCountOfCurrentTransaction()
-                        //                        {
-                        //                            showConfirmCompletionPopup = true
-                        //                        } else if pillScanViewModel.currentTransaction?
-                        //                            .target_count ?? 0
-                        //                            == pillScanViewModel
-                        //                            .getTotalPillCountOfCurrentTransaction()
-                        //                        {
-                        //
-                        //                            Task {
-                        //                                await userViewModel
-                        //                                    .completeTheSelectedTransaction(
-                        //                                        txnId: pillScanViewModel
-                        //                                            .currentTransaction?.txn_id ?? 0,
-                        //                                        countType: router
-                        //                                            .selectedPillScanningType ?? .FIXED)
-                        //                            }
-                        //                        }
-                        //                    }
                      )
                 }
                 PillCountingButton(
@@ -942,14 +916,7 @@ extension OPillCountView {
         
         // Prevent exceeding step target
         if stepTarget > 0 && newTotal > stepTarget {
-            
-            showToast = true
-            toastMessage = "Total transaction count exceeds target."
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                showToast = false
-            }
-            
+            pillScanViewModel.showToastMessage(text:"Total transaction count exceeds target." )
             return
         }
         
@@ -987,11 +954,7 @@ extension OPillCountView {
             if nextStep == .vial {
                 showCountMismatchPopup = true
             } else {
-                showToast = true
-                toastMessage = "Count is less than target."
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showToast = false
-                }
+                pillScanViewModel.showToastMessage(text:"Count is less than target.")
             }
             return
         }
@@ -1011,10 +974,10 @@ extension OPillCountView {
     }
     
     private func handleVialCapture() {
-        guard let image = cameraService.captureSnapshotWithOverlays() else {
+        guard let image = cameraService.captureSnapshot() else {
             return
         }
-        
+        cameraService.stop()
         let normalized = image.normalized()
         capturedVialImage = normalized
         
@@ -1043,13 +1006,7 @@ extension OPillCountView {
         let isPmsTxn = pillScanViewModel.currentTransaction?.is_from_pms ?? false
         
         guard let imagePath = vialCapturedImagePath else {
-            showToast = true
-            toastMessage = "Capture the image first."
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                showToast = false
-            }
-            
+            pillScanViewModel.showToastMessage(text:"Capture the image first." )
             return
         }
         

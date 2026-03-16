@@ -612,6 +612,39 @@ final class PillsDataLocalStorage {
         }
     }
     
+    // Delete transaction by step
+    func softDeleteTransactionDetailsForStep(
+        txnId: Int64,
+        step: ControlledStep
+    ) {
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> =
+            PillCountTransactionDetailsEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "txn_id == %lld AND type == %@ AND is_deleted == false",
+            txnId,
+            step.rawValue
+        )
+
+        do {
+            let details = try mainThreadContext.fetch(request)
+
+            guard !details.isEmpty else { return }
+
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+
+            for detail in details {
+                detail.is_deleted = true
+                detail.updated_at = now
+            }
+
+            CoreDataManager.shared.save(context: mainThreadContext)
+
+        } catch {
+            print("❌ Failed to delete step details for txnId \(txnId), step \(step): \(error)")
+        }
+    }
+    
     // MARK: UPDATE
     // Update an existing transaction instead of creating a new one
     func updateTransaction(

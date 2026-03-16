@@ -398,7 +398,6 @@ class UserViewModel: ObservableObject {
             self.historyCountTransactions = []
             return
         }
-
         self.historyCountTransactions =
             pillLocalDB.fetchAllTransactionFixedOrRegularPartial(
                 for: user, countType: countType)
@@ -412,6 +411,7 @@ class UserViewModel: ObservableObject {
                 total
         }
     }
+    
 
     // MARK: SOFT DELETE TRANSACITONS
     // func to soft delete a partular transaction.

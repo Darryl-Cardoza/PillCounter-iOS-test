@@ -82,35 +82,38 @@ private extension ControlledStepRow {
         Image(assetName(for: step))
             .resizable()
             .scaledToFit()
-            .frame(width: 24, height: 24)
+            .frame(width: 20, height: 20)
             .colorMultiply(iconColor(for: state))
             .padding(8)
-            .frame(width: 42, height: 42)
+            .frame(width: 40, height: 40)
             .background(
                 Circle()
-                    .fill(appColors.text)
+                    .fill(appColors.primaryBackground)
                     .shadow(color: .black.opacity(0.14), radius: 4, x: 0, y: 2)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                state == .current ? appColors.secondary : .clear,
+                                lineWidth: 2
+                            )
+                    )
             )
             .opacity(stateOpacity(for: state))
     }
     
     func iconColor(for state: StepState) -> Color {
-
         switch state {
-
         case .completed:
-            return appColors.primaryBackground
-
+            return appColors.text
         case .current:
-            return appColors.primaryBackground.opacity(0.6)
+            return appColors.text.opacity(0.7)
 
         case .upcoming:
-            return appColors.primaryBackground
+            return appColors.text.opacity(0.3)
         }
     }
     
     func stateOpacity(for state: StepState) -> Double {
-        
         switch state {
             
         case .completed:
@@ -120,27 +123,25 @@ private extension ControlledStepRow {
             return 1
             
         case .upcoming:
-            return 0.30
+            return 0.50
         }
     }
 }
 
 // MARK: - CONNECTOR
 
-    private extension ControlledStepRow {
+private extension ControlledStepRow {
 
-        @ViewBuilder
-        func connectorView(
-            between current: (ControlledStep, StepState),
-            and next: (ControlledStep, StepState)
-        ) -> some View {
+    @ViewBuilder
+    func connectorView(
+        between current: (ControlledStep, StepState),
+        and next: (ControlledStep, StepState)
+    ) -> some View {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .opacity(current.1 == .upcoming ? 0.5 : 1)
+                .foregroundColor(.white)
+                .opacity(next.1 == .upcoming ? 0.5 : 1)
 
-    
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .opacity(current.1 == .upcoming ? 0.5 : 1)
-                    .foregroundColor(appColors.text)
-                    .opacity(next.1 == .upcoming ? 0.5 : 1)
-
-        }
     }
+}

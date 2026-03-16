@@ -19,15 +19,16 @@ final class SpeechManager {
         
         guard AppStorageManager.shared.isSpeechEnabled else { return }
 
-        // Stop previous speech
         synthesizer.stopSpeaking(at: .immediate)
 
-        let utterance = AVSpeechUtterance(string: text)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let utterance = AVSpeechUtterance(string: text)
 
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = 0.45
-        utterance.pitchMultiplier = 1.0
+            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+            utterance.rate = 0.45
+            utterance.pitchMultiplier = 1.0
 
-        synthesizer.speak(utterance)
+            self.synthesizer.speak(utterance)
+        }
     }
 }

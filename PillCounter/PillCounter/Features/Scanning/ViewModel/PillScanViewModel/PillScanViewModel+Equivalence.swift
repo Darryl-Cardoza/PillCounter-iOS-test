@@ -27,6 +27,19 @@ extension PillScanViewModel {
         return false
     }
     
+    func manualEnterdControlledDrug(scannedNdc: String){
+        guard let expectedNdc = getExpectedPmsNdc() else {
+            return
+        }
+        print("Expected NDC: \(expectedNdc)")
+        print("Scanned NDC: \(scannedNdc)")
+
+        getControlledDrugInfo(
+            targetNdc: expectedNdc,
+            scannedNdc: scannedNdc
+        )
+    }
+    
     func getControlledDrugInfo(targetNdc: String, scannedNdc: String) {
 
         let request = NdcValidationRequest(
@@ -47,10 +60,8 @@ extension PillScanViewModel {
                 showNdcEquivalencePopup = true
 
             } catch {
-                // API failure → allow rescan without freezing
                 showNdcEquivalencePopup = true
-                isNdcEquivalent = false // make it false
-
+                isNdcEquivalent = false
             }
             isCheckingNdc = false
         }

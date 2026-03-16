@@ -273,12 +273,11 @@ struct UserSettingsView: View {
                                 option: option,
                                 selectedOption: radioBinding,
                                 label: option.displayText,
-                                selectedColor: Color(hex: "#FF699B"),
-                                unselectedColor: .gray.opacity(0.5),
+                                selectedColor: appColors.secondary,
+                                unselectedColor: appColors.text,
                                 size: 20,
                                 lineWidth: 2,
-                                textColor: appColors.text
-                            )
+                                textColor: Color.white                            )
                         }
                     }
                     .padding(.horizontal)
@@ -291,7 +290,7 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: NSLocalizedString("SOUND_FEEDBACK", comment: ""),
                     isOn: $isSoundEnabled,
-                    onColor: Color(hex: "#FF699B")
+                    onColor: appColors.text
                 ) { newValue in
                     AppStorageManager.shared.isSoundEnabled = newValue
                 }
@@ -303,7 +302,7 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: NSLocalizedString("HAPTIC_FEEDBACK", comment: ""),
                     isOn: $isHapticEnabled,
-                    onColor: Color(hex: "#FF699B")
+                    onColor: appColors.text
                 ) { newValue in
                     AppStorageManager.shared.isHapticEnabled = newValue
                 }
@@ -314,7 +313,7 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: NSLocalizedString("VOICE_INSTRUCTIONS", comment: ""),
                     isOn: $isSpeechEnabled,
-                    onColor: Color(hex: "#FF699B")
+                    onColor: appColors.text
                 ) { newValue in
                     AppStorageManager.shared.isSpeechEnabled = newValue
                 }

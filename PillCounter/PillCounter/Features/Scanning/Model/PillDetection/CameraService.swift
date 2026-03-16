@@ -327,6 +327,37 @@ extension CameraService {
             }
         }
     }
+    
+    func captureSnapshot() -> UIImage? {
+        
+        guard let pixelBuffer = lastPixelBuffer else { return nil }
+
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+
+        guard let cgImage = ciContext.createCGImage(
+            ciImage,
+            from: ciImage.extent
+        ) else { return nil }
+
+        let size = CGSize(
+            width: ciImage.extent.width,
+            height: ciImage.extent.height
+        )
+
+        let renderer = UIGraphicsImageRenderer(size: size)
+
+        return renderer.image { ctx in
+            let context = ctx.cgContext
+
+            context.saveGState()
+            context.translateBy(x: 0, y: size.height)
+            context.scaleBy(x: 1, y: -1)
+
+            context.draw(cgImage, in: CGRect(origin: .zero, size: size))
+
+            context.restoreGState()
+        }
+    }
 
     /// DRAWS NUMBERED BADGE OVER DETECTION RECT
     private func drawBadge(

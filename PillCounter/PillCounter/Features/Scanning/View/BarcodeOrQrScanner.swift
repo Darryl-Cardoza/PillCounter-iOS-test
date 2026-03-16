@@ -493,7 +493,11 @@ extension QRBarcodeScannerView {
                         }
                         
                         if router.selectedPillScanningType == .FIXED {
-                            showPillTargetCountPopup = true
+                            if pillScanViewModel.selectedTransaction?.is_from_pms == true {
+                                pillScanViewModel.manualEnterdControlledDrug(scannedNdc: pillScanViewModel.ndcNumber)
+                            }else {
+                                showPillTargetCountPopup = true
+                            }
                         } else {
                             Task {
                                 if isFromScanning {
@@ -618,7 +622,6 @@ extension QRBarcodeScannerView {
                     verticalPadding: 18,
                     iconSize: 0,
                     action: {
-
                         guard !pillScanViewModel.ndcNumber
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                             .isEmpty else {
@@ -635,7 +638,11 @@ extension QRBarcodeScannerView {
                         }
 
                         if router.selectedPillScanningType == .FIXED {
-                            showPillTargetCountPopup = true
+                            if pillScanViewModel.selectedTransaction?.is_from_pms == true {
+                                pillScanViewModel.manualEnterdControlledDrug(scannedNdc: pillScanViewModel.ndcNumber)
+                            }else {
+                                showPillTargetCountPopup = true
+                            }
                         } else {
                             Task {
                                 if isFromScanning {
@@ -976,8 +983,9 @@ extension QRBarcodeScannerView {
 
             onConfirm: {
                 if pillScanViewModel.isNdcEquivalent {
-                    guard let scannedData else { return }
-
+    
+                    let valueToSend = (scannedData?.isEmpty ?? true) ? pillScanViewModel.ndcNumber : scannedData!
+                    
                     Task { @MainActor in
 
                         guard let txnId = pillScanViewModel.selectedTransaction?.txn_id else { return }
@@ -986,7 +994,7 @@ extension QRBarcodeScannerView {
 
                         await pillScanViewModel.updateSubstitutedDrug(
                             txnId: txnId,
-                            rawValue: scannedData,
+                            rawValue: valueToSend,
                             countType: router.selectedPillScanningType ?? .FIXED,
                             image: image
                         )
@@ -1019,7 +1027,6 @@ extension QRBarcodeScannerView {
         pillScanViewModel.showNdcEquivalencePopup = false
     }
 }
-
 
 @discardableResult
 func DLOG(_ msg: String) -> Bool {

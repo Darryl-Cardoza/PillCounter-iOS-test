@@ -259,7 +259,7 @@ extension BaseView {
 
                 // Inject the custom actions here
                 headerActions()
-//                    .padding(6)
+
 
                 if showHamburgerMenu {
                     hamburgerMenuButton

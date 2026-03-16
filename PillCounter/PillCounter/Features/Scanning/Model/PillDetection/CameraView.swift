@@ -89,43 +89,49 @@ final class PreviewView: UIView {
 // MARK: - Detection Overlay
 
 struct DetectionOverlay: View {
+    
 
     @ObservedObject var cameraService: CameraService
     @EnvironmentObject var appColors: AppColors
+    var currentStep: ControlledStep
 
     var body: some View {
         GeometryReader { _ in
-            ZStack(alignment: .topLeading) {
-
-                // Draw only when preview layer & session are valid
-                if let layer = cameraService.previewLayer,
-                    layer.session != nil
-                {
-                    ForEach(
-                        Array(cameraService.detections.enumerated()),
-                        id: \.offset
-                    ) { _, det in
-
-                        let screenRect = getScreenRect(
-                            for: det,
-                            using: layer
-                        )
-
-                        let badgeSize: CGFloat = 20
-
-                        Circle()
-                            .fill(Color.black.opacity(0.8))
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white, lineWidth: 2)
+            if currentStep == .vial {
+                EmptyView()
+            } else {
+                ZStack(alignment: .topLeading) {
+                    
+                    // Draw only when preview layer & session are valid
+                    if let layer = cameraService.previewLayer,
+                       layer.session != nil
+                    {
+                        ForEach(
+                            Array(cameraService.detections.enumerated()),
+                            id: \.offset
+                        ) { _, det in
+                            
+                            let screenRect = getScreenRect(
+                                for: det,
+                                using: layer
                             )
-                            .frame(width: badgeSize, height: badgeSize)
-                            .position(
-                                x: screenRect.midX,
-                                y: screenRect.midY
-                            )
+                            
+                            let badgeSize: CGFloat = 20
+                            
+                            Circle()
+                                .fill(Color.black.opacity(0.8))
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 2)
+                                )
+                                .frame(width: badgeSize, height: badgeSize)
+                                .position(
+                                    x: screenRect.midX,
+                                    y: screenRect.midY
+                                )
+                        }
+                        
                     }
-
                 }
             }
         }

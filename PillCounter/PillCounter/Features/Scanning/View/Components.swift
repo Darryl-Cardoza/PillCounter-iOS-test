@@ -16,7 +16,7 @@ struct CameraContentView: View {
     @State private var isAutoOrManual: Bool = false // this variable is to handle the auto detection capture.
     @Environment(\.isLandscape) private var isLandscape
     
-
+    var isCameraEnabled: Bool
     
     var body: some View {
         ZStack {
@@ -31,13 +31,22 @@ struct CameraContentView: View {
                     .task {
                         cameraService.configureInitialOrientation()
                         cameraService.startObservingOrientation()
-                        cameraService.start()
+
+                        if isCameraEnabled {
+                            cameraService.start()
+                        }
+                    }
+                    .onChange(of: isCameraEnabled) { _, enabled in
+                        if enabled {
+                            cameraService.start()
+                        } else {
+                            cameraService.stop()
+                        }
                     }
                     .onDisappear { cameraService.stop() }
-  
-  
-                    DetectionOverlay(cameraService: cameraService)
-                        .ignoresSafeArea()
+                    DetectionOverlay(cameraService: cameraService, currentStep: pillScanViewModel.currentControlledStep)
+                            .ignoresSafeArea()
+                
                     //Toggle
                     //                    VStack {
                     //                        HStack {
@@ -57,8 +66,6 @@ struct CameraContentView: View {
                         .padding(.top, isLandscape ? 0 : 30)
                     
                     VStack {
-//                        ZoomControlView(cameraService: cameraService)
-                     
                         ControlledStepRow(
                             activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                             currentStep: pillScanViewModel.currentControlledStep
@@ -179,8 +186,8 @@ struct ZoomControlViewVertical: View {
     private let minZoom: CGFloat = 1.0
     private let maxZoom: CGFloat = 2.0
 
-    private let trackWidth:  CGFloat = 2
-    private let thumbSize:   CGFloat = 22
+    private let trackWidth: CGFloat = 2
+    private let thumbSize: CGFloat = 22
     private let verticalPadding: CGFloat = 50
 
     var body: some View {
@@ -189,24 +196,31 @@ struct ZoomControlViewVertical: View {
             let height       = geo.size.height
             let usableHeight = height - (verticalPadding * 2)
             let percentage   = (cameraService.zoomFactor - minZoom) / (maxZoom - minZoom)
+
             // top = maxZoom, bottom = minZoom
-            let thumbY       = height - verticalPadding - (usableHeight * percentage)
+            let thumbY = height - verticalPadding - (usableHeight * percentage)
 
             ZStack {
 
-                // ── White vertical track line ──
+                // Track
                 Rectangle()
-                    .fill(Color.white)
+                    .fill(appColors.secondary)
                     .frame(width: trackWidth, height: usableHeight)
                     .position(x: geo.size.width / 2, y: height / 2)
 
-                // ── Pink circular thumb ──
+                // Zoom text (placed before circle)
+                Text(String(format: "%.1fx", cameraService.zoomFactor))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .position(x: geo.size.width / 2 - 28, y: thumbY)
+
+                // Circle (UNCHANGED POSITION)
                 Circle()
-                    .fill(appColors.secondary)
+                    .fill(.white)
                     .frame(width: thumbSize, height: thumbSize)
                     .position(x: geo.size.width / 2, y: thumbY)
 
-                // ── Invisible drag overlay ──
+                // Drag overlay
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
@@ -230,14 +244,13 @@ struct ZoomControlViewVertical: View {
                     )
             }
         }
-        .frame(width: 44)
-        .padding(.vertical, 60)
+        .frame(width: 44, height: 340)
         .allowsHitTesting(!cameraService.isPausedDueToInactivity)
     }
 }
 
+// Top Step instrcution box
 struct PillCountInstructionOverlay: View {
-
     let text: String
     var backgroundOpacity: Double = 0.5
     var cornerRadius: CGFloat = 24
@@ -245,11 +258,11 @@ struct PillCountInstructionOverlay: View {
     var body: some View {
         Text(text)
             .font(.headline)
-            .foregroundColor(.white)
+            .foregroundColor(AppColors.shared.text)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(
-                Color.black.opacity(backgroundOpacity)
+                AppColors.shared.primaryBackground.opacity(backgroundOpacity)
             )
             .cornerRadius(cornerRadius)
     

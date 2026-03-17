@@ -49,12 +49,11 @@ struct PillCounterApp: App {
         WindowGroup {
             Group {
                 // 1️⃣ Security violation (highest priority)
-//                if !securityState.isSecure {
-//                    SecurityViolationView()
-//                        .environmentObject(appColors)
-//                    // 2️⃣ Force Update
-//                } else
-                if userViewModel.isForceUpdate {
+                if !securityState.isSecure {
+                    SecurityViolationView()
+                        .environmentObject(appColors)
+                    // 2️⃣ Force Update
+                } else if userViewModel.isForceUpdate {
                     ForceUpdateView()
                         .environmentObject(appColors)
 

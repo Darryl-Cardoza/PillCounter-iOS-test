@@ -262,6 +262,29 @@ final class CameraService: NSObject, ObservableObject {
         default: return 90
         }
     }
+    
+    private func ciImageOriented(
+        _ image: CIImage,
+        orientation: UIDeviceOrientation
+    ) -> CIImage {
+
+        switch orientation {
+        case .portrait:
+            return image.oriented(.right)
+
+        case .landscapeLeft:
+            return image
+
+        case .landscapeRight:
+            return image.oriented(.down)
+
+        case .portraitUpsideDown:
+            return image.oriented(.left)
+
+        default:
+            return image.oriented(.right)
+        }
+    }
 }
 
 // MARK: - SAMPLE BUFFER DELEGATE
@@ -329,36 +352,21 @@ extension CameraService {
     }
     
     func captureSnapshot() -> UIImage? {
-        
+
         guard let pixelBuffer = lastPixelBuffer else { return nil }
 
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let rawImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let ciImage = ciImageOriented(rawImage, orientation: currentCameraOrientation)
 
         guard let cgImage = ciContext.createCGImage(
             ciImage,
             from: ciImage.extent
         ) else { return nil }
 
-        let size = CGSize(
-            width: ciImage.extent.width,
-            height: ciImage.extent.height
-        )
-
-        let renderer = UIGraphicsImageRenderer(size: size)
-
-        return renderer.image { ctx in
-            let context = ctx.cgContext
-
-            context.saveGState()
-            context.translateBy(x: 0, y: size.height)
-            context.scaleBy(x: 1, y: -1)
-
-            context.draw(cgImage, in: CGRect(origin: .zero, size: size))
-
-            context.restoreGState()
-        }
+        return UIImage(cgImage: cgImage)
     }
-
+    
+    
     /// DRAWS NUMBERED BADGE OVER DETECTION RECT
     private func drawBadge(
         context: CGContext,

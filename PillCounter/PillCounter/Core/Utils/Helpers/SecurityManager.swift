@@ -21,6 +21,7 @@ struct SecurityManager {
             || isDebuggerAttached()
             || isRunningOnSimulator()
             || isTampered()
+        
     }
 
     // MARK: - JAILBREAK DETECTION

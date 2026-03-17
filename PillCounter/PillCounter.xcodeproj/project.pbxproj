@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		790300082F6986C300A4FDB7 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 790300072F6986C300A4FDB7 /* ComposeApp */; };
 		799F7DED2F31EB15008701B3 /* android-server.p12 in Resources */ = {isa = PBXBuildFile; fileRef = 799F7DEC2F31EB15008701B3 /* android-server.p12 */; };
-		799F80902F334E4D008701B3 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 799F808F2F334E4D008701B3 /* ComposeApp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,7 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				799F80902F334E4D008701B3 /* ComposeApp in Frameworks */,
+				790300082F6986C300A4FDB7 /* ComposeApp in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,6 +99,7 @@
 				473A48F72EB4F11200EEA905 /* PillCounter */,
 				473A490E2EB4F11300EEA905 /* PillCounterTests */,
 				473A49182EB4F11300EEA905 /* PillCounterUITests */,
+				790300062F6986C300A4FDB7 /* Frameworks */,
 				473A48F62EB4F11200EEA905 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -111,6 +112,13 @@
 				473A49152EB4F11300EEA905 /* PillCounterUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		790300062F6986C300A4FDB7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -133,7 +141,7 @@
 			);
 			name = PillCounter;
 			packageProductDependencies = (
-				799F808F2F334E4D008701B3 /* ComposeApp */,
+				790300072F6986C300A4FDB7 /* ComposeApp */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -221,7 +229,7 @@
 			mainGroup = 473A48EC2EB4F11200EEA905;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				799F80972F337B9D008701B3 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
+				790300052F69867100A4FDB7 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -654,15 +662,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		799F80972F337B9D008701B3 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
+		790300052F69867100A4FDB7 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage";
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		799F808F2F334E4D008701B3 /* ComposeApp */ = {
+		790300072F6986C300A4FDB7 /* ComposeApp */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 790300052F69867100A4FDB7 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */;
 			productName = ComposeApp;
 		};
 /* End XCSwiftPackageProductDependency section */

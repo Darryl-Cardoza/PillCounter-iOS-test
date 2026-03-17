@@ -25,7 +25,7 @@ class PillScanViewModel: ObservableObject {
     let userRepo = UserRepository.shared
 
     // published properties.
-    @Published var drugName: String?
+    @Published var drugName: String
 
     @Published var drugNameMannuallyEntered: String = ""
     @Published var isDrugFound: Bool?
@@ -76,7 +76,7 @@ class PillScanViewModel: ObservableObject {
     @Published var ndcComparisonResponse: NdcComparisonResponse?
     @Published var isNdcEquivalent: Bool = false
     @Published var showNdcEquivalencePopup = false
-    
+    @Published var shouldAutoProceedToCount = false
     
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
@@ -164,8 +164,7 @@ class PillScanViewModel: ObservableObject {
         countType: CountType,
         image: UIImage? = nil
     ) {
-
-
+        
         let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
         let gtin = decodedGs1Value.gtin ?? ""
 
@@ -173,7 +172,6 @@ class PillScanViewModel: ObservableObject {
         if gtin.isEmpty {
             return
         }
-
 
         // Generate potential ID
         var drugIdToUse = generateUniqueDrugId()
@@ -222,7 +220,6 @@ class PillScanViewModel: ObservableObject {
     }
 
 
-
     private func generateUniqueDrugId() -> Int64 {
         let defaults = UserDefaults.standard
 
@@ -242,7 +239,7 @@ class PillScanViewModel: ObservableObject {
     
     func manuallyEnteredPill(
            ndc: String, countType: CountType, isFixedCount: Bool = false
-       ) async {
+    ) async {
 
            // check in the database first
            if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(
@@ -353,6 +350,7 @@ class PillScanViewModel: ObservableObject {
            }
        }
 
+    
     func manualEntryDirectUpsert(
         ndc: String,
         drugName: String,
@@ -539,7 +537,18 @@ class PillScanViewModel: ObservableObject {
                     step: currentControlledStep
                 )
     }
+    
+    func addOrReplaceVialTransactionDetail(imagePath: String?) {
+        guard let txnId = currentTransaction?.txn_id else {
+            return
+        }
 
+        pillDataLocalStorage.addOrReplaceVialTransactionDetail(
+            txnId: txnId,
+            imagePath: imagePath
+        )
+    }
+    
     // function to add transaction detail to the current transaction.
     // this will be the function which will get the pill count from the model, the image path that we will capture and store it in the db.
     func addTransactionDetailToCurrentTransaction(
@@ -662,7 +671,6 @@ class PillScanViewModel: ObservableObject {
 //    }
 
     func getCurrentTransaction(txnId: Int64) async {
-
         // Fetch transaction
         currentTransaction =
             pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
@@ -780,16 +788,13 @@ class PillScanViewModel: ObservableObject {
     ) async {
 
         guard let order = message.order else {
-            print("HL7 Error: Missing ORC segment")
             callback?(false)
             return
         }
 
         let orderId = order.placerOrderId
-        print("PMS Order ID: \(orderId)")
 
         guard !message.medications.isEmpty else {
-            print("HL7 Error: No RXE medication segments")
             callback?(false)
             return
         }
@@ -854,7 +859,6 @@ class PillScanViewModel: ObservableObject {
     private func classifyInboundMessage(
         _ message: CompleteHL7Message
     ) -> CountType? {
-
         if message.messageType == "RDE",
            message.triggerEvent == "O11",
            !message.medications.isEmpty {
@@ -866,7 +870,6 @@ class PillScanViewModel: ObservableObject {
            !message.inventoryItems.isEmpty {
             return .REGULAR
         }
-
         return nil
     }
 
@@ -970,9 +973,6 @@ extension PillScanViewModel{
 
         return nil
     }
-
-
-    
     
     func getCurrentControlledTransaction(txnId: Int64) async {
 
@@ -997,9 +997,6 @@ extension PillScanViewModel{
     
     
     // MARK: - Update Target Count
-    
-
-    
     func updateControlledTargetCount() {
 
         guard let txn = currentTransaction else { return }
@@ -1105,8 +1102,6 @@ extension PillScanViewModel{
             return
         }
 
-        let steps = PillCountingStepResolver.getActiveSteps(txn: txn)
-
         // Fetch last saved step
         guard let lastStep = pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id) else {
             if txn.is_from_pms == true {
@@ -1118,18 +1113,6 @@ extension PillScanViewModel{
             updateControlledTargetCount()
             return
         }
-
-
-//        if lastStep == .vial {
-//            if steps.contains(.containerPending) {
-//                currentControlledStep = .containerPending
-//            } else {
-//                currentControlledStep = .containerPending
-//            }
-//
-//            updateControlledTargetCount()
-//            return
-//        }
 
         currentControlledStep = lastStep
         updateControlledTargetCount()

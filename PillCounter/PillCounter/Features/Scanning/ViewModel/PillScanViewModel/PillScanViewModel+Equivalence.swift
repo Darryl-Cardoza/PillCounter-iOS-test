@@ -7,7 +7,6 @@
 
 extension PillScanViewModel {
     
-    //
     func checkIsNdcMatch(rawValueFromBarcodeOrQr: String) -> Bool {
         
         let decoded = decoder.decode(rawValueFromBarcodeOrQr)
@@ -41,7 +40,6 @@ extension PillScanViewModel {
     }
     
     func getControlledDrugInfo(targetNdc: String, scannedNdc: String) {
-
         let request = NdcValidationRequest(
             targetNdc: targetNdc,
             scannedNdc: scannedNdc
@@ -53,12 +51,14 @@ extension PillScanViewModel {
             do {
                 let response = try await controlledRepo
                     .getControlledDrugInfo(ndcValidationRequest: request)
-
                 ndcComparisonResponse = response
                 isNdcEquivalent = response.data?.isNdcEquivalent ?? false
-
-                showNdcEquivalencePopup = true
-
+                let isNdcSame = response.data?.isNdcSame ?? false
+                if isNdcEquivalent && isNdcSame {
+                    showNdcEquivalencePopup = true
+                }else{
+                    shouldAutoProceedToCount = true
+                }
             } catch {
                 showNdcEquivalencePopup = true
                 isNdcEquivalent = false
@@ -67,7 +67,6 @@ extension PillScanViewModel {
         }
     }
     
-
     func markNdcVerified() {
         if let txnId = selectedTransaction?.txn_id {
             PillsDataLocalStorage.shared.updateNdcVerified(

@@ -19,9 +19,6 @@ struct UserSettingsView: View {
     @State private var isBackCountRequired =
         AppStorageManager.shared.isBackCountRequired
 
-    @State private var isAdjustReasonRequired =
-        AppStorageManager.shared.isAdjustReasonRequired
-
     @State private var isHapticEnabled =
         AppStorageManager.shared.isHapticEnabled
 
@@ -235,15 +232,15 @@ struct UserSettingsView: View {
                 Divider().background(appColors.text)
 
                 // MARK: Adjust Reason
-                ToggleRowView(
-                    title: NSLocalizedString("REQUIRED_ADJUST_REASON", comment: ""),
-                    isOn: $isAdjustReasonRequired,
-                    onColor: Color(hex: "#FF699B")
-                ) { newValue in
-                    AppStorageManager.shared.isAdjustReasonRequired = newValue
-                }
-
-                Divider().background(appColors.text)
+//                ToggleRowView(
+//                    title: NSLocalizedString("REQUIRED_ADJUST_REASON", comment: ""),
+//                    isOn: $isAdjustReasonRequired,
+//                    onColor: Color(hex: "#FF699B")
+//                ) { newValue in
+//                    AppStorageManager.shared.isAdjustReasonRequired = newValue
+//                }
+//
+//                Divider().background(appColors.text)
 
                 // MARK: Save History Title
                 Text(NSLocalizedString("SAVE_HISTORY", comment: ""))
@@ -290,7 +287,7 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: NSLocalizedString("SOUND_FEEDBACK", comment: ""),
                     isOn: $isSoundEnabled,
-                    onColor: appColors.text
+                    onColor: appColors.secondary
                 ) { newValue in
                     AppStorageManager.shared.isSoundEnabled = newValue
                 }
@@ -302,7 +299,7 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: NSLocalizedString("HAPTIC_FEEDBACK", comment: ""),
                     isOn: $isHapticEnabled,
-                    onColor: appColors.text
+                    onColor: appColors.secondary
                 ) { newValue in
                     AppStorageManager.shared.isHapticEnabled = newValue
                 }
@@ -313,7 +310,7 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: NSLocalizedString("VOICE_INSTRUCTIONS", comment: ""),
                     isOn: $isSpeechEnabled,
-                    onColor: appColors.text
+                    onColor: appColors.secondary
                 ) { newValue in
                     AppStorageManager.shared.isSpeechEnabled = newValue
                 }

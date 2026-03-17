@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+
 struct OPillCountView: View {
     
     // MARK: - ENVIRONMENT
@@ -30,8 +31,7 @@ struct OPillCountView: View {
 
     @State private var addNoteSettings: Bool = AppStorageManager.shared
         .isPillCountingEnabled
-    @State private var showAdjustNote: Bool = AppStorageManager.shared
-        .isAdjustReasonRequired
+
 
     @State private var showTransactionHistory: Bool = true
 
@@ -75,7 +75,7 @@ struct OPillCountView: View {
                         .environment(\.colorScheme, .light)
 
                         if let capturedImage = capturedVialImage {
-                            Image(uiImage: capturedImage)
+                            Image(uiImage: capturedImage.fixOrientation())
                                 .resizable()
                                 .scaledToFill()
                                 .ignoresSafeArea()
@@ -239,7 +239,6 @@ struct OPillCountView: View {
         SpeechManager.shared.speak(step.displayText)
         pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
     }
-
 }
 
 
@@ -561,7 +560,6 @@ extension OPillCountView {
 
         return message
     }
-
     // Popup confirming session end if target not met.
     private var showConfirmCompletion: some View {
         ConfirmationDialogue(
@@ -608,11 +606,7 @@ extension OPillCountView {
                 showCountMismatchPopup = false
             },
             onConfirm: {
-                if showAdjustNote {
-                    showNoteOption = true
-                } else {
-                    pillScanViewModel.handleStepCompletion()
-                }
+                showNoteOption = true
                 showCountMismatchPopup = false
             }
         )
@@ -626,10 +620,14 @@ extension OPillCountView {
             confirmButtonText: "OK",
             onCancel: {
                 showStepCompletionPopup = false
+                capturedVialImage = nil
+                vialCapturedImagePath = nil
             },
             onConfirm: {
                 showStepCompletionPopup = false
                 pillScanViewModel.handleStepCompletion()
+                capturedVialImage = nil
+                vialCapturedImagePath = nil
             }
         )
     }
@@ -720,13 +718,13 @@ extension OPillCountView {
 
                             await MainActor.run {
                                 // Controlled drug → move to next step
-                                if pillScanViewModel.currentTransaction?.is_from_pms == true {
-                                    pillScanViewModel.handleStepCompletion()
-
-                                } else {
+//                                if pillScanViewModel.currentTransaction?.is_from_pms == true {
+//                                    pillScanViewModel.handleStepCompletion()
+//                                      
+//                                } else {
                                     // Normal drug → completion popup
                                     showConfirmCompletionPopup = true
-                                }
+//                                }z
                             }
                         }
                     }
@@ -951,7 +949,7 @@ extension OPillCountView {
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
         
         guard pillScanViewModel.canCompleteStep(stepTotal: stepTotal) else {
-            if nextStep == .vial {
+            if nextStep == nil {
                 showCountMismatchPopup = true
             } else {
                 pillScanViewModel.showToastMessage(text:"Count is less than target.")
@@ -961,7 +959,7 @@ extension OPillCountView {
         
         // Last step for normal flowz
         if nextStep == nil {
-            if showAdjustNote && pillScanViewModel.currentTransaction?.is_from_pms != true {
+            if pillScanViewModel.currentTransaction?.is_from_pms != true {
                 showNoteOption = true
             } else {
                 showConfirmCompletionPopup = true
@@ -1004,36 +1002,26 @@ extension OPillCountView {
     private func handleVialDone() {
         
         let isPmsTxn = pillScanViewModel.currentTransaction?.is_from_pms ?? false
-        
+        let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
+        let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
+
         guard let imagePath = vialCapturedImagePath else {
             pillScanViewModel.showToastMessage(text:"Capture the image first." )
             return
         }
-        
+    
         // Save vial image
-        pillScanViewModel.addTransactionDetailToCurrentTransaction(
-            pillCount: 0,
-            imagePath: imagePath,
-            type: ControlledStep.vial.rawValue
+        pillScanViewModel.addOrReplaceVialTransactionDetail(
+            imagePath: imagePath
         )
-        
-        // Clear captured image
-        capturedVialImage = nil
-        vialCapturedImagePath = nil
-        
-        let stepTotal = Int(pillScanViewModel.getTotalCuntForCurrentStep())
-        
-        // Validate final count
-        guard pillScanViewModel.canCompleteStep(stepTotal: stepTotal) else {
-            showCountMismatchPopup = true
-            return
-        }
         
         // Normal completion flow
         if addNoteSettings && !isPmsTxn {
             showNoteOption = true
-        } else {
+        } else if nextStep == nil {
             showConfirmCompletionPopup = true
+        } else {
+            showStepCompletionPopup = true
         }
     }
 }

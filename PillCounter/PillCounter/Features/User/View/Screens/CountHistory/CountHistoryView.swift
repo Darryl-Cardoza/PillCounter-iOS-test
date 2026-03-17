@@ -303,109 +303,74 @@ struct CountHistoryView: View {
     }
 
     // MARK: - CONTENT VIEW
-//    private var contentView: some View {
-//        VStack {
-//            
-//            filterTabs
-//                .padding(.vertical, 5)
-//
-//            
-//            if isEditing {
-//                HStack {
-//
-//                    Text("\(selectedTxnIds.count) Selected")
-//                        .font(.system(size: 14, weight: .bold))
-//                        .foregroundStyle(appColors.text.opacity(0.6))
-//
-//                    Spacer()
-//
-//                    Text("Tap item(s) to delete.")
-//                        .font(.system(size: 14, weight: .medium))
-//                        .foregroundStyle(appColors.secondary)
-//                }
-//                .padding(.horizontal, 16)
-//                .padding(.top, 10)
-//            }
-//
-//            ScrollView(showsIndicators: false) {
-//                VStack(spacing: 16) {
-//
-//                    ForEach(filteredTransactions, id: \.txn_id) { txn in
-////                        let counted =
-////                            userViewModel.actualCountedPillsForTheTransactions[
-////                                txn.txn_id] ?? 0
-//                        
-//                        let details = Array(txn.pillCountTransactionDetails ?? [])
-//
-//                        let counted = pillScanViewmodel.getTotalPillCountOfCurrentTransactionByType(
-//                            type: .targetVerification,
-//                            details: details
-//                        )
-//                        
-//                        let counted = userViewModel.actualCountedPillsForTheTransactions[txn.txn_id] ?? 0
-//                        
-//                        
-//                        listItem(
-//                            txnId: txn.txn_id,  // Pass ID for selection logic
-//                            name: txn.drug?.drug_name ?? "N/A",
-//                            date:  "\(Formatter.getDateString(from: txn.created_at)) • " +
-//                            "\(Formatter.getTimeString(from: txn.created_at))",
-//                            trailingText: "\(0)"
-//                                + (router.selectedPillScanningType == .FIXED
-//                                    ? " / \(txn.target_count)" : ""),
-//                            icon: "ellipsis",
-//                            barcodeImagePath: txn.barcode_image,
-//                            isFromPms: txn.isComingFromPms,
-//                            onIconTap: {
-//                                // Only allow menu options if NOT editing
-//                                if !isEditing {
-//                                    showMenuOptions = true
-//                                    selectedTransasctionId = txn.txn_id
-//                                    userViewModel.currentTransactionTxnId =
-//                                        txn.txn_id
-//                                }
-//                            }
-//                        )
-//                        // Add tap gesture to the whole row to toggle selection in Edit Mode
-//                        .onTapGesture {
-//                            if isEditing {
-//                                toggleSelection(for: txn.txn_id)
-//                            }
-//                        }
-//                    }
-//
-//                    if filteredTransactions.isEmpty {
-//                        VStack(spacing: 10) {
-//                            Image(systemName: "magnifyingglass")
-//                                .font(.system(size: 40))
-//                                .foregroundColor(.gray.opacity(0.5))
-//                            Text("No transactions found")
-//                                .foregroundColor(.gray)
-//                        }
-//                        .padding(.top, 60)
-//                    }
-//                }
-//                .padding(.horizontal, 16)
-//                .padding(.bottom, 20)
-//            }
-//        }
-//        .padding(.top, 90)
-//        .padding(.horizontal, isLandscape ? SafeAreaInsets.leading + 5 : 0)
-//        .frame(maxWidth: .infinity, maxHeight: .infinity)
-//        .background(appColors.primaryBackground)
-//    }
-    
-    
     private var contentView: some View {
         VStack {
-
+            
             filterTabs
                 .padding(.vertical, 5)
 
+            
+            if isEditing {
+                HStack {
+
+                    Text("\(selectedTxnIds.count) Selected")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(appColors.text.opacity(0.6))
+
+                    Spacer()
+
+                    Text("Tap item(s) to delete.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(appColors.secondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+            }
+
             ScrollView(showsIndicators: false) {
-                transactionsList
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 20)
+                VStack(spacing: 16) {
+
+                    ForEach(filteredTransactions, id: \.txn_id) { (txn: PillCountTransactionEntity) in
+
+                        let counted = PillsDataLocalStorage.shared.getTotalCountForStep(
+                            txnId: txn.txn_id,
+                            step: .targetVerification
+                        )
+
+                        listItem(
+                            txnId: txn.txn_id,
+                            name: txn.drug?.drug_name ?? "N/A",
+                            date: "\(Formatter.getDateString(from: txn.created_at)) • " +
+                                  "\(Formatter.getTimeString(from: txn.created_at))",
+                            trailingText: "\(counted)"
+                                + (router.selectedPillScanningType == .FIXED
+                                    ? " / \(txn.target_count)" : ""),
+                            icon: "ellipsis",
+                            barcodeImagePath: txn.barcode_image,
+                            isFromPms: txn.is_from_pms,
+                            onIconTap: {
+                                if !isEditing {
+                                    showMenuOptions = true
+                                    selectedTransasctionId = txn.txn_id
+                                    userViewModel.currentTransactionTxnId = txn.txn_id
+                                }
+                            }
+                        )
+                    }
+
+                    if filteredTransactions.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray.opacity(0.5))
+                            Text("No transactions found")
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.top, 60)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 20)
             }
         }
         .padding(.top, 90)
@@ -413,6 +378,23 @@ struct CountHistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
+    
+    
+//    private var contentView: some View {
+//        VStack {
+//            filterTabs
+//                .padding(.vertical, 5)
+//            ScrollView(showsIndicators: false) {
+//                transactionsList
+//                    .padding(.horizontal, 16)
+//                    .padding(.bottom, 20)
+//            }
+//        }
+//        .padding(.top, 90)
+//        .padding(.horizontal, isLandscape ? SafeAreaInsets.leading + 5 : 0)
+//        .frame(maxWidth: .infinity, maxHeight: .infinity)
+//        .background(appColors.primaryBackground)
+//    }
     
     private var transactionsList: some View {
         VStack(spacing: 16) {

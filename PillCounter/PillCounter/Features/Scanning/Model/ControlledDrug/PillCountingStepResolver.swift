@@ -56,13 +56,12 @@ struct PillCountingStepResolver {
            selectedSchedules.contains(drugSchedule) {
            steps.append(.targetReverification)
         }
-
+        
+        steps.append(.vial)
 
         if backCountRequired {
             steps.append(.containerPending)
         }
-        
-        steps.append(.vial)
 
         return steps
     }

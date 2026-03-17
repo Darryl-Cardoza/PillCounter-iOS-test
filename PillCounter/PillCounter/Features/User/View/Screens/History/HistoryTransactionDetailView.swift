@@ -361,6 +361,7 @@ struct HistoryTransactionDetailView: View {
         let detailsArray =
             (transaction?.pillCountTransactionDetails?.allObjects
             as? [PillCountTransactionDetailsEntity])?
+            .filter { !$0.is_deleted }
             .sorted(by: { $0.created_at < $1.created_at }) ?? []
 
         return LazyHGrid(rows: rows, spacing: 16) {
@@ -516,9 +517,11 @@ struct HistoryTransactionDetailView: View {
         let detailsArray =
             (transaction.pillCountTransactionDetails?.allObjects
                 as? [PillCountTransactionDetailsEntity]) ?? []
+
         return pillScanViewModel.getTotalPillCountOfCurrentTransactionByType(
             type:.targetVerification,
-            details: detailsArray
+            details: detailsArray.filter { !$0.is_deleted }
+
         )
     }
 

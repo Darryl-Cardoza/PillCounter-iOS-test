@@ -126,8 +126,6 @@ struct UserHistoryView: View {
         .onChange(of: endDate) { _, _ in
             fetchTransactions()
         }
-
-
         .customPopup(isPresented: $showDeleteConfirmation) {
             deleteConfirmationPopUp
         }
@@ -448,8 +446,7 @@ struct TransactionRow: View {
                 as? [PillCountTransactionDetailsEntity]) ?? []
         return pillScanViewModel.getTotalPillCountOfCurrentTransactionByType(
             type:.targetVerification,
-            details: detailsArray
+            details: detailsArray.filter { !$0.is_deleted }
         )
     }
 }
-

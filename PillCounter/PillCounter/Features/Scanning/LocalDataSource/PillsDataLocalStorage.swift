@@ -909,6 +909,35 @@ final class PillsDataLocalStorage {
         print("✅ Transaction \(txnId) updated with new drug \(drugId)")
     }
     
+    //For Vial txn detail 
+    func addOrReplaceVialTransactionDetail(
+        txnId: Int64,
+        imagePath: String?
+    ) {
+
+        let context = mainThreadContext
+
+        context.performAndWait {
+
+            // Delete existing vial
+            softDeleteTransactionDetailsForStep(
+                txnId: txnId,
+                step: .vial
+            )
+
+            //  FORCE REFRESH CONTEXT (CRITICAL FIX)
+            context.refreshAllObjects()
+
+            //  Add new vial
+            addTransactionDetail(
+                txnId: txnId,
+                pillCount: 0,
+                imagePath: imagePath,
+                type: ControlledStep.vial.rawValue
+            )
+        }
+    }
+
     // MARK: DEBUGGING
     func debugPrintAllTransactions() {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()

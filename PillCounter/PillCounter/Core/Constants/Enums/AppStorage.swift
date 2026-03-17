@@ -33,7 +33,6 @@ final class AppStorageManager {
        static let isPillCountingEnabled = "isPillCountingEnabled"
        static let isDoubleCountRequired = "isDoubleCountRequired"
        static let isBackCountRequired = "isBackCountRequired"
-       static let isAdjustReasonRequired = "isAdjustReasonRequired"
        static let isHapticEnabled = "isHapticEnabled"
        static let isSoundEnabled = "isSoundEnabled"
        static let isSpeechEnabled = "isSpeechEnabled"
@@ -129,14 +128,6 @@ final class AppStorageManager {
         }
     }
     
-    var isAdjustReasonRequired: Bool {
-        get {
-            defaults.bool(forKey: AppStorageKeys.isAdjustReasonRequired)
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isAdjustReasonRequired)
-        }
-    }
     var isHapticEnabled: Bool {
         get {
             defaults.bool(forKey: AppStorageKeys.isHapticEnabled)
@@ -205,7 +196,6 @@ final class AppStorageManager {
     }
     
  
-
     // MARK: - Add email
     func addEmail(_ email: String) {
         guard !userSavedEmails.contains(email) else { return }

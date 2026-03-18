@@ -31,11 +31,11 @@ final class TrayDetectionService {
     private func loadModel() {
         do {
             let cfg = MLModelConfiguration()
-            cfg.computeUnits = .cpuOnly
+            cfg.computeUnits = .all
             model = try trayBest(configuration: cfg)
-            print("✅ Tray model loaded successfully")
+            print(" Tray model loaded successfully")
         } catch {
-            print("❌ TrayDetectionService: failed to load trayBest — \(error)")
+            print(" TrayDetectionService: failed to load trayBest — \(error)")
         }
     }
 

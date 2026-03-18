@@ -25,7 +25,7 @@ class PillScanViewModel: ObservableObject {
     let userRepo = UserRepository.shared
 
     // published properties.
-    @Published var drugName: String
+    @Published var drugName: String? = nil
 
     @Published var drugNameMannuallyEntered: String = ""
     @Published var isDrugFound: Bool?
@@ -102,7 +102,7 @@ class PillScanViewModel: ObservableObject {
             by: gtin)
         {
 
-            drugName = drugFoundInLocalStorage.drug_name
+            drugName = drugFoundInLocalStorage.drug_name ?? ""
 
             // FIX: Use the EXISTING ID from the database
             drugIdToUse = drugFoundInLocalStorage.drug_id
@@ -179,7 +179,7 @@ class PillScanViewModel: ObservableObject {
         if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(by: gtin) {
 
 
-            drugName = drugFoundInLocalStorage.drug_name
+            drugName = drugFoundInLocalStorage.drug_name ?? ""
 
             // Use existing ID
             drugIdToUse = drugFoundInLocalStorage.drug_id
@@ -220,7 +220,7 @@ class PillScanViewModel: ObservableObject {
     }
 
 
-    private func generateUniqueDrugId() -> Int64 {
+    func generateUniqueDrugId() -> Int64 {
         let defaults = UserDefaults.standard
 
         let current = defaults.integer(
@@ -246,7 +246,7 @@ class PillScanViewModel: ObservableObject {
                by: ndc)
            {
                isDrugFound = true
-               drugName = drugFoundInLocalStorage.drug_name
+               drugName = drugFoundInLocalStorage.drug_name ?? ""
                // after the drug is found from the db we create a new transaction.
                await createTransaction(
                    drugId: drugFoundInLocalStorage.drug_id, countType: countType)
@@ -371,7 +371,7 @@ class PillScanViewModel: ObservableObject {
 
             // Use existing drug
             drugIdToUse = existingDrug.drug_id
-            self.drugName = existingDrug.drug_name
+            self.drugName = existingDrug.drug_name ?? ""
 
         } else {
 
@@ -756,179 +756,7 @@ class PillScanViewModel: ObservableObject {
         }
     }
 
-    
-    func handleReceivedMessage(
-        message: CompleteHL7Message,
-        callback: HL7SimpleCallback? = nil
-    ){
-        print("Received message parsed message \(message)")
-        guard let inboundType = classifyInboundMessage(message) else {
-            return
-        }
-        
-        print("Message Type \(inboundType)")
-
-        Task(priority: .background) {
-            switch inboundType {
-            case .FIXED:
-                 await createFixedHl7Transaction(message:message, inboundType: .FIXED, callback: callback)
-
-            case .REGULAR:
-                 await createRegularHl7Transaction(message:message, inboundType: .REGULAR, callback: callback)
-            }
-        }
-    }
-    
-    
-    @MainActor
-    private func createFixedHl7Transaction(
-        message: CompleteHL7Message,
-        inboundType: CountType,
-        callback: HL7SimpleCallback? = nil
-    ) async {
-
-        guard let order = message.order else {
-            callback?(false)
-            return
-        }
-
-        let orderId = order.placerOrderId
-
-        guard !message.medications.isEmpty else {
-            callback?(false)
-            return
-        }
-
-        for medication in message.medications {
-
-            // RXE-2.1
-            let ndc = medication.drugCode.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            // RXE-2.2
-            let drugName = medication.drugName
-
-            // RXE-3
-            let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
-
-            print("""
-            PMS HL7 Request
-            Order: \(orderId)
-            Drug: \(drugName)
-            NDC: \(ndc)
-            Target Count: \(targetCount)
-            """)
-
-            await processHl7DrugAndCreateTransaction(
-                ndc: ndc,
-                drugName: drugName,
-                countType: inboundType,
-                targetCount: targetCount
-            )
-        }
-
-        callback?(true)
-    }
-    
-    @MainActor
-    private func createRegularHl7Transaction(
-        message: CompleteHL7Message,
-        inboundType: CountType,
-        callback: HL7SimpleCallback? = nil
-    ) async {
-    
-        guard let inventory = message.inventoryItems.first else {
-            print("Regular Count: No RXE medication found")
-            return
-        }
-
-        let ndc = inventory.substanceCode ?? ""
-        let drugName = inventory.description
-          
-        print("Regular Count Drug Info: \(ndc), \(drugName)")
-
-        await processHl7DrugAndCreateTransaction(
-            ndc: ndc,
-            drugName: drugName,
-            countType: inboundType
-        )
-        callback?(true)
-    }
-
-
-    
-    private func classifyInboundMessage(
-        _ message: CompleteHL7Message
-    ) -> CountType? {
-        if message.messageType == "RDE",
-           message.triggerEvent == "O11",
-           !message.medications.isEmpty {
-            return .FIXED
-        }
-
-        if message.messageType == "INR",
-           message.triggerEvent == "U06",
-           !message.inventoryItems.isEmpty {
-            return .REGULAR
-        }
-        return nil
-    }
-
-    
-    @MainActor
-    func processHl7DrugAndCreateTransaction(
-        ndc: String,
-        drugName: String,
-        countType: CountType,
-        targetCount: Int32? = nil
-    ) async {
-
-        print("🧾 HL7 Drug Processing → NDC: \(ndc), Name: \(drugName)")
-
-        var drugIdToUse: Int64
-
-        // 1️⃣ Check if drug exists
-        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
-
-            print("Drug found in DrugMaster (id: \(existingDrug.drug_id))")
-
-            drugIdToUse = existingDrug.drug_id
-            self.drugName = existingDrug.drug_name
-
-        } else {
-
-            // 2️⃣ Create new drug synchronously
-            drugIdToUse = generateUniqueDrugId()
-
-            print("Drug not found — creating new DrugMaster entry")
-
-            pillDataLocalStorage.saveManualPill(
-                ndc: ndc,
-                drugId: drugIdToUse,
-                drugName: drugName
-            )
-
-            self.drugName = drugName
-        }
-
-        // 3️⃣ Create transaction
-        await createTransaction(
-            drugId: drugIdToUse,
-            countType: countType,
-            isComingFromPms: true,
-            isControlled: true,
-            targetCount: targetCount,
-            drugName: drugName
-        )
-
-        // 4️⃣ Refresh transaction details
-        getAllTransactionDetailsOfTheCurrentTransaction()
-
-        // 5️⃣ Update target count if fixed
-        if countType == .FIXED {
-            updateTargetCountForCurrentTransaction()
-        }
-    }
-    
+ 
     
     // MARK: - HARD LOGOUT RESET
     @MainActor
@@ -959,220 +787,3 @@ class PillScanViewModel: ObservableObject {
 }
 
 
-//Controlled Drug
-extension PillScanViewModel{
-    
-    var activeTransaction: PillCountTransactionEntity? {
-        if let currentTransaction {
-            return currentTransaction
-        }
-
-        if let selectedTransaction {
-            return selectedTransaction
-        }
-
-        return nil
-    }
-    
-    func getCurrentControlledTransaction(txnId: Int64) async {
-
-        // Fetch transaction
-        currentTransaction =
-        pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
-            txnId: txnId
-        )
-
-        // Drug name
-        drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
-
-        // Load details
-        getAllTransactionDetailsOfTheCurrentTransaction()
-
-        // Restore correct step
-        getControlledStep()
-
-        // Calculate target for step
-        updateControlledTargetCount()
-    }
-    
-    
-    // MARK: - Update Target Count
-    func updateControlledTargetCount() {
-
-        guard let txn = currentTransaction else { return }
-        log("❌ updateControlledTargetCount: transaction missing")
-
-        let target = Int(txn.target_count)
-        log("Updating target for step \(currentControlledStep.rawValue) target \(target)")
-
-        let txnId = txn.txn_id
-
-        switch currentControlledStep {
-            
-        case .scan:
-            currentControlledTargetCount = 0
-            
-        case .containerInitiate:
-            currentControlledTargetCount = 0
-
-        case .targetVerification,
-             .targetReverification,
-             .vial:
-            currentControlledTargetCount = target
-
-        case .containerPending:
-
-            let containerCount =
-            pillDataLocalStorage.getTotalCountForStep(
-                txnId: txnId,
-                step: .containerInitiate
-            )
-
-            currentControlledTargetCount =
-            max(Int(containerCount) - target, 0)
-        }
-    }
-    
-    // Check is this step can be completed or not
-    func canCompleteStep(stepTotal: Int) -> Bool {
-
-        guard let txn = currentTransaction else { return false }
-
-        let target = Int(txn.target_count)
-
-        switch currentControlledStep {
-
-        case .containerInitiate:
-            return stepTotal > 0
-            
-        case .targetVerification:
-            if currentTransaction?.count_type == CountType.FIXED.rawValue {
-                return stepTotal == target
-            } else {
-                return stepTotal > 0
-            }
-            
-        case .targetReverification:
-            return stepTotal == target
-
-        case .containerPending:
-            let containerCount =
-            pillDataLocalStorage.getTotalCountForStep(
-                txnId: txn.txn_id,
-                step: .containerInitiate
-            )
-            let expected = Int(containerCount) - target
-            return stepTotal == expected
-            
-        case .vial:
-            return stepTotal == 0
-
-        default:
-            return false
-        }
-    }
-    
-    
-    func getTotalCuntForCurrentStep() -> Int32 {
-
-        guard let txnId = currentTransaction?.txn_id else {
-            return 0
-        }
-
-        let total = pillDataLocalStorage.getTotalCountForStep(
-            txnId: txnId,
-            step: currentControlledStep
-        )
-
-        return total
-    }
-    
-    
-    // Get Last saved Controlled Step
-    func getLastSavedControlledStep() -> ControlledStep? {
-        guard let txn = selectedTransaction else { return nil }
-        return pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id)
-    }
-    
-    
-    // Get which Controlled step is now
-    func getControlledStep(pillCountTxn: PillCountTransactionEntity? = nil) {
-
-        guard let txn = pillCountTxn else {
-            return
-        }
-
-        // Fetch last saved step
-        guard let lastStep = pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id) else {
-            if txn.is_from_pms == true {
-                currentControlledStep = .containerInitiate
-            } else {
-                currentControlledStep = .targetVerification
-            }
-
-            updateControlledTargetCount()
-            return
-        }
-
-        currentControlledStep = lastStep
-        updateControlledTargetCount()
-    }
-    
-    
-    // When step completed
-    func handleStepCompletion() {
-        guard let txn = currentTransaction else {
-            return
-        }
-        let steps = PillCountingStepResolver.getActiveSteps(txn: txn)
-
-        guard let currentIndex = steps.firstIndex(of: currentControlledStep) else {
-            return
-        }
-        let next = steps[currentIndex + 1]
-        currentControlledStep = next
-        updateControlledTargetCount()
-    }
-    
-    //Update Drug Data
-    func updateSubstitutedDrug(
-        txnId: Int64,
-        rawValue: String,
-        countType: CountType,
-        image: UIImage?
-    ) async {
-
-        let decoded = decoder.decode(rawValue)
-        let gtin = decoded.gtin ?? ""
-
-        guard !gtin.isEmpty else { return }
-
-        // create new drug
-        let drugId = generateUniqueDrugId()
-
-        pillDataLocalStorage.saveManualPill(
-            ndc: ndcComparisonResponse?.data?.scannedNdc.packageNdc ?? "",
-            drugId: drugId,
-            drugName: ndcComparisonResponse?.data?.scannedNdc.lookupName ?? "",
-            drugType: ndcComparisonResponse?.data?.scannedNdc.deaSchedule ?? "",
-        )
-
-        var savedPath = ""
-
-        if let img = image {
-            if let path = PhotoFileManager.shared.saveImage(img) {
-                savedPath = path
-            }
-        }
-
-        pillDataLocalStorage.updateTransaction(
-            txnId: txnId,
-            drugId: drugId,
-            countType: countType,
-            targetCount: nil,
-            barcodeImagePath: savedPath
-        )
-
-        isDrugFound = true
-    }
-}

@@ -23,6 +23,9 @@ final class CameraService: NSObject, ObservableObject {
 
     // MARK: - IMAGE PROCESSING
     private let detector = PillDetectionService()
+    private let trayDetector = TrayDetectionService.shared
+
+    
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
 
@@ -35,6 +38,8 @@ final class CameraService: NSObject, ObservableObject {
     // MARK: - STATE
     @Published var stableCount: Int = 0
     @Published var detections: [DetectionResult] = []
+    @Published var trayDetections: [TrayResult] = []
+
     @Published var isAuthorized = false
     @Published var error: String?
     @Published private(set) var isPausedDueToInactivity = false
@@ -291,23 +296,62 @@ final class CameraService: NSObject, ObservableObject {
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
     /// RECEIVES CAMERA FRAMES AND RUNS DETECTION
+//    func captureOutput(
+//        _ output: AVCaptureOutput,
+//        didOutput sampleBuffer: CMSampleBuffer,
+//        from connection: AVCaptureConnection
+//    ) {
+//
+//        guard !isPausedDueToInactivity,
+//            let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+//        else { return }
+//
+//        lastPixelBuffer = pixelBuffer
+//
+//        detector.detect(pixelBuffer: pixelBuffer) {
+//            [weak self] detections, count in
+//            DispatchQueue.main.async {
+//                self?.detections = detections
+//                self?.stableCount = count
+//            }
+//        }
+//    }
+    
+    
     func captureOutput(
         _ output: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-
         guard !isPausedDueToInactivity,
-            let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
         else { return }
 
         lastPixelBuffer = pixelBuffer
 
-        detector.detect(pixelBuffer: pixelBuffer) {
-            [weak self] detections, count in
+        // 1. Run tray detection FIRST (synchronous — no completion needed)
+        let trays = trayDetector.detect(pixelBuffer: pixelBuffer)
+
+        // 2. Run pill detection, then filter results by tray bounds
+        detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, count in
+            guard let self else { return }
+
+            // 3. Keep only pills whose centre falls inside any tray rect
+            let filtered: [DetectionResult]
+            if trays.isEmpty {
+                filtered = []
+            } else {
+                filtered = allPills.filter { pill in
+                    trays.contains { tray in
+                        tray.rect.contains(pill.center)
+                    }
+                }
+            }
+
             DispatchQueue.main.async {
-                self?.detections = detections
-                self?.stableCount = count
+                self.detections     = filtered
+                self.stableCount    = filtered.count
+                self.trayDetections = trays
             }
         }
     }

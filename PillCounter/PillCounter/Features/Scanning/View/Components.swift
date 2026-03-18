@@ -46,7 +46,8 @@ struct CameraContentView: View {
                     .onDisappear { cameraService.stop() }
                     DetectionOverlay(cameraService: cameraService, currentStep: pillScanViewModel.currentControlledStep)
                             .ignoresSafeArea()
-                
+//                    TrayOverlay(cameraService: cameraService)
+//                        .ignoresSafeArea()
                     //Toggle
                     //                    VStack {
                     //                        HStack {

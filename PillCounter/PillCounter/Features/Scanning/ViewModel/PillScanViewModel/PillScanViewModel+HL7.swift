@@ -4,7 +4,175 @@
 //
 //  Created by Bhushan Patil on 16/03/26.
 //
+import ComposeApp
+
 
 extension PillScanViewModel {
+    
+    func handleReceivedMessage(
+        message: CompleteHL7Message,
+        callback: HL7SimpleCallback? = nil
+    ){
+        print("Received message parsed message \(message)")
+        guard let inboundType = classifyInboundMessage(message) else {
+            return
+        }
+        
+        print("Message Type \(inboundType)")
+
+        Task(priority: .background) {
+            switch inboundType {
+            case .FIXED:
+                 await createFixedHl7Transaction(message:message, inboundType: .FIXED, callback: callback)
+
+            case .REGULAR:
+                 await createRegularHl7Transaction(message:message, inboundType: .REGULAR, callback: callback)
+            }
+        }
+    }
+    
+    
+    @MainActor
+    private func createFixedHl7Transaction(
+        message: CompleteHL7Message,
+        inboundType: CountType,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+
+        guard let order = message.order else {
+            callback?(false)
+            return
+        }
+
+        let orderId = order.placerOrderId
+
+        guard !message.medications.isEmpty else {
+            callback?(false)
+            return
+        }
+
+        for medication in message.medications {
+
+            // RXE-2.1
+            let ndc = medication.drugCode.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // RXE-2.2
+            let drugName = medication.drugName
+
+            // RXE-3
+            let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
+
+    
+
+            await processHl7DrugAndCreateTransaction(
+                ndc: ndc,
+                drugName: drugName,
+                countType: inboundType,
+                targetCount: targetCount
+            )
+        }
+
+        callback?(true)
+    }
+    
+    @MainActor
+    private func createRegularHl7Transaction(
+        message: CompleteHL7Message,
+        inboundType: CountType,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+    
+        guard let inventory = message.inventoryItems.first else {
+            print("Regular Count: No RXE medication found")
+            return
+        }
+
+        let ndc = inventory.substanceCode ?? ""
+        let drugName = inventory.description
+          
+        print("Regular Count Drug Info: \(ndc), \(drugName)")
+
+        await processHl7DrugAndCreateTransaction(
+            ndc: ndc,
+            drugName: drugName,
+            countType: inboundType
+        )
+        callback?(true)
+    }
+
+
+    
+    private func classifyInboundMessage(
+        _ message: CompleteHL7Message
+    ) -> CountType? {
+        if message.messageType == "RDE",
+           message.triggerEvent == "O11",
+           !message.medications.isEmpty {
+            return .FIXED
+        }
+
+        if message.messageType == "INR",
+           message.triggerEvent == "U06",
+           !message.inventoryItems.isEmpty {
+            return .REGULAR
+        }
+        return nil
+    }
+
+    
+    @MainActor
+    func processHl7DrugAndCreateTransaction(
+        ndc: String,
+        drugName: String,
+        countType: CountType,
+        targetCount: Int32? = nil
+    ) async {
+
+        print("🧾 HL7 Drug Processing → NDC: \(ndc), Name: \(drugName)")
+
+        var drugIdToUse: Int64
+
+        // 1️⃣ Check if drug exists
+        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+
+            print("Drug found in DrugMaster (id: \(existingDrug.drug_id))")
+
+            drugIdToUse = existingDrug.drug_id
+            self.drugName = existingDrug.drug_name
+
+        } else {
+
+            // 2️⃣ Create new drug synchronously
+            drugIdToUse = generateUniqueDrugId()
+
+            print("Drug not found — creating new DrugMaster entry")
+
+            pillDataLocalStorage.saveManualPill(
+                ndc: ndc,
+                drugId: drugIdToUse,
+                drugName: drugName
+            )
+
+            self.drugName = drugName
+        }
+
+        // 3️⃣ Create transaction
+        await createTransaction(
+            drugId: drugIdToUse,
+            countType: countType,
+            isComingFromPms: true,
+            isControlled: true,
+            targetCount: targetCount,
+            drugName: drugName
+        )
+
+        // 4️⃣ Refresh transaction details
+        getAllTransactionDetailsOfTheCurrentTransaction()
+
+        // 5️⃣ Update target count if fixed
+        if countType == .FIXED {
+            updateTargetCountForCurrentTransaction()
+        }
+    }
     
 }

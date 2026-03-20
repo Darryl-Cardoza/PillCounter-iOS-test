@@ -150,7 +150,8 @@ extension PillScanViewModel {
             pillDataLocalStorage.saveManualPill(
                 ndc: ndc,
                 drugId: drugIdToUse,
-                drugName: drugName
+                drugName: drugName,
+            
             )
 
             self.drugName = drugName
@@ -162,6 +163,7 @@ extension PillScanViewModel {
             countType: countType,
             isComingFromPms: true,
             isControlled: true,
+
             targetCount: targetCount,
             drugName: drugName
         )

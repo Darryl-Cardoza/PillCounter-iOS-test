@@ -13,7 +13,7 @@ extension PillScanViewModel {
         let decoded = decoder.decode(rawValueFromBarcodeOrQr)
         let scannedNdc = decoded.gtin ?? ""
 
-        guard let expectedNdc = getExpectedPmsNdc() else {
+        guard  let expectedNdc = getExpectedPmsNdc() else {
             return true
         }
         print("Expected NDC: \(expectedNdc)")
@@ -28,9 +28,9 @@ extension PillScanViewModel {
     }
     
     func manualEnterdControlledDrug(scannedNdc: String){
-        guard let expectedNdc = getExpectedPmsNdc() else {
-            return
-        }
+        let expectedNdc = getExpectedPmsNdc() ?? ""
+        
+
         print("Expected NDC: \(expectedNdc)")
         print("Scanned NDC: \(scannedNdc)")
 
@@ -61,6 +61,7 @@ extension PillScanViewModel {
                     shouldAutoProceedToCount = true
                 }
             } catch {
+                print("Failed to get equivat")
                 showNdcEquivalencePopup = true
                 isNdcEquivalent = false
             }

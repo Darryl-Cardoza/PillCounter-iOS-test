@@ -17,6 +17,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
 
     // MARK: - CONFIGURATION PROPERTIES
     let showBackButton: Bool
+    let showBackBackground: Bool
     let showHamburgerMenu: Bool
     let showPmsConnectionButton : Bool
     let pmsConnectionState: PmsConnectionState
@@ -58,6 +59,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         @ViewBuilder bottomContent: @escaping () -> BottomContent,
         @ViewBuilder headerActions: @escaping () -> HeaderActions,
         showBackButton: Bool = false,
+        showBackBackground: Bool = false,
         showHamburgerMenu: Bool = false,
         showpmsConnectionButton: Bool = false,
         pmsConnectionState: PmsConnectionState = .disconnected,
@@ -77,6 +79,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         self.bottomContent = bottomContent
         self.headerActions = headerActions
         self.showBackButton = showBackButton
+        self.showBackBackground = showBackBackground
         self.showHamburgerMenu = showHamburgerMenu
         self.showPmsConnectionButton = showpmsConnectionButton
         self.pmsConnectionState = pmsConnectionState
@@ -211,75 +214,88 @@ extension BaseView {
     }
 
     @ViewBuilder
-    private func overlayControls(using geometry: GeometryProxy) -> some View {
+    private func overlayControls(
+        using geometry: GeometryProxy,
+        showBackground: Bool = false
+    ) -> some View {
         ZStack {
-            // 1. LEFT SIDE: Back Button
-            if showBackButton {
-                HStack {
-                    backButton
+            if showBackground {
+                Rectangle()
+                    .fill(appColors.primaryBackground)
+                    .ignoresSafeArea(edges: .top)
+                    .frame(height: isLandscape ? 60 : 100)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+            
+            ZStack {
+                // 1. LEFT SIDE: Back Button
+                if showBackButton {
+                    HStack {
+                        backButton
+                    }
+                    //                .padding(.leading, 8)
+                    .padding(
+                        .top,
+                        isLandscape
+                        ? 0
+                        : max(geometry.safeAreaInsets.top + 10, 40)
+                    )
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: .topLeading
+                    )
                 }
-//                .padding(.leading, 8)
+                
+                
+                if showPmsConnectionButton {
+                    HStack {
+                        pmsConnectionStatusButton
+                            .scaleEffect(1)
+                            .padding(8)
+                    }
+                    .padding(
+                        .top,
+                        isLandscape
+                        ? 0
+                        : max(geometry.safeAreaInsets.top + 10, 40)
+                    )
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: .topLeading
+                    )
+                }
+                
+                
+                
+                // 2. RIGHT SIDE: Header Actions + Hamburger
+                HStack(spacing: 16) {
+                    
+                    // Inject the custom actions here
+                    headerActions()
+                    
+                    
+                    if showHamburgerMenu {
+                        hamburgerMenuButton
+                    }
+                }
+                //            .padding(.trailing, 8)
+                // FIX: Force height to 52 to match the Left Side Back Button (28px + 12px padding * 2)
+                // This ensures vertical centering aligns perfectly
+                .frame(height: 52)
                 .padding(
                     .top,
                     isLandscape
-                        ? 0
-                        : max(geometry.safeAreaInsets.top + 10, 40)
-                )
-                .frame(
-                    maxWidth: .infinity,
-                    maxHeight: .infinity,
-                    alignment: .topLeading
-                )
-            }
-            
-            
-            if showPmsConnectionButton {
-                HStack {
-                    pmsConnectionStatusButton
-                        .scaleEffect(1)
-                        .padding(8)
-                }
-                .padding(
-                    .top,
-                    isLandscape
-                        ? 0
-                        : max(geometry.safeAreaInsets.top + 10, 40)
-                )
-                .frame(
-                    maxWidth: .infinity,
-                    maxHeight: .infinity,
-                    alignment: .topLeading
-                )
-            }
-            
-        
-
-            // 2. RIGHT SIDE: Header Actions + Hamburger
-            HStack(spacing: 16) {
-
-                // Inject the custom actions here
-                headerActions()
-
-
-                if showHamburgerMenu {
-                    hamburgerMenuButton
-                }
-            }
-//            .padding(.trailing, 8)
-            // FIX: Force height to 52 to match the Left Side Back Button (28px + 12px padding * 2)
-            // This ensures vertical centering aligns perfectly
-            .frame(height: 52)
-            .padding(
-                .top,
-                isLandscape
                     ? 0
                     : max(geometry.safeAreaInsets.top + 10, 40)
-            )
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: .infinity,
-                alignment: .topTrailing
-            )
+                )
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .topTrailing
+                )
+            }
         }
     }
 }

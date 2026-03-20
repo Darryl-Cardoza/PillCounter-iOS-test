@@ -87,75 +87,98 @@ class PillScanViewModel: ObservableObject {
         countType: CountType,
         image: UIImage? = nil
     ) async {
-        
-        let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
-        let gtin = decodedGs1Value.gtin ?? ""
 
-        if gtin.isEmpty { return }
-        
-       
-        // 1. Generate a potential ID (only used if we create a NEW drug)
+        let decoded = decoder.decode(rawValueFromBarcodeOrQr)
+        let gtin = decoded.gtin ?? ""
+
+        await handleDrugFlow(
+            ndc: gtin,
+            countType: countType,
+            image: image
+        )
+    }
+    
+    private func handleDrugFlow(
+        ndc: String,
+        countType: CountType,
+        image: UIImage? = nil,
+        fallbackDrugName: String? = nil
+    ) async {
+
+        guard !ndc.isEmpty else { return }
+
         var drugIdToUse = generateUniqueDrugId()
 
-        // 2. CHECK LOCAL DB
-        if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(
-            by: gtin)
-        {
+        // 1. Check local DB
+        if let localDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
 
-            drugName = drugFoundInLocalStorage.drug_name ?? ""
-
-            // FIX: Use the EXISTING ID from the database
-            drugIdToUse = drugFoundInLocalStorage.drug_id
+            drugName = localDrug.drug_name ?? ""
+            drugIdToUse = localDrug.drug_id
 
             await createTransaction(
                 drugId: drugIdToUse,
                 countType: countType,
                 barcodeImage: image
             )
-            getAllTransactionDetailsOfTheCurrentTransaction()
-            isDrugFound = true
-            if countType == .FIXED {
-                updateTargetCountForCurrentTransaction()
-            }
+
+            postTransactionUIUpdate(countType: countType)
             return
         }
 
-        // 3. API CALL (If not found locally)
+        // 2. API call
         do {
-            let getDrugNameResult = try await userRepo.getDrug(ndc: gtin)
+            let result = try await userRepo.getDrug(ndc: ndc)
 
-            if getDrugNameResult.isSuccess ?? false {
-                drugName = getDrugNameResult.data?.genericName ?? "Loading..."
+            if result.isSuccess ?? false, let data = result.data {
 
-                if getDrugNameResult.data != nil {
-                    // Save new pill (using the NEW unique ID)
-                    self.pillDataLocalStorage.savePill(
-                        from: getDrugNameResult,
-                        ndc: gtin,
-                        drugId: drugIdToUse
-                    )
-                }
+                drugName = data.genericName ?? fallbackDrugName ?? ""
 
-                // Create transaction using the NEW ID (since we just saved it)
-                await createTransaction(
-                    drugId: drugIdToUse,
-                    countType: countType,
-                    barcodeImage: image
+                pillDataLocalStorage.savePill(
+                    from: result,
+                    ndc: ndc,
+                    drugId: drugIdToUse
                 )
 
-                if countType == .FIXED {
-                    updateTargetCountForCurrentTransaction()
-                }
-                getAllTransactionDetailsOfTheCurrentTransaction()
-                isDrugFound = true
-
             } else {
-                isDrugFound = false
+                // fallback for manual entry
+                guard let fallbackDrugName else {
+                    isDrugFound = false
+                    return
+                }
+
+                drugName = fallbackDrugName
+
+                pillDataLocalStorage.saveManualPill(
+                    ndc: ndc,
+                    drugId: drugIdToUse,
+                    drugName: fallbackDrugName
+                )
             }
 
+            // 3. Create transaction
+            await createTransaction(
+                drugId: drugIdToUse,
+                countType: countType,
+                barcodeImage: image
+            )
+
+            postTransactionUIUpdate(countType: countType)
+
         } catch {
-            DispatchQueue.main.async { self.isDrugFound = false }
+            print("❌ API error:", error)
+            isDrugFound = false
         }
+    }
+    
+    
+    private func postTransactionUIUpdate(countType: CountType) {
+        getAllTransactionDetailsOfTheCurrentTransaction()
+
+        if countType == .FIXED {
+            updateTargetCountForCurrentTransaction()
+        }
+
+        isDrugFound = true
     }
     
     
@@ -237,118 +260,25 @@ class PillScanViewModel: ObservableObject {
         print("🧪 [ManualPillFlow] \(message)")
     }
     
-    func manuallyEnteredPill(
-           ndc: String, countType: CountType, isFixedCount: Bool = false
-    ) async {
-
-           // check in the database first
-           if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(
-               by: ndc)
-           {
-               isDrugFound = true
-               drugName = drugFoundInLocalStorage.drug_name ?? ""
-               // after the drug is found from the db we create a new transaction.
-               await createTransaction(
-                   drugId: drugFoundInLocalStorage.drug_id, countType: countType)
-               getAllTransactionDetailsOfTheCurrentTransaction()
-               if countType == .FIXED {
-                   updateTargetCountForCurrentTransaction()
-               }
-               return
-           }
-
-           // if not found in the db then call the api
-
-           do {
-               let getDrugResult = try await userRepo.getDrug(ndc: ndc)
-
-               if getDrugResult.isSuccess ?? false {
-                   isDrugFound = true
-                   drugName = getDrugResult.data?.genericName ?? "Loading..."
-
-                   // generating new drug id for each pill
-                   let drugId = generateUniqueDrugId()
-
-                   // on success if the result has data in it then only store that data in the db. other wise return and ask the user to enter the ndc number manually.
-
-                   if getDrugResult.data != nil {
-                       // background task to save pill in background.
-                       Task(priority: .background) {
-                           self.pillDataLocalStorage.savePill(
-                               from: getDrugResult,
-                               ndc: ndc,
-                               drugId: drugId
-                           )
-                       }
-                   }
-                   // create transaction for the pill if we get the details of the pill from api.
-                   // drug id is being generated in the view model since saving of the pill in db should be in the background and the logic generation should be in the view model.
-                   // also for creating the transaction we would be needing the drug id.
-                   await createTransaction(drugId: drugId, countType: countType)
-                   if isFixedCount {
-                       updateTargetCountForCurrentTransaction()
-                   }
-                   getAllTransactionDetailsOfTheCurrentTransaction()
-
-               } else {
-                   isDrugFound = false
-                   mannualDrugCreated = true
-                   
-                   drugName = drugNameMannuallyEntered
-
-                   let drugId = generateUniqueDrugId()
-
-                   Task(priority: .background) {
-                       self.pillDataLocalStorage.saveManualPill(
-                           ndc: ndc,
-                           drugId: drugId,
-                           drugName: drugNameMannuallyEntered
-                       )
-                   }
-
-                   await createTransaction(drugId: drugId, countType: countType)
-                   
-                   if countType == .FIXED {
-                       self.updateTargetCountForCurrentTransaction()
-                   }
-
-                   getAllTransactionDetailsOfTheCurrentTransaction()
-               }
-
-           } catch let error {
-               DispatchQueue.main.async {
-                   self.isDrugFound = nil
-                   print("Error: \(error)")
-
-                   self.mannualDrugCreated = true
-
-                   let drugId = self.generateUniqueDrugId()
-
-                   Task(priority: .background) {
-                       self.pillDataLocalStorage.saveManualPill(
-                           ndc: ndc,
-                           drugId: drugId,
-                           drugName: self.drugNameMannuallyEntered
-                       )
-                   }
-                   
-                   self.drugName = self.drugNameMannuallyEntered
-
-                   Task {
-                       await self.createTransaction(
-                           drugId: drugId,
-                           countType: countType
-                       )
-                       if countType == .FIXED {
-                           self.updateTargetCountForCurrentTransaction()
-                       }
-                   }
-
-                   self.getAllTransactionDetailsOfTheCurrentTransaction()
-
-               }
-           }
-       }
+//    func manualEntryDirectUpsert(
+//        ndc: String,
+//        drugName: String,
+//        countType: CountType
+//    ) async {
+//
+//        let trimmedNdc = ndc.trimmingCharacters(in: .whitespaces)
+//        let trimmedDrugName = drugName.trimmingCharacters(in: .whitespaces)
+//
+//        guard !trimmedNdc.isEmpty else { return }
+//
+//        await handleDrugFlow(
+//            ndc: trimmedNdc,
+//            countType: countType,
+//            fallbackDrugName: trimmedDrugName
+//        )
+//
+//        self.mannualDrugCreated = true
+//    }
 
     
     func manualEntryDirectUpsert(
@@ -487,13 +417,10 @@ class PillScanViewModel: ObservableObject {
         var savedPath = ""
         if let img = barcodeImage {
 
-            print("📸 Image size:", img.size)
 
             if let path = PhotoFileManager.shared.saveImage(img) {
                 savedPath = path
-                print("✅ Image saved at:", path)
             } else {
-                print("❌ Failed to save image")
             }
 
         } else {

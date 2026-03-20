@@ -100,7 +100,6 @@ final class Hl7EventHandler: Hl7EventListener {
     }
 
     // MARK: - Error
-
     func onError(source: String, error: Error) {
         print("[HL7] Error | \(source) | \(error.localizedDescription)")
     }

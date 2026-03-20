@@ -9,6 +9,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import ComposeApp
 
 @MainActor
 final class Hl7ServiceController: ObservableObject {
@@ -227,9 +228,19 @@ final class Hl7ServiceController: ObservableObject {
         let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
         currentMessageId = messageId
 
-        let hl7 = buildHl7Message(from: txn, messageId: messageId)
+        guard let user = txn.user else {
+            print("❌ No user found for txnId=\(txn.txn_id)")
+            return
+        }
+
+        let hl7 = buildHl7Message(
+            txn: txn,
+            messageId: messageId,
+            user: user
+        )
 
         print("[HL7CTRL] Sending txnId=\(txn.txn_id) attempt=\(retryCount)/\(maxRetries)")
+        print("HL7 Message \(hl7)")
         hl7Manager?.sendClientHL7(hl7)
     }
 
@@ -247,7 +258,6 @@ final class Hl7ServiceController: ObservableObject {
 
         sendingQueue.removeFirst()
         sendingQueue.append(txn)
-
         currentTxn = nil
         currentMessageId = nil
         retryCount = 0
@@ -265,28 +275,11 @@ final class Hl7ServiceController: ObservableObject {
     // MARK: - HL7 Message Builder
 
     private func buildHl7Message(
-        from txn: PillCountTransactionEntity,
-        messageId: String
+        txn: PillCountTransactionEntity,
+        messageId: String,
+        user: UserEntity?
     ) -> String {
-        let timestamp = hl7Timestamp()
-
-        let msh = [
-            "MSH",
-            "|",
-            "^~\\&",
-            "PILLCOUNTER",
-            "PC",
-            "PMS",
-            "PMS",
-            timestamp,
-            "",
-            "ORM^O01",
-            messageId,
-            "P",
-            "2.3"
-        ].joined(separator: "|")
-
-        return msh + "\r"
+        return HL7CompletionBuilder().buildCompletionMessage(txn: txn, user: user )
     }
 
     

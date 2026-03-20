@@ -30,7 +30,7 @@ final class PillDetectionService {
     private let model = PillDetector.shared.model
     private let inputSize: CGFloat = 640
     private let iouThreshold: Double = 0.75
-    private let confThreshold: Double = 0.8
+    private let confThreshold: Double = 0.70
 
     private let stabilizer = CountStabilizer(windowSize: 7)
 
@@ -53,9 +53,6 @@ final class PillDetectionService {
             return
         }
 
-        if let scale = Letterbox.currentScaleInfo {
-        
-        }
 
         // BUILD MODEL INPUT
         let input = bestInput(
@@ -73,7 +70,7 @@ final class PillDetectionService {
             return
         }
 
-        let inferenceTime = (CFAbsoluteTimeGetCurrent() - start) * 1000
+        var inferenceTime = (CFAbsoluteTimeGetCurrent() - start) * 1000
 
         // DECODE
         let decoded = decodeDetections(

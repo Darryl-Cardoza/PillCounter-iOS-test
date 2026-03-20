@@ -12,6 +12,7 @@ struct HistoryTransactionDetailViewNew: View {
 
     // MARK: - PROPERTIES
     @State private var transaction: PillCountTransactionEntity? = nil
+    @State private var detailsByStep: [ControlledStep: [PillCountTransactionDetailsEntity]] = [:]
 
     // MARK: - ENVIRONMENT
     @Environment(\.isLandscape) private var isLandscape
@@ -44,7 +45,7 @@ struct HistoryTransactionDetailViewNew: View {
                             .scaledToFit()
                             .frame(width: 30, height: 30)
                             .overlay {
-                                appColors.secondary
+                                appColors.primary
                             }
                             .mask(
                                 Image("pdf")
@@ -85,19 +86,10 @@ struct HistoryTransactionDetailViewNew: View {
             }
         }
         .onAppear {
-            
             if pillScanViewModel.currentTransaction != nil {
                 transaction = pillScanViewModel.currentTransaction
+                prepareDetails()
             }
-            // This is for loading dummy transaction for testing purposes.
-            // Load specific details if necessary
-//            if pillScanViewModel.currentTransaction == nil {
-//                let dummyTransaction =
-//                    PreviewDataHelper.shared.createDummyTransaction()
-//
-//                pillScanViewModel.currentTransaction = dummyTransaction
-//                transaction = dummyTransaction
-//            }
         }
         .onDisappear {
             transaction = nil
@@ -128,15 +120,12 @@ struct HistoryTransactionDetailViewNew: View {
                     // SECTION 1: Summary & Details
                     VStack(spacing: 24) {
                         collapsibleSections
-                
                     }
                     .padding(.top, 80)  // Header offset
-                    .padding(.bottom,50)
-                    .padding(.horizontal, 20)
+                    .padding(.bottom,80)
+                    .padding(.horizontal, 10)
                     .frame(maxWidth: .infinity)  // Fill width in portrait
                  
-                    
-                    
                     HStack {
                         Spacer()
                         DeleteOkButtons(
@@ -157,10 +146,10 @@ struct HistoryTransactionDetailViewNew: View {
                         )
                         Spacer()
                     }
-                    .padding(
-                        .horizontal,
-                        UIDevice.current.userInterfaceIdiom == .pad ? 100 : 24
-                    )
+//                    .padding(
+//                        .horizontal,
+//                        UIDevice.current.userInterfaceIdiom == .pad ? 100 : 24
+//                    )
                     .padding(.top, -60)
                 }
                 .padding(.top, 30)
@@ -168,6 +157,22 @@ struct HistoryTransactionDetailViewNew: View {
                 .background(appColors.secondaryBackground)
             }
         }
+    }
+    
+    private func prepareDetails() {
+        guard let allDetails =
+            transaction?.pillCountTransactionDetails?.allObjects
+                as? [PillCountTransactionDetailsEntity]
+        else { return }
+
+        let validDetails = allDetails
+            .filter { !$0.is_deleted }
+
+        let grouped = Dictionary(grouping: validDetails) { detail in
+            ControlledStep(rawValue: detail.type ?? "") ?? .containerInitiate
+        }
+
+        detailsByStep = grouped
     }
 
     private func getCountType(from rawValue: String?) -> CountType {
@@ -181,59 +186,36 @@ struct HistoryTransactionDetailViewNew: View {
         return countType
     }
     
-
     private func batchesGrid(step: ControlledStep) -> some View {
-        let rows = [
-            GridItem(.flexible())
-        ]
-        let detailsArray =
-            (transaction?.pillCountTransactionDetails?.allObjects
-            as? [PillCountTransactionDetailsEntity])?
-            .filter { !$0.is_deleted }
-            .filter { $0.type == step.rawValue }
-            .sorted(by: { $0.created_at < $1.created_at }) ?? []
+        let detailsArray = detailsByStep[step] ?? []
 
-        return LazyHGrid(rows: rows, spacing: 16) {
+        return LazyHGrid(rows: [GridItem(.flexible())], spacing: 10) {
             ForEach(detailsArray, id: \.txn_details_id) { detail in
-                batchItem(detail: detail)
-                    .frame(width: 160)
+                batchItem(detail: detail, step: step)
             }
         }
     }
     
-    private var batchesGridVertical: some View {
-        // 1. Define Columns for LazyVGrid
-        // We use 2 flexible columns so they split the available width evenly.
-        let columns = [
-            GridItem(.flexible(), spacing: 16)
-        ]
-
-        let detailsArray =
-            (transaction?.pillCountTransactionDetails?.allObjects
-            as? [PillCountTransactionDetailsEntity])?
-            .sorted(by: { $0.created_at < $1.created_at }) ?? []
-
-        return LazyVGrid(columns: columns, spacing: 16) {
-            ForEach(detailsArray, id: \.txn_details_id) { detail in
-                batchItem(detail: detail)
-                // 2. Remove the fixed width (.frame(width: 160))
-                // The GridItem(.flexible()) controls the width now.
-            }
-        }
+    private func getTotalCount(step: ControlledStep) -> Int {
+        let details = detailsByStep[step] ?? []
+        return details.reduce(0) { $0 + Int($1.pill_count) }
     }
+    
 
     // MARK: - DETAILS LIST COMPONENT
     private var detailsInfoList: some View {
         VStack(spacing: 0) {
             //Substitued drug name
             detailRow(
-                label: "Substituted Drug",
+                label: NSLocalizedString("SUBSTITUED_DRUG",comment: ""),
                 value: transaction?.drug?.drug_name ?? "N/A"
             )
             
+            Divider().background(appColors.text.opacity(0.1))
+            
             // 1. NDC
             detailRow(
-                label: "NDC",
+                label: NSLocalizedString("NDC",comment: ""),
                 value: transaction?.drug?.ndc ?? "N/A"
             )
 
@@ -241,7 +223,7 @@ struct HistoryTransactionDetailViewNew: View {
 
             // 2. Expiry
             detailRow(
-                label: "Expiry No",
+                label: NSLocalizedString("EXPIRY_NO",comment: ""),
                 value: transaction?.expiry ?? "N/A"
             )
 
@@ -249,7 +231,7 @@ struct HistoryTransactionDetailViewNew: View {
 
             // 3. Lot No
             detailRow(
-                label: "Lot No",
+                label: NSLocalizedString("LOT_NO",comment: ""),
                 value: transaction?.lot_no ?? "N/A"
             )
 
@@ -257,7 +239,7 @@ struct HistoryTransactionDetailViewNew: View {
 
             // 4. Date
             detailRow(
-                label: "Date",
+                label: NSLocalizedString("DATE",comment: ""),
                 value: Formatter.getDateString(
                     from: transaction?.created_at ?? 0)
             )
@@ -266,7 +248,7 @@ struct HistoryTransactionDetailViewNew: View {
 
             // 5. Time
             detailRow(
-                label: "Time",
+                label: NSLocalizedString("TIME",comment: ""),
                 value: Formatter.getTimeString(
                     from: transaction?.created_at ?? 0)
             )
@@ -295,25 +277,22 @@ struct HistoryTransactionDetailViewNew: View {
         .padding(.vertical, 14)
     }
 
-    private func batchItem(detail: PillCountTransactionDetailsEntity)
-        -> some View
-    {
+    private func batchItem(detail: PillCountTransactionDetailsEntity, step: ControlledStep) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Image + Count Badge
             ZStack {
-
                 if let path = detail.image_path,
                     let image = PhotoFileManager.shared.loadImage(from: path)
                 {
                     image
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 150, height: 100)
+                        .frame(width: 120, height: 80)
                         .clipped()
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
-                        .frame(width: 150, height: 110)
+                        .frame(width: 120, height: 80)
                         .overlay(
                             Image(systemName: "photo")
                                 .foregroundStyle(Color.gray)
@@ -321,14 +300,16 @@ struct HistoryTransactionDetailViewNew: View {
                 }
 
                 // Count Circle
-                Text("\(detail.pill_count)")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .background(appColors.primary)
-                    .clipShape(Circle())
-                    .padding(8)
+                if step != .vial {
+                    Text("\(detail.pill_count)")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(appColors.primary)
+                        .clipShape(Circle())
+                        .padding(8)
+                }
             }
             .onTapGesture {
                 if let path = detail.image_path,
@@ -382,34 +363,50 @@ struct HistoryTransactionDetailViewNew: View {
     }
     
     private var collapsibleSections: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             
-            CollapsibleBox(title: "INITIAL CONTAINER COUNT", allowCollapse: false, defaultExpanded: true) {
-                collapsableBoxContent(step: .containerInitiate, showTargetCount: false)
+            if let details = detailsByStep[.targetVerification], !details.isEmpty, transaction?.is_from_pms == false {
+                CollapsibleBox(title: NSLocalizedString("PILL COUNT",comment: ""), allowCollapse: false, defaultExpanded: true) {
+                    collapsableBoxContent(step: .targetVerification)
+                }
             }
             
+            if let details = detailsByStep[.containerInitiate], !details.isEmpty {
+                CollapsibleBox(title: NSLocalizedString("INITIAL CONTAINER COUNT",comment: ""), allowCollapse: false, defaultExpanded: true) {
+                    collapsableBoxContent(step: .containerInitiate, showTargetCount: false)
+                }
+            }
             
-            CollapsibleBox(title: "SUBSTITUTED DRUG DETAILS") {
+            CollapsibleBox(title: NSLocalizedString("SUBSTITUTED DRUG DETAILS",comment: "")) {
                 detailsInfoList
             }
             
-            CollapsibleBox(title: "PILL COUNT 1") {
-                collapsableBoxContent(step: .targetVerification)
+            if let details = detailsByStep[.targetVerification], !details.isEmpty, transaction?.is_from_pms == true {
+                CollapsibleBox(title: NSLocalizedString("PILL COUNT",comment: "")) {
+                    collapsableBoxContent(step: .targetVerification)
+                }
             }
             
-            CollapsibleBox(title: "PILL COUNT 2") {
-                collapsableBoxContent(step: .targetReverification)
+            
+            if let details = detailsByStep[.targetReverification], !details.isEmpty {
+                CollapsibleBox(title: NSLocalizedString("PILL RECOUNT",comment: "")) {
+                    collapsableBoxContent(step: .targetReverification)
+                }
             }
                 
-            CollapsibleBox(title: "DISPENSED VIAL") {
-                collapsableBoxContent(step: .vial, showVialInfo: true)
+            if let details = detailsByStep[.vial], !details.isEmpty {
+                CollapsibleBox(title: NSLocalizedString("DISPENSED VIAL",comment: "")) {
+                    collapsableBoxContent(step: .vial, showVialInfo: true)
+                }
             }
             
-            CollapsibleBox(title: "REMAINING CONTAINER COUNT") {
-                collapsableBoxContent(step: .containerPending, showTargetCount: false)
+            if let details = detailsByStep[.containerPending], !details.isEmpty {
+                CollapsibleBox(title:  NSLocalizedString("REMAINING_CONTAINER_COUNT", comment: "")) {
+                    collapsableBoxContent(step: .containerPending, showTargetCount: false)
+                }
             }
-            
-            CollapsibleBox(title: "NOTE") {
+        
+            CollapsibleBox(title: NSLocalizedString("NOTE", comment: "")) {
                 notesContent
             }
         }
@@ -422,8 +419,8 @@ struct HistoryTransactionDetailViewNew: View {
                         // Image / Icon Container
                         ThumbnailImageView(
                             imagePath: transaction?.barcode_image,
-                            width: 160,
-                            height: 120,
+                            width: 140,
+                            height: 100,
                             cornerRadius: 12,
                             placeholderImageName: "placeholder_history",
                             placeholderSize: CGSize(width: 20, height: 20)
@@ -445,7 +442,7 @@ struct HistoryTransactionDetailViewNew: View {
                             let targetCount = transaction?.target_count ?? 0
                             
                             if showTargetCount {
-                                Text("\(transaction.map { getTotalPillCount(for: $0,  step: step) } ?? 0)")
+                                Text("\(getTotalCount(step: step))")
                                     .foregroundStyle(appColors.secondary)
                                     .font(.system(size: 25, weight: .bold))
                                     .padding(.bottom, -6)
@@ -464,13 +461,13 @@ struct HistoryTransactionDetailViewNew: View {
                                     .foregroundStyle(appColors.secondary)
                                     .font(.system(size: 25, weight: .bold))
                                     .padding(.bottom,3)
-
                             }
                             
                             
-                            Text("TOTAL COUNT")
-                                .foregroundStyle(appColors.primary)
+                            Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
+                                .foregroundStyle(appColors.text)
                                 .font(.system(size: 14))
+                                .fontWeight(.semibold)
                                 .multilineTextAlignment(.center)
                         }
                         
@@ -486,12 +483,13 @@ struct HistoryTransactionDetailViewNew: View {
     }
     
     private var notesContent: some View {
-        Text(transaction?.note ?? "No notes available")
+        Text(transaction?.note ?? "-")
             .font(.system(size: 14))
             .foregroundStyle(appColors.text)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
 
 struct CollapsibleBox<Content: View>: View {
 
@@ -518,7 +516,6 @@ struct CollapsibleBox<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-
             // HEADER
             HStack {
                 Text(title)
@@ -538,7 +535,7 @@ struct CollapsibleBox<Content: View>: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 if allowCollapse{
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeInOut(duration: 0.4)) {
                         isExpanded.toggle()
                     }
                 }
@@ -554,55 +551,51 @@ struct CollapsibleBox<Content: View>: View {
         .frame(maxWidth: .infinity)
         .background(appColors.primaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 0)
     }
 }
 
 
+struct DeleteOkButtons: View {
+    // MARK: - Inputs
+    let appColors: AppColors
+    let onDelete: () -> Void
+    let onOk: () -> Void
 
+    var body: some View {
+        EqualWidthHStackButtons(spacing: 16) {
 
+            // DELETE
+            PillCountingButton(
+                iconName: nil,
+                title: "DELETE",
+                textColor: appColors.primary,
+                backgroundColor: .clear,
+                borderColor: appColors.primary,
+                font: .system(size: 14, weight: .semibold),
+                cornerRadius: 30,
+                horizontalPadding: 32,
+                verticalPadding: 14,
+                iconSize: 0,
+                action: onDelete
+            )
 
-//struct DeleteOkButtons: View {
-//    // MARK: - Inputs
-//    let appColors: AppColors
-//    let onDelete: () -> Void
-//    let onOk: () -> Void
-//
-//    var body: some View {
-//        EqualWidthHStackButtons(spacing: 16) {
-//
-//            // DELETE
-//            PillCountingButton(
-//                iconName: nil,
-//                title: "DELETE",
-//                textColor: appColors.primary,
-//                backgroundColor: .clear,
-//                borderColor: appColors.primary,
-//                font: .system(size: 14, weight: .semibold),
-//                cornerRadius: 30,
-//                horizontalPadding: 32,
-//                verticalPadding: 14,
-//                iconSize: 0,
-//                action: onDelete
-//            )
-//
-//            // OK
-//            PillCountingButton(
-//                iconName: nil,
-//                title: "OK",
-//                textColor: Color.white,
-//                backgroundColor: appColors.secondary,
-//                borderColor: .clear,
-//                font: .system(size: 14, weight: .semibold),
-//                cornerRadius: 30,
-//                horizontalPadding: 32,
-//                verticalPadding: 14,
-//                iconSize: 0,
-//                action: onOk
-//            )
-//        }
-//    }
-//}
+            // OK
+            PillCountingButton(
+                iconName: nil,
+                title: "OK",
+                textColor: Color.white,
+                backgroundColor: appColors.primary,
+                borderColor: .clear,
+                font: .system(size: 14, weight: .semibold),
+                cornerRadius: 30,
+                horizontalPadding: 32,
+                verticalPadding: 14,
+                iconSize: 0,
+                action: onOk
+            )
+        }
+    }
+}
 
 
 

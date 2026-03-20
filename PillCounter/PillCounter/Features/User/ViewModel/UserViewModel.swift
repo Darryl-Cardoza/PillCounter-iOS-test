@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import CoreData
+import ComposeApp
 
 @MainActor  // decalaring this as an main actor since we will change the colors on the app launch.
 class UserViewModel: ObservableObject {
@@ -427,6 +428,83 @@ class UserViewModel: ObservableObject {
         }
     }
     
+    
+    
+    // Send HL7 message
+    private func sendCompletionHL7(txnId: Int64) async {
+
+        guard let txn = pillLocalDB.fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("[HL7] Txn not found")
+            return
+        }
+
+        // 1. Generate messageId
+        let messageId = "TXN_\(txnId)_\(Int(Date().timeIntervalSince1970))"
+
+        // 2. Build header
+        let header = MessageHeaderData(
+            fieldSeparator: "|",
+            encodingCharacters: "^~\\&",
+            sendingApplication: "PILLCOUNTER",
+            sendingFacility: "PC",
+            receivingApplication: "PMS",
+            receivingFacility: "PMS",
+            messageDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
+            messageType: "RDS",
+            triggerEvent: "O13",
+            messageControlId: messageId,
+            processingId: "P",
+            versionId: "2.3",
+            countryCode: nil
+        )
+
+        // 3. Build ORDER (ORC)
+        let order = OrderData(
+            orderControl: "RE", // Completed / Result
+            placerOrderId: "\(txnId)",
+            placerOrderNamespace: nil,
+            fillerOrderId: nil,
+            fillerOrderNamespace: nil,
+            orderStatus: "CM", // Completed
+            orderDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
+            orderingProviderId: nil,
+            orderingProviderFamilyName: nil,
+            orderingProviderGivenName: nil,
+            orderingFacility: nil
+        )
+
+        // 4. Build DISPENSE (RXD) — THIS IS IMPORTANT
+
+        // 5. Create complete message
+        let message = CompleteHL7Message(
+            messageId: messageId,
+            messageType: "RDS",
+            triggerEvent: "O13",
+            timestamp: header.messageDateTime,
+            sendingFacility: "PILLCOUNTER",
+            header: header,
+            patient: nil,
+            visit: nil,
+            order: order,
+            medications: [],
+            routes: [],
+            components: [],
+            dispenses: [],
+            equipment: nil,
+            inventoryItems: [],
+            inventory: nil,
+            acknowledgment: nil,
+            notes: [],
+            customSegments: [],
+            obxSegments: [],
+            errors: []
+        )
+
+        // 6. SEND using your controller (this handles queue + retry)
+//        Hl7ServiceController.shared./*    */(message)
+    }
+    
+    
     // MARK: - SOFT DELETE ALL TRANSACTIONS FOR A DATE
     func softDeleteTransactionsForSelectedDate(
         startDate: Date,
@@ -475,6 +553,7 @@ class UserViewModel: ObservableObject {
         )
         //  Refresh Partial Transactions
         if countType == .FIXED {
+            await sendCompletionHL7(txnId: txnId)
             await getAllPartialTransactions(countType: .FIXED)
         } else {
             await getAllPartialTransactions(countType: .REGULAR)
@@ -696,20 +775,16 @@ class UserViewModel: ObservableObject {
         }
     }
     
-    
     func getTransactionEntity(by txnId: Int64) -> PillCountTransactionEntity? {
         guard txnId > 0 else { return nil }
         return pillDataLocalStorage.fetchPillCountTransactionByTransactionId(txnId: txnId)
     }
     
-    
     @MainActor
     func getUnsyncedTransactions() async {
-            self.unsyncedTransactions = pillDataLocalStorage.getPendingHl7Txn()
-     
+        self.unsyncedTransactions = pillDataLocalStorage.getPendingHl7Txn()
     }
 
-    
     //For showing pms connection status
     func setPmsConnected(_ isConnected: Bool) {
         pmsConnectionState = isConnected ? .connected : .disconnected

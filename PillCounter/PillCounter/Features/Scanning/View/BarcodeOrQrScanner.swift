@@ -290,8 +290,7 @@ extension QRBarcodeScannerView {
     private func handleScannedCode(_ newValue: String) {
 
         if !newValue.isEmpty {
-
-
+            
             // Prevent duplicates
             if pillScanViewModel.isDrugFound != nil {
                 return
@@ -390,7 +389,6 @@ extension QRBarcodeScannerView {
     private var portraitBottomContent: some View {
         
         VStack(spacing: 16) {
-            
             // NDC Number row
             HStack(spacing: 12) {
                 Text("NDC Number:")
@@ -401,16 +399,19 @@ extension QRBarcodeScannerView {
                     imageName: nil,
                     placeholder: "",
                     disabled: false,
-                    text: $pillScanViewModel.ndcNumber,
+                    text: Binding(
+                        get: { pillScanViewModel.ndcNumber },
+                        set: { newValue in
+                            pillScanViewModel.ndcNumber = formatNDC(newValue)
+                        }
+                    ),
                     keyboardType: .phonePad,
                     validation: .none,
-                    maxLength: 11,
+                    maxLength: 13,
                     field: .ndcNumber,
                     focusedField: $focusedField
                 )
                 .frame(maxWidth: .infinity)
-                
-                
             }
             .padding(.top, 30)
             
@@ -463,6 +464,7 @@ extension QRBarcodeScannerView {
                     }
                 )
                 
+                
                 PillCountingButton(
                     iconName: nil,
                     title: "OK",
@@ -484,17 +486,17 @@ extension QRBarcodeScannerView {
                         }
                         
                         // Validate Drug Name
-                        guard !pillScanViewModel.drugNameMannuallyEntered
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                            .isEmpty else {
-                            manualEntryError = "Drug name is required."
-                            return
-                        }
+//                        guard !pillScanViewModel.drugNameMannuallyEntered
+//                            .trimmingCharacters(in: .whitespacesAndNewlines)
+//                            .isEmpty else {
+//                            manualEntryError = "Drug name is required."
+//                            return
+//                        }
                         
                         if router.selectedPillScanningType == .FIXED {
                             if pillScanViewModel.selectedTransaction?.is_from_pms == true {
                                 pillScanViewModel.manualEnterdControlledDrug(scannedNdc: pillScanViewModel.ndcNumber)
-                            }else {
+                            }else{
                                 showPillTargetCountPopup = true
                             }
                         } else {
@@ -515,6 +517,8 @@ extension QRBarcodeScannerView {
                                         countType: router
                                             .selectedPillScanningType ?? .FIXED
                                     )
+                                    
+                                    
                                 }
                                 showMannualEntryPopup = false
                             }
@@ -555,7 +559,12 @@ extension QRBarcodeScannerView {
                 imageName: nil,
                 placeholder: "",
                 disabled: false,
-                text: $pillScanViewModel.ndcNumber,
+                text: Binding(
+                    get: { pillScanViewModel.ndcNumber },
+                    set: { newValue in
+                        pillScanViewModel.ndcNumber = formatNDC(newValue)
+                    }
+                ),
                 keyboardType: .phonePad,
                 validation: .none,
                 maxLength: 11,
@@ -639,7 +648,7 @@ extension QRBarcodeScannerView {
                         if router.selectedPillScanningType == .FIXED {
                             if pillScanViewModel.selectedTransaction?.is_from_pms == true {
                                 pillScanViewModel.manualEnterdControlledDrug(scannedNdc: pillScanViewModel.ndcNumber)
-                            }else {
+                            }else{
                                 showPillTargetCountPopup = true
                             }
                         } else {
@@ -902,6 +911,9 @@ extension QRBarcodeScannerView {
         pillScanViewModel.ndcComparisonResponse  = nil
         pillScanViewModel.isNdcEquivalent = false
         pillScanViewModel.showNdcEquivalencePopup = false
+        pillScanViewModel.ndcNumber = ""
+        pillScanViewModel.drugName = ""
+        pillScanViewModel.drugNameMannuallyEntered  = ""
     }
 }
 

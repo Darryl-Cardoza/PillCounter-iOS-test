@@ -22,7 +22,7 @@ final class TrayDetectionService {
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     private let inputSize: Int       = 640
-    private let confThreshold: Float = 0.90
+    private let confThreshold: Float = 0.75
     private let iouThreshold: Float  = 0.45
     private let trayClassIndex: Int  = 1
 
@@ -95,7 +95,7 @@ final class TrayDetectionService {
                        originalFrameSize: frameSize)
         }
 
-        print("🧱 Trays: \(results.count) — rects: \(results.map { "\($0.rect)" })")
+//        print("🧱 Trays: \(results.count) — rects: \(results.map { "\($0.rect)" })")
         return results
     }
 

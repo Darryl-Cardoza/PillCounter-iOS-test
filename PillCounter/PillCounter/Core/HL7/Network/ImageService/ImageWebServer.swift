@@ -170,10 +170,10 @@ class ImageWebServer {
             return handleHealthCheck()
         } else if path == "/fingerprint" {
             return handleFingerprint()
-        } else if path.hasPrefix("/images/") {
-            let fileName = String(path.dropFirst("/images/".count))
+        }else if path.hasPrefix("/image/") {
+            let fileName = String(path.dropFirst("/image/".count))
             return handleImageRequest(fileName: fileName)
-        } else {
+        }else {
             return createErrorResponse(code: 404, message: "Not Found")
         }
     }
@@ -213,8 +213,7 @@ class ImageWebServer {
         // Read and encode image
         do {
             let imageData = try Data(contentsOf: imageURL)
-            let base64String = imageData.base64EncodedString()
-            
+            let base64String = imageData.base64EncodedString(options: [.lineLength64Characters])
             // Escape JSON strings properly
             let escapedFileName = fileName.replacingOccurrences(of: "\"", with: "\\\"")
             let json = """
@@ -300,6 +299,15 @@ class ImageWebServer {
             }
             connection.cancel()
         })
+    }
+    
+    private func getImageURL(fileName: String) -> URL? {
+        let baseDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let imageDir = baseDir.appendingPathComponent("images") // your folder
+        
+        let fileURL = imageDir.appendingPathComponent(fileName)
+        
+        return FileManager.default.fileExists(atPath: fileURL.path) ? fileURL : nil
     }
 }
 

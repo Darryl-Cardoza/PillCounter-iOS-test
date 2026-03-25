@@ -14,6 +14,7 @@
 - [📁 Folder Structure Overview](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-folder-structure-overview)
 - [⚙️ Configuration Details](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#%EF%B8%8F-configuration-details)
 - [📦 Adding a New Module](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-adding-a-new-module)
+- [🏥 HL7 Integration & Usage](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-hl7-integration--usage)
 
 ---
 
@@ -110,3 +111,12 @@ To add a new feature module:
    * `HistoryLogViewModel.swift` (Logic)
    * `HistoryLogModel.swift` (Data)
 4. Update the `Navigation` logic to map and route to the newly created view.
+
+---
+
+## 🏥 HL7 Integration & Usage
+The app integrates with Health Level Seven International (HL7) standards to ensure interoperability with Pharmacy Management Systems (PMS).
+* **Network Discovery:** The app advertises and discovers HL7 services on the local network.
+* **Transactions:** Capable of caching and storing unsynced offline pill count transactions. Once connection is established, transactions are synced efficiently.
+* **Customization:** Configurable hostname properties (e.g. `pmsHostName`, `pillCounterHostName`) are automatically resolved from user preferences.
+* **Core Module Location:** Discover all related modules, observers, and payload publishers under `Features/HL7/`.

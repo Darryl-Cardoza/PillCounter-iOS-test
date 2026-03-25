@@ -5,15 +5,15 @@
 </p>
 
 ## 📑 Table of Contents
-- [✨ What's Included](#-whats-included)
-- [🛠️ Tech Stack](#️-tech-stack)
-- [📋 Prerequisites](#-prerequisites)
-- [🚀 Project Setup (Step by Step)](#-project-setup-step-by-step)
-- [🏃 Running the Project](#-running-the-project)
-- [🧪 Testing](#-testing)
-- [📁 Folder Structure Overview](#-folder-structure-overview)
-- [⚙️ Configuration Details](#️-configuration-details)
-- [📦 Adding a New Module](#-adding-a-new-module)
+- [✨ What's Included](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-whats-included)
+- [🛠️ Tech Stack](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#%EF%B8%8F-tech-stack)
+- [📋 Prerequisites](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-prerequisites)
+- [🚀 Project Setup (Step by Step)](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-project-setup-step-by-step)
+- [🏃 Running the Project](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-running-the-project)
+- [🧪 Testing](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-testing)
+- [📁 Folder Structure Overview](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-folder-structure-overview)
+- [⚙️ Configuration Details](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#%EF%B8%8F-configuration-details)
+- [📦 Adding a New Module](https://github.com/Rite-Technologies-23/mobrite_pill_counter_ios?tab=readme-ov-file#-adding-a-new-module)
 
 ---
 

@@ -1,351 +1,112 @@
-# MobRite Pill Counting Application — iOS
+# 💊 Pill Counter
 
-The **MobRite Pill Counting Application** is a professional iOS system designed to automate pharmaceutical pill counting workflows using camera-based detection, barcode scanning, and HL7 integration with pharmacy management systems.
+<p align="center">
+  A smart iOS application to accurately count pills using an offline machine learning model.
+</p>
 
-The application enables pharmacists to perform **accurate pill counting, controlled drug verification, and transaction management** while maintaining secure communication with external healthcare infrastructure.
-
-The system is built using **SwiftUI, MVVM architecture, and modular feature-based design** to ensure scalability, maintainability, and clear separation of concerns.
-
----
-
-# System Overview
-
-MobRite Pill Counter is part of the **MobRite pharmacy automation ecosystem**, designed to support:
-
-* Automated pill counting workflows
-* Prescription validation
-* Controlled substance verification
-* HL7 communication with pharmacy management systems
-* Secure pharmaceutical transaction tracking
-
-The system performs **on-device processing**, minimizing latency and ensuring reliability in pharmacy environments.
+## 📑 Table of Contents
+- [✨ What's Included](#-whats-included)
+- [🛠️ Tech Stack](#️-tech-stack)
+- [📋 Prerequisites](#-prerequisites)
+- [🚀 Project Setup (Step by Step)](#-project-setup-step-by-step)
+- [🏃 Running the Project](#-running-the-project)
+- [🧪 Testing](#-testing)
+- [📁 Folder Structure Overview](#-folder-structure-overview)
+- [⚙️ Configuration Details](#️-configuration-details)
+- [📦 Adding a New Module](#-adding-a-new-module)
 
 ---
 
-# Architecture
-
-The application follows a **modular MVVM architecture** combined with a **clean separation of infrastructure, domain logic, and UI layers**.
-
-```
-Presentation Layer
-│
-├─ SwiftUI Views
-├─ Feature Screens
-└─ Reusable UI Components
-        │
-        ▼
-ViewModel Layer
-│
-├─ Screen State Management
-├─ UI Business Logic
-└─ Feature Coordination
-        │
-        ▼
-Repository Layer
-│
-├─ Data Aggregation
-├─ API Communication
-└─ Local Data Access
-        │
-        ▼
-Data Sources
-│
-├─ Local Storage
-├─ Secure Configuration
-└─ External System Communication
-        │
-        ▼
-Infrastructure Layer
-│
-├─ HL7 Messaging
-├─ Network Services
-├─ Security & Encryption
-└─ Application Utilities
-```
-
-This structure ensures that:
-
-* UI remains independent from business logic
-* Features are isolated and maintainable
-* Infrastructure concerns remain centralized
+## ✨ What's Included
+* **Offline Pill Counting**: CoreML-based object detection for precise pill counting without an internet connection.
+* **Localization**: Built-in support for multiple languages (English, Spanish, French, Hindi).
+* **Secure Environment**: Data encryption and security violation protections.
+* **Modern UI**: Fully built with SwiftUI for a seamless, declarative user experience.
+* **CoreData Integration**: Local storage capabilities to save previous count records.
 
 ---
 
-# Project Structure
+## 🛠️ Tech Stack
+* **Language:** Swift 5+
+* **Framework:** SwiftUI
+* **Machine Learning:** CoreML & Vision Framework
+* **Local Storage:** CoreData
+* **Architecture:** MVVM (Model-View-ViewModel) + Feature Modules
+
+---
+
+## 📋 Prerequisites
+Before you begin, ensure you have met the following requirements:
+* **Operating System:** macOS (for Xcode)
+* **IDE:** Xcode 15.0 or later
+* **iOS Target:** iOS 16.0+
+
+---
+
+## 🚀 Project Setup (Step by Step)
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd mobrite_pill_counter_ios
+   ```
+2. **Open the project in Xcode:**
+   Navigate into the project directory and open the `.xcodeproj` file.
+   ```bash
+   cd PillCounter
+   open PillCounter.xcodeproj
+   ```
+3. **Resolve Dependencies:**
+   If using Swift Package Manager (SPM), wait for Xcode to automatically resolve all packages.
+
+---
+
+## 🏃 Running the Project
+1. Select the **PillCounter** scheme at the top of Xcode.
+2. Choose a destination: select your connected iOS device (recommended for camera access and ML features) or an iOS Simulator.
+3. Press `Cmd + R` or click the **Run** (Play) button in the upper left corner to build and run the application.
+
+---
+
+## 🧪 Testing
+The project includes both Unit and UI tests.
+1. Make sure the scheme is set to **PillCounter**.
+2. Press `Cmd + U` or go to **Product > Test** from the top menu to run the test suite.
+3. Test targets include:
+   * `PillCounterTests` for logic and Unit testing.
+   * `PillCounterUITests` for automated interface testing.
+
+---
+
+## 📁 Folder Structure Overview
+Here is a high-level overview of our project structure:
 
 ```
-PillCounter
-│
-├── Base
-│   ├── AppLogoutManager
-│   ├── BaseRepository
-│   └── BaseView
-│
-├── Core
-│   │
-│   ├── Components
-│   │   ├── Button
-│   │   ├── Calendar
-│   │   ├── Checkbox
-│   │   ├── Confirmation
-│   │   ├── ConfirmationDialogue
-│   │   ├── InputField
-│   │   ├── Loader
-│   │   └── TextEditor
-│   │
-│   ├── Config
-│   ├── Constants
-│   │
-│   ├── HL7
-│   │   ├── Network
-│   │   └── Service
-│   │
-│   └── Utils
-│
-├── Features
-│   │
-│   ├── Login
-│   │
-│   ├── Scanning
-│   │   ├── LocalDataSource
-│   │   ├── Model
-│   │   │   └── ControlledDrug
-│   │   └── ViewModel
-│   │       ├── PillScanViewModel
-│   │       └── CameraViewModel
-│   │
-│   └── User
-│       ├── Model
-│       │   ├── Request
-│       │   └── Response
-│       │
-│       ├── Repository
-│       │   ├── SettingsRepository
-│       │   ├── UserLocalDataSource
-│       │   └── UserRepository
-│       │
-│       ├── View
-│       └── ViewModel
-│           └── UserViewModel
-│
-├── Navigation
-│   ├── Router
-│   └── AppNavigation
-│
-├── Assets
-├── Config
-├── Localizable
-│
-├── PillCounterApp.swift
-├── SecurityViolationView
-│
-├── Tests
-│   ├── PillCounterTests
-│   └── PillCounterUITests
+PillCounter/
+├── Assets.xcassets/        # App icons, colors, and static image assets
+├── Base/                   # Foundational classes and extensions
+├── Core/                   # Core functions like Network/ML models
+├── Features/               # Main application features and views
+├── Navigation/             # Navigation and routing logics
+├── Preview Content/        # Mock data for SwiftUI previews
+├── PillCounter.xcdatamodeld/ # CoreData database scheme
+└── PillCounterApp.swift    # Application entry point
 ```
 
 ---
 
-# Core Modules
-
-## Base Layer
-
-The **Base module** provides shared abstractions used across the application.
-
-Key responsibilities include:
-
-* Common view abstractions
-* Shared repository behavior
-* Application logout management
-
-This layer ensures consistent patterns across feature modules.
+## ⚙️ Configuration Details
+* **App Entitlements:** Required capabilities are specified in `PillCounter.entitlements`.
+* **Config Files:** Sensitive configurations may be utilizing encrypted properties (e.g., `Config.plist.enc`).
+* **Info.plist:** Contains essential app configuration details such as Camera permission strings which are crucial for the ML model to operate.
 
 ---
 
-# Core Infrastructure
-
-## Components
-
-Reusable SwiftUI components used throughout the application interface.
-
-Examples include:
-
-* Button components
-* Form inputs
-* Confirmation dialogs
-* Loaders
-* UI utilities
-
-These components ensure **consistent UI patterns and styling** across the system.
-
----
-
-## Configuration
-
-The configuration layer manages:
-
-* Environment configuration
-* Application constants
-* Secure configuration files
-
-Sensitive configuration values are encrypted and loaded securely at runtime.
-
----
-
-## HL7 Integration
-
-The HL7 module enables communication with **external pharmacy management systems**.
-
-### Network Layer
-
-Handles:
-
-* HL7 transport communication
-* Message delivery
-* External system connectivity
-
-### Service Layer
-
-Responsible for:
-
-* HL7 message construction
-* Message parsing
-* Processing inbound system messages
-
-This module enables the application to integrate with **pharmacy and hospital systems using healthcare interoperability standards**.
-
----
-
-# Feature Modules
-
-Application functionality is organized using **feature-driven modules** to improve maintainability and scalability.
-
----
-
-## Login
-
-Handles authentication and session management.
-
-Responsibilities include:
-
-* User login flow
-* Secure session initialization
-* Authentication state management
-
----
-
-## Scanning
-
-The scanning module is responsible for **pill counting operations**.
-
-Key responsibilities include:
-
-* Camera lifecycle management
-* Pill detection workflow
-* Controlled drug validation
-* Transaction creation
-
-### Core Components
-
-**ViewModels**
-
-* `PillScanViewModel`
-* `CameraViewModel`
-
-These manage camera input, detection state, and transaction logic.
-
-**Models**
-
-* Controlled drug models
-* Scanning data models
-
----
-
-## User Module
-
-The User module manages user-related data and application settings.
-
-### Data Models
-
-* API request models
-* API response models
-
-### Repositories
-
-* `UserRepository`
-* `SettingsRepository`
-* `UserLocalDataSource`
-
-These handle both **remote and local data sources**.
-
-### ViewModels
-
-* `UserViewModel`
-
-Responsible for user state and profile logic.
-
----
-
-# Navigation
-
-Navigation is handled through a centralized routing system.
-
-```
-Navigation
-├── Router
-└── AppNavigation
-```
-
-Responsibilities include:
-
-* Application routing
-* Screen flow control
-* Navigation state management
-
-This approach prevents navigation logic from leaking into feature modules.
-
----
-
-# Security
-
-Security is a critical component of the system due to healthcare and pharmaceutical requirements.
-
-Security features include:
-
-* Encrypted configuration files
-* Secure token storage
-* Session management
-* Runtime security validation
-
-The `SecurityViolationView` is responsible for handling potential security issues detected within the application.
-
----
-
-# Testing
-
-The project includes both **unit tests and UI tests**.
-
-```
-PillCounterTests
-PillCounterUITests
-```
-
-Test coverage focuses on:
-
-* ViewModel logic
-* Business rules
-* Navigation behavior
-* UI interaction flows
-
----
-
-# Organization
-
-Developed by **Rite Technologies**
-
-MobRite products focus on:
-
-* Pharmacy automation
-* Pill counting systems
-* Healthcare system integrations
-* HL7-based interoperability solutions
+## 📦 Adding a New Module
+To add a new feature module:
+1. Navigate to the `Features` folder.
+2. Create a new folder for your feature (e.g., `HistoryLog`).
+3. Add the necessary files following the MVVM pattern:
+   * `HistoryLogView.swift` (UI)
+   * `HistoryLogViewModel.swift` (Logic)
+   * `HistoryLogModel.swift` (Data)
+4. Update the `Navigation` logic to map and route to the newly created view.

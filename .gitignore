@@ -63,3 +63,9 @@ fastlane/test_output
 
 .DS_Store
 **/.DS_Store
+
+Config.plist
+**/Config.plist
+
+# model encryption key not to be committed !!
+*.mlmodelkey

@@ -15,10 +15,13 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var loginViewModel: LoginViewModel
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
-    
+    @EnvironmentObject private var pillScanViewModel: PillScanViewModel
+
     @State private var showLogoutPopup: Bool = false
     
     @AppStorage(AppStorageManager.AppStorageKeys.saveHistoryOption)
+    
+
     
     private var storedHistoryOption: String = SaveHistoryOption.default.rawValue
     
@@ -43,7 +46,14 @@ struct HamburgerMenuView: View {
         .customPopup(isPresented: $showLogoutPopup) {
             logoutPopUp
         }
+        .onAppear {
+            Task {
+                await userViewModel.getUnsyncedTransactions()
+                userViewModel.getAllTransactionsAndFilterByCountType()
+            }
+        }
     }
+      
 
     // MARK: - LOGOUT POP UP
     private var logoutPopUp: some View {
@@ -56,12 +66,16 @@ struct HamburgerMenuView: View {
             showLogoutPopup = false
         } onConfirm: {
             Task {
+                router.setRoot(
+                    to: .authentication(.login(.LoginEmail)))
                 await loginViewModel.logout()
-                if loginViewModel.isLogoutSucces {
-                    showLogoutPopup = false
-                    router.setRoot(
-                        to: .authentication(.login(.LoginEmail)))
-                }
+                
+                showLogoutPopup = false
+                AppLogoutManager.performLogout(
+                    userVM: userViewModel,
+                    pillScanVM: pillScanViewModel,
+                    loginViewModel: loginViewModel
+                )
             }
         }
     }
@@ -179,9 +193,13 @@ struct HamburgerMenuView: View {
         case .History:
             Text("\(storedHistoryOption)")
                 .foregroundStyle(appColors.text)
-                // In landscape, we add padding. In portrait, it naturally aligns right.
                 .padding(.horizontal, isLandscape ? 10 : 0)
 
+        case .UnsyncedTransaction:
+            Text("\(userViewModel.unsyncedTransactions.count)")
+                .foregroundStyle(appColors.text)
+                .padding(.horizontal, isLandscape ? 10 : 0)
+              
         case .FixedCount:
             countButtonsRow(
                 completedCount: userViewModel
@@ -193,15 +211,14 @@ struct HamburgerMenuView: View {
                 partialBg: appColors.primaryBackground,
                 primaryIconColor: appColors.secondary,
                 isLandscape: isLandscape,
+                isFixed: true,
                 onPartialTap: {
-                    if userViewModel.fixedCountTransactionPartialCount > 0 {
                         router.selectedPillScanningType = .FIXED
                         router.navigate(
                             to: .authentication(
                                 .login(.dashboard(.fixedCountPartial))))
-                    }
                 }
-            )
+            ).padding(.horizontal,0)
 
         case .RegularCount:
             countButtonsRow(
@@ -214,13 +231,12 @@ struct HamburgerMenuView: View {
                 partialBg: appColors.primaryBackground,
                 primaryIconColor: appColors.primary,
                 isLandscape: isLandscape,
+                isFixed: false,
                 onPartialTap: {
-                    if userViewModel.regularCountTransactionPartialCount > 0 {
                         router.selectedPillScanningType = .REGULAR
                         router.navigate(
                             to: .authentication(
                                 .login(.dashboard(.regularCountPartial))))
-                    }
                 }
             )
 
@@ -240,11 +256,13 @@ struct HamburgerMenuView: View {
         partialBg: Color,
         primaryIconColor: Color,
         isLandscape: Bool,
+        isFixed: Bool,
         onPartialTap: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 12) {
+        let historyType: HistoryFilterType = if (isFixed){  .fixed} else{ .regular}
+        HStack(spacing: 10) {
             // Landscape: Buttons align Right. Portrait: Buttons fill width.
-            if isLandscape { Spacer() }
+            if isLandscape { Spacer(minLength: 0) }
 
             PillCountingButton(
                 iconName: "tick_icon_pink",
@@ -258,13 +276,17 @@ struct HamburgerMenuView: View {
                 verticalPadding: 0,
                 iconSize: 16,
                 action: {
-                    router.navigate(to: .authentication(.user(.userSettings(.History))))
+                    router.navigate(to: .authentication(.user(.userSettings(.History(historyType)))))
                 },
                 iconColor: primaryIconColor
             )
-            // Portrait: Button takes equal available space
-            .frame(maxWidth: isLandscape ? nil : .infinity)
+            .fixedSize()
+            .frame(minWidth: isLandscape ? 150 : nil)
 
+            
+            if !isLandscape {Spacer()}
+            
+            
             PillCountingButton(
                 iconName: "partial",
                 title:
@@ -273,15 +295,15 @@ struct HamburgerMenuView: View {
                 backgroundColor: partialBg,
                 font: .system(size: 14, weight: .semibold),
                 cornerRadius: 32,
-                horizontalPadding: isLandscape ? 16 : 0,
+                horizontalPadding:  0,
                 verticalPadding: 8,
                 iconSize: 16,
                 action: onPartialTap,
                 iconColor: primaryIconColor
             )
-            // Portrait: Button takes equal available space
-            .frame(maxWidth: isLandscape ? nil : .infinity)
+            .frame(maxWidth:150)
         }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - MENU ACTION HANDLER
@@ -292,7 +314,11 @@ struct HamburgerMenuView: View {
             router.navigate(
                 to: .authentication(
                     .login(.dashboard(.pillCount(.barcodeScanning)))))
-
+            
+        case .UnsyncedTransaction:
+            router.navigate(
+                to: .authentication(.user(.userSettings(.unsyncedTransaction))))
+            
         case .Settings:
             router.navigate(
                 to: .authentication(.user(.userSettings(.settings))))
@@ -312,7 +338,7 @@ struct HamburgerMenuView: View {
             router.navigate(to: .authentication(.user(.userSettings(.profile))))
 
         case .History:
-            router.navigate(to: .authentication(.user(.userSettings(.History))))
+            router.navigate(to: .authentication(.user(.userSettings(.History(.all)))))
 
         }
     }

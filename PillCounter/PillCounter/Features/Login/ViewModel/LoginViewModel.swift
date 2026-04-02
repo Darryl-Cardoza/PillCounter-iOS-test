@@ -33,6 +33,12 @@ class LoginViewModel: ObservableObject {
         Bool = false
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = false
+    
+    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable)
+    
+
+    
+    var isHl7Enabled: Bool = false
 
     // for successful sending of the otp and navigate to the next screen.
     // successful otp sent to the email.
@@ -182,49 +188,55 @@ class LoginViewModel: ObservableObject {
         isLoading = true
 
         do {
-
             defer { isLoading = false }
 
-            let verifyOTPresult = try await loginrepo.verifyOTP(
-                email: userEmail, otp: otpString)
 
-            otp = ["", "", "", ""]
+            let verifyOTPresult = try await loginrepo.verifyOTP(
+                email: userEmail,
+                otp: otpString
+            )
+
 
             if verifyOTPresult.isSuccess ?? false {
-                errorMessage = nil
+
+
+                otp = ["", "", "", ""]
+
                 isOtpVerificationSuccess = true
                 isLoggedIn = true
+                isHl7Enabled = verifyOTPresult.data?.user?.isHl7Enabled ?? false
 
-                // store the access token and refresh token to the app storage or user defaults.
-                // saving the user email to user defaults too.
                 accessToken = verifyOTPresult.data?.accessToken ?? ""
                 refreshToken = verifyOTPresult.data?.refreshToken ?? ""
                 userEmailToSaveInUserDefaults = userEmail
 
                 let expiresInSeconds = TimeInterval(
-                    verifyOTPresult.data?.expiresIn ?? 86400)
+                    verifyOTPresult.data?.expiresIn ?? 86400
+                )
                 let expiryDate = Date().addingTimeInterval(expiresInSeconds)
                 AppStorageManager.shared.tokenExpiryTimestamp =
                     expiryDate.timeIntervalSince1970
+
+                await MainActor.run {
+                    Hl7ServiceController.shared.evaluate()
+                }
+
             } else {
                 errorMessage =
                     verifyOTPresult.message
-                    ?? "Something went wrong. Please try again later."
+                    ?? "Invalid OTP. Please try again."
             }
-        } catch let error {
-            isLoading = false
+
+        } catch {
             isOtpVerificationSuccess = false
-            errorMessage = "Something went wrong."
-            print("Error: \(error)")
+            errorMessage = "Unable to verify OTP. Please try again."
         }
     }
-
     // MARK: LOGOUT
     func logout() async {
         isLoading = true
 
         defer { isLoading = false }
-
         do {
             let logoutResult = try await loginrepo.logout(
                 refreshToken: refreshToken)
@@ -232,9 +244,11 @@ class LoginViewModel: ObservableObject {
             if logoutResult.isSuccess ?? false {
                 errorMessage = nil
                 isLogoutSucces = true
-                AppStorageManager.shared.logout()
             }
 
+            Task { @MainActor in
+                Hl7ServiceController.shared.evaluate()
+            }
         } catch let error {
             isLoading = false
             print("Error: \(error)")
@@ -248,7 +262,6 @@ class LoginViewModel: ObservableObject {
 
         errorMessage = nil
 
-        otp = ["", "", "", ""]
 
         defer { isLoading = false }
         // show some toast message to user to confirm that otp was resent.
@@ -257,9 +270,9 @@ class LoginViewModel: ObservableObject {
 
             if result.isSuccess ?? false {
                 resendOTPSent = true
-                errorMessage = nil
+                errorMessage = "A new OTP has been sent."
                 startResendTimer()
-                // show toast message to user
+                otp = ["", "", "", ""]
             } else {
                 errorMessage = result.message ?? "Something went wrong!"
             }

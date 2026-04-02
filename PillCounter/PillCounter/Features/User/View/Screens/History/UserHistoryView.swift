@@ -13,7 +13,9 @@ struct UserHistoryView: View {
     @EnvironmentObject private var appColors: AppColors
 
     // Default to today, but we handle the "Initial Load" separately
-    @State private var selectedDate: Date = Date()
+    @State private var startDate: Date? = Date()
+    @State private var endDate: Date? = nil
+    
     @State private var showDeleteConfirmation: Bool = false
 
     // Environment varibales
@@ -21,7 +23,36 @@ struct UserHistoryView: View {
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @EnvironmentObject private var router: Router
 
+    // MARK: - SEARCH STATE
+    @State private var isSearching: Bool = false
+    @State private var searchText: String = ""
+    @FocusState private var isSearchFieldFocused: Bool
+    
     @StateObject private var pdfService = PDFShareService.shared
+    
+    let filterType: HistoryFilterType
+
+    private var displayedTransactions: [PillCountTransactionEntity] {
+
+        guard !searchText.isEmpty else {
+            return userViewModel.filteredTransactionsOfUserByDate
+        }
+
+        let lowercasedQuery = searchText.lowercased()
+
+        return userViewModel.filteredTransactionsOfUserByDate.filter { txn in
+
+            let drugName = txn.drug?.drug_name?.lowercased() ?? ""
+            let note = txn.note?.lowercased() ?? ""
+            let status = txn.status?.lowercased() ?? ""
+
+            return drugName.contains(lowercasedQuery)
+                || note.contains(lowercasedQuery)
+                || status.contains(lowercasedQuery)
+        }
+    }
+
+    
 
     // MARK: MAIN VIEW
     var body: some View {
@@ -34,8 +65,46 @@ struct UserHistoryView: View {
                 bottomContent: {
                     userHistoryTransactionsList
                 },
-                showBackButton: true,
+                headerActions: {
+                    if isSearching {
+                        UnderlinedSearchBar(
+                            text: $searchText,
+                            isFocused: $isSearchFieldFocused,
+                            appColors: appColors,
+                            onExitSearch: {
+                                // Logic to close search mode
+                                withAnimation(.spring()) {
+                                    isSearching = false
+                                    searchText = ""
+                                    isSearchFieldFocused = false
+                                }
+                            }
+                        )
+                        .transition(
+                            .move(edge: .trailing).combined(with: .opacity))
+
+                    } else {
+                        // --- STANDARD MODE HEADER ---
+                        HStack(spacing: 16) {
+                            Button {
+                                withAnimation(.spring()) {
+                                    isSearching = true
+                                    isSearchFieldFocused = true
+                                }
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(appColors.secondary)
+                            }
+                        }
+                        .padding(.trailing, 16)
+                        .transition(.opacity)
+                    }
+                },
+
+                showBackButton: !isSearching,
                 showHamburgerMenu: false,
+                
                 title: NSLocalizedString("HISTORY", comment: "")
             )
 
@@ -49,27 +118,32 @@ struct UserHistoryView: View {
             }
         }
         .onAppear {
-            Task {
-                // 1. On App Launch/View Appear, load the "1 Week/1 Month" range default
-                await userViewModel.getTransactionsByDate(
-                    selectedDate: selectedDate)
-
-                // Allow a small delay before enabling the calendar listener to avoid instant override
-                try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5s
-            }
+            fetchTransactions()
         }
-        .onChange(of: selectedDate) { oldValue, newValue in
-            // Only fetch specific date if the user actually interacts with calendar
-            // and we aren't in the initialization phase
-            Task {
-                // Otherwise, load specific single-day data
-                await userViewModel.getTransactionsByDate(
-                    selectedDate: newValue)
-            }
-
+        .onChange(of: startDate) { _, _ in
+            fetchTransactions()
+        }
+        .onChange(of: endDate) { _, _ in
+            fetchTransactions()
         }
         .customPopup(isPresented: $showDeleteConfirmation) {
             deleteConfirmationPopUp
+        }
+    }
+    
+    private func fetchTransactions() {
+
+        guard let start = startDate else {
+            userViewModel.filteredTransactionsOfUserByDate = []
+            return
+        }
+
+        Task {
+            await userViewModel.getTransactionsByDate(
+                startDate: start,
+                endDate: endDate ?? start,
+                filter: filterType
+            )
         }
     }
 
@@ -85,14 +159,19 @@ struct UserHistoryView: View {
             ) {
                 showDeleteConfirmation = false
             } onConfirm: {
-                // delete all the transactions for that date.
                 Task {
+                    guard let start = startDate else { return }
+                    
                     await userViewModel.softDeleteTransactionsForSelectedDate(
-                        selectedDate: selectedDate
+                        startDate: start,
+                        endDate: endDate ?? start,
+                        filter: filterType
                     )
+
                     showDeleteConfirmation = false
                 }
             }
+
 
         }
         .frame(width: 275)
@@ -107,7 +186,7 @@ struct UserHistoryView: View {
                     // MARK: DYNAMIC COUNTS
                     // Shows: "5 Txns • 120 Pills" or similar
                     Text(
-                        "\(userViewModel.historyTotalTransactionsCount) counts"
+                        "\(displayedTransactions.count) counts"
                     )
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -118,19 +197,21 @@ struct UserHistoryView: View {
                     // icons
                     Button {
                         // something
-                        if let vc = UIApplication.shared.topMostViewController()
-                        {
-                            PDFShareService.shared
-                                .generateAndShareUserHistoryPDF(
-                                    selectedDate: Formatter.getDateString(
-                                        from: Int64(
-                                            selectedDate.timeIntervalSince1970
-                                                * 1000)),
-                                    transactions: userViewModel
-                                        .filteredTransactionsOfUserByDate,
-                                    presentingVC: vc
-                                )
+                        if let vc = UIApplication.shared.topMostViewController(),
+                           let start = startDate {
+
+                            let exportStart = start
+                            let exportEnd = endDate ?? start
+
+                            let formattedDate = "\(Formatter.getDateString(from: Int64(exportStart.timeIntervalSince1970 * 1000))) - \(Formatter.getDateString(from: Int64(exportEnd.timeIntervalSince1970 * 1000)))"
+
+                            PDFShareService.shared.generateAndShareUserHistoryPDF(
+                                selectedDate: formattedDate,
+                                transactions: userViewModel.filteredTransactionsOfUserByDate,
+                                presentingVC: vc
+                            )
                         }
+
                     } label: {
                         Image("pdf")
                             .resizable()
@@ -144,7 +225,7 @@ struct UserHistoryView: View {
                                     .resizable()
                                     .scaledToFit()
                             )
-                    }
+                    }.padding(.trailing,20)
 
                     Button {
                         showDeleteConfirmation = true
@@ -164,7 +245,7 @@ struct UserHistoryView: View {
                     }
 
                 }
-                .padding(.horizontal, isLandscape ? 40 : 20)
+                .padding(.horizontal, isLandscape ? 40 : 5)
                 .padding(.top, isLandscape ? SafeAreaInsets.top + 10 : 10)
             }
 
@@ -180,13 +261,23 @@ struct UserHistoryView: View {
                             "No transactions found for this period.")
                     )
                     .padding(.top, 40)
+                }else if displayedTransactions.isEmpty {
+                    
+                    // Search returned nothing
+                    ContentUnavailableView(
+                        "No Results",
+                        systemImage: "magnifyingglass",
+                        description: Text("No transactions match your search.")
+                    )
+                    .padding(.top, 40)
+
                 } else {
                     VStack(alignment: .leading) {
                         ForEach(
-                            userViewModel.filteredTransactionsOfUserByDate,
+                            displayedTransactions,
                             id: \.txn_id
                         ) { txn in
-                            TransactionRow(txn: txn, appColors: appColors)
+                            TransactionRow(txn: txn, appColors: appColors,pillScanViewModel: pillScanViewModel)
                                 .onTapGesture {
                                     Task {
                                         await pillScanViewModel
@@ -207,7 +298,6 @@ struct UserHistoryView: View {
                                 .foregroundStyle(appColors.text)
                         }
                     }
-                    .padding(.horizontal, 10)
                     .padding(.bottom, 20)
                 }
             }
@@ -226,7 +316,8 @@ struct UserHistoryView: View {
             selectedColor: appColors.secondary,
             textColor: appColors.text,
             backgroundColor: .clear,
-            selectedDate: $selectedDate
+            startDate: $startDate,
+            endDate: $endDate
         )
         .padding(
             .top,
@@ -242,6 +333,7 @@ struct UserHistoryView: View {
 struct TransactionRow: View {
     let txn: PillCountTransactionEntity
     let appColors: AppColors
+    let pillScanViewModel: PillScanViewModel
 
     var body: some View {
         HStack(spacing: 16) {
@@ -254,6 +346,7 @@ struct TransactionRow: View {
                 Text(txn.drug?.drug_name ?? "Unknown Pill")
                     .foregroundColor(appColors.text)
                     .font(.headline)
+                    .lineLimit(2)
 
                 Text(convertInt64ToDate(txn.created_at))
                     .foregroundColor(appColors.text.opacity(0.7))
@@ -264,17 +357,27 @@ struct TransactionRow: View {
 
             // Calculated Pill Count for this specific transaction
             // We need to sum the details for this row
-            let count =
-                (txn.pillCountTransactionDetails
-                as? Set<PillCountTransactionDetailsEntity>)?
-                .reduce(0) { $0 + Int($1.pill_count) } ?? 0
+//            let count =
+//                (txn.pillCountTransactionDetails
+//                as? Set<PillCountTransactionDetailsEntity>)?
+//                .reduce(0) { $0 + Int($1.pill_count) } ?? 0
 
+            
+            let count = getTotalPillCount(for: txn)
             let targetCount = txn.target_count
 
             let notes = txn.note
+         
+            let isRegular = (txn.count_type == CountType.REGULAR.rawValue)
+
+            let displayText = isRegular
+                ? "\(count)"
+                : "\(count) / \(targetCount)"
+
+            
 
             HStack(spacing: 15) {
-                if targetCount != count {
+                if targetCount != count && txn.status ==  "partial" {
                     Image("partial")
                         .resizable()
                         .scaledToFit()
@@ -300,9 +403,11 @@ struct TransactionRow: View {
                         )
                 }
 
-                Text("\(count)")
+                Text(displayText)
                     .foregroundColor(appColors.text)
                     .fontWeight(.bold)
+
+            
             }
             .padding(.trailing)
         }
@@ -331,5 +436,17 @@ struct TransactionRow: View {
         formatter.dateFormat = "dd-MM-yyyy hh:mm a"
 
         return formatter.string(from: date)
+    }
+    
+    private func getTotalPillCount(for transaction: PillCountTransactionEntity)
+        -> Int
+    {
+        let detailsArray =
+            (transaction.pillCountTransactionDetails?.allObjects
+                as? [PillCountTransactionDetailsEntity]) ?? []
+        return pillScanViewModel.getTotalPillCountOfCurrentTransactionByType(
+            type:.targetVerification,
+            details: detailsArray.filter { !$0.is_deleted }
+        )
     }
 }

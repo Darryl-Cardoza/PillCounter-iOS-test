@@ -30,7 +30,7 @@ final class PillDetectionService {
     private let model = PillDetector.shared.model
     private let inputSize: CGFloat = 640
     private let iouThreshold: Double = 0.75
-    private let confThreshold: Double = 0.25
+    private let confThreshold: Double = 0.70
 
     private let stabilizer = CountStabilizer(windowSize: 7)
 
@@ -39,50 +39,67 @@ final class PillDetectionService {
         completion: @escaping ([DetectionResult], Int) -> Void
     ) {
 
+
         guard let model else {
             return
         }
 
+
         // PREPROCESS
-        guard
-            let resized = Letterbox.preprocess(
-                pixelBuffer,
-                targetSize: Int(inputSize))
-        else {
+        guard let resized = Letterbox.preprocess(
+            pixelBuffer,
+            targetSize: Int(inputSize)
+        ) else {
             return
         }
+
 
         // BUILD MODEL INPUT
         let input = bestInput(
             image: resized,
             iouThreshold: iouThreshold,
-            confidenceThreshold: confThreshold)
+            confidenceThreshold: confThreshold
+        )
+
 
         // PREDICT
+        let start = CFAbsoluteTimeGetCurrent()
+
         guard let output = try? model.prediction(input: input) else {
             completion([], 0)
             return
         }
 
+        var inferenceTime = (CFAbsoluteTimeGetCurrent() - start) * 1000
+
         // DECODE
-        let dets = decodeDetections(
+        let decoded = decodeDetections(
             coords: output.coordinates,
             conf: output.confidence,
             originalSize: pixelBuffer.size,
             scaleInfo: Letterbox.currentScaleInfo
         )
 
+
         // NMS
         let final = NMS.run(
-            detections: dets,
-            iouThreshold: Float(iouThreshold))
+            detections: decoded,
+            iouThreshold: Float(iouThreshold)
+        )
+
+
+        final.enumerated().forEach { index, det in
+
+        }
 
         // STABILIZER
         let stabilized = stabilizer.update(rawCount: final.count)
 
-        // COMPLETE
+
+
         completion(final, stabilized)
     }
+
 
     private func decodeDetections(
         coords: MLMultiArray,

@@ -25,7 +25,18 @@ final class AppStorageManager {
         static let isNewUser = "is_new_user"
         static let tokenExpiryTimestamp = "token_expiry_timestamp"
         static let saveHistoryOption = "save_history_option"
-        static let isPillCountingEnabled = "is_pill_counting_enabled"
+        static let isHl7Enable: String = "is_hl7_enable"
+        static let pmsHostName = "pms_host_name"
+        static let pillCounterHostName = "pillcounter_host_name"
+        
+    
+       static let isPillCountingEnabled = "isPillCountingEnabled"
+       static let isDoubleCountRequired = "isDoubleCountRequired"
+       static let isBackCountRequired = "isBackCountRequired"
+       static let isHapticEnabled = "isHapticEnabled"
+       static let isSoundEnabled = "isSoundEnabled"
+       static let isSpeechEnabled = "isSpeechEnabled"
+       static let selectedSchedules = "selectedSchedules"
     }
 
     // MARK: - Access Token
@@ -99,7 +110,92 @@ final class AppStorageManager {
             defaults.setValue(newValue, forKey: AppStorageKeys.isPillCountingEnabled)
         }
     }
+    
+    var isDoubleCountRequired: Bool {
+        get {
+            defaults.bool(forKey: AppStorageKeys.isDoubleCountRequired)
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.isDoubleCountRequired)
+        }
+    }
+    var isBackCountRequired: Bool {
+        get {
+            defaults.bool(forKey: AppStorageKeys.isBackCountRequired)
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.isBackCountRequired)
+        }
+    }
+    
+    var isHapticEnabled: Bool {
+        get {
+            defaults.bool(forKey: AppStorageKeys.isHapticEnabled)
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.isHapticEnabled)
+        }
+    }
+    var isSoundEnabled: Bool {
+        get {
+            defaults.bool(forKey: AppStorageKeys.isSoundEnabled)
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.isSoundEnabled)
+        }
+    }
+    
+    var isSpeechEnabled: Bool {
+        get {
+            defaults.bool(forKey: AppStorageKeys.isSpeechEnabled)
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.isSpeechEnabled)
+        }
+    }
+    
+    var selectedSchedules: Set<DrugSchedule> {
+        get {
+            let stored = defaults.stringArray(forKey: AppStorageKeys.selectedSchedules) ?? []
+            return Set(stored.compactMap { DrugSchedule(rawValue: $0) })
+        }
+        set {
+            let rawValues = newValue.map { $0.rawValue }
+            defaults.setValue(rawValues, forKey: AppStorageKeys.selectedSchedules)
+        }
+    }
+    
+    
+    
+    //MARK: - Pill Counting HL7 enabled
+    var isHl7Enabled: Bool {
+        get {
+            defaults.bool(forKey: AppStorageKeys.isHl7Enable)
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.isHl7Enable)
+        }
+    }
+    
+    var pmsHostName: String {
+        get {
+            defaults.string(forKey: AppStorageKeys.pmsHostName) ?? ""
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.pmsHostName)
+        }
+    }
 
+    var pillCounterHostName: String {
+        get {
+            defaults.string(forKey: AppStorageKeys.pillCounterHostName) ?? ""
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.pillCounterHostName)
+        }
+    }
+    
+ 
     // MARK: - Add email
     func addEmail(_ email: String) {
         guard !userSavedEmails.contains(email) else { return }
@@ -164,5 +260,8 @@ final class AppStorageManager {
         defaults.removeObject(forKey: AppStorageKeys.userId)
         defaults.removeObject(forKey: AppStorageKeys.isLoggedIn)
         defaults.removeObject(forKey: AppStorageKeys.tokenExpiryTimestamp)
+        defaults.removeObject(forKey: AppStorageKeys.isHl7Enable)
+        defaults.removeObject(forKey: AppStorageKeys.pmsHostName)
+        defaults.removeObject(forKey: AppStorageKeys.pillCounterHostName)
     }
 }

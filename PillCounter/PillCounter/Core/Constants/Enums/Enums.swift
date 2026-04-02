@@ -40,6 +40,11 @@ public enum DashboardFlow: Hashable, Codable {
 public enum ScanningFlow: Codable, Hashable {
     case barcodeScanning
     case pillCountView
+    case controlledDrug(ControlFlow)
+}
+
+public enum ControlFlow: Hashable, Codable {
+    case vialCount
 }
 
 public enum UserFlow: Hashable, Codable {
@@ -47,12 +52,13 @@ public enum UserFlow: Hashable, Codable {
     case userSettings(HamburgerMenuFLow)
 }
 
+
+
 public enum HamburgerMenuFLow: Hashable, Codable {
-    //    case fixedCount
-    //    case regularCount
-    case History
+    case History(HistoryFilterType)
     case profile
     case settings
+    case unsyncedTransaction
     case HistoryTransactionDetail
 }
 
@@ -61,24 +67,25 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
     case RegularCount
     case Profile
     case History
+    case UnsyncedTransaction
     case Settings
     case Logout
 
     public var id: String { title }
 
     var title: String {
-
         switch self {
-        case .FixedCount:
-            return NSLocalizedString("FIXED_COUNT_TITLE", comment: "")
-        case .RegularCount:
-            return NSLocalizedString("REGULAR_COUNT_TITLE", comment: "")
-        case .Profile: return NSLocalizedString("PROFILE", comment: "")
-        case .History: return NSLocalizedString("HISTORY", comment: "")
-        case .Settings: return NSLocalizedString("SETTINGS", comment: "")
-        case .Logout: return NSLocalizedString("LOGOUT", comment: "")
-
+            case .FixedCount:
+                return NSLocalizedString("FIXED_COUNT_TITLE", comment: "")
+            case .RegularCount:
+                return NSLocalizedString("REGULAR_COUNT_TITLE", comment: "")
+            case .Profile: return NSLocalizedString("PROFILE", comment: "")
+            case .History: return NSLocalizedString("HISTORY", comment: "")
+            case .UnsyncedTransaction:return NSLocalizedString("Unsynced Transactions", comment: "")
+            case .Settings: return NSLocalizedString("SETTINGS", comment: "")
+            case .Logout: return NSLocalizedString("LOGOUT", comment: "")
         }
+        
     }
 
     var iconName: String {
@@ -88,6 +95,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
         case .RegularCount: return "regular_count_icon"
         case .Profile: return "profile_icon"
         case .History: return "history_icon"
+        case .UnsyncedTransaction: return "unsync_icon"
         case .Settings: return "settings_icon"
         case .Logout: return "logout_icon"
         }
@@ -156,4 +164,50 @@ public enum InputValidation {
     case phone
     case email
     case npi
+}
+    
+
+public enum HistoryFilterType: String, Codable, Hashable {
+    case all
+    case fixed
+    case regular
+    
+    var title: String {
+          switch self {
+          case .all:
+              return NSLocalizedString("HISTORY", comment: "")
+          case .fixed:
+              return "Fixed Count History"
+          case .regular:
+              return "Quick Count History"
+          }
+      }
+}
+
+
+enum ControlledStep: String, CaseIterable {
+    
+    case scan = "SCAN"
+    case containerInitiate = "CONTAINER_INITIATE"
+    case targetVerification = "TARGET_VERIFICATION"
+    case targetReverification = "TARGET_REVERIFICATION"
+    case vial = "VIAL"
+    case containerPending = "CONTAINER_PENDING"
+    
+    var displayText: String {
+        switch self {
+        case .scan:
+            return "Scan Container QR Code"
+        case .containerInitiate:
+            return "Count all pills from container"
+        case .targetVerification:
+            return "Count Prescribed quantity"
+        case .targetReverification:
+            return "Recount Prescribed Quantity."
+        case .vial:
+            return "Take picture of the counted Pills Vial"
+        case .containerPending:
+            return "Count all remaining Pills from Container"
+        }
+    }
 }

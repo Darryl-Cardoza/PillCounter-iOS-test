@@ -17,12 +17,14 @@
 "LOGIN_BUTTON" = "LOGIN";
 "EMAIL_INPUT_FIELD_PLACEHOLDER" = "Email";
 "EMAIL_ERROR_MESSAGE" = "Please enter your email address." ;
+"EMAIL_ERROR_INVALID" = "Please enter correct email address.";
 
 // MARK: - OTP VERIFICATION SCREEN
 
 "CODE_SENT_TEXT" = "Security code has been sent to";
 "RESEND_CODE" = "Resend code";
 "VERIFY_BUTTON" = "VERIFY";
+"ERROR_INVALID_OTP" = "";
 
 // MARK: - DASHBOARD
 
@@ -69,7 +71,36 @@
 
 // MARK: USER SETTINGS VIEW
 "TOGGLE_BUTTON_TEXT" = "Always ask to add Notes";
-"SAVE_HISTORY" = "Save history for";
+"SAVE_HISTORY" = "Save History For";
+"REQUIRED_DOUBLE_COUNT" = "Require Double Counts";
+"REQUIRED_BACK_COUNT" = "Require Back Counts";
+"REQUIRED_ADJUST_REASON" = "Require Adjust Reasons";
+"HAPTIC_FEEDBACK" = "Haptic Feedback";
+"SOUND_FEEDBACK" = "Sound Feedback";
+"VOICE_INSTRUCTIONS" = "Voice Feedback";
+"CLEAR_ALL_LOCAL_DATA" = "Clear All Local Data";
 
+
+
+//POPUPS
+"GENERIC_EQUIVALENT_SCANNED"  = "GENERIC EQUIVALENT SCANNED";
+"GENERIC_EQUIVALENT_SUBTITLE" = "Scanned item is a generic equivalent to the speficied drug";
+"DO_YOU_WANT_SUBSTITUE" = "Do you want to substitute?";
+
+//MARK: HISTORY SCREEN
+"PILL_COUNT" = "PILL COUNT";
+"INITIAL_CONTAINER_COUNT" = "INITIAL CONTAINER COUNT";
+"SUBSTITUTED_DRUG_DETAILS" = "SUBSTITUTED DRUG DETAILS";
+"PILL_RECOUNT" = "PILL RECOUNT";
+"DISPENSED_VIAL" = "DISPENSED VIAL";
+"REMAINING_CONTAINER_COUNT" = "REMAINING CONTAINER COUNT";
+"NOTE" = "NOTE";
+"TOTAL_COUNT" = "TOTAL COUNT";
+"SUBSTITUED_DRUG"= "Substituted Drug";
+"NDC" = "NDC";
+"EXPIRY_NO" = "Expiry No";
+"LOT_NO" = "Lot No";
+"DATE" = "Date";
+"TIME" = "Time";
 
 // MARK: ERROR

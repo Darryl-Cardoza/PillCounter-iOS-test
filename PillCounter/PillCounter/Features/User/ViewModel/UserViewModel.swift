@@ -6,11 +6,14 @@
 //
 
 import Foundation
-import SwiftUI  // neccessary to import for app storage
+import SwiftUI
+import CoreData
+import ComposeApp
 
 @MainActor  // decalaring this as an main actor since we will change the colors on the app launch.
 class UserViewModel: ObservableObject {
     // MARK: - APP STORAGE
+    let pillDataLocalStorage = PillsDataLocalStorage.shared
     // get the access token from the app storage
     @AppStorage(AppStorageManager.AppStorageKeys.accessToken) var accessToken:
         String = ""
@@ -19,9 +22,15 @@ class UserViewModel: ObservableObject {
     @AppStorage(AppStorageManager.AppStorageKeys.userEmail) var userEmail:
         String = ""
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userID: String = ""
+    @AppStorage(AppStorageManager.AppStorageKeys.pmsHostName)
+    var pmsHostName: String = ""
+
+    @AppStorage(AppStorageManager.AppStorageKeys.pillCounterHostName)
+    var pillCounterHostName: String = ""
+
 
     // MARK: PUBLISHED VARIABLES
-    // general loading
+    // general loading  
     @Published var isLoading: Bool = false
 
     // user details
@@ -68,6 +77,10 @@ class UserViewModel: ObservableObject {
 
     // maintenance
     @Published var isMaintenance: Bool = false
+    
+    @Published var unsyncedTransactions: [PillCountTransactionEntity] = []
+
+    @Published var pmsConnectionState: PmsConnectionState = .disconnected
 
     // MARK: DATABASE
     // get the user db
@@ -81,6 +94,8 @@ class UserViewModel: ObservableObject {
 
     // settings repo
     let settingsRepo = SettingsRepository.shared
+ 
+    
 
     // MARK: MOBILE SETTINGS
     // mobile color settings.
@@ -109,6 +124,9 @@ class UserViewModel: ObservableObject {
                     } else {
                         self.isForceUpdate = false
                     }
+                    
+                    self.pmsHostName = response.data?.hl7Config?.pmsHostName ?? ""
+                    self.pillCounterHostName = response.data?.hl7Config?.pillCounterHostName ?? ""
                 }
 
             } catch {
@@ -124,71 +142,75 @@ class UserViewModel: ObservableObject {
     // MARK: GET USER
     // get user info
     func getUser() async {
-
         isLoading = true
-        
-        defer { isLoading = false }
-        
+        defer {
+            isLoading = false
+        }
+
         if !userID.isEmpty,
            let localUser = userLocalDB.getUserByUserId(by: userID) {
-            
+
+
             let name = Formatter.segregateName(from: localUser.name ?? "")
-            
-            // Populate UI from local DB
+
             firstName = name.firstName
             lastName = name.lastName
-            
+
             email = localUser.email ?? ""
             pharmacyName = localUser.pharmacy_name ?? ""
             npiID = localUser.npi_id ?? ""
-            
+            phoneNumber = localUser.phone_number ?? ""
+
+
+
             getAllTransactionsAndFilterByCountType()
-            
+
             return
         }
 
-        do {
 
-            // get the current statuses of the transactions
+        do {
             getAllTransactionsAndFilterByCountType()
 
             let currentAppVersion =
                 Bundle.main.infoDictionary?["CFBundleShortVersionString"]
                 as? String ?? "Unknown"
 
+
+
             let getUserResult = try await userRepo.getUser(
                 accessToken: accessToken,
                 currentAppVersion: currentAppVersion,
-                fcmToken: ""  // needs to be generated on app launch. and passed in here.
+                fcmToken: ""
             )
 
+
             if getUserResult.isSuccess ?? false {
+
+
                 email = userEmail
+
                 if let user = getUserResult.data?.profile {
                     userProfileDetails = user
                     populateEditableFields(from: user)
                 }
 
-                // save the user id to app storage.
                 userID = getUserResult.data?.profile?.userId ?? ""
 
-                // save to db only if the user that has logged in is not present.
-                // condition : getting the user id from the response of the api.
-                // if the user with the user id is not there in the db then save the user in db
-                // else do not save the user to db. we will update the user. (using the update function of db).
                 if let userId = userProfileDetails?.userId,
-                    userLocalDB.getUserByUserId(by: userId) == nil
-                {
-                    // saved in the background thread
+                   userLocalDB.getUserByUserId(by: userId) == nil {
                     userLocalDB.saveUser(from: getUserResult)
                 }
 
+            } else {
             }
-        } catch let error {
-            print("Error: \(error)")
+
+            getAllTransactionsAndFilterByCountType()
+
+        } catch {
+            print(" [User] Error fetching user: \(error.localizedDescription)")
         }
     }
-
     // private func for profile screen fields
     private func populateEditableFields(from user: UserProfile) {
         let fullName = user.fullName ?? ""
@@ -207,13 +229,16 @@ class UserViewModel: ObservableObject {
 
     // MARK: UPDATE USER PROFILE
     // update user profile
-    func updateUserProfile() async {
-
-        if !hasUserProfileChanged() { return }
+    func updateUserProfile() async {    
+        if !hasUserProfileChanged() {
+            return
+        }
 
         isLoading = true
 
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+        }
 
         do {
 
@@ -224,27 +249,40 @@ class UserViewModel: ObservableObject {
                 npiID: npiID,
                 isProfileComplete: true,
                 avatarURL: "",
-                notificationsEnabled: false,  // notifications permission check and accordingly update it.
-                language: "",  // what should be passed in the language.
-                timezone: ""  // also what should be passed in the timezone // does this means local timezone ?
+                notificationsEnabled: false,
+                language: "",
+                timezone: ""
+            )
+            let updateUserProfileResult = try await userRepo.updateUserProfile(
+                request: request,
+                accessToken: accessToken
             )
 
-            let updateUserProfileResult = try await userRepo.updateUserProfile(
-                request: request, accessToken: accessToken)
-
             if updateUserProfileResult.isSuccess ?? false {
+
                 isProfileUpdated = true
+
                 let previousUserProfileDetails = userProfileDetails
                 userProfileDetails =
                     updateUserProfileResult.data?.profile
-                    ?? previousUserProfileDetails  // fallback to what was earlier stored in user details.
+                    ?? previousUserProfileDetails
+                
+                if !userID.isEmpty {
+                    let fullName = "\(firstName) \(lastName)"
+
+                    userLocalDB.updateUser(userId: userID, field: .name, value: fullName)
+                    userLocalDB.updateUser(userId: userID, field: .email, value: email)
+                    userLocalDB.updateUser(userId: userID, field: .pharmacyName, value: pharmacyName)
+                    userLocalDB.updateUser(userId: userID, field: .phoneNumber, value: phoneNumber)
+                    userLocalDB.updateUser(userId: userID, field: .npiId, value: npiID)
+                }
+
+            } else {
             }
 
-        } catch let error {
-            print("Error: \(error)")
+        } catch {
         }
     }
-
     // func to check if any updates were there in the profile.
     private func hasUserProfileChanged() -> Bool {
         guard let original = userProfileDetails else { return true }  // if no original data, treat as changed
@@ -290,45 +328,80 @@ class UserViewModel: ObservableObject {
 
     // MARK: TRANSACTION BY DATE
     // get user's transactions filtered by date.
-    func getTransactionsByDate(selectedDate: Date) async {
+    func getTransactionsByDate(
+        startDate: Date,
+        endDate: Date,
+        filter: HistoryFilterType
+    ) async {
+        
+
         guard let user = userLocalDB.getUserByUserId(by: userID) else {
             print("❌ no user found in the local DB")
             self.filteredTransactionsOfUserByDate = []
             return
         }
 
-        // convert the start of the date to start-of-day Int 64
-        let startOfDay = Calendar.current.startOfDay(for: selectedDate)
-        let endOfDay = Calendar.current.date(
-            byAdding: .day, value: 1, to: startOfDay)!
+        // MARK: Date range
+        let startOfDay = Calendar.current.startOfDay(for: startDate)
 
-        // FIX: Multiply by 1000 to match the Milliseconds stored in your DB
+         let endOfDay = Calendar.current.date(
+             byAdding: DateComponents(day: 1, second: -1),
+             to: Calendar.current.startOfDay(for: endDate)
+         )!
+
         let startTimestamp = Int64(startOfDay.timeIntervalSince1970 * 1000)
         let endTimestamp = Int64(endOfDay.timeIntervalSince1970 * 1000)
 
-        filteredTransactionsOfUserByDate =
+        // STEP 1: Get all transactions of that date
+        let allTransactions =
             userLocalDB.getTransactionsForUserFilteredByDate(
                 for: user,
                 startDateTs: startTimestamp,
                 endDateTs: endTimestamp
             )
 
-        await fetchAndSetHistoryTransactions(
-            user: user, startTs: startTimestamp, endTs: endTimestamp)
+        // STEP 2: Apply business filter
+        let finalTransactions: [PillCountTransactionEntity]
+
+        switch filter {
+
+        case .all:
+            finalTransactions = allTransactions
+
+        case .regular:
+            finalTransactions = allTransactions.filter { txn in
+                txn.count_type == CountType.REGULAR.rawValue &&
+                (
+                    txn.status == CountStatus.COMPLETED.rawValue
+                )
+            }
+
+        case .fixed:
+            finalTransactions = allTransactions.filter { txn in
+                txn.count_type == CountType.FIXED.rawValue &&
+                (
+                    txn.status == CountStatus.COMPLETED.rawValue
+                )
+            }
+        }
+
+        // STEP 3: assign to UI
+        await MainActor.run {
+            self.filteredTransactionsOfUserByDate = finalTransactions
+        }
     }
+
 
     // MARK: ALL PARTIAL TRANSACTIONS
     // get user's fixed count partial transactoins
     func getAllPartialTransactions(countType: CountType) async {
         guard let user = userLocalDB.getUserByUserId(by: userID) else {
-            print("❌ no user found in the local DB")
             self.historyCountTransactions = []
             return
         }
-
         self.historyCountTransactions =
             pillLocalDB.fetchAllTransactionFixedOrRegularPartial(
-                for: user, countType: countType) ?? []
+                for: user, countType: countType)
 
         self.actualCountedPillsForTheTransactions = [:]
 
@@ -339,6 +412,7 @@ class UserViewModel: ObservableObject {
                 total
         }
     }
+    
 
     // MARK: SOFT DELETE TRANSACITONS
     // func to soft delete a partular transaction.
@@ -354,21 +428,101 @@ class UserViewModel: ObservableObject {
         }
     }
     
+    
+    
+    // Send HL7 message
+    private func sendCompletionHL7(txnId: Int64) async {
+
+        guard let txn = pillLocalDB.fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("[HL7] Txn not found")
+            return
+        }
+
+        // 1. Generate messageId
+        let messageId = "TXN_\(txnId)_\(Int(Date().timeIntervalSince1970))"
+
+        // 2. Build header
+        let header = MessageHeaderData(
+            fieldSeparator: "|",
+            encodingCharacters: "^~\\&",
+            sendingApplication: "PILLCOUNTER",
+            sendingFacility: "PC",
+            receivingApplication: "PMS",
+            receivingFacility: "PMS",
+            messageDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
+            messageType: "RDS",
+            triggerEvent: "O13",
+            messageControlId: messageId,
+            processingId: "P",
+            versionId: "2.3",
+            countryCode: nil
+        )
+
+        // 3. Build ORDER (ORC)
+        let order = OrderData(
+            orderControl: "RE", // Completed / Result
+            placerOrderId: "\(txnId)",
+            placerOrderNamespace: nil,
+            fillerOrderId: nil,
+            fillerOrderNamespace: nil,
+            orderStatus: "CM", // Completed
+            orderDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
+            orderingProviderId: nil,
+            orderingProviderFamilyName: nil,
+            orderingProviderGivenName: nil,
+            orderingFacility: nil
+        )
+
+        // 4. Build DISPENSE (RXD) — THIS IS IMPORTANT
+
+        // 5. Create complete message
+        let message = CompleteHL7Message(
+            messageId: messageId,
+            messageType: "RDS",
+            triggerEvent: "O13",
+            timestamp: header.messageDateTime,
+            sendingFacility: "PILLCOUNTER",
+            header: header,
+            patient: nil,
+            visit: nil,
+            order: order,
+            medications: [],
+            routes: [],
+            components: [],
+            dispenses: [],
+            equipment: nil,
+            inventoryItems: [],
+            inventory: nil,
+            acknowledgment: nil,
+            notes: [],
+            customSegments: [],
+            obxSegments: [],
+            errors: []
+        )
+
+        // 6. SEND using your controller (this handles queue + retry)
+//        Hl7ServiceController.shared./*    */(message)
+    }
+    
+    
     // MARK: - SOFT DELETE ALL TRANSACTIONS FOR A DATE
     func softDeleteTransactionsForSelectedDate(
-        selectedDate: Date
+        startDate: Date,
+        endDate: Date,
+        filter: HistoryFilterType
     ) async {
 
         let transactionsToDelete = filteredTransactionsOfUserByDate
 
         guard !transactionsToDelete.isEmpty else { return }
 
+        
         for txn in transactionsToDelete {
             pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
         }
 
         // Refresh UI after deletion
-        await getTransactionsByDate(selectedDate: selectedDate)
+        await getTransactionsByDate(startDate: startDate,endDate: endDate,filter:filter)
     }
 
     // MARK: - FORCE COMPLETE TRANSACTION
@@ -376,9 +530,9 @@ class UserViewModel: ObservableObject {
     func forceCompleteTheSelectedTransaction(txnId: Int64, countType: CountType)
         async
     {
-
         pillLocalDB.updateTransactionStatus(
-            txnId: txnId, newStatus: .FORCE_COMPLETED)
+            txnId: txnId, newStatus: .FORCE_COMPLETED
+        )
 
         if countType == .FIXED {
             await getAllPartialTransactions(countType: .FIXED)
@@ -399,6 +553,7 @@ class UserViewModel: ObservableObject {
         )
         //  Refresh Partial Transactions
         if countType == .FIXED {
+            await sendCompletionHL7(txnId: txnId)
             await getAllPartialTransactions(countType: .FIXED)
         } else {
             await getAllPartialTransactions(countType: .REGULAR)
@@ -603,7 +758,6 @@ class UserViewModel: ObservableObject {
 
     // MARK: - DELETE USER PROFILE
     func deleteUserProfile() async {
-
         isLoading = true
         defer { isLoading = false }
 
@@ -617,8 +771,66 @@ class UserViewModel: ObservableObject {
             }
 
         } catch {
-            print("❌ Failed to delete user profile: \(error)")
+            print("Failed to delete user profile: \(error)")
         }
     }
+    
+    func getTransactionEntity(by txnId: Int64) -> PillCountTransactionEntity? {
+        guard txnId > 0 else { return nil }
+        return pillDataLocalStorage.fetchPillCountTransactionByTransactionId(txnId: txnId)
+    }
+    
+    @MainActor
+    func getUnsyncedTransactions() async {
+        self.unsyncedTransactions = pillDataLocalStorage.getPendingHl7Txn()
+    }
 
+    //For showing pms connection status
+    func setPmsConnected(_ isConnected: Bool) {
+        pmsConnectionState = isConnected ? .connected : .disconnected
+    }
+    
+    func clearLocalData() {
+        pillDataLocalStorage.clearAllLocalData()
+    }
+    
+    // MARK: - HARD RESET (called on logout)
+    @MainActor
+    func resetState() {
+        // AppStorage backed vars
+        userEmail = ""
+        userID = ""
+        pmsHostName = ""
+        pillCounterHostName = ""
+
+        // Loading & flags
+        isLoading = false
+        isForceUpdate = false
+        isMaintenance = false
+        isProfileUpdated = false
+        pmsConnectionState = .disconnected
+
+        // Profile
+        userProfileDetails = nil
+        fullName = ""
+        firstName = ""
+        lastName = ""
+        email = ""
+        phoneNumber = ""
+        pharmacyName = ""
+        npiID = ""
+
+        // Transactions
+        historyCountTransactions = []
+        filteredTransactionsOfUserByDate = []
+        actualCountedPillsForTheTransactions = [:]
+        historyTotalTransactionsCount = 0
+        currentTransactionTxnId = nil
+        unsyncedTransactions = []
+
+        fixedCountTransactionCompletedCount = 0
+        fixedCountTransactionPartialCount = 0
+        regularCountTransactionCompletedCount = 0
+        regularCountTransactionPartialCount = 0
+    }
 }

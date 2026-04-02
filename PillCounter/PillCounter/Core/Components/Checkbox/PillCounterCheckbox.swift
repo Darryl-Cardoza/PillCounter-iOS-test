@@ -16,6 +16,7 @@ struct PillCounterCheckbox: View {
     var label: String? = nil
     var size: CGFloat = 15
     var tintColor: Color? = nil
+    var selectedCheckmarkColor: Color? = nil
     
     // main body
     var body: some View {
@@ -29,8 +30,9 @@ struct PillCounterCheckbox: View {
                     ZStack {
                         // Outer box
                         RoundedRectangle(cornerRadius: 4)
-                            .stroke(isChecked ? tintColor : .gray, lineWidth: 2)
+                            .stroke(isChecked ? selectedCheckmarkColor ?? tintColor : .gray, lineWidth: 2)
                             .frame(width: size, height: size)
+                            .background(isChecked ? selectedCheckmarkColor  : .clear)
                         
                         // Checkmark
                         if isChecked {

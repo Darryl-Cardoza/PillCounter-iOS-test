@@ -13,6 +13,7 @@ struct UserProfileScreen: View {
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var appColors: AppColors
+    @EnvironmentObject private var toastManager: ToastManager
 
     @State private var showDeleteConfirmation: Bool = false
 
@@ -44,9 +45,11 @@ struct UserProfileScreen: View {
                 bottomContent: {
                     EmptyView()
                 },
-                showBackButton: !isNewUser,
+                headerActions: { EmptyView() },
+                showBackButton: false,
                 showHamburgerMenu: false,
-                title: NSLocalizedString("PROFILE", comment: "")
+                title: NSLocalizedString("PROFILE", comment: ""),
+                allowKeyboardResize: true,
             )
 
             if userViewModel.isLoading {
@@ -57,6 +60,8 @@ struct UserProfileScreen: View {
                     PillCountingLoader()
                 }
             }
+            
+       
         }
         .onAppear {
             Task {
@@ -129,7 +134,8 @@ struct UserProfileScreen: View {
                 placeholder: "",
                 disabled: false,
                 text: $userViewModel.pharmacyName,
-                validation: .none
+                validation: .none,
+                maxLength: 30
             )
 
             Text(NSLocalizedString("PHONE_NUMBER", comment: ""))
@@ -141,7 +147,8 @@ struct UserProfileScreen: View {
                 disabled: false,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .phone,
+                maxLength: 10
             )
 
             Text(NSLocalizedString("EMAIL", comment: ""))
@@ -163,7 +170,8 @@ struct UserProfileScreen: View {
                 disabled: false,
                 text: $userViewModel.npiID,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .phone,
+                maxLength: 10
             )
         }
     }
@@ -197,7 +205,8 @@ struct UserProfileScreen: View {
                 placeholder: "",
                 disabled: false,
                 text: $userViewModel.pharmacyName,
-                validation: .none
+                validation: .none,
+                maxLength: 30
             )
 
             Text(NSLocalizedString("EMAIL", comment: ""))
@@ -235,7 +244,8 @@ struct UserProfileScreen: View {
                 disabled: false,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .phone,
+                maxLength: 10
             )
 
             Text(NSLocalizedString("NPI_ID", comment: ""))
@@ -247,7 +257,8 @@ struct UserProfileScreen: View {
                 disabled: false,
                 text: $userViewModel.npiID,
                 keyboardType: .phonePad,
-                validation: .phone
+                validation: .npi,
+                maxLength: 10
             )
         }
     }
@@ -312,55 +323,104 @@ struct UserProfileScreen: View {
 
     private func onSaveTapped() {
         Task {
-            await userViewModel.updateUserProfile()
+            if !userViewModel.phoneNumber.isEmpty {
+                if userViewModel.phoneNumber.count != 10 {
+                    toastManager.show(message: "Phone number must be exactly 10 digits.")
+                    return
+                }
 
+                if !CharacterSet.decimalDigits.isSuperset(of: CharacterSet(charactersIn: userViewModel.phoneNumber)) {
+                    toastManager.show(message: "Phone number must contain only digits.")
+                    return
+                }
+            }
+            await userViewModel.updateUserProfile()
+            toastManager.show(message: "Profile updated successfully.")
             if userViewModel.isProfileUpdated {
-                // New user flow completed
                 isNewUser = false
                 userViewModel.isProfileUpdated = false
                 router.navigateBack()
+            }else{
+                toastManager.show(message: "Failed to update profile. Please try again.")
             }
         }
     }
 
     private func profileScreenLandscape() -> some View {
-        VStack(spacing: 20) {
-            Spacer().frame(height: SafeAreaInsets.top + 20)
-            landscapeProfileColums
+        VStack(spacing: 0) {
+
+            profileHeader
+
+            ScrollView {
+                VStack(spacing: 20) {
+
+                    HStack(alignment: .top, spacing: 20) {
+                        leftProfileColumn
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        rightProfileColumn
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    HStack {
+                        Spacer()
+                        actionButtons
+                        Spacer()
+                    }
+                    .padding(.bottom, 20)
+                }
                 .padding(.horizontal)
-
-            HStack {
-                Spacer()
-                actionButtons
-                Spacer()
             }
-            .padding(.horizontal)
-
         }
-        .padding(.horizontal, SafeAreaInsets.leading)
-        .keyboardAdaptive()
+        .background(appColors.primaryBackground)
     }
-
     private func profileScreenPotrait() -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Spacer().frame(height: 100)
+        VStack(spacing: 0) {
 
-            potraitProfileColums
+            profileHeader
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+
+                    Spacer().frame(height: 20)
+
+                    potraitProfileColums
+
+                    Spacer().frame(height: 30)
+                    actionButtons
+                    
+                }
+                .padding(.horizontal)
+            }
+        }
+        .background(appColors.primaryBackground)
+    }
+    
+    private var profileHeader: some View {
+        HStack {
+            if !isNewUser {
+                Button {
+                    router.navigateBack()
+                } label: {
+                    HStack {
+                        Image("back_icon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+
+                        Text(NSLocalizedString("PROFILE", comment: ""))
+                            .font(.headline)
+                            .foregroundStyle(appColors.text)
+                    }
+                }
+            }
 
             Spacer()
-
-            HStack {
-                Spacer()
-                actionButtons
-                Spacer()
-            }
-            .padding(.bottom)
         }
+        .padding(.top, SafeAreaInsets.top + 10)
         .padding(.horizontal)
-        .background(appColors.primaryBackground)
-        .keyboardAdaptive()
+        .padding(.vertical,8)
     }
-
 }
 
 #Preview {

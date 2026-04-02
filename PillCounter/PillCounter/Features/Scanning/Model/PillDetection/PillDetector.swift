@@ -18,22 +18,19 @@ final class PillDetector {
     private(set) var model: best?
 
     private init() {
-        print("🔄 PillDetector.init called")
         loadModel()
     }
 
     // load model
     private func loadModel() {
-
         do {
-
             let config = MLModelConfiguration()
             
-            config.computeUnits = .cpuAndGPU
+            // Use .all instead of .cpuAndGPU to allow CoreML to automatically choose the most stable and optimal compute unit (CPU, GPU, or Neural Engine).
+            config.computeUnits = .all
             
             let mlModel = try best(configuration: config)
             self.model = mlModel
-            print("✅ MODEL LOADED SUCCESSFULLY")
 
         } catch let error {
             print("❌ FALIED TO LOAD MODEL: \(error)")

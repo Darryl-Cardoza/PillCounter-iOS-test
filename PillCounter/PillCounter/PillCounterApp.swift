@@ -18,33 +18,40 @@ struct PillCounterApp: App {
 
     @ObservedObject private var router = Router()
     @ObservedObject private var loginViewModel = LoginViewModel()
-    @ObservedObject private var userViewModel = UserViewModel()
     @ObservedObject private var appColors = AppColors.shared
-    @ObservedObject private var confirmationDialogueManager =
-        ConfirmationDialogueManager()
-    @ObservedObject private var pillScanViewModel = PillScanViewModel()
+    @ObservedObject private var confirmationDialogueManager = ConfirmationDialogueManager()
+    @StateObject private var pillScanViewModel = PillScanViewModel()
+    @StateObject private var userViewModel = UserViewModel()
+    @StateObject private var toastManager = ToastManager()
+
+    private let isCompromised: Bool
 
     init() {
-        if SecurityManager.isDeviceCompromised() {
-            _securityState = StateObject(
-                wrappedValue: {
-                    let state = AppSecurityState()
-                    state.isSecure = false
-                    return state
-                }()
-            )
+        let compromised = SecurityManager.isDeviceCompromised()
+        self.isCompromised = compromised
+
+
+        // Only bootstrap when secure
+        if !compromised {
+            RuntimeUnit.activateIfNeeded()
         }
+        
+        let center = UNUserNotificationCenter.current()
+              center.delegate = NotificationDelegate.shared
+
+              center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                  print("Notification permission granted:", granted)
+              }
+
     }
 
     var body: some Scene {
         WindowGroup {
             Group {
-
                 // 1️⃣ Security violation (highest priority)
                 if !securityState.isSecure {
                     SecurityViolationView()
                         .environmentObject(appColors)
-
                     // 2️⃣ Force Update
                 } else if userViewModel.isForceUpdate {
                     ForceUpdateView()
@@ -57,41 +64,80 @@ struct PillCounterApp: App {
 
                     // 4️⃣ Normal App
                 } else {
-                    AppNavigation()
-                        .font(.system(size: 16))
-                        .environment(\.dynamicTypeSize, .medium)
-                        .environmentObject(router)
-                        .environmentObject(loginViewModel)
-                        .environmentObject(userViewModel)
-                        .environmentObject(appColors)
-                        .environmentObject(confirmationDialogueManager)
-                        .environmentObject(pillScanViewModel)
-                        .onAppear {
-                            startSecurityMonitoring()
-                        }
-                        .task {
-                            userViewModel.loadMobileThemeSettings()
-
-                            Task.detached(priority: .background) {
-                                await MainActor.run {
-                                    PillsDataLocalStorage.shared
-                                        .cleanUpOldHistory()
+                    ZStack{
+                        AppNavigation()
+                            .font(.system(size: 16))
+                            .environment(\.dynamicTypeSize, .medium)
+                            .environmentObject(router)
+                            .environmentObject(loginViewModel)
+                            .environmentObject(userViewModel)
+                            .environmentObject(appColors)
+                            .environmentObject(confirmationDialogueManager)
+                            .environmentObject(pillScanViewModel)
+                            .environmentObject(toastManager)
+                            .onAppear {
+                                startSecurityMonitoring()
+                            }
+                            .task {
+                                userViewModel.loadMobileThemeSettings()
+                                
+                                Task.detached(priority: .background) {
+                                    await MainActor.run {
+                                        PillsDataLocalStorage.shared
+                                            .cleanUpOldHistory()
+                                    }
                                 }
                             }
+                        //show toast when succefully updated profile date
+                        if toastManager.isShowing {
+                            VStack {
+                                Spacer()
+
+                                HStack(spacing: 10) {
+                                    Image("app_icon")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 24, height: 24)
+
+                                    Text(toastManager.message)
+                                        .font(.subheadline)
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(Color.black.opacity(0.8))
+                                .cornerRadius(10)
+                                .padding(.bottom, 32)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                            .animation(.easeInOut, value: toastManager.isShowing)
                         }
+                    }
                 }
+            }
+            .onAppear {
+                if isCompromised {
+                    securityState.isSecure = false
+                }
+                
+                Hl7ServiceController.shared.bind(
+                    pillScanViewModel: pillScanViewModel,
+                    userViewModel: userViewModel
+                )
+                
+                Hl7ServiceController.shared.evaluate()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhaseChange(newPhase)
             }
+        
         }
 
     }
 }
 
-// MARK: - Security Handling
+// MARK: - SECURITY HANDLING
 extension PillCounterApp {
-
     private func startSecurityMonitoring() {
         SecurityMonitor.shared.startMonitoring {
             DispatchQueue.main.async {
@@ -114,5 +160,17 @@ extension PillCounterApp {
         @unknown default:
             break
         }
+    }
+
+    private func initializeSecurityAndRuntime() {
+        let compromised = SecurityManager.isDeviceCompromised()
+
+        if !compromised {
+            securityState.isSecure = false
+            return
+        }
+
+        // Only bootstrap when environment is verified as secure
+        RuntimeUnit.activateIfNeeded()
     }
 }

@@ -13,6 +13,7 @@ struct CountHistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
+    @EnvironmentObject private var pillScanViewmodel: PillScanViewModel
     @EnvironmentObject private var router: Router
 
     @State private var selectedTransactionDetailOption:
@@ -28,19 +29,35 @@ struct CountHistoryView: View {
     // MARK: - EDIT/DELETE STATE
     @State private var isEditing: Bool = false
     @State private var selectedTxnIds: Set<Int64> = []
+    @State private var selectedFilter: TransactionFilter = .all
 
+    @State private var pendingAction: TransactionAction?
+    
     let title: String
 
     // Filter Logic
     var filteredTransactions: [PillCountTransactionEntity] {
+        let baseList: [PillCountTransactionEntity]
+
         if searchText.isEmpty {
-            return userViewModel.historyCountTransactions
+            baseList = userViewModel.historyCountTransactions
         } else {
-            return userViewModel.historyCountTransactions.filter { txn in
+            baseList = userViewModel.historyCountTransactions.filter { txn in
                 let drugName = txn.drug?.drug_name ?? ""
                 return drugName.localizedCaseInsensitiveContains(searchText)
             }
         }
+        
+        switch selectedFilter {
+          case .all:
+              return baseList
+
+          case .pms:
+              return baseList.filter { $0.is_from_pms }
+
+          case .nonPms:
+              return baseList.filter { !$0.is_from_pms }
+          }
     }
 
     // Helper to get the actual transaction objects for the selected IDs
@@ -59,6 +76,68 @@ struct CountHistoryView: View {
             selectedTxnIds.contains($0.txn_id)
         }
     }
+    
+    enum TransactionFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case pms = "PMS"
+        case nonPms = "Non PMS"
+
+        var id: String { rawValue }
+    }
+    
+    private var filterTabs: some View {
+        HStack {
+            Spacer()
+
+            HStack(spacing: 12) {
+                ForEach(TransactionFilter.allCases) { filter in
+                    FilterTabButton(
+                        title: filter.rawValue,
+                        isSelected: selectedFilter == filter
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedFilter = filter
+                            selectedTxnIds.removeAll()
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        
+    }
+
+    struct FilterTabButton: View {
+        let title: String
+        let isSelected: Bool
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(
+                        isSelected
+                        ? AppColors.shared.primary
+                        : AppColors.shared.text
+                    )
+                    .frame(width: 90, height: 36)
+                    .background(Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                isSelected
+                                ? AppColors.shared.primary
+                                : AppColors.shared.text,
+                                lineWidth: 1
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
 
     var body: some View {
         ZStack {
@@ -79,7 +158,7 @@ struct CountHistoryView: View {
                             Button {
                                 toggleSelectAll()
                             } label: {
-                                HStack(spacing: 8) {
+                                HStack(spacing: 12) {
                                     // Visual representation of Select All state
                                     Image(
                                         systemName: areAllSelected
@@ -105,7 +184,7 @@ struct CountHistoryView: View {
                             HStack(spacing: 20) {
                                 // Delete Button (Only active if items are selected)
                                 Button {
-                                    performBatchDelete()
+                                    pendingAction = .multiDelete(selectedTxnIds)
                                 } label: {
                                     Text("Delete")
                                         .font(.system(size: 16, weight: .bold))
@@ -209,12 +288,28 @@ struct CountHistoryView: View {
             .customPopup(isPresented: $showMenuOptions) {
                 menuOptions
             }
+            .customPopup(
+                isPresented: Binding(
+                    get: { pendingAction != nil },
+                    set: { if !$0 { pendingAction = nil } }
+                )
+            ) {
+                if pendingAction != nil {
+                    commonConfirmationDialog
+                }
+            }
+   
         }
     }
 
     // MARK: - CONTENT VIEW
     private var contentView: some View {
         VStack {
+            
+            filterTabs
+                .padding(.vertical, 5)
+
+            
             if isEditing {
                 HStack {
 
@@ -235,38 +330,32 @@ struct CountHistoryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
 
-                    ForEach(filteredTransactions, id: \.txn_id) { txn in
-                        let counted =
-                            userViewModel.actualCountedPillsForTheTransactions[
-                                txn.txn_id] ?? 0
+                    ForEach(filteredTransactions, id: \.txn_id) { (txn: PillCountTransactionEntity) in
+
+                        let counted = PillsDataLocalStorage.shared.getTotalCountForStep(
+                            txnId: txn.txn_id,
+                            step: .targetVerification
+                        )
 
                         listItem(
-                            txnId: txn.txn_id,  // Pass ID for selection logic
+                            txnId: txn.txn_id,
                             name: txn.drug?.drug_name ?? "N/A",
-                            date:  "\(Formatter.getDateString(from: txn.created_at)) • " +
-                            "\(Formatter.getTimeString(from: txn.created_at))",
+                            date: "\(Formatter.getDateString(from: txn.created_at)) • " +
+                                  "\(Formatter.getTimeString(from: txn.created_at))",
                             trailingText: "\(counted)"
                                 + (router.selectedPillScanningType == .FIXED
                                     ? " / \(txn.target_count)" : ""),
                             icon: "ellipsis",
                             barcodeImagePath: txn.barcode_image,
+                            isFromPms: txn.is_from_pms,
                             onIconTap: {
-                                // Only allow menu options if NOT editing
                                 if !isEditing {
-                                    print("Tapped \(txn.txn_id)")
                                     showMenuOptions = true
                                     selectedTransasctionId = txn.txn_id
-                                    userViewModel.currentTransactionTxnId =
-                                        txn.txn_id
+                                    userViewModel.currentTransactionTxnId = txn.txn_id
                                 }
                             }
                         )
-                        // Add tap gesture to the whole row to toggle selection in Edit Mode
-                        .onTapGesture {
-                            if isEditing {
-                                toggleSelection(for: txn.txn_id)
-                            }
-                        }
                     }
 
                     if filteredTransactions.isEmpty {
@@ -289,7 +378,75 @@ struct CountHistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
+    
+    
+//    private var contentView: some View {
+//        VStack {
+//            filterTabs
+//                .padding(.vertical, 5)
+//            ScrollView(showsIndicators: false) {
+//                transactionsList
+//                    .padding(.horizontal, 16)
+//                    .padding(.bottom, 20)
+//            }
+//        }
+//        .padding(.top, 90)
+//        .padding(.horizontal, isLandscape ? SafeAreaInsets.leading + 5 : 0)
+//        .frame(maxWidth: .infinity, maxHeight: .infinity)
+//        .background(appColors.primaryBackground)
+//    }
+    
+    private var transactionsList: some View {
+        VStack(spacing: 16) {
+            ForEach(filteredTransactions, id: \.txn_id) { txn in
+                transactionRow(txn)
+            }
 
+            if filteredTransactions.isEmpty {
+                emptyStateView
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func transactionRow(_ txn: PillCountTransactionEntity) -> some View {
+
+        listItem(
+            txnId: txn.txn_id,
+            name: txn.drug?.drug_name ?? "N/A",
+            date: "\(Formatter.getDateString(from: txn.created_at)) • \(Formatter.getTimeString(from: txn.created_at))",
+            trailingText: "\(0)" +
+                (router.selectedPillScanningType == .FIXED ? " / \(txn.target_count)" : ""),
+            icon: "ellipsis",
+            barcodeImagePath: txn.barcode_image,
+            isFromPms: txn.is_from_pms,
+            onIconTap: {
+                if !isEditing {
+                    showMenuOptions = true
+                    selectedTransasctionId = txn.txn_id
+                    userViewModel.currentTransactionTxnId = txn.txn_id
+                }
+            }
+        )
+        .onTapGesture {
+            if isEditing {
+                toggleSelection(for: txn.txn_id)
+            }
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 40))
+                .foregroundColor(.gray.opacity(0.5))
+
+            Text("No transactions found")
+                .foregroundColor(.gray)
+        }
+        .padding(.top, 60)
+    }
+    
     // MARK: - LIST ITEM
     private func listItem(
         txnId: Int64,
@@ -297,7 +454,8 @@ struct CountHistoryView: View {
         date: String,
         trailingText: String,
         icon: String,
-        barcodeImagePath: String?, // 1. Add this parameter
+        barcodeImagePath: String?,
+        isFromPms:Bool = false,
         onIconTap: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 16) {
@@ -310,7 +468,7 @@ struct CountHistoryView: View {
                         set: { _ in toggleSelection(for: txnId) }
                     ),
                     size: 20,
-                    tintColor: appColors.primary
+                    tintColor: appColors.primary,
                 )
                 .padding(.trailing, 4)
                 .transition(.move(edge: .leading).combined(with: .opacity))
@@ -318,24 +476,36 @@ struct CountHistoryView: View {
             
             // 2. IMAGE LOGIC
             ThumbnailImageView(
-                imagePath: barcodeImagePath
+                imagePath: barcodeImagePath,
+                isFromPms: isFromPms
             )
             
-            // 3. TEXT INFO
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(name)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(appColors.text)
                     .lineLimit(1)
-                
-                Text(date)
-                    .font(.system(size: 12))
-                    .foregroundColor(appColors.text)
-                    .lineLimit(1)
+
+                HStack(spacing: 10) {
+                    Text(date)
+                        .font(.system(size: 12))
+                        .foregroundColor(appColors.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+
+                    if isFromPms {
+                        Text("PMS")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(appColors.primary)
+                            .fixedSize()
+                    }
+                }
             }
-            
-            Spacer()
-            
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+
+       
             // 4. TRAILING INFO & ACTION
             Text(trailingText)
                 .font(.subheadline)
@@ -357,7 +527,7 @@ struct CountHistoryView: View {
         .background(
             colorScheme == .dark ? Color.black.opacity(0.8) : Color.white
         )
-        .cornerRadius(14)
+        .cornerRadius(10)
         .animation(.spring(), value: isEditing)
     }
 
@@ -399,6 +569,8 @@ struct CountHistoryView: View {
             }
         }
     }
+    
+
 
     // MARK: - MENU OPTIONS (Existing)
     private var menuOptions: some View {
@@ -452,30 +624,59 @@ struct CountHistoryView: View {
                         showMenuOptions = false
                         switch selectedTransactionDetailOption {
                         case .resume:
-                            userViewModel.currentTransactionTxnId =
-                                selectedTransasctionId
-                            router.navigate(
-                                to: .authentication(
-                                    .login(
-                                        .dashboard(.pillCount(.pillCountView))))
-                            )
-                        case .delete:
-                            Task {
-                                await userViewModel
-                                    .softDeleteTheSelectedTransaction(
-                                        transactionId: selectedTransasctionId
-                                            ?? 0,
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED
+                            if let txnId = selectedTransasctionId,
+                               let txn = userViewModel.getTransactionEntity(by: txnId) {
+                                
+                                userViewModel.currentTransactionTxnId = txnId
+                                pillScanViewmodel.selectedTransaction = txn.is_from_pms ? txn : nil // Resumed Transaction
+                                
+                                // Txn is Controlled drug
+                                if txn.is_from_pms{
+                                    let lastStep = pillScanViewmodel.getLastSavedControlledStep()
+                                    // Last step is nil go to scan screen else count screen
+                                    if lastStep == nil && txn.is_ndc_verfied == false{
+                                         router.navigate(
+                                             to: .authentication(
+                                                 .login(.dashboard(.pillCount(.barcodeScanning)))
+                                             )
+                                         )
+                                     } else {
+                                         router.navigate(
+                                             to: .authentication(
+                                                 .login(.dashboard(.pillCount(.pillCountView)))
+                                             )
+                                         )
+                                     }
+                                }
+
+                                else if txn.is_from_pms && txn.is_ndc_verfied{
+                                    router.navigate(
+                                        to: .authentication(
+                                            .login(
+                                                .dashboard(.pillCount(.barcodeScanning))
+                                            )
+                                        )
                                     )
+                                } else {
+                                    router.navigate(
+                                        to: .authentication(
+                                            .login(
+                                                .dashboard(.pillCount(.pillCountView))
+                                            )
+                                        )
+                                    )
+                                }
+                            } else {
+                                print("Resume failed: transaction ID or entity missing")
                             }
+                        case .delete:
+                            if let txnId = selectedTransasctionId {
+                                pendingAction = .delete(txnId)
+                            }
+
                         case .forceComplete:
-                            Task {
-                                await userViewModel.forceCompleteTheSelectedTransaction(
-                                    txnId: selectedTransasctionId ?? 0,
-                                    countType: router
-                                        .selectedPillScanningType ?? .FIXED
-                                )
+                            if let txnId = selectedTransasctionId {
+                                pendingAction = .forceComplete(txnId)
                             }
                         }
                     }
@@ -483,5 +684,104 @@ struct CountHistoryView: View {
             }
         }
         .frame(width: 250)
+        .padding(.vertical)
     }
+    
+    // Confirmation Dialogs
+    private var commonConfirmationDialog: some View {
+        ConfirmationDialogue(
+            title: dialogTitle,
+            message: dialogMessage,
+            cancelButtonText: "CANCEL",
+            confirmButtonText: confirmButtonTitle,
+            onCancel: {
+                pendingAction = nil
+            },
+            onConfirm: {
+                handleConfirmedAction()
+            }
+        )
+    }
+    
+    private var dialogTitle: String {
+        switch pendingAction {
+        case .delete:
+            return "Confirm Delete"
+        case .forceComplete:
+            return "Force Complete"
+        case .multiDelete:
+            return "Delete Selected"
+        case .none:
+            return ""
+        }
+    }
+
+    private var dialogMessage: String {
+        switch pendingAction {
+        case .delete:
+            return "Are you sure you want to delete this transaction?"
+        case .forceComplete:
+            return "Are you sure you want to force complete this transaction?"
+        case .multiDelete:
+            return "Are you sure you want to delete selected transactions?"
+        case .none:
+            return ""
+        }
+    }
+
+    private var confirmButtonTitle: String {
+        switch pendingAction {
+        case .delete, .multiDelete:
+            return "DELETE"
+        case .forceComplete:
+            return "CONFIRM"
+        case .none:
+            return ""
+        }
+    }
+    
+    //Handle Action
+    private func handleConfirmedAction() {
+        guard let action = pendingAction else { return }
+
+        pendingAction = nil
+
+        switch action {
+
+        case .delete(let id):
+            Task {
+                await userViewModel.softDeleteTheSelectedTransaction(
+                    transactionId: id,
+                    countType: router.selectedPillScanningType ?? .FIXED
+                )
+            }
+
+        case .forceComplete(let id):
+            Task {
+                await userViewModel.forceCompleteTheSelectedTransaction(
+                    txnId: id,
+                    countType: router.selectedPillScanningType ?? .FIXED
+                )
+            }
+
+        case .multiDelete(let ids):
+            Task {
+                await userViewModel.softDeleteMultipleTransactions(
+                    txnIds: ids,
+                    countType: router.selectedPillScanningType ?? .FIXED
+                )
+
+                await MainActor.run {
+                    isEditing = false
+                    selectedTxnIds.removeAll()
+                }
+            }
+        }
+    }}
+
+
+enum TransactionAction {
+    case delete(Int64)
+    case forceComplete(Int64)
+    case multiDelete(Set<Int64>)
 }

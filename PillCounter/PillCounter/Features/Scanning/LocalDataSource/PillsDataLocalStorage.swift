@@ -12,12 +12,15 @@ final class PillsDataLocalStorage {
     // singleton instance
     static let shared = PillsDataLocalStorage()
 
+     var pendingTxnController: NSFetchedResultsController<PillCountTransactionEntity>?
+     var pendingTxnDelegate: PendingTxnFetchedResultsDelegate?
+    
     // init function.
     private init() {}
 
     // MARK: DRUG MASTER
     // context that we need to save the operations or find something.
-    private let mainThreadContext = CoreDataManager.shared.context
+    let mainThreadContext = CoreDataManager.shared.context
 
     // background context
     //    private let backgroundContext = CoreDataManager.shared.backgroundContext
@@ -31,7 +34,7 @@ final class PillsDataLocalStorage {
             return
         }
 
-        // now if the pill data is found.
+        // now if the pill data is found.HL7MessageBuilder
         // save the pill data in the local db.
 
         let entity = DrugMasterEntity(context: mainThreadContext)
@@ -51,7 +54,8 @@ final class PillsDataLocalStorage {
     func saveManualPill(
         ndc: String,
         drugId: Int64,
-        drugName: String
+        drugName: String,
+        drugType: String = "",
     ) {
         let entity = DrugMasterEntity(context: mainThreadContext)
 
@@ -60,7 +64,7 @@ final class PillsDataLocalStorage {
         entity.drug_name = drugName
         entity.ndc = ndc
         entity.equivalence = ""
-        entity.drug_type = ""
+        entity.drug_type = drugType
 
         CoreDataManager.shared.save(context: mainThreadContext)
     }
@@ -95,8 +99,14 @@ final class PillsDataLocalStorage {
     // MARK: PILL COUNT TRANSACTION
     // create transaction for the pill after scanning the qr or barcode.
     func createTransaction(
-        for user: UserEntity, drugId: Int64?, countType: CountType,
-        barcodeImagePath: String
+        for user: UserEntity,
+        drugId: Int64?,
+        countType: CountType,
+        barcodeImagePath: String,
+        isComingFromPms: Bool? = nil,
+        drugName:String? = nil,
+        targetCount: Int32? = nil,
+        isControlled: Bool? = nil
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -125,7 +135,13 @@ final class PillsDataLocalStorage {
         // setting both the values created_at and updated_at same at time of creating the transaction.
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
         entity.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-
+        
+        // set is hl7 or normal transaction and isSynced false
+        entity.is_from_pms = isComingFromPms ?? false
+        entity.is_synced = false
+    
+        entity.target_count = targetCount ?? 0
+        entity.is_ndc_verfied = false
         entity.user = user
         print(
             "User → id: \(user.user_id ?? ""), name: \(user.name ?? "-"), email: \(user.email ?? "-")"
@@ -162,6 +178,7 @@ final class PillsDataLocalStorage {
 
         transaction.status = newStatus.rawValue
         transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        
 
         CoreDataManager.shared.save(context: mainThreadContext)
     }
@@ -204,18 +221,20 @@ final class PillsDataLocalStorage {
 
     // soft delete the transaction
     func softDeleteTransaction(txnId: Int64) {
-        guard
-            let transaction = fetchPillCountTransactionByTransactionId(
-                txnId: txnId)
-        else {
-            print("❌ no transaction found.")
+
+        print("➡️ DB Delete Request for txnId:", txnId)
+
+        guard let transaction = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("❌ DB ERROR: no transaction found for id \(txnId)")
             return
         }
+
 
         transaction.is_deleted = true
         transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
 
         CoreDataManager.shared.save(context: mainThreadContext)
+
     }
 
     // get all fixed partial count
@@ -246,7 +265,6 @@ final class PillsDataLocalStorage {
             CountType.FIXED.rawValue,
             [
                 CountStatus.COMPLETED.rawValue,
-                CountStatus.FORCE_COMPLETED.rawValue
             ]
         )
 
@@ -281,7 +299,6 @@ final class PillsDataLocalStorage {
             CountType.REGULAR.rawValue,
             [
                 CountStatus.COMPLETED.rawValue,
-                CountStatus.FORCE_COMPLETED.rawValue
             ]
         )
 
@@ -293,7 +310,6 @@ final class PillsDataLocalStorage {
     func fetechLatestTransactionOfUser(for user: UserEntity)
         -> PillCountTransactionEntity?
     {
-
         // make the fetch request
         let request: NSFetchRequest<PillCountTransactionEntity> =
             PillCountTransactionEntity.fetchRequest()
@@ -308,19 +324,24 @@ final class PillsDataLocalStorage {
 
     // fetch all the transaction fixed partial only.
     func fetchAllTransactionFixedOrRegularPartial(
-        for user: UserEntity, countType: CountType
-    ) -> [PillCountTransactionEntity]? {
+        for user: UserEntity,
+        countType: CountType
+    ) -> [PillCountTransactionEntity] {
 
         let request: NSFetchRequest<PillCountTransactionEntity> =
             PillCountTransactionEntity.fetchRequest()
 
         request.predicate = NSPredicate(
-            format:
-                "user == %@ AND is_deleted == false AND count_type == %@ AND status == %@",
+            format: "user == %@ AND is_deleted == false AND count_type == %@ AND status == %@",
             user,
             countType.rawValue,
             CountStatus.PARTIAL.rawValue
         )
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "is_from_pms", ascending: false),
+            NSSortDescriptor(key: "created_at", ascending: false)
+        ]
 
         return (try? mainThreadContext.fetch(request)) ?? []
     }
@@ -536,7 +557,7 @@ final class PillsDataLocalStorage {
         }
     }
     
-    // MARK: - FETCH TRANSACTIONS (New Methods)
+    // MARK: - FETCH TRANSACTIONS
     
     /// Fetches transactions for a user within a specific time range (timestamps in milliseconds).
     /// Used for both "History Option" range and "Single Date" range.
@@ -567,7 +588,356 @@ final class PillsDataLocalStorage {
         }
     }
     
+    // MARK: - BULK DELETE TRANSACTION DETAILS
+    func softDeleteAllTransactionDetails(for txnId: Int64) {
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> =
+        PillCountTransactionDetailsEntity.fetchRequest()
+        
+        request.predicate = NSPredicate(
+            format: "txn_id == %lld AND is_deleted == false", txnId
+        )
+        do {
+            let details = try mainThreadContext.fetch(request)
+            guard !details.isEmpty else { return }
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+            
+            for detail in details {
+                detail.is_deleted = true
+                detail.updated_at = now
+            }
+            
+            CoreDataManager.shared.save(context: mainThreadContext)
+        } catch {
+            print("❌ Failed to delete transaction details for txnId \(txnId): \(error)")
+        }
+    }
     
+    // Delete transaction by step
+    func softDeleteTransactionDetailsForStep(
+        txnId: Int64,
+        step: ControlledStep
+    ) {
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> =
+            PillCountTransactionDetailsEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "txn_id == %lld AND type == %@ AND is_deleted == false",
+            txnId,
+            step.rawValue
+        )
+
+        do {
+            let details = try mainThreadContext.fetch(request)
+
+            guard !details.isEmpty else { return }
+
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+
+            for detail in details {
+                detail.is_deleted = true
+                detail.updated_at = now
+            }
+
+            CoreDataManager.shared.save(context: mainThreadContext)
+
+        } catch {
+            print("❌ Failed to delete step details for txnId \(txnId), step \(step): \(error)")
+        }
+    }
+    
+    // MARK: UPDATE
+    // Update an existing transaction instead of creating a new one
+    func updateTransaction(
+        txnId: Int64,
+        drugId: Int64?,
+        countType: CountType,
+        targetCount: Int32?,
+        barcodeImagePath: String? = nil
+    ) {
+        guard
+            let entity = fetchPillCountTransactionByTransactionId(txnId: txnId)
+        else {
+            print("❌ No transaction found to update for txnId \(txnId)")
+            return
+        }
+
+        // Update drug if needed
+        if let drugId = drugId,
+           let drugEntity = fetchDrugById(drugId) {
+            entity.drug_id = drugId
+            entity.drug = drugEntity
+        }
+
+        // Update core fields
+        entity.count_type = countType.rawValue
+        entity.is_synced = false
+        
+        // Update target count ONLY if provided
+        if let targetCount {
+            entity.target_count = targetCount
+        }
+
+        // Update barcode image ONLY if provided
+        if let barcodeImagePath, !barcodeImagePath.isEmpty {
+            entity.barcode_image = barcodeImagePath
+        }
+
+        // Update timestamp
+        entity.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+        debugPrintAllTransactions()
+    }
+    
+    func updateTransactionSynced(txnId: Int64) {
+
+        print("[DB][SYNC] updateTransactionSynced called for txnId =", txnId)
+
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("[DB][SYNC] ❌ Transaction NOT FOUND for txnId =", txnId)
+            return
+        }
+
+        print("[DB][SYNC] Before update → isSynced =", txn.is_synced,
+              "status =", txn.status ?? "nil")
+
+        txn.is_synced = true
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("[DB][SYNC] After update → isSynced =", txn.is_synced)
+    }
+
+    func clearAllLocalData() {
+        
+        let context = mainThreadContext
+        let fileManager = FileManager.default
+        
+        do {
+            print("🧹 Clearing ALL local data...")
+            
+            // MARK: 1️⃣ Delete All Transaction Details
+            let detailFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
+            let detailDelete = NSBatchDeleteRequest(fetchRequest: detailFetch)
+            try context.execute(detailDelete)
+            
+            // MARK: 2️⃣ Delete All Transactions
+            let txnFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionEntity.fetchRequest()
+            let txnDelete = NSBatchDeleteRequest(fetchRequest: txnFetch)
+            try context.execute(txnDelete)
+            
+            // MARK: 3️⃣ Delete All Drugs
+            let drugFetch: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
+            let drugDelete = NSBatchDeleteRequest(fetchRequest: drugFetch)
+            try context.execute(drugDelete)
+            
+            // MARK: 4️⃣ Delete All Images from Documents Directory
+            if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
+                let files = try fileManager.contentsOfDirectory(at: documentsURL, includingPropertiesForKeys: nil)
+                
+                for fileURL in files {
+                    try? fileManager.removeItem(at: fileURL)
+                }
+                
+                print("🗂 All local image files removed.")
+            }
+            
+            // MARK: 5️⃣ Reset Transaction ID Counters
+            UserDefaults.standard.removeObject(forKey: "txnTransactionIdCounter")
+            UserDefaults.standard.removeObject(forKey: "txnDetailIdCounter")
+            
+            try context.save()
+            
+            print("✅ All local data cleared successfully.")
+            
+        } catch {
+            print("❌ Failed to clear local data:", error)
+        }
+    }
+    
+
+    
+    // For Controlled Drug
+    func getTransactionDetailsForStep(
+        txnId: Int64,
+        step: ControlledStep
+    ) -> [PillCountTransactionDetailsEntity] {
+        
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> =
+            PillCountTransactionDetailsEntity.fetchRequest()
+        
+        request.predicate = NSPredicate(
+            format: "txn_id == %lld AND type == %@ AND is_deleted == false",
+            txnId,
+            step.rawValue
+        )
+        
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "created_at", ascending: true)
+        ]
+        
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
+    
+    func getTotalCountForStep(
+        txnId: Int64,
+        step: ControlledStep
+    ) -> Int32 {
+        
+        let details = getTransactionDetailsForStep(
+            txnId: txnId,
+            step: step
+        )
+        
+        return details.reduce(Int32(0)) { total, item in
+            total + item.pill_count
+        }
+    }
+    
+    func getLastCompletedStep(txnId: Int64) -> ControlledStep? {
+
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> =
+            PillCountTransactionDetailsEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "txn_id == %lld AND is_deleted == false",
+            txnId
+        )
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "created_at", ascending: false)
+        ]
+
+        request.fetchLimit = 1
+
+        guard
+            let detail = try? mainThreadContext.fetch(request).first,
+            let type = detail.type,
+            let step = ControlledStep(rawValue: type)
+        else {
+            return nil
+        }
+
+        return step
+    }
+    
+    func getContainerPendingTarget(txnId: Int64) -> Int32 {
+
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            return 0
+        }
+
+        let containerCount = getTotalCountForStep(
+            txnId: txnId,
+            step: .containerInitiate
+        )
+
+        let target = txn.target_count
+
+        return max(containerCount - target, 0)
+    }
+    
+    func updateNdcVerified(txnId: Int64, verified: Bool) {
+
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("❌ No transaction found for txnId \(txnId)")
+            return
+        }
+
+        txn.is_ndc_verfied = verified
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("✅ NDC verification updated for txnId \(txnId) → \(verified)")
+    }
+    
+    // Update drugMaster data
+    func updateDrugMaster(
+        drugId: Int64,
+        drugName: String? = nil,
+        ndc: String? = nil,
+        equivalence: String? = nil,
+        drugType: String? = nil
+    ) {
+
+        guard let drug = fetchDrugById(drugId) else {
+            print("❌ Drug not found for id \(drugId)")
+            return
+        }
+
+        if let drugName {
+            drug.drug_name = drugName
+        }
+
+        if let ndc {
+            drug.ndc = ndc
+        }
+
+        if let equivalence {
+            drug.equivalence = equivalence
+        }
+
+        if let drugType {
+            drug.drug_type = drugType
+        }
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("✅ Drug updated for id \(drugId)")
+    }
+    
+    
+    func updateTransactionDrugId(
+        txnId: Int64,
+        drugId: Int64
+    ) {
+
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId),
+              let drug = fetchDrugById(drugId) else {
+            print("❌ Failed to update txn drug")
+            return
+        }
+
+        txn.drug_id = drugId
+        txn.drug = drug
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("✅ Transaction \(txnId) updated with new drug \(drugId)")
+    }
+    
+    //For Vial txn detail 
+    func addOrReplaceVialTransactionDetail(
+        txnId: Int64,
+        imagePath: String?
+    ) {
+
+        let context = mainThreadContext
+
+        context.performAndWait {
+
+            // Delete existing vial
+            softDeleteTransactionDetailsForStep(
+                txnId: txnId,
+                step: .vial
+            )
+
+            //  FORCE REFRESH CONTEXT (CRITICAL FIX)
+            context.refreshAllObjects()
+
+            //  Add new vial
+            addTransactionDetail(
+                txnId: txnId,
+                pillCount: 0,
+                imagePath: imagePath,
+                type: ControlledStep.vial.rawValue
+            )
+        }
+    }
+
     // MARK: DEBUGGING
     func debugPrintAllTransactions() {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
@@ -585,7 +955,10 @@ final class PillsDataLocalStorage {
                     📊 Status: \(txn.status ?? "nil")
                     🔢 Type: \(txn.count_type ?? "nil")
                     🗑️ Deleted: \(txn.is_deleted)
-                    ---------------------------------------------------
+                       isComingFromPms \(txn.is_from_pms)
+                       isSynced \(txn.is_synced)
+                    ---------------------------------
+                    ------------------
                     """)
             }
         } catch {

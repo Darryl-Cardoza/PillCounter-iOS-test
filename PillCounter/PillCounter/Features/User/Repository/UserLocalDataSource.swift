@@ -84,23 +84,51 @@ final class UserLocalDataSource {
     
     // get user by user id.
     func getUserByUserId(by userId: String) -> UserEntity? {
-        
+
+
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user_id == %@", userId)
-        request.fetchLimit = 1 // this is for imporvement in performance.
-        
-        // now return the UserEntity with the provided user id.
-        return try? mainThreadContext.fetch(request).first // return the first user with the user id.
+        request.fetchLimit = 1
+
+        do {
+            let result = try mainThreadContext.fetch(request)
+
+            if let user = result.first {
+                return user
+            } else {
+                print("🔴 DB: No user found for id =", userId)
+                return nil
+            }
+
+        } catch {
+            print("❌ DB ERROR fetching user:", error.localizedDescription)
+            return nil
+        }
     }
+    
     
     // get all users
     func getAllUsers() -> [UserEntity] {
-        
-        // make the request
+
+
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
-        return (try? mainThreadContext.fetch(request)) ?? []
+
+        do {
+            let users = try mainThreadContext.fetch(request)
+
+
+            for user in users {
+            }
+
+            return users
+
+        } catch {
+            print("❌ DB ERROR fetching all users:", error.localizedDescription)
+            return []
+        }
     }
-    
+
+        
     // update the value of the fields.
     func updateUser(userId: String, field: UserField, value: Any?) {
         guard let user = getUserByUserId(by: userId) else {
@@ -126,9 +154,10 @@ final class UserLocalDataSource {
     func getTransactionsForUserFilteredByDate(for user: UserEntity, startDateTs: Int64, endDateTs: Int64) -> [PillCountTransactionEntity] {
         let set = user.transactions as? Set<PillCountTransactionEntity> ?? []
         
-        return set
+        return set  
             .filter { txn in
-                txn.created_at >= startDateTs && txn.created_at < endDateTs
+                txn.created_at >= startDateTs && txn.created_at < endDateTs &&
+                txn.is_deleted == false
             }
             .sorted { $0.created_at < $1.created_at }
     }

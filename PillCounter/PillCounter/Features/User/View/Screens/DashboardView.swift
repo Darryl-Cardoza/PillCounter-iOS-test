@@ -18,6 +18,12 @@ struct DashboardView: View {
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = true
+    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable) var isHl7Enable:
+        Bool = false
+
+
+    
+    
     // MARK: - LOCAL STATE
     // This ensures we only redirect once per session (prevents infinite loop on Skip)
     @State private var hasCheckedNewUser: Bool = false
@@ -29,44 +35,35 @@ struct DashboardView: View {
                     VStack(spacing: 10) {
                         Spacer()
                         Spacer()
-                        Image("fixed_count")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(
-                                width: geometry.size.width * 0.35,
-                                height: geometry.size.width * 0.35
-                            )
-                            .overlay {
-                                appColors.secondary
-                                    .mask {
-                                        Image("fixed_count")
-                                            .resizable()
-                                            .scaledToFit()
-                                    }
-                            }
-                            .onTapGesture {
-
-                                // before navigating to the barcode scanning set the router value to fixed because we will need this value ahead for creating transactions.
-                                router.selectedPillScanningType = .FIXED
-
-                                router.navigate(
-                                    to: .authentication(
-                                        .login(
-                                            .dashboard(
-                                                .pillCount(.barcodeScanning)))))
-                            }
-
-                        Spacer().frame(height: 15)
-
-                        Text("FIXED_COUNT_TITLE")
-                            .font(.title)
-                            .foregroundStyle(appColors.secondary)
-
-                        Text("FIXED_COUNT_SUBTITLE")
-                            .foregroundStyle(appColors.text)
-
-                        Spacer()
-
+                        VStack(spacing: 15) {
+                            
+                            Image("fixed_count")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(
+                                    width: geometry.size.width * 0.35,
+                                    height: geometry.size.width * 0.35
+                                )
+                                .overlay {
+                                    appColors.secondary
+                                        .mask {
+                                            Image("fixed_count")
+                                                .resizable()
+                                                .scaledToFit()
+                                        }
+                                }
+                               
+                            Spacer().frame(height: 15)
+                            
+                            Text("FIXED_COUNT_TITLE")
+                                .font(.title)
+                                .foregroundStyle(appColors.secondary)
+                            
+                            Text("FIXED_COUNT_SUBTITLE")
+                                .foregroundStyle(appColors.text)
+                            
+                        }
+                        
                         HStack {
                             PillCountingButton(
                                 iconName: "tick_icon_pink",
@@ -76,7 +73,7 @@ struct DashboardView: View {
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
-                                    router.navigate(to: .authentication(.user(.userSettings(.History))))
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
                                 },
                                 iconColor: appColors.secondary
                             )
@@ -90,10 +87,7 @@ struct DashboardView: View {
                                 textColor: appColors.secondary,
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
-                                    // some action to be performed like opening or navigating
-
-                                    if userViewModel.fixedCountTransactionPartialCount > 0 {
-                                        
+                                    // some action to be performed like opening or navigatin
                                         router.selectedPillScanningType = .FIXED
                                         
                                         router.navigate(
@@ -101,8 +95,6 @@ struct DashboardView: View {
                                                 .login(
                                                     .dashboard(.fixedCountPartial)))
                                         )
-                                        
-                                    }
                                 },
                                 iconColor: appColors.secondary
                             )
@@ -113,6 +105,18 @@ struct DashboardView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.secondaryBackground)
+                    .onTapGesture {
+                        
+                        // before navigating to the barcode scanning set the router value to fixed because we will need this value ahead for creating transactions.
+                        router.selectedPillScanningType = .FIXED
+                        
+                        router.navigate(
+                            to: .authentication(
+                                .login(
+                                    .dashboard(
+                                        .pillCount(.barcodeScanning)))))
+                    }
+                
                 }
 
             },
@@ -136,19 +140,7 @@ struct DashboardView: View {
                                             .scaledToFit()
                                     }
                             }
-                            .onTapGesture {
-                                // routing for regular count
-                                // make sure before you route we set the
-                                // router.selectedPillScanningType to regular.
-
-                                router.selectedPillScanningType = .REGULAR
-
-                                router.navigate(
-                                    to: .authentication(
-                                        .login(
-                                            .dashboard(
-                                                .pillCount(.barcodeScanning)))))
-                            }
+                        
 
                         Spacer().frame(height: 15)
 
@@ -170,7 +162,7 @@ struct DashboardView: View {
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
-                                    router.navigate(to: .authentication(.user(.userSettings(.History))))
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular)))))
                                 },
                                 iconColor: appColors.primary
                             )
@@ -185,8 +177,6 @@ struct DashboardView: View {
                                 action: {
                                     // some action to be performed like opening or navigating
                                     // need to set this as regular.
-
-                                    if userViewModel.regularCountTransactionPartialCount > 0 {
                                         router.selectedPillScanningType = .REGULAR
                                         
                                         router.navigate(
@@ -194,7 +184,6 @@ struct DashboardView: View {
                                                 .login(
                                                     .dashboard(.regularCountPartial)
                                                 )))
-                                    }
                                     
                                 },
                                 iconColor: appColors.primary
@@ -207,13 +196,30 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.primaryBackground)
                     .cornerRadius(24)
+                    .onTapGesture {
+                        // routing for regular count
+                        // make sure before you route we set the
+                        // router.selectedPillScanningType to regular.
+
+                        router.selectedPillScanningType = .REGULAR
+
+                        router.navigate(
+                            to: .authentication(
+                                .login(
+                                    .dashboard(
+                                        .pillCount(.barcodeScanning)))))
+                    }
                 }
             },
             showBackButton: false,
-            showHamburgerMenu: true
+            showHamburgerMenu: true,
+            showPmsConnectionButton: isHl7Enable,
+            pmsConnectionState : userViewModel.pmsConnectionState
+  
+
         )
         .onAppear {
-            
+    
             Task(priority: .background) {
                 await userViewModel.checkAndRefreshTokenIfNeeded()
             }
@@ -230,7 +236,6 @@ struct DashboardView: View {
                 }
             }
         }
-
     }
 }
 

@@ -37,7 +37,8 @@ struct PillCountingToggleButton: View {
                 Circle()
                     .fill(Color.white)
                     .frame(width: 28, height: 28)
-                    .padding(5)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 0)
             }
         }
         .accessibilityLabel(Text(isOn ? "Switch On" : "Switch Off"))

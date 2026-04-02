@@ -8,7 +8,6 @@
 import Foundation
 
 protocol SettingsRepositoryProtocol {
-    
     func getMobileSettings(currentVersion: String) async throws -> MobileSettingsResponse
 }
 
@@ -27,4 +26,3 @@ final class SettingsRepository: SettingsRepositoryProtocol, BaseRepositoryProtoc
         )
     }
 }
-

@@ -12,7 +12,12 @@ import SwiftUI
 struct CameraContentView: View {
     @ObservedObject var cameraService: CameraService
     @EnvironmentObject var appColors: AppColors
-
+    @EnvironmentObject var pillScanViewModel: PillScanViewModel
+    @State private var isAutoOrManual: Bool = false // this variable is to handle the auto detection capture.
+    @Environment(\.isLandscape) private var isLandscape
+    
+    var isCameraEnabled: Bool
+    
     var body: some View {
         ZStack {
             // CAMERA + OVERLAY
@@ -23,11 +28,58 @@ struct CameraContentView: View {
                         cameraService: cameraService
                     )
                     .ignoresSafeArea()
-                    .task { cameraService.start() }
-                    .onDisappear { cameraService.stop() }
+                    .task {
+                        cameraService.configureInitialOrientation()
+                        cameraService.startObservingOrientation()
 
-                    DetectionOverlay(cameraService: cameraService)
+                        if isCameraEnabled {
+                            cameraService.start()
+                        }
+                    }
+                    .onChange(of: isCameraEnabled) { _, enabled in
+                        if enabled {
+                            cameraService.start()
+                        } else {
+                            cameraService.stop()
+                        }
+                    }
+                    .onDisappear { cameraService.stop() }
+                    DetectionOverlay(cameraService: cameraService, currentStep: pillScanViewModel.currentControlledStep)
+                            .ignoresSafeArea()
+                    TrayOverlay(cameraService: cameraService)
                         .ignoresSafeArea()
+                    //Toggle
+                    //                    VStack {
+                    //                        HStack {
+                    //                            Spacer()
+                    //
+                    //                            PillCountingToggleButton(
+                    //                                isOn: $isAutoOrManual,
+                    //                                onColor: appColors.secondary,
+                    //                                offColor: Color.black.opacity(0.5)
+                    //                            )
+                    //                            .padding(.trailing, 16)
+                    //                            .padding(.top, 16)
+                    //                        }
+                    //
+                    //                        Spacer()
+                    //                    }
+                        .padding(.top, isLandscape ? 0 : 30)
+                    
+                    VStack {
+                        ControlledStepRow(
+                            activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
+                            currentStep: pillScanViewModel.currentControlledStep
+                        )
+                    }
+                    
+                    VStack {
+                        Spacer()
+                        ZoomControlViewVertical(
+                            cameraService: cameraService
+                        )
+                        Spacer()
+                    }
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -37,265 +89,721 @@ struct CameraContentView: View {
 
         }
     }
+    private var headerToggle: some View {
+        PillCountingToggleButton(
+            isOn: $isAutoOrManual,
+            onColor: appColors.secondary,
+            offColor: appColors.text.opacity(0.4)
+        )
+    }
 }
+
+struct ZoomControlView: View {
+
+    @ObservedObject var cameraService: CameraService
+    @EnvironmentObject var appColors: AppColors
+
+    private let minZoom: CGFloat = 1.0
+    private let maxZoom: CGFloat = 2.0
+
+    var body: some View {
+        VStack {
+            Spacer()
+
+            VStack(spacing: 8) {
+           
+                Spacer()
+
+                GeometryReader { geo in
+                    let width = geo.size.width
+
+                    let horizontalPadding: CGFloat = 16   // slider internal padding
+                    let usableWidth = width - (horizontalPadding * 2)
+
+                    let percentage = (cameraService.zoomFactor - minZoom) / (maxZoom - minZoom)
+                    let thumbX = horizontalPadding + (usableWidth * percentage)
+
+                    ZStack(alignment: .leading) {
+
+                        Slider(
+                            value: Binding(
+                                get: { cameraService.zoomFactor },
+                                set: { newValue in
+                                    cameraService.setZoom(newValue)
+                                    cameraService.resetInactivityTimer()
+                                }
+                            ),
+                            in: minZoom...maxZoom,
+                            step: 0.1
+                        )
+                        .tint(appColors.secondary)
+
+                        Text(String(format: "%.1fx", cameraService.zoomFactor))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(appColors.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Capsule())
+                            .position(x: thumbX, y: -5)  
+
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        guard usableWidth > 0 else { return }
+
+                                        let percentage = min(
+                                            max((value.location.x - horizontalPadding) / usableWidth, 0),
+                                            1
+                                        )
+
+                                        let zoom = minZoom + (maxZoom - minZoom) * percentage
+
+                                        cameraService.setZoom(zoom)
+                                        cameraService.resetInactivityTimer()
+                                    }
+                            )
+                    }
+                }
+                .frame(height: 60)
+                .frame(height: 44)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 5)
+            .cornerRadius(14)
+        }
+        .allowsHitTesting(!cameraService.isPausedDueToInactivity)
+    }
+}
+
+struct ZoomControlViewVertical: View {
+
+    @ObservedObject var cameraService: CameraService
+    @EnvironmentObject var appColors: AppColors
+
+    private let minZoom: CGFloat = 1.0
+    private let maxZoom: CGFloat = 2.0
+
+    private let trackWidth: CGFloat = 2
+    private let thumbSize: CGFloat = 22
+    private let verticalPadding: CGFloat = 50
+
+    var body: some View {
+
+        GeometryReader { geo in
+            let height       = geo.size.height
+            let usableHeight = height - (verticalPadding * 2)
+            let percentage   = (cameraService.zoomFactor - minZoom) / (maxZoom - minZoom)
+
+            // top = maxZoom, bottom = minZoom
+            let thumbY = height - verticalPadding - (usableHeight * percentage)
+
+            ZStack {
+
+                // Track
+                Rectangle()
+                    .fill(appColors.secondary)
+                    .frame(width: trackWidth, height: usableHeight)
+                    .position(x: geo.size.width / 2, y: height / 2)
+
+                // Zoom text (placed before circle)
+                Text(String(format: "%.1fx", cameraService.zoomFactor))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .position(x: geo.size.width / 2 - 28, y: thumbY)
+
+                // Circle (UNCHANGED POSITION)
+                Circle()
+                    .fill(.white)
+                    .frame(width: thumbSize, height: thumbSize)
+                    .position(x: geo.size.width / 2, y: thumbY)
+
+                // Drag overlay
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                guard usableHeight > 0 else { return }
+
+                                let pct = min(
+                                    max(
+                                        (height - verticalPadding - value.location.y) / usableHeight,
+                                        0
+                                    ),
+                                    1
+                                )
+
+                                let zoom = minZoom + (maxZoom - minZoom) * pct
+                                cameraService.setZoom(zoom)
+                                cameraService.resetInactivityTimer()
+                            }
+                    )
+            }
+        }
+        .frame(width: 44, height: 340)
+        .allowsHitTesting(!cameraService.isPausedDueToInactivity)
+    }
+}
+
+// Top Step instrcution box
+struct PillCountInstructionOverlay: View {
+    let text: String
+    var backgroundOpacity: Double = 0.5
+    var cornerRadius: CGFloat = 24
+
+    var body: some View {
+        Text(text)
+            .font(.headline)
+            .foregroundColor(AppColors.shared.text)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                AppColors.shared.primaryBackground.opacity(backgroundOpacity)
+            )
+            .cornerRadius(cornerRadius)
+    
+    }
+}
+
 // MARK: - BOTTOM CONTROLS VIEW
 // The container for the pill info, count display, and buttons.
 struct BottomControlsView: View {
+    
     let isLandscape: Bool
     let pillScanViewModel: PillScanViewModel
     let cameraService: CameraService
     let appColors: AppColors
+    var isAddButtonDisabled: Bool = false
     let onAddPill: () -> Void
     let onComplete: () -> Void
+    let onReset: () -> Void
     let onTransactionDetailTapped: (PillCountTransactionDetailsEntity) -> Void
     @Binding var showTransactionDetails: Bool
     @Binding var isPaused: Bool
+    @State private var showHistoryOrScanPillIcon: Bool = false
 
-    var body: some View {
-        VStack(spacing: 25) {
-
-            // Switch layout based on orientation using separate Views
-            if isLandscape {
-                LandscapeLayout(
-                    pillScanViewModel: pillScanViewModel,
-                    cameraService: cameraService,
-                    appColors: appColors,
-                    isPaused: $isPaused
-                )
-            } else {
-                PortraitLayout(
-                    pillScanViewModel: pillScanViewModel,
-                    cameraService: cameraService,
-                    appColors: appColors,
-                    isPaused: $isPaused
-                )
-            }
-
-            TransactionDetailsScrollView(
-                details: pillScanViewModel
-                    .currentTransactionTransactionDetails ?? [],
-                appColors: appColors,
-                onTap: onTransactionDetailTapped
-            )
-            .opacity(showTransactionDetails ? 1 : 0)
-            .allowsHitTesting(showTransactionDetails)
-
-            ActionButtons(
-                showTransactionDetails: $showTransactionDetails,
-                isLandscape: isLandscape,
-                appColors: appColors,
-                onAddPill: onAddPill,
-                onComplete: onComplete
-            )
+    @EnvironmentObject private var router: Router
+    
+    
+    var targetCount: Int32 {
+        if pillScanViewModel.currentTransaction?.is_from_pms == true {
+            return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
+        } else {
+            return pillScanViewModel.currentTransaction?.target_count ?? 0
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(appColors.primaryBackground)
-        .cornerRadius(24)
     }
-}
 
-// MARK: - PORTRAIT VIEWS
-// Layout for Portrait: Count is horizontal, large circle on left.
-struct PortraitLayout: View {
-    let pillScanViewModel: PillScanViewModel
-    @ObservedObject var cameraService: CameraService
-    let appColors: AppColors
-    @EnvironmentObject var router: Router
-    @Binding var isPaused: Bool
-
-    var body: some View {
-        HStack {
-            CircleBadge(
-                size: 100,
-                strokeWidth: 3,
-                outerColor: .pink,
-                innerColor: appColors.primary,
-                text: "\(cameraService.stableCount)",
-                textColor: .white,
-                font: .system(size: 24, weight: .bold),
-                isAnimated: !isPaused ? true : false
-            )
-            .padding(.horizontal, 20)
-
-            Spacer()
-
-            VStack(spacing: 10) {
-                Text(pillScanViewModel.drugName ?? "Loading...").font(.title3)
-                if router.selectedPillScanningType == .FIXED {
-                    Text(
-                        "\(NSLocalizedString("TOTAL_PILL_COUNT", comment: "")) \(pillScanViewModel.getTotalPillCountOfCurrentTransaction())/\(pillScanViewModel.currentTransaction?.target_count ?? 0)"
-                    )
-                    .font(.system(size: 22, weight: .regular))
-                } else {
-                    Text(
-                        "\(NSLocalizedString("TOTAL_PILL_COUNT", comment: "")) \(pillScanViewModel.getTotalPillCountOfCurrentTransaction())"
-                    )
-                    .font(.system(size: 22, weight: .regular))
-                }
-            }
-            Spacer()
+    var completeCount: Int {
+        if pillScanViewModel.currentTransaction?.is_from_pms == true {
+            return Int( pillScanViewModel.getTotalCuntForCurrentStep())
+        }else{
+            return   pillScanViewModel
+                .getTotalPillCountOfCurrentTransaction()
         }
-        .padding(.top, 20)
     }
-}
-
-// MARK: - LANDSCAPE LAYOUT
-// Layout for Landscape: Count is vertical, text truncated.
-struct LandscapeLayout: View {
-    let pillScanViewModel: PillScanViewModel
-    @ObservedObject var cameraService: CameraService
-    let appColors: AppColors
-    @EnvironmentObject var router: Router
-    @Binding var isPaused: Bool
-
-    var body: some View {
-        VStack(spacing: 30) {
-            Text(pillScanViewModel.drugName ?? "Loading...")
-                .font(.title3).lineLimit(2)
-                .multilineTextAlignment(.leading).truncationMode(.tail)
-                .padding(.horizontal, 5)
-
-            CircleBadge(
-                size: 85,
-                strokeWidth: 3,
-                outerColor: .pink,
-                innerColor: appColors.primary,
-                text: "\(cameraService.stableCount)",
-                textColor: .white,
-                font: .system(size: 24, weight: .bold),
-                isAnimated: !isPaused ? true : false
-            )
-
-            if router.selectedPillScanningType == .FIXED {
-                Text(
-                    "\(NSLocalizedString("TOTAL_PILL_COUNT", comment: "")) \(pillScanViewModel.getTotalPillCountOfCurrentTransaction())/\(pillScanViewModel.currentTransaction?.target_count ?? 0)"
-                )
-                .font(.system(size: 22, weight: .regular))
-            } else {
-                Text(
-                    "\(NSLocalizedString("TOTAL_PILL_COUNT", comment: "")) \(pillScanViewModel.getTotalPillCountOfCurrentTransaction())"
-                )
-                .font(.system(size: 22, weight: .regular))
-            }
-        }
-        .padding(.top, 20)
-    }
-}
-
-// MARK: - SCROLLABLE LIST
-// Horizontal list of saved pill counts (batches).
-struct TransactionDetailsScrollView: View {
-    let details: [PillCountTransactionDetailsEntity]
-    let appColors: AppColors
-    let onTap: (PillCountTransactionDetailsEntity) -> Void
     
     var body: some View {
-        GeometryReader { geo in
+        VStack(spacing: 0) {
+
+            BottomControlsViewHeader(
+                drugName: pillScanViewModel.currentTransaction?.drug?.drug_name
+                    ?? "",
+                isLandScape: isLandscape,
+                isScanPill: $showHistoryOrScanPillIcon,
+                onResetPills: onReset
+            )
+            .padding()
+            .padding(.top, isLandscape ? 0 : 10)
+
+            VStack {
+                if showHistoryOrScanPillIcon {
+                    BottonControlsViewForTransactionList(
+                        details: pillScanViewModel
+                            .currentTransactionTransactionDetails ?? [],
+                        appColors: appColors,
+                        countType: router.selectedPillScanningType ?? .FIXED,
+//                        targetCount: pillScanViewModel.currentTransaction?
+//                            .target_count ?? 0,
+                        targetCount: targetCount ,
+                        onTap: onTransactionDetailTapped,
+                        isLandscape: isLandscape
+                    )
+                    .padding(.trailing, isLandscape ? 20 : 0)
+                } else {
+                    BottomControlsViewBodyForPillScan(
+                        appColors: appColors,
+                        countType: router.selectedPillScanningType ?? .FIXED,
+//                        targetCount: pillScanViewModel.currentTransaction?
+//                            .target_count ?? 0,
+                        targetCount: targetCount,
+                        currentTotalCount: completeCount,
+                        currentScanningCount: cameraService.stableCount,
+                        onAddPills: onAddPill,
+                        onCompleteScan: onComplete,
+                        isLandscape: isLandscape,
+                        isPausedDueToInactivity: cameraService
+                            .isPausedDueToInactivity,
+                        isAddButtonDisabled: isAddButtonDisabled
+                    )
+                    .padding()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+
+    }
+}
+
+// MARK: ADD BUTTON-
+struct CountAddButtonView: View {
+    let count: Int
+    let ringColor: Color
+    let buttonColor: Color
+    let textColor: Color
+    let ringLineWidth: CGFloat
+    let size: CGFloat
+    let isAnimating: Bool
+    let onAddTap: () -> Void
+    var isDisabled: Bool = false
+
+    // We use a UUID to force SwiftUI to recreate the view when animation state changes.
+    // This prevents the "repeatForever" from getting stuck or not resetting correctly.
+    @State private var animationID = UUID()
+    @State private var trimValue: CGFloat = 1.0
+
+    var body: some View {
+        VStack(spacing: -20) {
+
+            // Circle with animated stroke
+            ZStack {
+                Circle()
+                    .trim(from: 0, to: trimValue)
+                    .stroke(
+                        ringColor,
+                        style: StrokeStyle(
+                            lineWidth: ringLineWidth,
+                            lineCap: .round
+                        )
+                    )
+                    .rotationEffect(.degrees(90))  // Start at 6 o'clock
+                    .frame(width: size, height: size)
+                    .id(animationID)  // ⬅️ Critical for resetting animation cleanly
+                    .onAppear {
+                        updateAnimationState()
+                    }
+                    .onChange(of: isAnimating) { _, _ in
+                        updateAnimationState()
+                    }
+
+                Text("\(count)")
+                    .font(.system(size: size * 0.28, weight: .bold))
+                    .foregroundStyle(textColor)
+            }
+            .opacity(isDisabled ? 0.5 : 1.0)
+
+            // Add button
+            Button(action: onAddTap) {
+                Text(isDisabled ? "Wait..." : "Add")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 10)
+                    .background(isDisabled ? Color.gray : buttonColor)
+                    .clipShape(Capsule())
+            }
+            .disabled(isDisabled)
+        }
+    }
+
+    private func updateAnimationState() {
+        // Regenerate ID to kill any existing animation context
+        animationID = UUID()
+
+        if isAnimating {
+            // Start with empty circle
+            trimValue = 0
+            withAnimation(
+                .linear(duration: 1.5)
+                    .repeatForever(autoreverses: false)
+            ) {
+                trimValue = 1
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now()) {
+                 guard isAnimating else { return }
+
+                 FeedbackManager.shared.triggerDetectionFeedback(
+                     isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
+                     isSoundEnabled: AppStorageManager.shared.isSoundEnabled
+                 )
+             }
+        } else {
+            // Stop state: Full Circle Visible immediately
+            withAnimation(.linear(duration: 0.2)) {
+                trimValue = 1
+            }
+        }
+    }
+}
+
+// MARK: PILL SCAN BODY
+struct BottomControlsViewBodyForPillScan: View {
+
+    let appColors: AppColors
+    let countType: CountType
+    let targetCount: Int32?
+    let currentTotalCount: Int
+    let currentScanningCount: Int
+    let onAddPills: () -> Void
+    let onCompleteScan: () -> Void
+    let isLandscape: Bool
+    let isPausedDueToInactivity: Bool
+    var isAddButtonDisabled: Bool
+
+    @State private var isAnimating: Bool = true
+    @State private var stabilityWorkItem: DispatchWorkItem?
+
+    var body: some View {
+        Group {
+            if isLandscape {
+                // MARK: - LANDSCAPE LAYOUT
+                // 1. Center: Add Button
+                // 2. Below: Row with Total Count (Left) and All Done (Right)
+                VStack(spacing: 20) {
+                    addButton
+
+                    HStack(alignment: .bottom) {
+                        totalCountView
+                        Spacer()
+                        allDoneButton
+                    }
+                }
+            } else {
+                // MARK: - PORTRAIT LAYOUT
+                // All three in one bottom-aligned row
+                HStack(alignment: .bottom) {
+                    totalCountView
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    addButton
+                        .frame(maxWidth: .infinity)
+
+                    allDoneButton
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .padding(.horizontal)
+            }
+        }
+        .onAppear {
+            if !isPausedDueToInactivity { handleCountChange() }
+        }
+        .onChange(of: isPausedDueToInactivity) { _, paused in
+            if paused {
+                stabilityWorkItem?.cancel()
+                withAnimation { isAnimating = false }
+            } else {
+                handleCountChange()
+            }
+        }
+        .onChange(of: currentScanningCount) { _, _ in
+            handleCountChange()
+        }
+    }
+
+    // MARK: - COMPONENT BUILDERS
+    // Extracted to avoid code duplication across the if/else layout
+
+    @ViewBuilder
+    private var addButton: some View {
+        CountAddButtonView(
+            count: currentScanningCount,
+            ringColor: appColors.secondary,
+            buttonColor: appColors.primary,
+            textColor: appColors.text,
+            ringLineWidth: 5,
+            size: 120,
+            isAnimating: isAnimating,
+            onAddTap: { onAddPills() },
+            isDisabled: isAddButtonDisabled
+        )
+    }
+
+    @ViewBuilder
+    private var totalCountView: some View {
+        TotalCountView(
+            currentTotalCount: currentTotalCount,
+            targetCount: targetCount,
+            countType: countType,
+            appColors: appColors
+        )
+    }
+
+    @ViewBuilder
+    private var allDoneButton: some View {
+        Button {
+            onCompleteScan()
+        } label: {
+            VStack(spacing: 6) {
+
+                Spacer()
+
+                Image("all_done")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 50, height: 50)
+                    .overlay(appColors.primary)
+                    .mask(Image("all_done").resizable().scaledToFit())
+
+                Spacer().frame(height: 10)
+
+                Text("All Done")
+                    .foregroundStyle(appColors.text)
+                    .font(.system(size: 16))
+            }
+        }
+    }
+
+    // MARK: - LOGIC
+    private func handleCountChange() {
+        guard !isPausedDueToInactivity else { return }
+
+        if !isAnimating {
+            isAnimating = true
+        }
+
+        stabilityWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
+            withAnimation {
+                isAnimating = false
+            }
+        }
+
+        stabilityWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+    }
+}
+
+// MARK: TOTAL COUNT VIEW
+struct TotalCountView: View {
+    
+    let currentTotalCount: Int
+    let targetCount: Int32?
+    let countType: CountType
+    let appColors: AppColors
+    
+    private var showTarget: Bool {
+        countType == .FIXED && (targetCount ?? 0) > 0
+    }
+
+    var body: some View {
+        
+        VStack(spacing: 6) {
+
+            if !showTarget {
+                Spacer()
+            }
+
+            // Current Total
+            Text("\(currentTotalCount)")
+                .foregroundStyle(appColors.primary)
+                .font(.system(size: showTarget ? 26 : 30, weight: .bold))
+
+            // Divider
+            if showTarget {
+                Rectangle()
+                    .fill(appColors.primary)
+                    .frame(width: 65, height: 1.5)
+            }
+
+            // Target
+            if showTarget {
+                Text("\(targetCount ?? 0)")
+                    .foregroundStyle(appColors.primary)
+                    .font(.system(size: 20, weight: .bold))
+            }
+
+            if !showTarget {
+                Spacer().frame(height: 10)
+            }
+
+            Text("Total Count")
+                .foregroundStyle(appColors.text)
+                .font(.system(size: 16))
+                .padding(.top, 8)
+        }
+    }
+}
+// MARK: LIST BOTTOM
+struct BottonControlsViewForTransactionList: View {
+
+    let details: [PillCountTransactionDetailsEntity]
+    let appColors: AppColors
+    let countType: CountType
+    let targetCount: Int32?
+    let onTap: (PillCountTransactionDetailsEntity) -> Void
+    let isLandscape: Bool
+
+    private var totalCount: Int {
+        details.reduce(0) { $0 + Int($1.pill_count) }
+    }
+
+    var body: some View {
+        VStack {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
-                        
+
                         Spacer(minLength: 0)
-                        
+
                         ForEach(details.indices, id: \.self) { index in
                             let item = details[index]
                             let isLast = index == details.count - 1
-                            
+
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(appColors.statusChipBackgroundOnPrimary)
-                                .frame(width: 50, height: 50)
+                                .stroke(
+                                    isLast
+                                        ? appColors.secondary
+                                        : appColors.primary,
+                                    lineWidth: 2
+                                )
+                                .frame(width: 50, height: 80)
                                 .overlay(
                                     Text("\(item.pill_count)")
-                                        .foregroundColor(appColors.secondary)
+                                        .foregroundColor(appColors.text)
                                         .font(
                                             isLast
-                                            ? .headline.bold()
-                                            : .headline
-                                        )
+                                                ? .headline.bold() : .headline)
                                 )
                                 .id(index)
                                 .onTapGesture { onTap(item) }
                         }
-                        
+
                         Spacer(minLength: 0)
                     }
-                    .frame(minWidth: geo.size.width)
-                    .padding(.horizontal)
                 }
-                .onChange(of: details.count) { _, newCount in
-                    guard newCount > 0 else { return }
-                    
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            proxy.scrollTo(newCount - 1, anchor: .center)
-                        }
-                    }
+                .frame(height: 80)
+                .onAppear { scrollToLast(proxy) }
+                .onChange(of: details.count) { _, _ in
+                    scrollToLast(proxy)
                 }
             }
+
+            if !isLandscape {
+                Text("Total Count")
+                    .font(.caption)
+                    .foregroundColor(appColors.text)
+
+                HStack(spacing: 4) {
+                    Text("\(totalCount)")
+                        .font(.title.bold())
+                        .foregroundColor(appColors.primary)
+
+                    if countType == .FIXED, let targetCount {
+                        Text("/ \(targetCount)")
+                            .font(.body)
+                            .foregroundColor(appColors.primary)
+                    }
+                }
+            } else {
+                TotalCountView(
+                    currentTotalCount: totalCount,
+                    targetCount: targetCount,
+                    countType: countType,
+                    appColors: appColors
+                )
+                .padding(.top, 60)
+            }
         }
-        .frame(height: 60)
+    }
+    private func scrollToLast(_ proxy: ScrollViewProxy) {
+        guard !details.isEmpty else { return }
+
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(details.count - 1, anchor: .center)
+            }
+        }
     }
 }
 
-
-// MARK: - ACTION BUTTONS
-struct ActionButtons: View {
-    @Binding var showTransactionDetails: Bool
-    let isLandscape: Bool
-    let appColors: AppColors
-    let onAddPill: () -> Void
-    let onComplete: () -> Void
-
-    // 🔹 Local state to control Add button
-    @State private var isAddDisabled = false
+// MARK: - HEADER BOTTOM
+struct BottomControlsViewHeader: View {
+    let drugName: String
+    let isLandScape: Bool
+    @EnvironmentObject private var appColors: AppColors
+    @Binding var isScanPill: Bool
+    let onResetPills: () -> Void
 
     var body: some View {
-        HStack {
-            // History button
-            Button {
-                showTransactionDetails.toggle()
-            } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .foregroundStyle(appColors.primary)
-            }
+        Group {
+            if isLandScape {
+                VStack(spacing: 2) {
+                    HStack {
+                        resetButton
+                        Spacer()
+                        historyScanButton
+                    }
 
-            Spacer()
+                    Text(drugName)
+                        .foregroundStyle(appColors.text)
+                        .font(.system(size: 18))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .padding(.top, 30)
+                }
 
-            Button {
-                handleAddPill()
-            } label: {
-                Image(systemName: "plus.circle")
-                    .foregroundColor(
-                        isAddDisabled ? .gray : appColors.primary
-                    )
-            }
-            .disabled(isAddDisabled)
+            } else {
+                ZStack {
+                    // Layer 1: The Text (Centered)
+                    Text(drugName)
+                        .foregroundStyle(appColors.text)
+                        .font(.system(size: 20))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 44)
+                        .frame(maxWidth: .infinity, alignment: .center)
 
-            Spacer()
-
-            Button(action: onComplete) {
-                Image(systemName: "checkmark.circle")
-                    .foregroundColor(appColors.primary)
+                    // Layer 2: The Buttons (Left & Right edges)
+                    HStack {
+                        resetButton
+                        Spacer()
+                        historyScanButton
+                    }
+                }
             }
         }
-        .font(.system(size: 32))
-        .padding(.horizontal, isLandscape ? 15 : 50)
-        .padding(.bottom, 20)
     }
 
-    // MARK: - Add Pill Handler
-    private func handleAddPill() {
-        guard !isAddDisabled else { return }
+    private var resetButton: some View {
+        Button {
+            onResetPills()
+        } label: {
+            Image("delete")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 36, height: 36)
+                .overlay(appColors.primary)
+                .mask(Image("delete").resizable().scaledToFit())
+        }
+    }
 
-        // Call original action
-        onAddPill()
+    private var historyScanButton: some View {
+        Button {
+            isScanPill.toggle()
+        } label: {
+            let iconName = isScanPill ? "scan_pill" : "history_icon"
 
-        // Disable button
-        isAddDisabled = true
-
-        // Re-enable after 5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-            isAddDisabled = false
+            Image(iconName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 36, height: 36)
+                .overlay(appColors.primary)
+                .mask(Image(iconName).resizable().scaledToFit())
         }
     }
 }
@@ -313,7 +821,7 @@ struct CircleBadge: View {
     let isAnimated: Bool
 
     @State private var trimValue: CGFloat = 1
-    @State private var animationID = UUID()  // ⬅️ animation reset key
+    @State private var animationID = UUID()
 
     var body: some View {
         ZStack {
@@ -329,7 +837,7 @@ struct CircleBadge: View {
                 )
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
-                .id(animationID)  // ⬅️ forces SwiftUI to kill animation
+                .id(animationID)
                 .onAppear {
                     handleAnimationChange()
                 }
@@ -358,7 +866,7 @@ struct CircleBadge: View {
 
     // MARK: - ANIMATION CONTROL
     private func handleAnimationChange() {
-        animationID = UUID()  // ⬅️ kills any running repeatForever
+        animationID = UUID()  // kills any running repeatForever
 
         if isAnimated {
             trimValue = 0
@@ -368,8 +876,162 @@ struct CircleBadge: View {
                 trimValue = 1
             }
         } else {
-            // ⛔️ Pause → static full circle
+            // Pause → static full circle
             trimValue = 1
         }
+    }
+}
+
+struct SuccessAnimationView: View {
+    let count: Int
+    let color: Color
+
+    @State private var particles: [ConfettiParticle] = []
+    @State private var scale: CGFloat = 0.1
+    @State private var opacity: Double = 1.0
+
+    var body: some View {
+        ZStack {
+            // 1. Confetti Layer
+            ForEach(particles) { particle in
+                Circle()
+                    .fill(particle.color)
+                    .frame(width: particle.size, height: particle.size)
+                    .position(x: particle.x, y: particle.y)
+                    .opacity(particle.opacity)
+            }
+
+            // 2. Central Text Layer
+            Text("+\(count)")
+                .font(.system(size: 80, weight: .heavy))
+                .foregroundStyle(color)
+                .scaleEffect(scale)
+                .opacity(opacity)
+                .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 0)
+        }
+        .onAppear {
+            createParticles()
+            animate()
+        }
+    }
+
+    private func createParticles() {
+        let colors: [Color] = [
+            color, .red, .blue, .yellow, .green, .orange, .purple,
+        ]
+        for _ in 0..<50 {
+            let angle = Double.random(in: 0..<360) * .pi / 180
+            let speed = Double.random(in: 200...500)  // Explosion distance
+
+            particles.append(
+                ConfettiParticle(
+                    x: UIScreen.main.bounds.width / 2,
+                    y: UIScreen.main.bounds.height / 2,
+                    vx: cos(angle) * speed,
+                    vy: sin(angle) * speed,
+                    color: colors.randomElement() ?? .blue,
+                    size: CGFloat.random(in: 5...12),
+                    opacity: 1.0
+                )
+            )
+        }
+    }
+
+    private func animate() {
+        // Animate Text
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
+            scale = 1.5
+        }
+
+        // Animate Particles
+        withAnimation(.easeOut(duration: 1.5)) {
+            for i in particles.indices {
+                particles[i].x += particles[i].vx
+                particles[i].y += particles[i].vy
+                particles[i].opacity = 0
+            }
+        }
+
+        // Fade out text at the end
+        withAnimation(.easeIn(duration: 0.5).delay(2.0)) {
+            opacity = 0
+        }
+    }
+}
+
+struct ConfettiParticle: Identifiable {
+    let id = UUID()
+    var x: Double
+    var y: Double
+    var vx: Double
+    var vy: Double
+    let color: Color
+    let size: CGFloat
+    var opacity: Double
+}
+
+
+struct VialBottomContentView: View {
+    
+    let appColors: AppColors
+    
+    var onRedo: () -> Void
+    var onCapture: () -> Void
+    var onDone: () -> Void
+    
+    @Environment(\.isLandscape) private var isLandscape
+
+    var body: some View {
+        
+        let layout = isLandscape
+        ? AnyLayout(VStackLayout(spacing: 70))
+        : AnyLayout(HStackLayout(spacing: 90))
+        
+        layout {
+            
+            // Redo
+            VStack(spacing: 10) {
+                Image("redo_icon")
+                    .foregroundColor(appColors.primary)
+                
+                Text("Redo")
+                    .font(.caption)
+                    .foregroundColor(appColors.text)
+            }
+            .onTapGesture {
+                onRedo()
+            }
+            
+            
+            // Camera Button
+            ZStack {
+                Circle()
+                    .fill(appColors.primary)
+                    .frame(width: 70, height: 70)
+                
+                Image(systemName: "camera")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundColor(appColors.text)
+            }
+            .onTapGesture {
+                onCapture()
+            }
+            
+            
+            // Done
+            VStack(spacing: 10) {
+                Image("done_icon")
+                    .foregroundColor(appColors.primary)
+                
+                Text("Done")
+                    .font(.caption)
+                    .foregroundColor(appColors.text)
+            }
+            .onTapGesture {
+                onDone()
+            }
+        }
+        .padding(.vertical, 25)
+        .padding(.horizontal)
     }
 }

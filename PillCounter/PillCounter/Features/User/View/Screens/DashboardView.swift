@@ -66,7 +66,9 @@ struct DashboardView: View {
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
-                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
+//                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
+                                    
+                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
                                 },
                                 iconColor: appColors.primary
                             )
@@ -147,7 +149,9 @@ struct DashboardView: View {
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
-                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular)))))
+//                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular))))).
+                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
+
                                 },
                                 iconColor: appColors.primary,
                             )
@@ -166,7 +170,7 @@ struct DashboardView: View {
                                     // need to set this as regular.
                                     router.selectedPillScanningType = .REGULAR
                                     router.navigate(to: .authentication(
-                                        .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
+                                        .login(.dashboard(.pillCount(.stockCount(.stockCountPendingBatchListScreen))))))
                                     
                                 },
                                 iconColor: appColors.primary

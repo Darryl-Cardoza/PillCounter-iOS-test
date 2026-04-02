@@ -58,10 +58,13 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
                 topRatio: 1.0,
                 topContent: { contentView },
                 bottomContent: { EmptyView() },
-                headerActions: { header },
+                headerActions: {
+                    header
+                },
                 showBackButton: !isSearching && !isEditing,
                 showHamburgerMenu: false,
-                title: (isSearching || isEditing) ? "" : title
+                title: (isSearching || isEditing) ? "" : title,
+                headerActionsBackground: appColors.primaryBackground
             )
             .customPopup(isPresented: $showMenu) {
                 MenuOption(
@@ -84,7 +87,6 @@ extension GenericListScreen {
 
     fileprivate var contentView: some View {
         VStack {
-
             if isEditing {
                 HStack {
                     Text("\(selectedIds.count) Selected")
@@ -110,6 +112,7 @@ extension GenericListScreen {
             }
         }
         .padding(.top, 90)
+        .background(appColors.primaryBackground)
     }
 
     fileprivate var filteredItems: [Item] {
@@ -126,6 +129,7 @@ extension GenericListScreen {
 
     fileprivate func row(_ item: Item) -> some View {
         rowView(item, isEditing, selectedIds)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isEditing)
             .onTapGesture {
                 if isEditing {
                     toggle(item.id as! Int64)
@@ -149,18 +153,26 @@ extension GenericListScreen {
                     Button("Select All") {
                         toggleAll()
                     }
+                    .foregroundColor(appColors.primary)
 
                     Spacer()
 
                     Button("Delete") {
                         onDelete(selectedIds)
                     }
+                    .foregroundColor(appColors.primary)
 
                     Button("Cancel") {
-                        isEditing = false
-                        selectedIds.removeAll()
+                        withAnimation(.spring()) {
+                            isEditing = false
+                            selectedIds.removeAll()
+                        }
                     }
+                    .foregroundColor(appColors.primary)
                 }
+                .padding(.horizontal, 10)
+                .transition(.opacity)
+
             } else if isSearching {
                 UnderlinedSearchBar(
                     text: $searchText,
@@ -174,21 +186,34 @@ extension GenericListScreen {
                         }
                     }
                 )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+
             } else {
-                HStack {
+                HStack(spacing: 16) {
+                    
                     Button {
-                        isSearching = true
-                        isSearchFieldFocused = true
+                        withAnimation(.spring()) {
+                            isSearching = true
+                            isSearchFieldFocused = true
+                        }
                     } label: {
                         Image(systemName: "magnifyingglass")
+                            .font(.system(size: 20))
+                            .foregroundColor(appColors.primary)
                     }
 
                     Button {
-                        isEditing = true
+                        withAnimation(.spring()) {
+                            isEditing = true
+                        }
                     } label: {
                         Image(systemName: "trash")
+                            .font(.system(size: 20))
+                            .foregroundColor(appColors.primary)
                     }
                 }
+                .padding(.trailing, 16)
+                .transition(.opacity)
             }
         }
     }

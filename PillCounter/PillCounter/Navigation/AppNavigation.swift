@@ -96,7 +96,7 @@ struct AppNavigation: View {
                         VialCaptureView()
                             .navigationBarBackButtonHidden(true)
                         
-                        // MARK: STOCK COUNT
+                    // MARK: STOCK COUNT
                     case .authentication(
                         .login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail))))
                     ):
@@ -112,7 +112,7 @@ struct AppNavigation: View {
                     case .authentication(
                         .login(.dashboard(.pillCount(.stockCount(.stockCountPendingBatchListScreen))))
                     ):
-                        EmptyView()
+                        StockCountRequestedList()
                             .navigationBarBackButtonHidden(true)
                     }
                 }

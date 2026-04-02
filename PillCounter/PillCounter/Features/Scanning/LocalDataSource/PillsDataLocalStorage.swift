@@ -44,7 +44,6 @@ final class PillsDataLocalStorage {
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
         entity.drug_name = pillData.genericName
         entity.ndc = ndc  // this is the values stored that we are sending to the backend for calling the api.
-        entity.equivalence = ""
         entity.drug_type = ""
 
         CoreDataManager.shared.save(context: mainThreadContext)
@@ -63,7 +62,6 @@ final class PillsDataLocalStorage {
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
         entity.drug_name = drugName
         entity.ndc = ndc
-        entity.equivalence = ""
         entity.drug_type = drugType
 
         CoreDataManager.shared.save(context: mainThreadContext)
@@ -856,7 +854,6 @@ final class PillsDataLocalStorage {
         drugId: Int64,
         drugName: String? = nil,
         ndc: String? = nil,
-        equivalence: String? = nil,
         drugType: String? = nil
     ) {
 
@@ -873,17 +870,13 @@ final class PillsDataLocalStorage {
             drug.ndc = ndc
         }
 
-        if let equivalence {
-            drug.equivalence = equivalence
-        }
-
         if let drugType {
             drug.drug_type = drugType
         }
 
         CoreDataManager.shared.save(context: mainThreadContext)
 
-        print("✅ Drug updated for id \(drugId)")
+        print("Drug updated for id \(drugId)")
     }
     
     

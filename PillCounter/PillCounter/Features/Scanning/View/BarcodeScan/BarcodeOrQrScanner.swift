@@ -88,11 +88,10 @@ struct QRBarcodeScannerView: View {
     var body: some View {
         ZStack {
             BaseView(
-                topRatio: 0.7,
+                topRatio: 1.5,
                 topContent: {
                     GeometryReader { geo in
-
-                        ZStack(alignment: .bottom) {
+                        ZStack {
                             // 1. Camera Layer
                             // if permission granted show CameraPreview
                             if cameraManager.isAuthorized {
@@ -102,22 +101,17 @@ struct QRBarcodeScannerView: View {
                                 )
                                 // We don't use ignoresSafeArea here because BaseView controls the frame.
                                 // However, BaseView usually ignores safe area, so this will fill nicely.
+                                .ignoresSafeArea()
                             } else {
                                 // Fallback/Loading background
                                 // Permission is not granted
-                                Color.black
+                                Color.black.ignoresSafeArea()
+                                CameraPermissionView()
                             }
 
                             // The SquareBreathing Box in camera view
-                            if cameraManager.scannedCode.isEmpty {
+                            if cameraManager.scannedCode.isEmpty && cameraManager.isAuthorized {
                                 BarcodeScanBox()
-                                    .frame(
-                                        maxWidth: .infinity,
-                                        maxHeight: .infinity
-                                    )
-                                    .overlay(alignment: .center) {
-                                        BarcodeScanBox()
-                                    }
                             }
                         }
                     }
@@ -157,9 +151,6 @@ struct QRBarcodeScannerView: View {
                 }
             }
 
-        }
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: 0)
         }
         .onAppear {
             // Reset ViewModel state so we are ready for a NEW transaction
@@ -293,7 +284,7 @@ struct QRBarcodeScannerView: View {
             
             VStack(alignment: .leading) {
                 Text("Select Container Status")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 16, weight: .regular))
                     .foregroundColor(appColors.text)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -307,9 +298,8 @@ struct QRBarcodeScannerView: View {
                 case .opened: return "Opened"
                 }
             }
-            .padding(.horizontal)
 
-            EqualWidthHStackButtons(spacing: 24) {
+            EqualWidthHStackButtons(spacing: 30){
 
                 // DELETE
                 PillCountingButton(
@@ -327,6 +317,7 @@ struct QRBarcodeScannerView: View {
                         showStockCountScannedDetails = false
                     }
                 )
+                
 
                 // ADD button
                 PillCountingButton(
@@ -370,37 +361,6 @@ struct QRBarcodeScannerView: View {
             ))
         case .opened:
             print("The bottle is open.")
-        }
-    }
-
-    struct BarcodeScanBox: View {
-        @State private var animate = false
-
-        var body: some View {
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            AppColors.shared.primary,
-                            AppColors.shared.secondary,
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 3
-                )
-                .frame(width: 180, height: 180)
-                .scaleEffect(animate ? 1.05 : 0.95)
-                .opacity(animate ? 1 : 0.6)
-                .onAppear {
-                    withAnimation(
-                        .easeInOut(duration: 0.8)
-                            .repeatForever(autoreverses: true)
-                    ) {
-                        animate = true
-                    }
-                }
-                .allowsHitTesting(false)
         }
     }
 }
@@ -996,10 +956,6 @@ extension QRBarcodeScannerView {
 
     private var showNdcEquivalencePopup: some View {
         ConfirmationDialogue(
-            //            title: pillScanViewModel.isNdcEquivalent
-            //                ? NSLocalizedString("GENERIC_EQUIVALENT_SCANNED", comment: "")
-            //                : "Ndc Not Matched" ,
-
             title: pillScanViewModel.isNdcEquivalent
                 ? NSLocalizedString("DO_YOU_WANT_SUBSTITUE", comment: "")
                 : "Rescan Required",

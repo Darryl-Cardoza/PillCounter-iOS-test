@@ -20,13 +20,12 @@ struct SegmentedPillSelector<Option: Hashable>: View {
             ForEach(Array(options.enumerated()), id: \.element) { index, option in
                 
                 let isSelected = selected == option
-                let isFirst = index == 0
-                let isLast = index == options.count - 1
-                
+
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selected = option
                     }
+                
                 } label: {
                     Text(title(option))
                         .font(.system(size: 16, weight: .semibold))
@@ -41,13 +40,13 @@ struct SegmentedPillSelector<Option: Hashable>: View {
                         .clipShape(
                             RoundedCorner(
                                 radius: 30,
-                                corners: corners(isFirst: isFirst, isLast: isLast)
                             )
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
+        .background(appColors.inputBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 30)
                 .stroke(appColors.primary.opacity(0.2), lineWidth: 1)

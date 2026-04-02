@@ -1,4 +1,10 @@
 //
+//  StockCountRequestedList.swift
+//  PillCounter
+//
+//  Created by Bhushan Patil on 02/04/26.
+//
+//
 //  StockCountPartialBatchList.swift
 //  PillCounter
 //
@@ -7,7 +13,7 @@
 
 import SwiftUI
 
-struct StockCountPartialBatchListScreen: View {
+struct StockCountRequestedList: View {
 
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var appColors: AppColors
@@ -33,21 +39,21 @@ struct StockCountPartialBatchListScreen: View {
     @State private var batches: [Batch] = [
         Batch(
             id: 1,
-            name: "Batch 1001",
-            date: "01 Apr • 10:30 AM",
-            total: "50"
+            name: "NDC 23545-333-54",
+            date: "01-02-2026 18:45 PM",
+            total: "50 NDCs"
         ),
         Batch(
             id: 2,
-            name: "Batch 2001",
-            date: "01 Apr • 11:00 AM",
-            total: "50"
+            name: "NDC 23545-333-54",
+            date: "01-02-2026 18:45 PM",
+            total: "50 NDCs"
         ),
         Batch(
             id: 3,
-            name: "Batch 1003",
-            date: "01 Apr • 12:00 PM",
-            total: "50"
+            name: "NDC 23545-333-54",
+            date: "01-02-2026 18:45 PM",
+            total: "50 NDCs"
         ),
     ]
 
@@ -67,7 +73,7 @@ struct StockCountPartialBatchListScreen: View {
         
         GenericListScreen<Batch, TransactionDetailOption>(
             items: batches,
-            title: "PARTIAL COUNTS",
+            title: "NDC REQUESTS",
             
             // 🔹 ROW UI
             rowView: { batch, isEditing, selectedIds in
@@ -103,7 +109,6 @@ struct StockCountPartialBatchListScreen: View {
             
             // 🔹 MENU ACTIONS
             onSelectOption: { option, item in
-                handleMenuAction(option)
             },
             
             menuOptions: TransactionDetailOption.allCases,
@@ -141,7 +146,7 @@ struct StockCountPartialBatchListScreen: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
 
-            ThumbnailImageView(imagePath: "", placeholderImageName: "batch_icon" ,isFromPms: false, )
+            ThumbnailImageView(imagePath: "", placeholderImageName: "new_rx" ,placeholderBackgroundColor: appColors.secondary, isFromPms: false,  )
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(batch.name)
@@ -154,10 +159,9 @@ struct StockCountPartialBatchListScreen: View {
             }
 
             Spacer()
-
-            Text(batch.total)
-                .font(.system(size: 16))
-                .foregroundColor(appColors.secondary)
+            
+            Image(systemName: "partial")
+                .foregroundColor(appColors.text)
 
             if !isEditing {
                 Button {
@@ -251,23 +255,3 @@ struct StockCountPartialBatchListScreen: View {
     }
 }
 
-extension StockCountPartialBatchListScreen {
-
-    fileprivate func handleMenuAction(_ option: TransactionDetailOption) {
-        switch option {
-        case .resume:
-            // TODO: Resume batch
-            break
-
-        case .delete:
-            if let id = selectedBatchId {
-                pendingAction = .delete(id)
-            }
-
-        case .forceComplete:
-            if let id = selectedBatchId {
-                pendingAction = .forceComplete(id)
-            }
-        }
-    }
-}

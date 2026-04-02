@@ -32,7 +32,7 @@ struct CountHistoryView: View {
     @State private var selectedFilter: TransactionFilter = .all
 
     @State private var pendingAction: TransactionAction?
-    
+
     let title: String
 
     // Filter Logic
@@ -47,17 +47,17 @@ struct CountHistoryView: View {
                 return drugName.localizedCaseInsensitiveContains(searchText)
             }
         }
-        
+
         switch selectedFilter {
-          case .all:
-              return baseList
+        case .all:
+            return baseList
 
-          case .pms:
-              return baseList.filter { $0.is_from_pms }
+        case .pms:
+            return baseList.filter { $0.is_from_pms }
 
-          case .nonPms:
-              return baseList.filter { !$0.is_from_pms }
-          }
+        case .nonPms:
+            return baseList.filter { !$0.is_from_pms }
+        }
     }
 
     // Helper to get the actual transaction objects for the selected IDs
@@ -76,7 +76,7 @@ struct CountHistoryView: View {
             selectedTxnIds.contains($0.txn_id)
         }
     }
-    
+
     enum TransactionFilter: String, CaseIterable, Identifiable {
         case all = "All"
         case pms = "PMS"
@@ -84,7 +84,7 @@ struct CountHistoryView: View {
 
         var id: String { rawValue }
     }
-    
+
     private var filterTabs: some View {
         HStack {
             Spacer()
@@ -105,7 +105,7 @@ struct CountHistoryView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-        
+
     }
 
     struct FilterTabButton: View {
@@ -119,8 +119,8 @@ struct CountHistoryView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(
                         isSelected
-                        ? AppColors.shared.primary
-                        : AppColors.shared.text
+                            ? AppColors.shared.primary
+                            : AppColors.shared.text
                     )
                     .frame(width: 90, height: 36)
                     .background(Color.clear)
@@ -128,8 +128,8 @@ struct CountHistoryView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
                                 isSelected
-                                ? AppColors.shared.primary
-                                : AppColors.shared.text,
+                                    ? AppColors.shared.primary
+                                    : AppColors.shared.text,
                                 lineWidth: 1
                             )
                     )
@@ -137,7 +137,6 @@ struct CountHistoryView: View {
             .buttonStyle(.plain)
         }
     }
-
 
     var body: some View {
         ZStack {
@@ -166,7 +165,8 @@ struct CountHistoryView: View {
                                     )
                                     .foregroundColor(
                                         areAllSelected
-                                            ? appColors.secondary : .gray)
+                                            ? appColors.secondary : .gray
+                                    )
 
                                     Text(
                                         areAllSelected
@@ -190,7 +190,8 @@ struct CountHistoryView: View {
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundColor(
                                             selectedTxnIds.isEmpty
-                                                ? .gray : appColors.secondary)
+                                                ? .gray : appColors.secondary
+                                        )
                                 }
                                 .disabled(selectedTxnIds.isEmpty)
 
@@ -230,7 +231,8 @@ struct CountHistoryView: View {
                             }
                         )
                         .transition(
-                            .move(edge: .trailing).combined(with: .opacity))
+                            .move(edge: .trailing).combined(with: .opacity)
+                        )
 
                     } else {
                         // --- STANDARD MODE HEADER ---
@@ -272,7 +274,8 @@ struct CountHistoryView: View {
                 if router.selectedPillScanningType == .FIXED {
                     Task {
                         await userViewModel.getAllPartialTransactions(
-                            countType: .FIXED)
+                            countType: .FIXED
+                        )
 
                         //                        if userViewModel.fixedCountTransactions.isEmpty {
                         //                            userViewModel.generateDummyData()
@@ -281,7 +284,8 @@ struct CountHistoryView: View {
                 } else {
                     Task {
                         await userViewModel.getAllPartialTransactions(
-                            countType: .REGULAR)
+                            countType: .REGULAR
+                        )
                     }
                 }
             }
@@ -298,18 +302,17 @@ struct CountHistoryView: View {
                     commonConfirmationDialog
                 }
             }
-   
+
         }
     }
 
     // MARK: - CONTENT VIEW
     private var contentView: some View {
         VStack {
-            
+
             filterTabs
                 .padding(.vertical, 5)
 
-            
             if isEditing {
                 HStack {
 
@@ -330,18 +333,21 @@ struct CountHistoryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
 
-                    ForEach(filteredTransactions, id: \.txn_id) { (txn: PillCountTransactionEntity) in
+                    ForEach(filteredTransactions, id: \.txn_id) {
+                        (txn: PillCountTransactionEntity) in
 
-                        let counted = PillsDataLocalStorage.shared.getTotalCountForStep(
-                            txnId: txn.txn_id,
-                            step: .targetVerification
-                        )
+                        let counted = PillsDataLocalStorage.shared
+                            .getTotalCountForStep(
+                                txnId: txn.txn_id,
+                                step: .targetVerification
+                            )
 
                         listItem(
                             txnId: txn.txn_id,
                             name: txn.drug?.drug_name ?? "N/A",
-                            date: "\(Formatter.getDateString(from: txn.created_at)) • " +
-                                  "\(Formatter.getTimeString(from: txn.created_at))",
+                            date:
+                                "\(Formatter.getDateString(from: txn.created_at)) • "
+                                + "\(Formatter.getTimeString(from: txn.created_at))",
                             trailingText: "\(counted)"
                                 + (router.selectedPillScanningType == .FIXED
                                     ? " / \(txn.target_count)" : ""),
@@ -352,7 +358,8 @@ struct CountHistoryView: View {
                                 if !isEditing {
                                     showMenuOptions = true
                                     selectedTransasctionId = txn.txn_id
-                                    userViewModel.currentTransactionTxnId = txn.txn_id
+                                    userViewModel.currentTransactionTxnId =
+                                        txn.txn_id
                                 }
                             }
                         )
@@ -378,24 +385,23 @@ struct CountHistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
-    
-    
-//    private var contentView: some View {
-//        VStack {
-//            filterTabs
-//                .padding(.vertical, 5)
-//            ScrollView(showsIndicators: false) {
-//                transactionsList
-//                    .padding(.horizontal, 16)
-//                    .padding(.bottom, 20)
-//            }
-//        }
-//        .padding(.top, 90)
-//        .padding(.horizontal, isLandscape ? SafeAreaInsets.leading + 5 : 0)
-//        .frame(maxWidth: .infinity, maxHeight: .infinity)
-//        .background(appColors.primaryBackground)
-//    }
-    
+
+    //    private var contentView: some View {
+    //        VStack {
+    //            filterTabs
+    //                .padding(.vertical, 5)
+    //            ScrollView(showsIndicators: false) {
+    //                transactionsList
+    //                    .padding(.horizontal, 16)
+    //                    .padding(.bottom, 20)
+    //            }
+    //        }
+    //        .padding(.top, 90)
+    //        .padding(.horizontal, isLandscape ? SafeAreaInsets.leading + 5 : 0)
+    //        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    //        .background(appColors.primaryBackground)
+    //    }
+
     private var transactionsList: some View {
         VStack(spacing: 16) {
             ForEach(filteredTransactions, id: \.txn_id) { txn in
@@ -407,16 +413,19 @@ struct CountHistoryView: View {
             }
         }
     }
-    
+
     @ViewBuilder
-    private func transactionRow(_ txn: PillCountTransactionEntity) -> some View {
+    private func transactionRow(_ txn: PillCountTransactionEntity) -> some View
+    {
 
         listItem(
             txnId: txn.txn_id,
             name: txn.drug?.drug_name ?? "N/A",
-            date: "\(Formatter.getDateString(from: txn.created_at)) • \(Formatter.getTimeString(from: txn.created_at))",
-            trailingText: "\(0)" +
-                (router.selectedPillScanningType == .FIXED ? " / \(txn.target_count)" : ""),
+            date:
+                "\(Formatter.getDateString(from: txn.created_at)) • \(Formatter.getTimeString(from: txn.created_at))",
+            trailingText: "\(0)"
+                + (router.selectedPillScanningType == .FIXED
+                    ? " / \(txn.target_count)" : ""),
             icon: "ellipsis",
             barcodeImagePath: txn.barcode_image,
             isFromPms: txn.is_from_pms,
@@ -434,7 +443,7 @@ struct CountHistoryView: View {
             }
         }
     }
-    
+
     private var emptyStateView: some View {
         VStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
@@ -446,7 +455,7 @@ struct CountHistoryView: View {
         }
         .padding(.top, 60)
     }
-    
+
     // MARK: - LIST ITEM
     private func listItem(
         txnId: Int64,
@@ -455,11 +464,11 @@ struct CountHistoryView: View {
         trailingText: String,
         icon: String,
         barcodeImagePath: String?,
-        isFromPms:Bool = false,
+        isFromPms: Bool = false,
         onIconTap: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 16) {
-            
+
             // 1. CHECKBOX
             if isEditing {
                 PillCounterCheckbox(
@@ -473,13 +482,13 @@ struct CountHistoryView: View {
                 .padding(.trailing, 4)
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
-            
+
             // 2. IMAGE LOGIC
             ThumbnailImageView(
                 imagePath: barcodeImagePath,
                 isFromPms: isFromPms
             )
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text(name)
                     .font(.system(size: 14, weight: .bold))
@@ -504,13 +513,11 @@ struct CountHistoryView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-
-       
             // 4. TRAILING INFO & ACTION
             Text(trailingText)
                 .font(.subheadline)
                 .foregroundColor(appColors.text)
-            
+
             if !isEditing {
                 Button(action: onIconTap) {
                     Image(systemName: icon)
@@ -569,124 +576,72 @@ struct CountHistoryView: View {
             }
         }
     }
-    
 
-
-    // MARK: - MENU OPTIONS (Existing)
+    // MARK: - MENU OPTIONS
     private var menuOptions: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("SELECT OPTIONS")
-                .foregroundStyle(appColors.text)
-                .font(.system(size: 18, weight: .bold))
+        MenuOption(
+            options: TransactionDetailOption.allCases,
+            selectedOption: $selectedTransactionDetailOption,
+            isPresented: $showMenuOptions,
+            label: { $0.rawValue },
+            onSelect: { option in
 
-            ForEach(TransactionDetailOption.allCases) { option in
-                PillCountingRadioButton(
-                    option: option,
-                    selectedOption: $selectedTransactionDetailOption,
-                    label: option.rawValue,
-                    selectedColor: appColors.primary,
-                    unselectedColor: .gray.opacity(0.5),
-                    size: 20,
-                    lineWidth: 2,
-                    textColor: appColors.text
-                )
-                .padding(.vertical)
-            }
-            .padding(.horizontal)
+                switch option {
+                case .resume:
+                    handleResume()
 
-            HStack {
-                PillCountingButton(
-                    iconName: nil,
-                    title: "CANCEL",
-                    textColor: appColors.text,
-                    backgroundColor: appColors.primaryBackground,
-                    borderColor: appColors.primary,
-                    font: .system(size: 12, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 14,
-                    iconSize: 0,
-                    action: { showMenuOptions = false }
-                )
-
-                PillCountingButton(
-                    iconName: nil,
-                    title: "OK",
-                    textColor: Color.white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 12, weight: .regular),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 14,
-                    iconSize: 0,
-                    action: {
-                        showMenuOptions = false
-                        switch selectedTransactionDetailOption {
-                        case .resume:
-                            if let txnId = selectedTransasctionId,
-                               let txn = userViewModel.getTransactionEntity(by: txnId) {
-                                
-                                userViewModel.currentTransactionTxnId = txnId
-                                pillScanViewmodel.selectedTransaction = txn.is_from_pms ? txn : nil // Resumed Transaction
-                                
-                                // Txn is Controlled drug
-                                if txn.is_from_pms{
-                                    let lastStep = pillScanViewmodel.getLastSavedControlledStep()
-                                    // Last step is nil go to scan screen else count screen
-                                    if lastStep == nil && txn.is_ndc_verfied == false{
-                                         router.navigate(
-                                             to: .authentication(
-                                                 .login(.dashboard(.pillCount(.barcodeScanning)))
-                                             )
-                                         )
-                                     } else {
-                                         router.navigate(
-                                             to: .authentication(
-                                                 .login(.dashboard(.pillCount(.pillCountView)))
-                                             )
-                                         )
-                                     }
-                                }
-
-                                else if txn.is_from_pms && txn.is_ndc_verfied{
-                                    router.navigate(
-                                        to: .authentication(
-                                            .login(
-                                                .dashboard(.pillCount(.barcodeScanning))
-                                            )
-                                        )
-                                    )
-                                } else {
-                                    router.navigate(
-                                        to: .authentication(
-                                            .login(
-                                                .dashboard(.pillCount(.pillCountView))
-                                            )
-                                        )
-                                    )
-                                }
-                            } else {
-                                print("Resume failed: transaction ID or entity missing")
-                            }
-                        case .delete:
-                            if let txnId = selectedTransasctionId {
-                                pendingAction = .delete(txnId)
-                            }
-
-                        case .forceComplete:
-                            if let txnId = selectedTransasctionId {
-                                pendingAction = .forceComplete(txnId)
-                            }
-                        }
+                case .delete:
+                    if let txnId = selectedTransasctionId {
+                        pendingAction = .delete(txnId)
                     }
+
+                case .forceComplete:
+                    if let txnId = selectedTransasctionId {
+                        pendingAction = .forceComplete(txnId)
+                    }
+                }
+            }
+        )
+    }
+
+    private func handleResume() {
+
+        guard let txnId = selectedTransasctionId,
+            let txn = userViewModel.getTransactionEntity(by: txnId)
+        else {
+            print("Resume failed")
+            return
+        }
+
+        userViewModel.currentTransactionTxnId = txnId
+        pillScanViewmodel.selectedTransaction = txn.is_from_pms ? txn : nil
+
+        // TODO: Simplify this branching later
+        if txn.is_from_pms {
+            let lastStep = pillScanViewmodel.getLastSavedControlledStep()
+
+            if lastStep == nil && txn.is_ndc_verfied == false {
+                router.navigate(
+                    to: .authentication(
+                        .login(.dashboard(.pillCount(.barcodeScanning)))
+                    )
+                )
+            } else {
+                router.navigate(
+                    to: .authentication(
+                        .login(.dashboard(.pillCount(.pillCountView)))
+                    )
                 )
             }
+        } else {
+            router.navigate(
+                to: .authentication(
+                    .login(.dashboard(.pillCount(.pillCountView)))
+                )
+            )
         }
-        .frame(width: 250)
-        .padding(.vertical)
     }
-    
+
     // Confirmation Dialogs
     private var commonConfirmationDialog: some View {
         ConfirmationDialogue(
@@ -702,7 +657,7 @@ struct CountHistoryView: View {
             }
         )
     }
-    
+
     private var dialogTitle: String {
         switch pendingAction {
         case .delete:
@@ -739,7 +694,7 @@ struct CountHistoryView: View {
             return ""
         }
     }
-    
+
     //Handle Action
     private func handleConfirmedAction() {
         guard let action = pendingAction else { return }
@@ -777,8 +732,8 @@ struct CountHistoryView: View {
                 }
             }
         }
-    }}
-
+    }
+}
 
 enum TransactionAction {
     case delete(Int64)

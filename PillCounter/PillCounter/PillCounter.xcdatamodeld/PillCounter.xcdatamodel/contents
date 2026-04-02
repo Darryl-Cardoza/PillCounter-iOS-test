@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24512" systemVersion="25D2128" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="BatchCountEntity" representedClassName="BatchCountEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="batchId" optional="YES" attributeType="String"/>
+        <attribute name="bucketId" optional="YES" attributeType="String"/>
+        <attribute name="enddatetime" optional="YES" attributeType="String"/>
+        <attribute name="isdeleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="startdatetime" optional="YES" attributeType="String"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+    </entity>
     <entity name="DrugMasterEntity" representedClassName="DrugMasterEntity" syncable="YES" codeGenerationType="class">
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -50,11 +59,12 @@
         <attribute name="avatar_url" optional="YES" attributeType="String"/>
         <attribute name="created_at" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="email" optional="YES" attributeType="String"/>
+        <attribute name="fname" optional="YES" attributeType="String"/>
         <attribute name="is_profile_completed" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_verified" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="language" optional="YES" attributeType="String"/>
+        <attribute name="lname" optional="YES" attributeType="String"/>
         <attribute name="local_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="notifications" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="npi_id" optional="YES" attributeType="String"/>
         <attribute name="pharmacy_name" optional="YES" attributeType="String"/>

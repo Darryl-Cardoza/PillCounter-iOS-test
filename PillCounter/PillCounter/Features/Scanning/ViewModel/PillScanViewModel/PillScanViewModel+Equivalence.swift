@@ -55,7 +55,7 @@ extension PillScanViewModel {
                 ndcComparisonResponse = response
                 isNdcEquivalent = response.data?.isNdcEquivalent ?? false
                 let isNdcSame = response.data?.isNdcSame ?? false
-                if isNdcEquivalent && isNdcSame {
+                if isNdcEquivalent && !isNdcSame {
                     showNdcEquivalencePopup = true
                 }else{
                     shouldAutoProceedToCount = true

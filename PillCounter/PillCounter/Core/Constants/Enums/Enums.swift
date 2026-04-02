@@ -41,6 +41,13 @@ public enum ScanningFlow: Codable, Hashable {
     case barcodeScanning
     case pillCountView
     case controlledDrug(ControlFlow)
+    case stockCount(StockCountFlow)
+}
+
+public enum StockCountFlow: Codable, Hashable {
+    case stockCountBatchDetail
+    case stockCountPartialBatchListScreen
+    case stockCountPendingBatchListScreen
 }
 
 public enum ControlFlow: Hashable, Codable {
@@ -210,4 +217,14 @@ enum ControlledStep: String, CaseIterable {
             return "Count all remaining Pills from Container"
         }
     }
+}
+
+public enum StockCountOption: Hashable {
+    case newBatch
+    case existingBatch
+}
+
+public enum StockCountOptionContainerStatus: Hashable {
+    case sealed
+    case opened
 }

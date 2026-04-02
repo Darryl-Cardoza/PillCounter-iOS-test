@@ -21,36 +21,15 @@ extension PillScanViewModel{
         return nil
     }
     
-    func getCurrentControlledTransaction(txnId: Int64) async {
 
-        // Fetch transaction
-        currentTransaction =
-        pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
-            txnId: txnId
-        )
-
-        // Drug name
-        drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
-
-        // Load details
-        getAllTransactionDetailsOfTheCurrentTransaction()
-
-        // Restore correct step
-        getControlledStep()
-
-        // Calculate target for step
-        updateControlledTargetCount()
-    }
     
     
     // MARK: - Update Target Count
     func updateControlledTargetCount() {
 
         guard let txn = currentTransaction else { return }
-        log("❌ updateControlledTargetCount: transaction missing")
 
         let target = Int(txn.target_count)
-        log("Updating target for step \(currentControlledStep.rawValue) target \(target)")
 
         let txnId = txn.txn_id
 

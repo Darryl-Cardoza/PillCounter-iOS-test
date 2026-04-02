@@ -1035,3 +1035,114 @@ struct VialBottomContentView: View {
         .padding(.horizontal)
     }
 }
+
+// MARK: KEY VALUE INFO CARD
+struct KeyValueInfoCard: View {
+    
+    let title: String
+    let value: String
+    
+    @EnvironmentObject private var appColors: AppColors
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            
+            // KEY (Label)
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(appColors.text.opacity(0.8))
+            
+            // VALUE
+            Text(value)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(appColors.text)
+                .lineLimit(nil)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            appColors.inputBackground
+                .opacity(appColors.isDarkMode ? 1 : 0.9)
+        )
+        .cornerRadius(12)
+    }
+}
+
+struct MenuOption<Option: Hashable>: View {
+    
+    let options: [Option]
+    @Binding var selectedOption: Option
+    @Binding var isPresented: Bool
+    
+    let label: (Option) -> String
+    let onSelect: (Option) -> Void
+    
+    @EnvironmentObject private var appColors: AppColors
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            
+            Text("SELECT OPTIONS")
+                .foregroundStyle(appColors.text)
+                .font(.system(size: 18, weight: .bold))
+            
+            // 🔹 OPTIONS
+            ForEach(options, id: \.self) { option in
+                PillCountingRadioButton(
+                    option: option,
+                    selectedOption: $selectedOption,
+                    label: label(option),
+                    selectedColor: appColors.primary,
+                    unselectedColor: .gray.opacity(0.5),
+                    size: 20,
+                    lineWidth: 2,
+                    textColor: appColors.text
+                )
+                .padding(.vertical)
+            }
+            .padding(.horizontal)
+            
+            // 🔹 BUTTONS
+            HStack {
+                
+                // CANCEL
+                PillCountingButton(
+                    iconName: nil,
+                    title: "CANCEL",
+                    textColor: appColors.text,
+                    backgroundColor: appColors.primaryBackground,
+                    borderColor: appColors.primary,
+                    font: .system(size: 12, weight: .semibold),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 14,
+                    iconSize: 0,
+                    action: {
+                        isPresented = false
+                    }
+                )
+                
+                // OK
+                PillCountingButton(
+                    iconName: nil,
+                    title: "OK",
+                    textColor: .white,
+                    backgroundColor: appColors.primary,
+                    borderColor: .clear,
+                    font: .system(size: 12, weight: .regular),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 14,
+                    iconSize: 0,
+                    action: {
+                        isPresented = false
+                        onSelect(selectedOption)
+                    }
+                )
+            }
+        }
+        .frame(width: 250)
+        .padding(.vertical)
+    }
+}
+

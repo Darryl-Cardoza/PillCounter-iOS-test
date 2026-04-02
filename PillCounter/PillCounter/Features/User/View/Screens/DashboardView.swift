@@ -21,7 +21,8 @@ struct DashboardView: View {
     @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable) var isHl7Enable:
         Bool = false
 
-
+    @State private var showStockCountPopup: Bool = false
+    @State private var selectedStockCountOption: StockCountOption = .newBatch
     
     
     // MARK: - LOCAL STATE
@@ -37,21 +38,13 @@ struct DashboardView: View {
                         Spacer()
                         VStack(spacing: 15) {
                             
-                            Image("fixed_count")
+                            Image("dispense_icon")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(
                                     width: geometry.size.width * 0.35,
                                     height: geometry.size.width * 0.35
                                 )
-                                .overlay {
-                                    appColors.secondary
-                                        .mask {
-                                            Image("fixed_count")
-                                                .resizable()
-                                                .scaledToFit()
-                                        }
-                                }
                                
                             Spacer().frame(height: 15)
                             
@@ -66,25 +59,26 @@ struct DashboardView: View {
                         
                         HStack {
                             PillCountingButton(
-                                iconName: "tick_icon_pink",
+                                iconName: "partial",
                                 title:
-                                    "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
-                                textColor: appColors.secondary,
-                                backgroundColor: appColors.secondaryBackground,
+                                    "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("PARTIAL", comment: ""))",
+                                textColor: appColors.primary,
+                                backgroundColor: appColors.primaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
                                     router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
                                 },
-                                iconColor: appColors.secondary
+                                iconColor: appColors.primary
                             )
 
                             Spacer()
+                                .frame(width: 40)
 
                             PillCountingButton(
-                                iconName: "partial",
+                                iconName: "new_rx",
                                 title:
-                                    "\(userViewModel.fixedCountTransactionPartialCount) \(NSLocalizedString("PARTIAL", comment: ""))",
-                                textColor: appColors.secondary,
+                                    "\(userViewModel.fixedCountTransactionPartialCount) \(NSLocalizedString("NEWRX", comment: ""))",
+                                textColor: appColors.primary,
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigatin
@@ -96,7 +90,7 @@ struct DashboardView: View {
                                                     .dashboard(.fixedCountPartial)))
                                         )
                                 },
-                                iconColor: appColors.secondary
+                                iconColor: appColors.primary
                             )
                         }
                         .padding(.horizontal, 20)
@@ -125,28 +119,19 @@ struct DashboardView: View {
                     VStack(spacing: 10) {
                         Spacer()
                         Spacer()
-                        Image("regular_count")
+                        Image("fixed_count")
                             .resizable()
                             .scaledToFit()
                             .frame(
                                 width: geometry.size.width * 0.35,
                                 height: geometry.size.width * 0.35
                             )
-                            .overlay {
-                                appColors.primary
-                                    .mask {
-                                        Image("regular_count")
-                                            .resizable()
-                                            .scaledToFit()
-                                    }
-                            }
-                        
-
+                    
                         Spacer().frame(height: 15)
 
                         Text("REGULAR_COUNT_TITLE")
                             .font(.title)
-                            .foregroundStyle(appColors.primary)
+                            .foregroundStyle(appColors.secondary)
 
                         Text("REGULAR_COUNT_SUBTITLE")
                             .foregroundStyle(appColors.text)
@@ -155,41 +140,39 @@ struct DashboardView: View {
 
                         HStack {
                             PillCountingButton(
-                                iconName: "tick_icon_pink",
+                                iconName: "partial",
                                 title:
-                                    "\(userViewModel.regularCountTransactionCompletedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
-                                textColor: appColors.text,
-                                backgroundColor: appColors.primaryBackground,
+                                    "\(userViewModel.regularCountTransactionCompletedCount) \(NSLocalizedString("PARTIAL", comment: ""))",
+                                textColor: appColors.primary,
+                                backgroundColor: appColors.secondaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
                                     router.navigate(to: .authentication(.user(.userSettings(.History(.regular)))))
                                 },
-                                iconColor: appColors.primary
+                                iconColor: appColors.primary,
                             )
+                            
                             Spacer()
-
+                                .frame(width: 40)
+                            
                             PillCountingButton(
-                                iconName: "partial",
+                                iconName: "new_rx",
                                 title:
-                                    "\(userViewModel.regularCountTransactionPartialCount) \(NSLocalizedString("PARTIAL", comment: ""))",
-                                textColor: appColors.text,
+                                    "\(userViewModel.regularCountTransactionPartialCount) \(NSLocalizedString("NDCREQ", comment: ""))",
+                                textColor: appColors.primary,
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
                                     // need to set this as regular.
-                                        router.selectedPillScanningType = .REGULAR
-                                        
-                                        router.navigate(
-                                            to: .authentication(
-                                                .login(
-                                                    .dashboard(.regularCountPartial)
-                                                )))
+                                    router.selectedPillScanningType = .REGULAR
+                                    router.navigate(to: .authentication(
+                                        .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
                                     
                                 },
                                 iconColor: appColors.primary
                             )
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 20)
 
                     }
@@ -201,14 +184,21 @@ struct DashboardView: View {
                         // make sure before you route we set the
                         // router.selectedPillScanningType to regular.
 
-                        router.selectedPillScanningType = .REGULAR
-
-                        router.navigate(
-                            to: .authentication(
-                                .login(
-                                    .dashboard(
-                                        .pillCount(.barcodeScanning)))))
+//                        router.selectedPillScanningType = .REGULAR
+//
+//                        router.navigate(
+//                            to: .authentication(
+//                                .login(
+//                                    .dashboard(
+//                                        .pillCount(.barcodeScanning)))))
+                        
+                        // New flow for batch count.
+                        // on tap we will show the pop up for the either continuing the existing batch or create a new batch.
+                        
+                        showStockCountPopup.toggle()
+                        resetStockCountSelection()
                     }
+                    
                 }
             },
             showBackButton: false,
@@ -236,6 +226,119 @@ struct DashboardView: View {
                 }
             }
         }
+        .customPopup(isPresented: $showStockCountPopup) {
+            stockCountPopUp
+        }
+    }
+    
+    private var stockCountPopUp: some View {
+        return (
+            VStack(spacing: 35) {
+                
+                // title for the pop up.
+                VStack (alignment: .leading) {
+                    Text(NSLocalizedString("WHAT_WOULD_YOU_DO", comment: ""))
+                        .font(.system(size: 16))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(appColors.text)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                // radio options for the buttons.
+                VStack(alignment: .leading, spacing: 28) {
+                    PillCountingRadioButton(
+                            option: StockCountOption.newBatch,
+                            selectedOption: $selectedStockCountOption,
+                            label: NSLocalizedString("CREATE_NEW_BATCH", comment: ""),
+                            selectedColor: appColors.secondary,
+                            unselectedColor: .gray,
+                            size: 20,
+                            lineWidth: 2,
+                            textColor: appColors.text
+                    )
+                    PillCountingRadioButton(
+                            option: StockCountOption.existingBatch,
+                            selectedOption: $selectedStockCountOption,
+                            label: NSLocalizedString("CONTINUE_LAST_BATCH", comment: ""),
+                            selectedColor: appColors.secondary,
+                            unselectedColor: .gray,
+                            size: 20,
+                            lineWidth: 2,
+                            textColor: appColors.text
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                
+                // action buttons for the pop up
+                EqualWidthHStackButtons(spacing: 20) {
+
+                    // DELETE
+                    PillCountingButton(
+                        iconName: nil,
+                        title: NSLocalizedString("CANCEL", comment: ""),
+                        textColor: appColors.text,
+                        backgroundColor: .clear,
+                        borderColor: appColors.primary,
+                        font: .system(size: 14, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 32,
+                        verticalPadding: 20,
+                        iconSize: 0,
+                        action: {
+                            showStockCountPopup = false
+                        }
+                    )
+
+                    // OK
+                    PillCountingButton(
+                        iconName: nil,
+                        title: "OK",
+                        textColor: Color.white,
+                        backgroundColor: appColors.primary,
+                        borderColor: .clear,
+                        font: .system(size: 14, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 32,
+                        verticalPadding: 20,
+                        iconSize: 0,
+                        action: {
+                            // some action to be performed
+                            // navigate to the barcode scan screen for scanning the bottles.
+                            // for this we would need to note the flow and clear it.
+                            handleStockCountSelectedOption()
+                            showStockCountPopup = false
+                        }
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            
+                
+            }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 10)
+        )
+    }
+    
+    private func handleStockCountSelectedOption() {
+        switch selectedStockCountOption {
+        case .newBatch:
+            // navigate to the barcode scanning screen
+            print("new batch selected")
+            // we will create a new batch and directly navigate to the barcode scanning screen for the first entry to be added in the batch.
+            router.selectedPillScanningType = .REGULAR
+            router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning)))))
+            resetStockCountSelection()
+        case .existingBatch:
+            // navigate the list screen where we will have all the batches which are in the pending state.
+            router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
+            print("existing batch selected.")
+            resetStockCountSelection()
+        }
+    }
+    
+    private func resetStockCountSelection() {
+        selectedStockCountOption = .newBatch
     }
 }
 

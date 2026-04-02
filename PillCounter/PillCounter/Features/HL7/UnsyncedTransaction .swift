@@ -61,7 +61,6 @@ extension PillsDataLocalStorage {
             try controller.performFetch()
             subject.send(controller.fetchedObjects ?? [])
         } catch {
-            print("Failed to fetch pending HL7 txns:", error)
         }
 
         return subject.eraseToAnyPublisher()

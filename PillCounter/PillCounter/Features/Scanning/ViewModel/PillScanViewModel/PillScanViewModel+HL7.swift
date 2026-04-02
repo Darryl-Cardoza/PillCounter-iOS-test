@@ -62,7 +62,7 @@ extension PillScanViewModel {
             // RXE-3
             let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
 
-    
+            
 
             await processHl7DrugAndCreateTransaction(
                 ndc: ndc,
@@ -132,30 +132,20 @@ extension PillScanViewModel {
 
         var drugIdToUse: Int64
 
-        // 1️⃣ Check if drug exists
-        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+        // Create new drug synchronously
+        drugIdToUse = generateUniqueDrugId()
 
-            print("Drug found in DrugMaster (id: \(existingDrug.drug_id))")
+        print("Drug not found — creating new DrugMaster entry")
 
-            drugIdToUse = existingDrug.drug_id
-            self.drugName = existingDrug.drug_name
+        pillDataLocalStorage.saveManualPill(
+            ndc: ndc,
+            drugId: drugIdToUse,
+            drugName: drugName,
+        
+        )
 
-        } else {
-
-            // 2️⃣ Create new drug synchronously
-            drugIdToUse = generateUniqueDrugId()
-
-            print("Drug not found — creating new DrugMaster entry")
-
-            pillDataLocalStorage.saveManualPill(
-                ndc: ndc,
-                drugId: drugIdToUse,
-                drugName: drugName,
-            
-            )
-
-            self.drugName = drugName
-        }
+        self.drugName = drugName
+    
 
         // 3️⃣ Create transaction
         await createTransaction(

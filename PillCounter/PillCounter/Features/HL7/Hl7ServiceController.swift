@@ -16,7 +16,7 @@ final class Hl7ServiceController: ObservableObject {
 
     static let shared = Hl7ServiceController()
 
-    // MARK: - App Storage
+    // MARK: - App Storaget
 
     @AppStorage(AppStorageManager.AppStorageKeys.isLoggedIn)
     private var isLoggedIn: Bool = false
@@ -31,7 +31,6 @@ final class Hl7ServiceController: ObservableObject {
     private var pillCounterHostName: String = ""
 
     // MARK: - Dependencies
-
     private let pillDataLocalStorage = PillsDataLocalStorage.shared
     private var cancellables = Set<AnyCancellable>()
 
@@ -92,11 +91,9 @@ final class Hl7ServiceController: ObservableObject {
     private func startHl7Services() {
         guard hl7Manager == nil, let handler = hl7Handler else { return }
 
-        print("[HL7CTRL] Starting HL7 services")
-
         hl7Manager = Hl7ServiceManager(
             port: 2575,
-            serviceName: "PillCounterHL7",
+            serviceName: "PillCounter",
             serviceType: pillCounterHostName,
             pmsServiceType: pmsHostName,
             listener: handler
@@ -105,7 +102,6 @@ final class Hl7ServiceController: ObservableObject {
     }
 
     private func stopService() {
-        print("[HL7CTRL] Stopping HL7 services")
         hl7Manager?.stop()
         hl7Manager = nil
         resetQueueState()
@@ -134,7 +130,6 @@ final class Hl7ServiceController: ObservableObject {
 
     /// PMS client connection is ready — load and start sending pending transactions.
     func onClientConnected() {
-        print("[HL7CTRL] Client connected — loading pending transactions")
         resendPendingHl7Transactions()
     }
 
@@ -142,16 +137,12 @@ final class Hl7ServiceController: ObservableObject {
     func onAckReceived(messageId: String?, ackCode: String) {
         let ackMsgId = messageId?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        print("[HL7][ACK] messageId=\(ackMsgId ?? "nil") code=\(ackCode)")
-
         guard let txn = currentTxn else {
-            print("[HL7][ACK] No in-flight txn — ignoring ACK")
             return
         }
 
         // NACK → retry / move to end
         guard ackCode == "AA" else {
-            print("[HL7][ACK] NACK received")
             handleSendFailure()
             return
         }
@@ -159,16 +150,13 @@ final class Hl7ServiceController: ObservableObject {
         // If PMS sent a messageId, it must match what we sent
         if let ackId = ackMsgId, !ackId.isEmpty {
             guard let inflightId = currentMessageId, ackId == inflightId else {
-                print("[HL7][ACK] MessageId mismatch — ignoring ACK")
                 return
             }
         } else {
-            print("[HL7][ACK] No messageId in ACK — accepting (single in-flight rule)")
         }
 
         // Mark synced in persistence
         pillDataLocalStorage.updateTransactionSynced(txnId: txn.txn_id)
-        print("[HL7][ACK] Txn \(txn.txn_id) marked synced")
 
         // Advance queue
         sendingQueue.removeFirst()
@@ -181,7 +169,6 @@ final class Hl7ServiceController: ObservableObject {
 
     /// ACK timeout — treat same as send failure.
     func onAckTimeout() {
-        print("[HL7CTRL] ACK timeout")
         handleSendFailure()
     }
 
@@ -191,11 +178,8 @@ final class Hl7ServiceController: ObservableObject {
         let pending = pillDataLocalStorage.getPendingHl7Txn()
 
         guard !pending.isEmpty else {
-            print("[HL7CTRL] No pending transactions")
             return
         }
-
-        print("[HL7CTRL] Queuing \(pending.count) pending transaction(s)")
 
         sendingQueue = pending
         currentTxn = nil
@@ -208,12 +192,10 @@ final class Hl7ServiceController: ObservableObject {
     private func sendNextIfPossible() {
         // Already waiting for an ACK
         guard currentTxn == nil else {
-            print("[HL7CTRL] In-flight txn exists — waiting for ACK")
             return
         }
 
         guard !sendingQueue.isEmpty else {
-            print("[HL7CTRL] All transactions processed")
             return
         }
 
@@ -229,7 +211,6 @@ final class Hl7ServiceController: ObservableObject {
         currentMessageId = messageId
 
         guard let user = txn.user else {
-            print("❌ No user found for txnId=\(txn.txn_id)")
             return
         }
 
@@ -238,9 +219,6 @@ final class Hl7ServiceController: ObservableObject {
             messageId: messageId,
             user: user
         )
-
-        print("[HL7CTRL] Sending txnId=\(txn.txn_id) attempt=\(retryCount)/\(maxRetries)")
-        print("HL7 Message \(hl7)")
         hl7Manager?.sendClientHL7(hl7)
     }
 
@@ -248,14 +226,11 @@ final class Hl7ServiceController: ObservableObject {
         guard let txn = currentTxn else { return }
 
         if retryCount < maxRetries {
-            print("[HL7CTRL] Retrying txnId=\(txn.txn_id) attempt \(retryCount + 1)/\(maxRetries)")
             sendTransaction(txn)
             return
         }
 
         // Max retries exhausted → move to end of queue, try others
-        print("[HL7CTRL] Max retries for txnId=\(txn.txn_id) — moving to end of queue")
-
         sendingQueue.removeFirst()
         sendingQueue.append(txn)
         currentTxn = nil

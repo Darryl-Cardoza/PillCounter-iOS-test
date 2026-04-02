@@ -22,7 +22,6 @@ struct CameraView: UIViewRepresentable {
 
         // Expose the preview layer to CameraService
         cameraService.previewLayer = view.previewLayer
-
         return view
     }
 

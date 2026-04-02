@@ -80,7 +80,7 @@ final class HL7CompletionBuilder {
             prescriptionNumber: txn.rx_no,
             pharmacistId: user?.user_id,
             pharmacistFamilyName: nil,
-            pharmacistGivenName: user?.name,
+            pharmacistGivenName: user?.fname ?? "",
             substituteCode: txn.is_substitute ? "1" : "0",
             deliverToLocation: user?.pharmacy_name,
             needsHumanReview: nil,
@@ -103,7 +103,7 @@ final class HL7CompletionBuilder {
             orderDateTime: timestamp,
             orderingProviderId: user?.user_id,
             orderingProviderFamilyName: nil,
-            orderingProviderGivenName: user?.name,
+            orderingProviderGivenName: user?.fname,
             orderingFacility: config.sendingFacility
         )
         

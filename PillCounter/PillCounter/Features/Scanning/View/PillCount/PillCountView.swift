@@ -115,6 +115,7 @@ struct OPillCountView: View {
                 onBack: {
                     router.setRoot(
                         to: .authentication(.login(.dashboard(.dashboardHome))))
+                    cameraService.stop()
                 }
             )
 
@@ -172,9 +173,9 @@ struct OPillCountView: View {
             }
         }
         .onAppear {
-            initializeTransaction()
             cameraService.configureInitialOrientation()
             cameraService.startObservingOrientation()
+            initializeTransaction()
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {

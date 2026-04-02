@@ -358,19 +358,15 @@ class PillScanViewModel: ObservableObject {
         var savedPath = ""
 
         if let img = barcodeImage {
-            print("📸 Barcode image exists")
-
             if let path = PhotoFileManager.shared.saveImage(img) {
                 savedPath = path
             } else {
-                print("❌ Failed to save image")
+                print("Failed to save image")
             }
 
         } else {
-            print("⚠️ barcodeImage is nil")
+            print("barcodeImage is nil")
         }
-
-        print("🗂 Final Image Path Being Sent To DB: \(savedPath)")
 
 
         // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
@@ -424,7 +420,7 @@ class PillScanViewModel: ObservableObject {
             }
 
         } else {
-            print("⚠️ barcodeImage is nil")
+            print("barcodeImage is nil")
         }
 
 

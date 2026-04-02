@@ -143,9 +143,7 @@ final class PillsDataLocalStorage {
         entity.target_count = targetCount ?? 0
         entity.is_ndc_verfied = false
         entity.user = user
-        print(
-            "User → id: \(user.user_id ?? ""), name: \(user.name ?? "-"), email: \(user.email ?? "-")"
-        )
+      
 
         // finally save the transaction in core data.
         CoreDataManager.shared.save(context: mainThreadContext)

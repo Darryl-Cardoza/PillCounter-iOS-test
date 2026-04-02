@@ -88,7 +88,7 @@ struct QRBarcodeScannerView: View {
     var body: some View {
         ZStack {
             BaseView(
-                topRatio: 1.5,
+                topRatio: 1.0,
                 topContent: {
                     GeometryReader { geo in
                         ZStack {
@@ -118,7 +118,8 @@ struct QRBarcodeScannerView: View {
                 },
 
                 bottomContent: {
-                    bottomContent
+//                    bottomContent
+                    EmptyView()
                 },
                 headerActions: {
                     let instruction = ControlledStep.scan.displayText
@@ -179,7 +180,8 @@ struct QRBarcodeScannerView: View {
         }
         // MARK: - LOGIC HANDLERS
         .onChange(of: cameraManager.scannedCode) { _, newValue in
-            handleScannedCode(newValue)
+//            handleScannedCode(newValue)
+            showStockCountScannedDetails.toggle()
         }
         .onChange(of: pillScanViewModel.isDrugFound) { oldValue, newValue in
             handleDrugFoundState(newValue)
@@ -315,6 +317,7 @@ struct QRBarcodeScannerView: View {
                     iconSize: 0,
                     action: {
                         showStockCountScannedDetails = false
+                        restartFullScannerFlow()
                     }
                 )
                 
@@ -352,13 +355,27 @@ struct QRBarcodeScannerView: View {
     private func handleStockCountAddAction() {
         switch scannedBottleContainerStatus {
         case .sealed:
-            router.navigate(to: .authentication(
-                .login(
-                    .dashboard(
-                        .pillCount(.stockCount(.stockCountBatchDetail))
-                    )
+            Task {
+                guard let batchId = pillScanViewModel.currentBatchId else {
+                    return
+                }
+
+                await pillScanViewModel.createTxnForBatchFromScan(
+                    rawValue: cameraManager.scannedCode,
+                    countType: .REGULAR,
+                    batchId: batchId
                 )
-            ))
+
+                  router.navigate(
+                      to: .authentication(
+                          .login(
+                              .dashboard(
+                                  .pillCount(.stockCount(.stockCountBatchDetail))
+                              )
+                          )
+                      )
+                  )
+              }
         case .opened:
             print("The bottle is open.")
         }

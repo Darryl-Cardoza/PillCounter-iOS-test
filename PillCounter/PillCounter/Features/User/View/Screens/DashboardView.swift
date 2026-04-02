@@ -11,6 +11,7 @@ struct DashboardView: View {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
+    @EnvironmentObject private var pillViewModel: PillScanViewModel
     @State private var someParialValue: Int = 1
     @State private var someParialValue2: Int = 2
     @State private var someCompletedValue: Int = 3
@@ -37,14 +38,18 @@ struct DashboardView: View {
                         Spacer()
                         Spacer()
                         VStack(spacing: 15) {
-                            
-                            Image("dispense_icon")
+                            Image("dispense_dashboard_icon")
+                                .renderingMode(.template)
                                 .resizable()
                                 .scaledToFit()
-                                .frame(
-                                    width: geometry.size.width * 0.35,
-                                    height: geometry.size.width * 0.35
+                                .frame(width: 60, height: 60)
+                                .foregroundColor(appColors.secondary)
+                                .padding(40)
+                                .background(
+                                    Circle()
+                                        .stroke(appColors.primary, lineWidth: 4)
                                 )
+
                                
                             Spacer().frame(height: 15)
                             
@@ -121,13 +126,18 @@ struct DashboardView: View {
                     VStack(spacing: 10) {
                         Spacer()
                         Spacer()
-                        Image("fixed_count")
+                        Image("placeholder_history")
+                            .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
-                            .frame(
-                                width: geometry.size.width * 0.35,
-                                height: geometry.size.width * 0.35
+                            .frame(width: 75, height: 75)
+                            .foregroundColor(appColors.secondary)
+                            .padding(32)
+                            .background(
+                                Circle()
+                                    .stroke(appColors.primary, lineWidth: 4)
                             )
+
                     
                         Spacer().frame(height: 15)
 
@@ -330,6 +340,7 @@ struct DashboardView: View {
             // navigate to the barcode scanning screen
             print("new batch selected")
             // we will create a new batch and directly navigate to the barcode scanning screen for the first entry to be added in the batch.
+            pillViewModel.createNewBatch()
             router.selectedPillScanningType = .REGULAR
             router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning)))))
             resetStockCountSelection()

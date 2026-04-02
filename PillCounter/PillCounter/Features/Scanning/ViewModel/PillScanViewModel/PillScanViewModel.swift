@@ -71,12 +71,16 @@ class PillScanViewModel: ObservableObject {
     @Published var currentControlledTargetCount: Int? = nil
     @Published var showCompletionPopup = false
 
-    // Controlled drug Equivalence
+    // MARK: Controlled drug Equivalence
     @Published var isCheckingNdc: Bool = false
     @Published var ndcComparisonResponse: NdcComparisonResponse?
     @Published var isNdcEquivalent: Bool = false
     @Published var showNdcEquivalencePopup = false
     @Published var shouldAutoProceedToCount = false
+
+    // MARK: Stock Count
+    @Published var currentBatchId: Int64?
+
     
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
@@ -343,7 +347,8 @@ class PillScanViewModel: ObservableObject {
         isComingFromPms:Bool = false,
         isControlled:Bool? = nil,
         targetCount: Int32? = nil,
-        drugName: String? = nil
+        drugName: String? = nil,
+        batchId: Int64? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.
@@ -375,11 +380,13 @@ class PillScanViewModel: ObservableObject {
             for: user,
             drugId: drugId,
             countType: countType,
+            batchId: batchId ?? 0,
             barcodeImagePath: savedPath,
             isComingFromPms: isComingFromPms,
             drugName: drugName,
             targetCount: targetCount,
-            isControlled: isControlled // temporary true
+            isControlled: isControlled,
+            // temporary true
         )
     
 

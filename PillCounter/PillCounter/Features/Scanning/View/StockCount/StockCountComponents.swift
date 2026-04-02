@@ -79,22 +79,29 @@ struct StockTransactionListView: View {
                                 .foregroundColor(appColors.secondary)
                         }
 
-                    } content: {
+                    }
+                    content: {
 
                         VStack(spacing: 12) {
-
                             HStack {
                                 Text("Stock Bottles")
+                                    .font(.system(size: 14, weight: .regular))
                                 Spacer()
                                 Text("\(txn.stockBottles ?? 0) pills")
+                                    .font(.system(size: 14, weight: .regular))
                             }
+                            
+                            Divider()
 
                             HStack {
                                 Text("Open Pills")
+                                    .font(.system(size: 14, weight: .regular))
                                 Spacer()
                                 Text("\(txn.openPills ?? 0) pills")
+                                    .font(.system(size: 14, weight: .regular))
                             }
                         }
+                        .padding(.horizontal,8)
                         .foregroundColor(appColors.text)
                     }
                 }
@@ -106,7 +113,6 @@ struct StockTransactionListView: View {
 
     @ViewBuilder
     private func transactionHeader(_ txn: StockTransaction) -> some View {
-
         HStack {
 
             VStack(alignment: .leading, spacing: 4) {
@@ -128,36 +134,7 @@ struct StockTransactionListView: View {
         .padding()
     }
 
-    @ViewBuilder
-    private func transactionExpandedView(_ txn: StockTransaction) -> some View {
 
-        // Show only if data exists
-        if let bottles = txn.stockBottles,
-            let open = txn.openPills
-        {
-
-            VStack(spacing: 12) {
-
-                Divider()
-
-                HStack {
-                    Text("Stock Bottles")
-                        .foregroundColor(appColors.text)
-                    Spacer()
-                    Text("\(bottles) pills")
-                        .foregroundColor(appColors.text)
-                }
-
-                HStack {
-                    Text("Open Pills")
-                        .foregroundColor(appColors.text)
-                    Spacer()
-                    Text("\(open) pills")
-                        .foregroundColor(appColors.text)
-                }
-            }
-        }
-    }
     private func toggleExpansion(_ id: Int64) {
         if expandedId == id {
             expandedId = nil
@@ -207,11 +184,7 @@ struct ControlledCollapsibleBox<Header: View, Content: View>: View {
 
             // EXPANDED CONTENT
             if isExpanded {
-                VStack(spacing: 12) {
-
-                    Divider()
-                        .background(appColors.text.opacity(0.2))
-
+                VStack(spacing: 18) {
                     content
                 }
                 .padding(.horizontal, 16)
@@ -220,7 +193,7 @@ struct ControlledCollapsibleBox<Header: View, Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .background(appColors.primaryBackground)
+        .background(appColors.secondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }

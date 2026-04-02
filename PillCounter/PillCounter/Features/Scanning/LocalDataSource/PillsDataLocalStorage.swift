@@ -100,6 +100,7 @@ final class PillsDataLocalStorage {
         for user: UserEntity,
         drugId: Int64?,
         countType: CountType,
+        batchId: Int64? = nil,
         barcodeImagePath: String,
         isComingFromPms: Bool? = nil,
         drugName:String? = nil,
@@ -113,6 +114,8 @@ final class PillsDataLocalStorage {
         entity.local_id = Int64(AppStorageManager.shared.userId ?? "") ?? 0
         // drug_id -> this is for which drug we are creating the transaction for.
         entity.drug_id = drugId ?? 0
+
+        entity.batch_id = batchId ?? 0
 
         // relation ship.
         // ONE DRUG --> MULTIPLE TRANSACTION --> THIS LINKS THE CREATED TRANSACTION TO THAT DRUG.

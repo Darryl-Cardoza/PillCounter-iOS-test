@@ -13,7 +13,7 @@ struct ConfirmationDialogue: View {
 
     let title: String
     var secondTitle: String = ""
-    let message: String
+    let message: String?
     let cancelButtonText: String
     let confirmButtonText: String
     var showSecondTitle: Bool = false
@@ -29,10 +29,12 @@ struct ConfirmationDialogue: View {
                 .foregroundStyle(appColors.text)
                 .multilineTextAlignment(.center)
 
-            Text(message)
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(appColors.text)
+            if message != nil {
+                Text(message ?? "")
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(appColors.text)
+            }
 
             if showSecondTitle {
                 Text(secondTitle)
@@ -42,7 +44,9 @@ struct ConfirmationDialogue: View {
             }
 
             
-            if showSingleConfirmButton {
+            
+            
+            if showSingleConfirmButton {	
 
                 // single centered button
                 PillCountingButton(

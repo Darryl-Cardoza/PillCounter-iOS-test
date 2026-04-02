@@ -107,12 +107,14 @@ struct AppNavigation: View {
                         .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))
                     ):
                         StockCountPartialBatchListScreen()
+//                        StockCountBatchDetail()
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(
                         .login(.dashboard(.pillCount(.stockCount(.stockCountPendingBatchListScreen))))
                     ):
                         StockCountRequestedList()
+//                        StockCountBatchDetail()
                             .navigationBarBackButtonHidden(true)
                     }
                 }

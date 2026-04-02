@@ -792,6 +792,7 @@ class UserViewModel: ObservableObject {
         pillDataLocalStorage.clearAllLocalData()
     }
     
+
     // MARK: - HARD RESET (called on logout)
     @MainActor
     func resetState() {

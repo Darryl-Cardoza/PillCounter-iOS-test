@@ -20,6 +20,7 @@ struct StockCountBatchDetail: View {
 
     // end batch
     @State private var showEndBatchPopUp: Bool = false
+    @State private var showExportPopUp: Bool = false
 
     // transactions that are in the batch
     @State private var transactions: [StockTransaction] = [
@@ -60,6 +61,7 @@ struct StockCountBatchDetail: View {
                     EmptyView()
                 },
                 headerActions: {
+                    
                     if isEditing {
 
                         // EDIT MODE
@@ -119,6 +121,7 @@ struct StockCountBatchDetail: View {
                             }
                         }
                         .padding(.horizontal)
+                        .background(appColors.primaryBackground)
 
                     } else {
 
@@ -128,12 +131,12 @@ struct StockCountBatchDetail: View {
 
                             // PDF BUTTON (your existing one)
                             Button {
-                                print("generate pdf")
+                                showExportPopUp.toggle()
                             } label: {
                                 Image("pdf")
                                     .resizable()
                                     .scaledToFit()
-                                    .frame(width: 30, height: 30)
+                                    .frame(width: 26, height: 26)
                                     .overlay { appColors.primary }
                                     .mask(
                                         Image("pdf")
@@ -160,6 +163,7 @@ struct StockCountBatchDetail: View {
                 showBackButton: !isEditing,
                 showHamburgerMenu: false,
                 title: isEditing ? "" : "BATCH ID 3445",
+                headerActionsBackground: appColors.primaryBackground,
                 onBack: {
                     router.setRoot(
                         to: .authentication(.login(.dashboard(.dashboardHome)))
@@ -167,7 +171,10 @@ struct StockCountBatchDetail: View {
                 }
             )
             .customPopup(isPresented: $showEndBatchPopUp) {
-                endBatchPopup
+                showEndBatchPopup
+            }
+            .customPopup(isPresented: $showExportPopUp) {
+                showConfirmExportPopup
             }
         }
     }
@@ -227,66 +234,12 @@ struct StockCountBatchDetail: View {
                 )
             }
             .padding()
-            .background(appColors.secondaryBackground)
         }
         .padding(.top, isLandscape ? SafeAreaInsets.top + 40 : 90)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(appColors.primaryBackground)
     }
 
-    // MARK: POP UP
-    private var endBatchPopup: some View {
-        VStack(spacing: 30) {
-
-            Text("Are you sure you want to\nend this Batch Count?")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(appColors.text)
-                .multilineTextAlignment(.center)
-
-            EqualWidthHStackButtons(spacing: 16) {
-
-                PillCountingButton(
-                    title: "NO",
-                    textColor: appColors.primary,
-                    backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 20,
-                    iconSize: 0,
-                    action: {
-                        // TODO
-                        showEndBatchPopUp = false
-                    }
-                )
-
-                PillCountingButton(
-                    title: "YES",
-                    textColor: .white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 20,
-                    iconSize: 0,
-                    action: {
-                        showEndBatchPopUp = false
-                        // TODO
-                        // We save the batch and mark it as complete
-                        // update the status in db calling the view model functions.
-                        // Navigate back to the Dashboard Screen
-                        router.selectedPillScanningType = .none
-                        router.setRoot(
-                            to: .authentication(
-                                .login(.dashboard(.dashboardHome))
-                            )
-                        )
-                    }
-                )
-            }
-        }
-    }
 
     // MARK: HELPERS
     private var areAllSelected: Bool {
@@ -317,5 +270,40 @@ struct StockCountBatchDetail: View {
 
         selectedTxnIds.removeAll()
         isEditing = false
+    }
+}
+
+
+// MARK: POPUPS
+extension StockCountBatchDetail{
+    
+    private var showEndBatchPopup: some View {
+        ConfirmationDialogue(
+            title: NSLocalizedString("CONFIRM_END_BATCH", comment: ""),
+            message: nil,
+            cancelButtonText: "NO",
+            confirmButtonText: "YES",
+            onCancel: {
+                showEndBatchPopUp = false
+            },
+            onConfirm: {
+                showEndBatchPopUp = false
+            }
+        )
+    }
+    
+    private var showConfirmExportPopup: some View {
+        ConfirmationDialogue(
+            title: NSLocalizedString("CONFIRM_EXPORT", comment: ""),
+            message: nil,
+            cancelButtonText: "NO",
+            confirmButtonText: "YES",
+            onCancel: {
+                showExportPopUp = false
+            },
+            onConfirm: {
+                showExportPopUp = false
+            }
+        )
     }
 }

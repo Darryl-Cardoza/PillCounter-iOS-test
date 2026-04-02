@@ -12,6 +12,7 @@
 "VERSION" = "Version";
 "CANCEL" = "CANCEL";
 "OK" = "OK";
+"ADD" = "ADD";
 
 // MARK: - LOGIN
 "REMEMBER_ME" = "Remember me";
@@ -111,5 +112,11 @@
 "LOT_NO" = "Lot No";
 "DATE" = "Date";
 "TIME" = "Time";
+
+//MARK: STOCK
+"CONFIRM_END_BATCH" = "Are you sure you want to end this Batch Count?";
+"CONFIRM_EXPORT" = "Do you want to export this batch inventory details?";
+"END_BATCH" = "END BATCH";
+
 
 // MARK: ERROR

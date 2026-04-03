@@ -78,8 +78,8 @@ class PillScanViewModel: ObservableObject {
     @Published var showNdcEquivalencePopup = false
     @Published var shouldAutoProceedToCount = false
 
-    // MARK: Stock Count
-    @Published var currentBatchId: Int64?
+
+    @Published var isNdcAdded: Bool = false
 
     
     // func to get the value from the barcode and check in the db

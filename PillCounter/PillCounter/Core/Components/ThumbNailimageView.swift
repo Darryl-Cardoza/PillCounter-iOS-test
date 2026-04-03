@@ -22,6 +22,7 @@ struct ThumbnailImageView: View {
     let placeholderBackgroundColor: Color?
     let placeholderSize: CGSize
     let isFromPms: Bool
+    let showImageBackground: Color?
 
     // MARK: - ENVIRONMENT
     @EnvironmentObject private var appColors: AppColors
@@ -37,7 +38,8 @@ struct ThumbnailImageView: View {
         placeholderImageName: String = "placeholder_history",
         placeholderBackgroundColor: Color? = nil,
         placeholderSize: CGSize = CGSize(width: 25, height: 25),
-        isFromPms: Bool = false
+        isFromPms: Bool = false,
+        showImageBackground: Color? = nil
     ) {
         self.imagePath = imagePath
         self.width = width
@@ -49,6 +51,7 @@ struct ThumbnailImageView: View {
         self.placeholderBackgroundColor = placeholderBackgroundColor
         self.placeholderSize = placeholderSize
         self.isFromPms = isFromPms
+        self.showImageBackground = showImageBackground
     }
 
     // MARK: - BODY
@@ -69,7 +72,6 @@ struct ThumbnailImageView: View {
                     )
 
             } else {
-                
                 if isFromPms {
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(appColors.text.opacity(0.8), lineWidth: borderWidth)
@@ -81,7 +83,8 @@ struct ThumbnailImageView: View {
                         )
                 }else {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(appColors.text.opacity(0.8), lineWidth: borderWidth)
+                        .fill(showImageBackground ?? appColors.secondaryBackground)
+                        .stroke(showImageBackground ?? appColors.text.opacity(0.8), lineWidth: borderWidth)
                         .frame(width: width, height: height)
                         .overlay(
                             Image(placeholderImageName)

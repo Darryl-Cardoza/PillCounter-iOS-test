@@ -1,0 +1,223 @@
+//
+//  StockCountViewModel.swift
+//  PillCounter
+//
+//  Created by Bhushan Patil on 03/04/26.
+//
+import Foundation
+import SwiftUI
+
+@MainActor
+class StockCountViewModel: ObservableObject {
+    
+    let pillDataLocalStorage = PillsDataLocalStorage.shared
+    let userDataLocalStorage = UserLocalDataSource.shared
+    let decoder = BarcodeAndQRDecoder()
+    let controlledRepo  = ControlledRepository.shared
+
+    
+    // MARK: Stock Count State
+    @Published var batchTransactions: [PillCountTransactionEntity] = []
+    @Published var batchMappedTransactions: [StockTransaction] = []
+    @Published var regularCountTransactions: [PillCountTransactionEntity] = []
+
+    
+    @Published var currentBatchId: Int64?
+    @Published var totalBatchCount: Int = 0
+    @Published var totalNdcRequests: Int = 0
+    @Published var scannedDrugData: ScannedDrugData?
+    @Published var showStockCountScannedDetails: Bool = false
+    @Published var showScanError: Bool = false
+    @Published var isLoading:Bool = false
+    
+    
+    // Creating New Batch in Database
+    func createNewBatch() {
+        let batchId = Int64(Date().timeIntervalSince1970 * 1000)
+
+        let context = pillDataLocalStorage.mainThreadContext
+
+        let batch = BatchCountEntity(context: context)
+        batch.batch_id = batchId
+        batch.start_date_time = batchId
+        batch.status = "partial"
+        batch.is_deleted = false
+
+        CoreDataManager.shared.save(context: context)
+
+        currentBatchId = batchId // Get current batch
+        updateBatchCount() //Update count of batch
+    }
+    
+    // Load NDC requests
+    func getAllPartialTransactions(countType: CountType, userId: String) async {
+        guard let user = userDataLocalStorage.getUserByUserId(by: userId) else {
+            self.regularCountTransactions = []
+            return
+        }
+        self.regularCountTransactions =
+        pillDataLocalStorage.fetchAllTransactionFixedOrRegularPartial(
+                for: user, countType: countType)
+
+        self.totalNdcRequests = 0
+
+        for transaction in regularCountTransactions {
+            let total = pillDataLocalStorage.getTheCountedNumberOfPillsForTheTransaction(
+                for: transaction.txn_id)
+            self.totalNdcRequests = total
+        }
+    }
+    
+    // Loading all batches from database
+    func loadBatches() -> [StockCountPartialBatchListScreen.Batch] {
+        let batches = pillDataLocalStorage.fetchAllBatches()
+        
+        return batches.map { batch in
+
+            let count = pillDataLocalStorage.getTransactionCount(
+                for: batch.batch_id
+            )
+
+            return StockCountPartialBatchListScreen.Batch(
+                id: batch.batch_id,
+                name: "Batch \(batch.batch_id)",
+                date: formatDate(Int64(batch.start_date_time)),
+                total: "\(count)"
+            )
+        }
+        
+    }
+    
+    func loadTransactions() {
+        guard let batchId = currentBatchId else {
+            self.batchTransactions = []
+            self.batchMappedTransactions = []
+            return
+        }
+
+        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
+
+        self.batchTransactions = txns
+
+        self.batchMappedTransactions = txns.map { txn in
+            StockTransaction(
+                id: txn.txn_id,
+                drugName: txn.drug?.drug_name ?? "Unknown",
+                ndc: txn.drug?.ndc ?? "",
+                total: Int(txn.target_count),
+                stockBottles: Int(txn.bottle_qty ?? "0"),
+                openPills: Int(txn.loose_qty ?? "0")
+            )
+        }
+    }
+    
+    // MARK: Scan Stock count Barcode
+    func getScannedDrugData(
+        rawValue: String
+    ) async {
+
+        let decoded = decoder.decode(rawValue)
+        let gtin = decoded.gtin ?? ""
+
+        await fetchDrugDataOnly(gtin: gtin)
+    }
+    
+    
+    
+    private func fetchDrugDataOnly(gtin: String) async {
+        guard !gtin.isEmpty else {
+            showScanError = true
+            return
+        }
+
+        showStockCountScannedDetails = false
+        showScanError = false
+        isLoading = true
+
+        // 1. LOCAL DB
+        if let localDrug = pillDataLocalStorage.getPillByGtin(by: gtin) {
+            scannedDrugData = ScannedDrugData(
+                drugName: localDrug.drug_name ?? "",
+                ndc: localDrug.ndc ?? "",
+                gtin: localDrug.gtin ?? "",
+                quantity: localDrug.package_qty ?? "0"
+            )
+
+            isLoading = false
+            showStockCountScannedDetails = true
+            print("Fetched response from Local |()")
+            return
+        }
+
+        let request = NdcValidationRequest(
+            targetNdc: gtin,
+            scannedNdc: gtin
+        )
+
+        // 2. API CALL
+        do {
+            let response = try await controlledRepo
+                .getControlledDrugInfo(ndcValidationRequest: request)
+
+            scannedDrugData = ScannedDrugData(
+                drugName: response.data?.scannedNdc?.lookupName ?? "",
+                ndc: response.data?.scannedNdc?.packageNdc ?? "",
+                gtin:response.data?.scannedNdc?.packageNdc ?? "",
+                quantity: "30"
+            )
+
+            isLoading = false
+            showStockCountScannedDetails = true
+            print("Fetched response from API")
+        } catch {
+            scannedDrugData = nil
+            isLoading = false
+            showScanError = true
+        }
+    }
+    
+    // Formatting Date
+    func formatDate(_ timestamp: Int64?) -> String {
+        guard let timestamp else { return "" }
+        let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd MMM • hh:mm a"
+        return formatter.string(from: date)
+    }
+    
+    
+    // Get Total Count of batches
+    func updateBatchCount() {
+        let batches = pillDataLocalStorage.fetchAllBatches()
+        totalBatchCount = batches.count
+    }
+    
+    // Get Count Data
+    func getCountData(){
+        updateBatchCount()
+    }
+    
+    func reset(){
+        scannedDrugData = nil
+        showStockCountScannedDetails = false
+        showScanError = false
+    }
+    
+}
+
+struct ScannedDrugData{
+    let drugName: String
+    let ndc: String
+    let gtin: String
+    let quantity: String
+}
+
+
+struct StockTransaction: Identifiable, Hashable {
+    let id: Int64
+    let drugName: String
+    let ndc: String
+    let total: Int
+    let stockBottles: Int?
+    let openPills: Int?
+}

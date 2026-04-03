@@ -29,8 +29,8 @@ struct NdcComparisonResponse: Codable {
 struct NdcComparisonData: Codable {
     let isNdcSame: Bool
     let isNdcEquivalent: Bool
-    let targetNdc: NdcDrug
-    let scannedNdc: NdcDrug
+    let targetNdc: NdcDrug?
+    let scannedNdc: NdcDrug?
 
     enum CodingKeys: String, CodingKey {
         case isNdcSame = "is_ndc_same"

@@ -315,7 +315,6 @@ struct CountHistoryView: View {
 
             if isEditing {
                 HStack {
-
                     Text("\(selectedTxnIds.count) Selected")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(appColors.text.opacity(0.6))

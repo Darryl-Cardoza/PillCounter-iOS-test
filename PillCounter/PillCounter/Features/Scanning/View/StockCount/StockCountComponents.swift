@@ -7,14 +7,6 @@
 
 import SwiftUI
 
-struct StockTransaction: Identifiable, Hashable {
-    let id: Int64
-    let drugName: String
-    let ndc: String
-    let total: Int
-    let stockBottles: Int?
-    let openPills: Int?
-}
 
 struct StockTransactionListView: View {
 

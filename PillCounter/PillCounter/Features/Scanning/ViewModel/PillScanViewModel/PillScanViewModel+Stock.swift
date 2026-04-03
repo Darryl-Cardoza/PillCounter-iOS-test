@@ -2,79 +2,78 @@
 //  PillScanViewModel+Stock.swift
 //  PillCounter
 //
-//  Created by Bhushan Patil on 02/04/26.
+//  Created by Bhushan Patil on 03/04/26.
 //
-import Foundation
 import SwiftUI
 
 extension PillScanViewModel {
     
-    // Creating New batch in local database
-    func createNewBatch() {
-        let batchId = Int64(Date().timeIntervalSince1970 * 1000)
-
-        let context = pillDataLocalStorage.mainThreadContext
-
-        let batch = BatchCountEntity(context: context)
-        batch.batch_id = batchId
-        batch.start_date_time = String(batchId)
-        batch.status = "partial"
-        batch.is_deleted = false
-
-        CoreDataManager.shared.save(context: context)
-
-        currentBatchId = batchId
-    }
-    
-    
     func createTxnForBatchFromScan(
-        rawValue: String,
+        rawValueFromBarcodeOrQr:String?,
+        ndc:String,
+        drugName: String,
+        quantity: Int32,
         countType: CountType,
-        batchId: Int64 ,
+        batchId: Int64,
+        containerStatus: StockCountOptionContainerStatus,
         image: UIImage? = nil
     ) async {
-
-        guard !rawValue.isEmpty else { return }
-
-        //  Decode GS1 / barcode
-        let decoded = decoder.decode(rawValue)
-        let ndc = decoded.gtin ?? rawValue // fallback
-
+        
         guard !ndc.isEmpty else {
             return
         }
+        
+        let decoded = decoder.decode(rawValueFromBarcodeOrQr ?? "")
+        let gtin = decoded.gtin ?? ""
 
         var drugIdToUse: Int64
 
-        // Check local DB
+        //  Check local DB
         if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
             drugIdToUse = existingDrug.drug_id
-            self.drugName = existingDrug.drug_name ?? ""
-
         } else {
-            //  Create new drug
+            // Create new drug
             drugIdToUse = generateUniqueDrugId()
 
             pillDataLocalStorage.saveManualPill(
                 ndc: ndc,
+                gtin: gtin,
                 drugId: drugIdToUse,
-                drugName: "Unknown Drug"
+                drugName: drugName
             )
-
-            self.drugName = "Unknown Drug"
         }
 
-        //  Create transaction WITH batch
+        // Create transaction (USE YOUR EXISTING FUNCTION )
         await createTransaction(
             drugId: drugIdToUse,
             countType: countType,
             barcodeImage: image,
+            targetCount: quantity,
+            drugName: self.drugName,
             batchId: batchId
         )
 
-        //  Update UI
+        //  Optional UI updates
         getAllTransactionDetailsOfTheCurrentTransaction()
-        isDrugFound = true
+        
+        if let latest = pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
+            txnId: currentTransaction?.txn_id ?? 0
+        ) {
+            self.currentTransaction = latest
+        }
+        
+        if containerStatus == .sealed{
+            isNdcAdded = true
+        }else{
+            isDrugFound = true
+        }
+        
+        print("Batch Txn Created → NDC:", ndc, "Batch:", batchId)
+    }
+    
+    
+    func reset(){
+        isNdcAdded = false
     }
     
 }

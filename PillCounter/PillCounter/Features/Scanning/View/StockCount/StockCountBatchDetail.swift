@@ -13,6 +13,7 @@ struct StockCountBatchDetail: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
     @Environment(\.isLandscape) private var isLandscape
+    @EnvironmentObject private var stockCountVieModel: StockCountViewModel
 
     // delete state
     @State private var isEditing: Bool = false
@@ -22,33 +23,7 @@ struct StockCountBatchDetail: View {
     @State private var showEndBatchPopUp: Bool = false
     @State private var showExportPopUp: Bool = false
 
-    // transactions that are in the batch
-    @State private var transactions: [StockTransaction] = [
-        StockTransaction(
-            id: 1,
-            drugName: "Levothyroxine 50mg",
-            ndc: "423",
-            total: 8500,
-            stockBottles: 1500,
-            openPills: 500
-        ),
-        StockTransaction(
-            id: 2,
-            drugName: "Levothyroxine 50mg",
-            ndc: "423",
-            total: 8500,
-            stockBottles: nil,
-            openPills: nil
-        ),
-        StockTransaction(
-            id: 3,
-            drugName: "Levothyroxine 50mg",
-            ndc: "423",
-            total: 8500,
-            stockBottles: nil,
-            openPills: nil
-        ),
-    ]
+
 
     var body: some View {
         ZStack {
@@ -162,14 +137,15 @@ struct StockCountBatchDetail: View {
                 },
                 showBackButton: !isEditing,
                 showHamburgerMenu: false,
-                title: isEditing ? "" : "BATCH ID 3445",
+                title: isEditing ? "" : "BATCH ID \(String(stockCountVieModel.currentBatchId ?? 0))",
                 headerActionsBackground: appColors.primaryBackground,
                 onBack: {
-                    router.setRoot(
-                        to: .authentication(.login(.dashboard(.dashboardHome)))
-                    )
+                    router.navigateBack()
                 }
             )
+            .onAppear(){
+                stockCountVieModel.loadTransactions()
+            }
             .customPopup(isPresented: $showEndBatchPopUp) {
                 showEndBatchPopup
             }
@@ -186,20 +162,27 @@ struct StockCountBatchDetail: View {
         VStack(spacing: 0) {
 
             // SCROLLABLE CONTENT
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 16) {
+            if stockCountVieModel.batchMappedTransactions.isEmpty {
+                EmptyStateView(
+                    imageName: "fixed_count",
+                    systemImageName: nil,
+                    title: "No Transactions Yet",
+                    subtitle: "Start adding items to this batch"
+                )
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 16) {
+                        StockTransactionListView(
+                            transactions: $stockCountVieModel.batchMappedTransactions,
+                            selectedIds: $selectedTxnIds,
+                            isEditing: $isEditing
+                        )
 
-                    StockTransactionListView(
-                        transactions: $transactions,
-                        selectedIds: $selectedTxnIds,
-                        isEditing: $isEditing
-                    )
-
+                    }
+                    .padding(isLandscape ? 20 : 0)
+                    .padding(.bottom, 20)
                 }
-                .padding(isLandscape ? 20 : 0)
-                .padding(.bottom, 20)
             }
-
             // FIXED BUTTONS (ALWAYS BOTTOM)
             EqualWidthHStackButtons(spacing: 16) {
 
@@ -229,7 +212,15 @@ struct StockCountBatchDetail: View {
                     verticalPadding: 20,
                     iconSize: 0,
                     action: {
-                        // TODO
+                        router.navigate(
+                            to: .authentication(
+                                .login(
+                                    .dashboard(
+                                        .pillCount(.barcodeScanning)
+                                    )
+                                )
+                            )
+                        )
                     }
                 )
             }
@@ -263,13 +254,24 @@ struct StockCountBatchDetail: View {
         // viewmodel.deleteTransactions(selectedTxnIds)
 
         withAnimation(.easeInOut(duration: 0.30)) {
-            transactions.removeAll { txn in
-                selectedTxnIds.contains(txn.id)
+            stockCountVieModel.batchTransactions.removeAll { txn in
+                selectedTxnIds.contains(txn.txn_id)
             }
         }
 
         selectedTxnIds.removeAll()
         isEditing = false
+    }
+    
+    func mapToStockTransaction(_ txn: PillCountTransactionEntity) -> StockTransaction {
+        StockTransaction(
+            id: txn.txn_id,
+            drugName: txn.drug?.drug_name ?? "Unknown",
+            ndc: txn.drug?.ndc ?? "",
+            total: Int(txn.target_count),
+            stockBottles: txn.bottle_qty != nil ? Int(txn.bottle_qty ?? "0") : nil,
+            openPills: txn.loose_qty != nil ? Int(txn.loose_qty ?? "0") : nil
+        )
     }
 }
 

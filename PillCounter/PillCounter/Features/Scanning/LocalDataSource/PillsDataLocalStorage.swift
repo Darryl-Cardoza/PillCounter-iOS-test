@@ -52,6 +52,7 @@ final class PillsDataLocalStorage {
     // save mannual pill
     func saveManualPill(
         ndc: String,
+        gtin: String = "",
         drugId: Int64,
         drugName: String,
         drugType: String = "",
@@ -62,6 +63,7 @@ final class PillsDataLocalStorage {
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
         entity.drug_name = drugName
         entity.ndc = ndc
+        entity.gtin = gtin
         entity.drug_type = drugType
 
         CoreDataManager.shared.save(context: mainThreadContext)
@@ -73,6 +75,16 @@ final class PillsDataLocalStorage {
         let request: NSFetchRequest<DrugMasterEntity> =
             DrugMasterEntity.fetchRequest()
         request.predicate = NSPredicate(format: "ndc == %@", ndc)
+        request.fetchLimit = 1
+
+        return try? mainThreadContext.fetch(request).first
+    }
+    
+    func getPillByGtin(by gtin: String) -> DrugMasterEntity? {
+
+        let request: NSFetchRequest<DrugMasterEntity> =
+            DrugMasterEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "gtin == %@", gtin)
         request.fetchLimit = 1
 
         return try? mainThreadContext.fetch(request).first

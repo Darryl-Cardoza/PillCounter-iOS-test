@@ -12,14 +12,15 @@ struct StockCountPartialBatchListScreen: View {
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
+    @EnvironmentObject private var stockCountViewMoel: StockCountViewModel
 
-    // TODO: Replace with StockCountViewModel
-    // @EnvironmentObject private var stockViewModel: StockCountViewModel
 
     @State private var selectedBatchId: Int64?
 
     @State private var pendingAction: TransactionAction?
-
+    @State private var showMenuOptions: Bool = false
+    @State private var selectedTransactionDetailOption:
+        TransactionDetailOption = .resume
 
     // MARK: - DUMMY DATA (Replace later)
 
@@ -30,26 +31,7 @@ struct StockCountPartialBatchListScreen: View {
         let total: String
     }
 
-    @State private var batches: [Batch] = [
-        Batch(
-            id: 1,
-            name: "Batch 1001",
-            date: "01 Apr • 10:30 AM",
-            total: "50"
-        ),
-        Batch(
-            id: 2,
-            name: "Batch 2001",
-            date: "01 Apr • 11:00 AM",
-            total: "50"
-        ),
-        Batch(
-            id: 3,
-            name: "Batch 1003",
-            date: "01 Apr • 12:00 PM",
-            total: "50"
-        ),
-    ]
+    @State private var batches: [Batch] = []
 
     // MARK: - FILTER
 
@@ -88,7 +70,17 @@ struct StockCountPartialBatchListScreen: View {
             
             // 🔹 ROW TAP
             onRowTap: { batch in
-                // TODO: Navigate to batch details
+                selectedBatchId = batch.id
+                stockCountViewMoel.currentBatchId = batch.id
+                router.navigate(
+                    to: .authentication(
+                        .login(
+                            .dashboard(
+                                .pillCount(.stockCount(.stockCountBatchDetail))
+                            )
+                        )
+                    )
+                )
             },
             
             // 🔹 MENU TAP (IMPORTANT)
@@ -109,6 +101,9 @@ struct StockCountPartialBatchListScreen: View {
             menuOptions: TransactionDetailOption.allCases,
             optionLabel: { $0.rawValue }
         )
+        .onAppear {
+            batches = stockCountViewMoel.loadBatches()
+        }
         .customPopup(
             isPresented: Binding(
                 get: { pendingAction != nil },
@@ -118,6 +113,9 @@ struct StockCountPartialBatchListScreen: View {
             if pendingAction != nil {
                 commonConfirmationDialog
             }
+        }
+        .customPopup(isPresented: $showMenuOptions) {
+            menuOptions
         }
     }
     
@@ -141,7 +139,12 @@ struct StockCountPartialBatchListScreen: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
 
-            ThumbnailImageView(imagePath: "", placeholderImageName: "batch_icon" ,isFromPms: false, )
+            ThumbnailImageView(
+                imagePath: "",
+                placeholderImageName: "batch_icon",
+                isFromPms: false,
+                showImageBackground: appColors.primaryBackground
+            )
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(batch.name)
@@ -162,6 +165,7 @@ struct StockCountPartialBatchListScreen: View {
             if !isEditing {
                 Button {
                     selectedBatchId = batch.id
+                    showMenuOptions = true
                 } label: {
                     Image(systemName: "ellipsis")
                         .rotationEffect(.degrees(90))
@@ -174,6 +178,71 @@ struct StockCountPartialBatchListScreen: View {
         .cornerRadius(10)
     }
 
+  
+}
+
+extension StockCountPartialBatchListScreen {
+
+    fileprivate func handleMenuAction(_ option: TransactionDetailOption) {
+        switch option {
+        case .resume:
+            // TODO: Resume batch
+            break
+
+        case .delete:
+            if let id = selectedBatchId {
+                pendingAction = .delete(id)
+            }
+
+        case .forceComplete:
+            if let id = selectedBatchId {
+                pendingAction = .forceComplete(id)
+            }
+        }
+    }
+}
+
+
+
+// MARK: POPUP
+extension StockCountPartialBatchListScreen {
+    
+    private var menuOptions: some View {
+        MenuOption(
+            options: TransactionDetailOption.allCases,
+            selectedOption: $selectedTransactionDetailOption,
+            isPresented: $showMenuOptions,
+            label: { $0.rawValue },
+            onSelect: { option in
+                switch option {
+                    case .resume:
+                        router.navigate(
+                            to: .authentication(
+                                .login(
+                                    .dashboard(
+                                        .pillCount(.stockCount(.stockCountBatchDetail))
+                                    )
+                                )
+                            )
+                        )
+                    case .delete:
+                        if let id = selectedBatchId {
+                            showMenuOptions = false
+                            pendingAction = .delete(id)
+                        }
+                    case .forceComplete:
+                        if let id = selectedBatchId {
+                            showMenuOptions = false
+                            pendingAction = .delete(id)
+                        }
+                    
+                }
+            }
+        )
+    }
+
+    
+    
     private var commonConfirmationDialog: some View {
         ConfirmationDialogue(
             title: dialogTitle,
@@ -247,27 +316,6 @@ struct StockCountPartialBatchListScreen: View {
             return "CONFIRM"
         case .none:
             return ""
-        }
-    }
-}
-
-extension StockCountPartialBatchListScreen {
-
-    fileprivate func handleMenuAction(_ option: TransactionDetailOption) {
-        switch option {
-        case .resume:
-            // TODO: Resume batch
-            break
-
-        case .delete:
-            if let id = selectedBatchId {
-                pendingAction = .delete(id)
-            }
-
-        case .forceComplete:
-            if let id = selectedBatchId {
-                pendingAction = .forceComplete(id)
-            }
         }
     }
 }

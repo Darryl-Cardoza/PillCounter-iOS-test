@@ -19,46 +19,17 @@ struct StockCountRequestedList: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
 
-    // TODO: Replace with StockCountViewModel
-    // @EnvironmentObject private var stockViewModel: StockCountViewModel
+    @EnvironmentObject private var stockViewModel: StockCountViewModel
+    @EnvironmentObject private var userViewModel: UserViewModel
 
     @State private var selectedBatchId: Int64?
 
     @State private var pendingAction: TransactionAction?
 
 
-    // MARK: - DUMMY DATA (Replace later)
 
-    struct Batch: Identifiable {
-        let id: Int64
-        let name: String
-        let date: String
-        let total: String
-    }
-
-    @State private var batches: [Batch] = [
-        Batch(
-            id: 1,
-            name: "NDC 23545-333-54",
-            date: "01-02-2026 18:45 PM",
-            total: "50 NDCs"
-        ),
-        Batch(
-            id: 2,
-            name: "NDC 23545-333-54",
-            date: "01-02-2026 18:45 PM",
-            total: "50 NDCs"
-        ),
-        Batch(
-            id: 3,
-            name: "NDC 23545-333-54",
-            date: "01-02-2026 18:45 PM",
-            total: "50 NDCs"
-        ),
-    ]
 
     // MARK: - FILTER
-
     enum BatchFilter: String, CaseIterable, Identifiable {
         case all = "All"
         case active = "Active"
@@ -71,8 +42,8 @@ struct StockCountRequestedList: View {
 
     var body: some View {
         
-        GenericListScreen<Batch, TransactionDetailOption>(
-            items: batches,
+        GenericListScreen<PillCountTransactionEntity, TransactionDetailOption>(
+            items: stockViewModel.regularCountTransactions,
             title: "NDC REQUESTS",
             
             // 🔹 ROW UI
@@ -86,34 +57,39 @@ struct StockCountRequestedList: View {
                 )
             },
             
-            // 🔹 SEARCH
+            //  SEARCH
             searchMatcher: { batch, query in
-                batch.name.localizedCaseInsensitiveContains(query)
-                || batch.total.localizedCaseInsensitiveContains(query)
+                batch.drug?.drug_name?.localizedCaseInsensitiveContains(query) ?? false
+                || batch.drug?.ndc?.localizedCaseInsensitiveContains(query) ?? false
             },
             
-            // 🔹 ROW TAP
+            //  ROW TAP
             onRowTap: { batch in
                 // TODO: Navigate to batch details
             },
             
-            // 🔹 MENU TAP (IMPORTANT)
+            //  MENU TAP (IMPORTANT)
             onMenuTap: { batch in
-                selectedBatchId = batch.id
+                selectedBatchId = batch.batch_id
             },
             
-            // 🔹 DELETE (MULTI)
+            //  DELETE (MULTI)
             onDelete: { ids in
                 pendingAction = .multiDelete(ids)
             },
             
-            // 🔹 MENU ACTIONS
+            //  MENU ACTIONS
             onSelectOption: { option, item in
             },
             
             menuOptions: TransactionDetailOption.allCases,
             optionLabel: { $0.rawValue }
         )
+        .onAppear {
+            Task{
+                await stockViewModel.getAllPartialTransactions(countType: .REGULAR, userId: userViewModel.userID)
+            }
+        }
         .customPopup(
             isPresented: Binding(
                 get: { pendingAction != nil },
@@ -127,7 +103,7 @@ struct StockCountRequestedList: View {
     }
     
     private func batchRow(
-        _ batch: Batch,
+        _ txn: PillCountTransactionEntity,
         isEditing: Bool,
         selectedIds: Set<Int64>
     ) -> some View {
@@ -137,7 +113,7 @@ struct StockCountRequestedList: View {
             if isEditing {
                 PillCounterCheckbox(
                     isChecked: Binding(
-                        get: { selectedIds.contains(batch.id) },
+                        get: { selectedIds.contains(txn.txn_id) },
                         set: { _ in } // handled by GenericListScreen
                     ),
                     size: 20,
@@ -146,14 +122,20 @@ struct StockCountRequestedList: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
 
-            ThumbnailImageView(imagePath: "", placeholderImageName: "new_rx" ,placeholderBackgroundColor: appColors.secondary, isFromPms: false,  )
+            ThumbnailImageView(
+                imagePath: "",
+                placeholderImageName: "new_rx" ,
+                placeholderBackgroundColor: appColors.secondary,
+                isFromPms: false,
+                showImageBackground: appColors.primaryBackground
+            )
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(batch.name)
+                Text(txn.drug?.drug_name ?? "Unknown Drug")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(appColors.text)
 
-                Text(batch.date)
+                Text(String(txn.created_at))
                     .font(.system(size: 12))
                     .foregroundColor(appColors.text.opacity(0.7))
             }
@@ -165,7 +147,7 @@ struct StockCountRequestedList: View {
 
             if !isEditing {
                 Button {
-                    selectedBatchId = batch.id
+                    selectedBatchId = txn.txn_id
                 } label: {
                     Image(systemName: "ellipsis")
                         .rotationEffect(.degrees(90))
@@ -212,7 +194,7 @@ struct StockCountRequestedList: View {
             // TODO: Delete multiple batches API
             
             withAnimation {
-                batches.removeAll { ids.contains($0.id) }
+//                /*tx*/.removeAll { ids.contains($0.id) }
             }
         }
     }

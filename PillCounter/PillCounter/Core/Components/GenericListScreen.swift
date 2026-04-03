@@ -99,20 +99,27 @@ extension GenericListScreen {
 
             ScrollView {
                 VStack(spacing: 16) {
-
                     ForEach(filteredItems) { item in
                         row(item)
                     }
 
                     if filteredItems.isEmpty {
-                        emptyState
+                        EmptyStateView(
+                            imageName: nil,
+                            systemImageName: "magnifyingglass",
+                            title: "No results found",
+                            subtitle: nil
+                        )
+                        .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
                     }
                 }
                 .padding(.horizontal)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 90)
         .background(appColors.primaryBackground)
+
     }
 
     fileprivate var filteredItems: [Item] {
@@ -253,20 +260,5 @@ extension GenericListScreen {
         } else {
             selectedIds = allIds
         }
-    }
-}
-
-extension GenericListScreen {
-
-    fileprivate var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundColor(.gray.opacity(0.5))
-
-            Text("No results found")
-                .foregroundColor(.gray)
-        }
-        .padding(.top, 60)
     }
 }

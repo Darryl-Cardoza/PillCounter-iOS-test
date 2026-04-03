@@ -84,7 +84,8 @@ extension PillScanViewModel {
         guard let txn = selectedTransaction,
               txn.is_from_pms,
               let ndc = txn.drug?.ndc,
-              !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              txn.count_type == CountType.FIXED.rawValue
         else {
             return nil
         }

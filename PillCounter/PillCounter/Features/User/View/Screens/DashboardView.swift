@@ -11,7 +11,7 @@ struct DashboardView: View {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
-    @EnvironmentObject private var pillViewModel: PillScanViewModel
+    @EnvironmentObject private var stockCountViewModel: StockCountViewModel
     @State private var someParialValue: Int = 1
     @State private var someParialValue2: Int = 2
     @State private var someCompletedValue: Int = 3
@@ -154,7 +154,7 @@ struct DashboardView: View {
                             PillCountingButton(
                                 iconName: "partial",
                                 title:
-                                    "\(userViewModel.regularCountTransactionCompletedCount) \(NSLocalizedString("PARTIAL", comment: ""))",
+                                    "\(stockCountViewModel.totalBatchCount) \(NSLocalizedString("PARTIAL", comment: ""))",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
@@ -237,6 +237,7 @@ struct DashboardView: View {
                 // Only fetch user details if we are staying on Dashboard
                 Task {
                     await userViewModel.getUser()
+                    stockCountViewModel.getCountData()
                 }
             }
         }
@@ -340,7 +341,7 @@ struct DashboardView: View {
             // navigate to the barcode scanning screen
             print("new batch selected")
             // we will create a new batch and directly navigate to the barcode scanning screen for the first entry to be added in the batch.
-            pillViewModel.createNewBatch()
+            stockCountViewModel.createNewBatch()
             router.selectedPillScanningType = .REGULAR
             router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning)))))
             resetStockCountSelection()

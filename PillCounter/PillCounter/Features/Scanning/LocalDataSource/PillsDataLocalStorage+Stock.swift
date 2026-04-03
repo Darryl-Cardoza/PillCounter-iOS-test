@@ -26,77 +26,57 @@ extension  PillsDataLocalStorage {
         entity.status = status
         entity.is_deleted = false
         
-        entity.start_date_time = String(batchId)
-        entity.end_date_time = nil
+        entity.start_date_time = batchId
         
         CoreDataManager.shared.save(context: mainThreadContext)
 
         return batchId
     }
     
+    func getTransactionCount(for batchId: Int64) -> Int {
+        let request: NSFetchRequest<PillCountTransactionEntity> =
+            PillCountTransactionEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "batch_id == %lld AND is_deleted == false",
+            batchId
+        )
+
+        return (try? mainThreadContext.count(for: request)) ?? 0
+    }
     
-//    func assignTransactionToBatch(
-//        txnId: Int64,
-//        batchId: Int64
-//    ) {
-//        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
-//            print("❌ txn not found")
-//            return
-//        }
-//
-//        txn.batch_id = batchId
-//        
-//        CoreDataManager.shared.save(context: mainThreadContext)
-//    }
-//    
-//    
-//    func fetchTransactionsByBatch(
-//        batchId: Int64,
-//        countType: CountType
-//    ) -> [PillCountTransactionEntity] {
-//        
-//        let request: NSFetchRequest<PillCountTransactionEntity> =
-//            PillCountTransactionEntity.fetchRequest()
-//
-//        request.predicate = NSPredicate(
-//            format: "batch_id == %lld AND count_type == %@ AND is_deleted == false",
-//            batchId,
-//            countType.rawValue
-//        )
-//
-//        request.sortDescriptors = [
-//            NSSortDescriptor(key: "created_at", ascending: false)
-//        ]
-//
-//        return (try? mainThreadContext.fetch(request)) ?? []
-//    }
-//    
-//    func fetchAllBatches() -> [BatchCountEntity] {
-//        
-//        let request: NSFetchRequest<BatchCountEntity> =
-//            BatchCountEntity.fetchRequest()
-//
-//        request.predicate = NSPredicate(format: "is_deleted == false")
-//
-//        request.sortDescriptors = [
-//            NSSortDescriptor(key: "start_date_time", ascending: false)
-//        ]
-//
-//        return (try? mainThreadContext.fetch(request)) ?? []
-//    }
-//    
-//    func fetchBatchesByCountType(
-//        countType: CountType
-//    ) -> [BatchCountEntity] {
-//
-//        let allBatches = fetchAllBatches()
-//
-//        return allBatches.filter { batch in
-//            let txns = fetchTransactionsByBatch(
-//                batchId: Int64(batch.batch_id ?? 0) ?? 0,
-//                countType: countType
-//            )
-//            return !txns.isEmpty
-//        }
-//    }
+    
+    func fetchAllBatches() -> [BatchCountEntity] {
+        let request: NSFetchRequest<BatchCountEntity> =
+            BatchCountEntity.fetchRequest()
+
+        request.predicate = NSPredicate(format: "is_deleted == false")
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "start_date_time", ascending: false)
+        ]
+
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
+    
+    
+    func fetchTransactionsByBatch(batchId: Int64) -> [PillCountTransactionEntity] {
+
+        let request: NSFetchRequest<PillCountTransactionEntity> =
+            PillCountTransactionEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "batch_id == %lld AND is_deleted == false",
+            batchId
+        )
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "created_at", ascending: false)
+        ]
+
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
+    
+    
+    
 }

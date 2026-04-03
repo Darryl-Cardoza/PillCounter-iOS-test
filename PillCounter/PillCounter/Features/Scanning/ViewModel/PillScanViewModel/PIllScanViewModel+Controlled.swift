@@ -177,10 +177,10 @@ extension PillScanViewModel{
         let drugId = generateUniqueDrugId()
 
         pillDataLocalStorage.saveManualPill(
-            ndc: ndcComparisonResponse?.data?.scannedNdc.packageNdc ?? "",
+            ndc: ndcComparisonResponse?.data?.scannedNdc?.packageNdc ?? "",
             drugId: drugId,
-            drugName: ndcComparisonResponse?.data?.scannedNdc.lookupName ?? "",
-            drugType: ndcComparisonResponse?.data?.scannedNdc.deaSchedule ?? "",
+            drugName: ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
+            drugType: ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? "",
         )
 
         var savedPath = ""

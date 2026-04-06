@@ -9,8 +9,8 @@ import SwiftUI
 extension PillScanViewModel {
     
     func createTxnForBatchFromScan(
-        rawValueFromBarcodeOrQr:String?,
-        ndc:String,
+        rawValueFromBarcodeOrQr: String?,
+        ndc: String,
         drugName: String,
         quantity: Int32,
         countType: CountType,
@@ -19,58 +19,101 @@ extension PillScanViewModel {
         image: UIImage? = nil
     ) async {
         
-        guard !ndc.isEmpty else {
-            return
-        }
+        guard !ndc.isEmpty else { return }
         
         let decoded = decoder.decode(rawValueFromBarcodeOrQr ?? "")
         let gtin = decoded.gtin ?? ""
 
-        var drugIdToUse: Int64
+        // MARK: 1️⃣ Check existing txn
+        let existingTxn = pillDataLocalStorage
+            .fetchTransactionsByBatch(batchId: batchId)
+            .first {
+                $0.drug?.ndc == ndc &&
+                $0.drug?.package_qty == quantity &&
+                $0.is_deleted == false
+            }
 
-        //  Check local DB
-        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
-            drugIdToUse = existingDrug.drug_id
-        } else {
-            // Create new drug
-            drugIdToUse = generateUniqueDrugId()
+        if let txn = existingTxn {
+            
+            print(" Existing txn found → merging")
 
-            pillDataLocalStorage.saveManualPill(
-                ndc: ndc,
-                gtin: gtin,
-                drugId: drugIdToUse,
-                drugName: drugName
+            // MARK: 2️⃣ Update counts
+            pillDataLocalStorage.updateCounts(
+                txnId: txn.txn_id,
+                bottleQty: containerStatus == .sealed ? 1 : nil,
+                looseQty: containerStatus == .opened ? quantity : nil
             )
+
+            // MARK: 3️⃣ Update current transaction (IMPORTANT FIX)
+            if let updatedTxn = pillDataLocalStorage
+                .fetchPillCountTransactionByTransactionId(txnId: txn.txn_id) {
+                self.currentTransaction = updatedTxn
+            }
+
+            // MARK: 4️⃣ UI Updates
+            handlePostScanUI(containerStatus: containerStatus)
+            getAllTransactionDetailsOfTheCurrentTransaction()
+
+            return
         }
 
-        // Create transaction (USE YOUR EXISTING FUNCTION )
+        // MARK: 5️⃣ Create / Get Drug
+        let drugIdToUse: Int64 = {
+            if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+                return existingDrug.drug_id
+            } else {
+                let newId = generateUniqueDrugId()
+                pillDataLocalStorage.saveManualPill(
+                    ndc: ndc,
+                    gtin: gtin,
+                    drugId: newId,
+                    drugName: drugName
+                )
+                return newId
+            }
+        }()
+
+        // MARK: 6️⃣ Create Transaction
         await createTransaction(
             drugId: drugIdToUse,
             countType: countType,
             barcodeImage: image,
             targetCount: quantity,
-            drugName: self.drugName,
+            drugName: drugName,
             batchId: batchId
         )
 
-        //  Optional UI updates
-        getAllTransactionDetailsOfTheCurrentTransaction()
-        
-        if let latest = pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
-            txnId: currentTransaction?.txn_id ?? 0
-        ) {
-            self.currentTransaction = latest
+        // MARK: 7️⃣ Fetch newly created txn
+        guard let newTxn = pillDataLocalStorage
+            .fetchTransactionsByBatch(batchId: batchId)
+            .last else { return }
+
+        // MARK: 8️⃣ Set initial counts
+        pillDataLocalStorage.updateCounts(
+            txnId: newTxn.txn_id,
+            bottleQty: containerStatus == .sealed ? 1 : nil,
+            looseQty: containerStatus == .opened ? quantity : nil
+        )
+
+        // MARK: 9️⃣ Update current txn
+        if let updatedTxn = pillDataLocalStorage
+            .fetchPillCountTransactionByTransactionId(txnId: newTxn.txn_id) {
+            self.currentTransaction = updatedTxn
         }
-        
-        if containerStatus == .sealed{
+
+        // MARK: 🔟 UI Updates
+        handlePostScanUI(containerStatus: containerStatus)
+        getAllTransactionDetailsOfTheCurrentTransaction()
+
+        print("🆕 Batch Txn Created → NDC:", ndc, "Batch:", batchId)
+    }
+    private func handlePostScanUI(containerStatus: StockCountOptionContainerStatus) {
+        if containerStatus == .sealed {
             isNdcAdded = true
-        }else{
+        } else {
             isDrugFound = true
         }
-        
-        print("Batch Txn Created → NDC:", ndc, "Batch:", batchId)
     }
-    
     
     func reset(){
         isNdcAdded = false

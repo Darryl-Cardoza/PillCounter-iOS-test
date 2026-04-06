@@ -252,7 +252,6 @@ struct StockCountBatchDetail: View {
     private func deleteSelectedTransactions() {
         // TODO: Replace with API call
         // viewmodel.deleteTransactions(selectedTxnIds)
-
         withAnimation(.easeInOut(duration: 0.30)) {
             stockCountVieModel.batchTransactions.removeAll { txn in
                 selectedTxnIds.contains(txn.txn_id)
@@ -263,16 +262,6 @@ struct StockCountBatchDetail: View {
         isEditing = false
     }
     
-    func mapToStockTransaction(_ txn: PillCountTransactionEntity) -> StockTransaction {
-        StockTransaction(
-            id: txn.txn_id,
-            drugName: txn.drug?.drug_name ?? "Unknown",
-            ndc: txn.drug?.ndc ?? "",
-            total: Int(txn.target_count),
-            stockBottles: txn.bottle_qty != nil ? Int(txn.bottle_qty ?? "0") : nil,
-            openPills: txn.loose_qty != nil ? Int(txn.loose_qty ?? "0") : nil
-        )
-    }
 }
 
 

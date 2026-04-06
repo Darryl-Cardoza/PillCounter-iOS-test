@@ -16,7 +16,7 @@
         <attribute name="drug_type" optional="YES" attributeType="String"/>
         <attribute name="gtin" optional="YES" attributeType="String"/>
         <attribute name="ndc" attributeType="String"/>
-        <attribute name="package_qty" optional="YES" attributeType="String"/>
+        <attribute name="package_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PillCountTransactionEntity" inverseName="drug" inverseEntity="PillCountTransactionEntity"/>
     </entity>
     <entity name="PillCountTransactionDetailsEntity" representedClassName="PillCountTransactionDetailsEntity" syncable="YES" codeGenerationType="class">
@@ -34,7 +34,7 @@
     <entity name="PillCountTransactionEntity" representedClassName="PillCountTransactionEntity" syncable="YES" codeGenerationType="class">
         <attribute name="barcode_image" optional="YES" attributeType="String"/>
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="bottle_qty" optional="YES" attributeType="String"/>
+        <attribute name="bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="count_type" optional="YES" attributeType="String"/>
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -45,7 +45,7 @@
         <attribute name="is_substitute" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_synced" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="local_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="loose_qty" optional="YES" attributeType="String"/>
+        <attribute name="loose_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="lot_no" optional="YES" attributeType="String"/>
         <attribute name="note" optional="YES" attributeType="String"/>
         <attribute name="patient_name" optional="YES" attributeType="String"/>

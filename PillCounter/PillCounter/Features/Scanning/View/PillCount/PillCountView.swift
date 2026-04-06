@@ -17,6 +17,7 @@ struct OPillCountView: View {
     @EnvironmentObject var userViewModel: UserViewModel
     @EnvironmentObject var router: Router
     @EnvironmentObject var pillScanViewModel: PillScanViewModel
+    @EnvironmentObject var stockCountViewModel: StockCountViewModel
 
     // MARK: - STATE MANAGEMENT
     // @StateObject ensures the camera session survives view updates and rotations.
@@ -577,7 +578,19 @@ extension OPillCountView {
                 showConfirmCompletionPopup = false
                 capturedVialImage = nil
                 vialCapturedImagePath = nil
-                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+                if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
+                    router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+                }else{
+                    router.setRoot(
+                        to: .authentication(
+                            .login(
+                                .dashboard(
+                                    .pillCount(.stockCount(.stockCountBatchDetail))
+                                )
+                            )
+                        )
+                    )
+                }
                 if isTransactionCompleted
                     || router.selectedPillScanningType == .REGULAR
                 {
@@ -936,11 +949,20 @@ extension OPillCountView {
             savedPath = PhotoFileManager.shared.saveImage(compositeImage)
         }
         
-        pillScanViewModel.addTransactionDetailToCurrentTransaction(
-            pillCount: Int32(cameraService.stableCount),
-            imagePath: savedPath,
-            type: pillScanViewModel.currentControlledStep.rawValue
-        )
+        if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue{
+            stockCountViewModel.updateCounts(
+                txnId: pillScanViewModel.currentTransaction?.txn_id ,
+                bottleQty: nil,
+                looseQty: cameraService.stableCount
+            )
+            pillScanViewModel.addCurrentOpenPillCount = cameraService.stableCount
+        }else{
+            pillScanViewModel.addTransactionDetailToCurrentTransaction(
+                pillCount: Int32(cameraService.stableCount),
+                imagePath: savedPath,
+                type: pillScanViewModel.currentControlledStep.rawValue
+            )
+        }
     }
     
     private func handleComplete() {
@@ -960,9 +982,9 @@ extension OPillCountView {
         
         // Last step for normal flowz
         if nextStep == nil {
-            if pillScanViewModel.currentTransaction?.is_from_pms != true {
+            if pillScanViewModel.currentTransaction?.is_from_pms != true && pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                 showNoteOption = true
-            } else {
+            } else  {
                 showConfirmCompletionPopup = true
             }
             return

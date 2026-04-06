@@ -719,14 +719,48 @@ final class PillsDataLocalStorage {
 
         print("[DB][SYNC] After update → isSynced =", txn.is_synced)
     }
+    
+    
+    // Update Txn count for stock counts
+    func updateCounts(
+        txnId: Int64?,
+        bottleQty: Int32? = nil,
+        looseQty: Int32? = nil
+    ) {
+        guard let txnId = txnId else {
+            print("txnId is nil")
+            return
+        }
+        
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("No transaction found for txnId \(txnId)")
+            return
+        }
 
+        //  Add to existing values instead of replacing
+        if let bottleQty {
+            txn.bottle_qty += bottleQty
+        }
+
+        if let looseQty {
+            txn.loose_qty += looseQty
+        }
+
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("Counts updated → bottle: \(txn.bottle_qty), loose: \(txn.loose_qty)")
+    }
+    
+    
     func clearAllLocalData() {
         
         let context = mainThreadContext
         let fileManager = FileManager.default
         
         do {
-            print("🧹 Clearing ALL local data...")
+            print("Clearing ALL local data...")
             
             // MARK: 1️⃣ Delete All Transaction Details
             let detailFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
@@ -751,7 +785,7 @@ final class PillsDataLocalStorage {
                     try? fileManager.removeItem(at: fileURL)
                 }
                 
-                print("🗂 All local image files removed.")
+                print("All local image files removed.")
             }
             
             // MARK: 5️⃣ Reset Transaction ID Counters
@@ -760,10 +794,10 @@ final class PillsDataLocalStorage {
             
             try context.save()
             
-            print("✅ All local data cleared successfully.")
+            print("All local data cleared successfully.")
             
         } catch {
-            print("❌ Failed to clear local data:", error)
+            print("Failed to clear local data:", error)
         }
     }
     

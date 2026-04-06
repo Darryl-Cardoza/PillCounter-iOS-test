@@ -66,7 +66,7 @@ struct StockTransactionListView: View {
 
                             Spacer()
 
-                            Text("\(txn.total)")
+                            Text("\(txn.openPills  + txn.stockBottles )")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(appColors.secondary)
                         }
@@ -79,7 +79,7 @@ struct StockTransactionListView: View {
                                 Text("Stock Bottles")
                                     .font(.system(size: 14, weight: .regular))
                                 Spacer()
-                                Text("\(txn.stockBottles ?? 0) pills")
+                                Text("\(txn.stockBottles) pills")
                                     .font(.system(size: 14, weight: .regular))
                             }
                             
@@ -89,7 +89,7 @@ struct StockTransactionListView: View {
                                 Text("Open Pills")
                                     .font(.system(size: 14, weight: .regular))
                                 Spacer()
-                                Text("\(txn.openPills ?? 0) pills")
+                                Text("\(txn.openPills) pills")
                                     .font(.system(size: 14, weight: .regular))
                             }
                         }

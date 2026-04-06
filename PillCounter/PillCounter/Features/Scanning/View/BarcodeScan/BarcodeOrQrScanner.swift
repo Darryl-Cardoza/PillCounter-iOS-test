@@ -278,7 +278,7 @@ struct QRBarcodeScannerView: View {
                     
                     KeyValueInfoCard(
                         title: "Quantity",
-                        value: stockCountVieModel.scannedDrugData?.quantity ?? ""
+                        value: String(stockCountVieModel.scannedDrugData?.quantity ?? 0 )
                     )
                 }
                 
@@ -451,6 +451,25 @@ struct QRBarcodeScannerView: View {
 //        }
 //    }
     
+//    private func handleStockCountAddAction() {
+//        Task {
+//            guard let batchId = stockCountVieModel.currentBatchId else {
+//                // Handle error or simply return early if batchId is nil
+//                // e.g. DLOG("Current Batch ID is nil, cannot add/update transaction.")
+//                return
+//            }
+//            stockCountVieModel.addOrUpdateTransactionForBatch(
+//                ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
+//                drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
+//                quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
+//                countType: .REGULAR,
+//                batchId: batchId
+//            )
+//            stockCountVieModel.showStockCountScannedDetails = false
+//        }
+//    }   
+//}
+    
     private func handleStockCountAddAction() {
         switch scannedBottleContainerStatus {
         case .sealed:
@@ -462,7 +481,7 @@ struct QRBarcodeScannerView: View {
                     rawValueFromBarcodeOrQr: scannedData,
                     ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
                     drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
-                    quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? "0") ?? 0),
+                    quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
                     countType: .REGULAR,
                     batchId: batchId,
                     containerStatus: .sealed
@@ -479,7 +498,7 @@ struct QRBarcodeScannerView: View {
                     rawValueFromBarcodeOrQr: scannedData,
                     ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
                     drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
-                    quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? "0") ?? 0),
+                    quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
                     countType: .REGULAR,
                     batchId: batchId,
                     containerStatus: .opened
@@ -1164,3 +1183,4 @@ func DLOG(_ msg: String) -> Bool {
     print("[Scanner] \(msg)")
     return true
 }
+

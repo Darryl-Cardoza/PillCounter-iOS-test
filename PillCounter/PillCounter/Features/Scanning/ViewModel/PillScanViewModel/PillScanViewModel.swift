@@ -80,6 +80,9 @@ class PillScanViewModel: ObservableObject {
 
 
     @Published var isNdcAdded: Bool = false
+    
+    // MARK: Stock Count State
+    @Published var addCurrentOpenPillCount: Int = 0
 
     
     // func to get the value from the barcode and check in the db

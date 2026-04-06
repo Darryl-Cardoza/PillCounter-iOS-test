@@ -21,8 +21,6 @@ extension PillScanViewModel{
         return nil
     }
     
-
-    
     
     // MARK: - Update Target Count
     func updateControlledTargetCount() {
@@ -47,7 +45,6 @@ extension PillScanViewModel{
             currentControlledTargetCount = target
 
         case .containerPending:
-
             let containerCount =
             pillDataLocalStorage.getTotalCountForStep(
                 txnId: txnId,
@@ -75,7 +72,7 @@ extension PillScanViewModel{
             if currentTransaction?.count_type == CountType.FIXED.rawValue {
                 return stepTotal == target
             } else {
-                return stepTotal > 0
+                return true  //stepTotal > 0
             }
             
         case .targetReverification:
@@ -100,7 +97,6 @@ extension PillScanViewModel{
     
     
     func getTotalCuntForCurrentStep() -> Int32 {
-
         guard let txnId = currentTransaction?.txn_id else {
             return 0
         }
@@ -123,7 +119,6 @@ extension PillScanViewModel{
     
     // Get which Controlled step is now
     func getControlledStep(pillCountTxn: PillCountTransactionEntity? = nil) {
-
         guard let txn = pillCountTxn else {
             return
         }

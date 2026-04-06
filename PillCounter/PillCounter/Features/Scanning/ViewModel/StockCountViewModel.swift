@@ -15,6 +15,11 @@ class StockCountViewModel: ObservableObject {
     let decoder = BarcodeAndQRDecoder()
     let controlledRepo  = ControlledRepository.shared
 
+    var currentUserId: String? {
+        // Assuming there's a way to get the current userId, you can set this accordingly in your app
+        // For now, returning a sample or nil
+        return nil
+    }
     
     // MARK: Stock Count State
     @Published var batchTransactions: [PillCountTransactionEntity] = []
@@ -104,9 +109,9 @@ class StockCountViewModel: ObservableObject {
                 id: txn.txn_id,
                 drugName: txn.drug?.drug_name ?? "Unknown",
                 ndc: txn.drug?.ndc ?? "",
-                total: Int(txn.target_count),
-                stockBottles: Int(txn.bottle_qty ?? "0"),
-                openPills: Int(txn.loose_qty ?? "0")
+                total: Int32(txn.target_count),
+                stockBottles: (txn.bottle_qty) * (txn.drug?.package_qty ?? 0),
+                openPills: txn.loose_qty
             )
         }
     }
@@ -140,7 +145,7 @@ class StockCountViewModel: ObservableObject {
                 drugName: localDrug.drug_name ?? "",
                 ndc: localDrug.ndc ?? "",
                 gtin: localDrug.gtin ?? "",
-                quantity: localDrug.package_qty ?? "0"
+                quantity: localDrug.package_qty
             )
 
             isLoading = false
@@ -163,7 +168,7 @@ class StockCountViewModel: ObservableObject {
                 drugName: response.data?.scannedNdc?.lookupName ?? "",
                 ndc: response.data?.scannedNdc?.packageNdc ?? "",
                 gtin:response.data?.scannedNdc?.packageNdc ?? "",
-                quantity: "30"
+                quantity: 0
             )
 
             isLoading = false
@@ -175,6 +180,28 @@ class StockCountViewModel: ObservableObject {
             showScanError = true
         }
     }
+    
+    
+    // Update Count in Txn
+    func updateCounts(
+        txnId: Int64?,
+        bottleQty: Int? = nil,
+        looseQty: Int? = nil
+    ) {
+        let bottle = bottleQty.map { Int32($0) }
+        let loose = looseQty.map { Int32($0) }
+
+        pillDataLocalStorage.updateCounts(
+            txnId: txnId,
+            bottleQty: bottle,
+            looseQty: loose
+        )
+        loadTransactions()
+    }
+    
+    
+ 
+    
     
     // Formatting Date
     func formatDate(_ timestamp: Int64?) -> String {
@@ -209,7 +236,7 @@ struct ScannedDrugData{
     let drugName: String
     let ndc: String
     let gtin: String
-    let quantity: String
+    let quantity: Int32
 }
 
 
@@ -217,7 +244,8 @@ struct StockTransaction: Identifiable, Hashable {
     let id: Int64
     let drugName: String
     let ndc: String
-    let total: Int
-    let stockBottles: Int?
-    let openPills: Int?
+    let total: Int32
+    let stockBottles: Int32
+    let openPills: Int32
 }
+

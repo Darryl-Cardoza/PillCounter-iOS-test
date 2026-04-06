@@ -31,7 +31,7 @@ struct CameraContentView: View {
                     .task {
                         cameraService.configureInitialOrientation()
                         cameraService.startObservingOrientation()
-
+                        
                         if isCameraEnabled {
                             cameraService.start()
                         }
@@ -45,7 +45,7 @@ struct CameraContentView: View {
                     }
                     .onDisappear { cameraService.stop() }
                     DetectionOverlay(cameraService: cameraService, currentStep: pillScanViewModel.currentControlledStep)
-                            .ignoresSafeArea()
+                        .ignoresSafeArea()
                     TrayOverlay(cameraService: cameraService)
                         .ignoresSafeArea()
                     //Toggle
@@ -65,12 +65,14 @@ struct CameraContentView: View {
                     //                        Spacer()
                     //                    }
                         .padding(.top, isLandscape ? 0 : 30)
-                    
-                    VStack {
-                        ControlledStepRow(
-                            activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
-                            currentStep: pillScanViewModel.currentControlledStep
-                        )
+                    if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue
+                    {
+                        VStack {
+                            ControlledStepRow(
+                                activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
+                                currentStep: pillScanViewModel.currentControlledStep
+                            )
+                        }
                     }
                     
                     VStack {
@@ -293,6 +295,8 @@ struct BottomControlsView: View {
     var targetCount: Int32 {
         if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
+        }else if(pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue){
+            return 0
         } else {
             return pillScanViewModel.currentTransaction?.target_count ?? 0
         }
@@ -301,9 +305,10 @@ struct BottomControlsView: View {
     var completeCount: Int {
         if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return Int( pillScanViewModel.getTotalCuntForCurrentStep())
-        }else{
-            return   pillScanViewModel
-                .getTotalPillCountOfCurrentTransaction()
+        }else if(pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue){
+            return pillScanViewModel.addCurrentOpenPillCount
+        }else {
+            return pillScanViewModel.getTotalPillCountOfCurrentTransaction()
         }
     }
     

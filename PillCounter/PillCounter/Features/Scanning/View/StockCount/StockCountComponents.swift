@@ -73,7 +73,6 @@ struct StockTransactionListView: View {
 
                     }
                     content: {
-
                         VStack(spacing: 12) {
                             HStack {
                                 Text("Stock Bottles")
@@ -134,6 +133,7 @@ struct StockTransactionListView: View {
             expandedId = id
         }
     }
+    
     private func toggleSelection(_ id: Int64) {
         if selectedIds.contains(id) {
             selectedIds.remove(id)

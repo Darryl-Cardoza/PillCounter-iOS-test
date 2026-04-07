@@ -622,7 +622,7 @@ struct CountHistoryView: View {
             if lastStep == nil && txn.is_ndc_verfied == false {
                 router.navigate(
                     to: .authentication(
-                        .login(.dashboard(.pillCount(.barcodeScanning)))
+                        .login(.dashboard(.pillCount(.barcodeScanning(.barcode))))
                     )
                 )
             } else {

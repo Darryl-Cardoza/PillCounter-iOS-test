@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import Firebase
 
 @main
 struct PillCounterApp: App {
 
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     // MARK: - ENVIRONMENT
     @Environment(\.scenePhase) private var scenePhase
 
@@ -31,7 +33,8 @@ struct PillCounterApp: App {
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised
 
-
+        FirebaseApp.configure()
+        UIApplication.shared.registerForRemoteNotifications()
         // Only bootstrap when secure
         if !compromised {
             RuntimeUnit.activateIfNeeded()

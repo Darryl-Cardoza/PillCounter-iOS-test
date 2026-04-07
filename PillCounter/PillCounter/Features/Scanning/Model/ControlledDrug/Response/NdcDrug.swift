@@ -4,6 +4,7 @@
 //
 //  Created by Bhushan Patil on 09/03/26.
 //
+import Foundation
 
 struct NdcDrug: Codable {
     let packageNdc: String
@@ -20,6 +21,7 @@ struct NdcDrug: Codable {
     let therapeuticFda: TherapeuticFDA?
     let image: DrugImage?
     let updatedAt: String?
+    let package: NdcPackage?
 
     enum CodingKeys: String, CodingKey {
         case packageNdc = "package_ndc"
@@ -36,5 +38,33 @@ struct NdcDrug: Codable {
         case therapeuticFda = "therapeutic_fda"
         case image
         case updatedAt = "updated_at"
+        case package
+    }
+}
+
+
+extension NdcDrug {
+
+    var safeQuantity: Int32 {
+        // Case 1: structured (best)
+        if let qty = package?.levels?.first?.contains?.quantity {
+            return Int32(qty)
+        }
+
+        // Case 2: fallback to level quantity
+        if let qty = package?.levels?.first?.quantity {
+            return Int32(qty)
+        }
+
+        // Case 3: fallback to description
+        if let desc = package?.description {
+            let numbers = desc
+                .components(separatedBy: CharacterSet.decimalDigits.inverted)
+                .compactMap { Int($0) }
+
+            return Int32(numbers.first ?? 0)
+        }
+
+        return 0
     }
 }

@@ -107,7 +107,6 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.secondaryBackground)
                     .onTapGesture {
-                        
                         // before navigating to the barcode scanning set the router value to fixed because we will need this value ahead for creating transactions.
                         router.selectedPillScanningType = .FIXED
                         
@@ -115,7 +114,7 @@ struct DashboardView: View {
                             to: .authentication(
                                 .login(
                                     .dashboard(
-                                        .pillCount(.barcodeScanning)))))
+                                        .pillCount(.barcodeScanning(.barcode))))))
                     }
                 
                 }
@@ -172,7 +171,7 @@ struct DashboardView: View {
                             PillCountingButton(
                                 iconName: "new_rx",
                                 title:
-                                    "\(userViewModel.regularCountTransactionPartialCount) \(NSLocalizedString("NDCREQ", comment: ""))",
+                                    "\(stockCountViewModel.totalNdcRequests) \(NSLocalizedString("NDCREQ", comment: ""))",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
@@ -343,7 +342,7 @@ struct DashboardView: View {
             // we will create a new batch and directly navigate to the barcode scanning screen for the first entry to be added in the batch.
             stockCountViewModel.createNewBatch()
             router.selectedPillScanningType = .REGULAR
-            router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning)))))
+            router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
             resetStockCountSelection()
         case .existingBatch:
             // navigate the list screen where we will have all the batches which are in the pending state.

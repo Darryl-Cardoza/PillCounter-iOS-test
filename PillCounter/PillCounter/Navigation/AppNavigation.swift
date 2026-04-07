@@ -55,9 +55,8 @@ struct AppNavigation: View {
                         CountHistoryView(title: "pending quick counts")
                             .navigationBarBackButtonHidden(true)
                         
-                    case .authentication(
-                        .login(.dashboard(.pillCount(.barcodeScanning)))):
-                        QRBarcodeScannerView()
+                    case .authentication(.login(.dashboard(.pillCount(.barcodeScanning(let scanType))))):
+                        QRBarcodeScannerView(scanType: scanType)
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(
@@ -107,14 +106,12 @@ struct AppNavigation: View {
                         .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))
                     ):
                         StockCountPartialBatchListScreen()
-//                        StockCountBatchDetail()
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(
                         .login(.dashboard(.pillCount(.stockCount(.stockCountPendingBatchListScreen))))
                     ):
                         StockCountRequestedList()
-//                        StockCountBatchDetail()
                             .navigationBarBackButtonHidden(true)
                     }
                 }

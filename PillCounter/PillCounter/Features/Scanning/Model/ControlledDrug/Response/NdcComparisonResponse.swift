@@ -66,3 +66,27 @@ struct TherapeuticFDA: Codable {
 struct DrugImage: Codable {
     let link: String?
 }
+
+
+struct NdcPackage: Codable {
+    let ndc: String?
+    let description: String?
+    let levels: [PackageLevel]? 
+}
+
+struct PackageLevel: Codable {
+    let type: String?
+    let name: String?
+    let quantity: Int?
+    let modifiers: String?
+    let material: String?
+    let contains: PackageContains?
+}
+
+struct PackageContains: Codable{
+    let type: String?
+    let name: String?
+    let quantity: Int?
+    let modifiers: [String]?
+    let material: String?
+}

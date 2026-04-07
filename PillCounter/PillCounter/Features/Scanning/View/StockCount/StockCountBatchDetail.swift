@@ -36,9 +36,7 @@ struct StockCountBatchDetail: View {
                     EmptyView()
                 },
                 headerActions: {
-                    
                     if isEditing {
-
                         // EDIT MODE
                         HStack {
 
@@ -183,6 +181,7 @@ struct StockCountBatchDetail: View {
                     .padding(.bottom, 20)
                 }
             }
+            
             // FIXED BUTTONS (ALWAYS BOTTOM)
             EqualWidthHStackButtons(spacing: 16) {
 
@@ -216,7 +215,7 @@ struct StockCountBatchDetail: View {
                             to: .authentication(
                                 .login(
                                     .dashboard(
-                                        .pillCount(.barcodeScanning)
+                                        .pillCount(.barcodeScanning(.stockCount))
                                     )
                                 )
                             )
@@ -279,6 +278,10 @@ extension StockCountBatchDetail{
             },
             onConfirm: {
                 showEndBatchPopUp = false
+                if let batchId = stockCountVieModel.currentBatchId {
+                    stockCountVieModel.completeBatch(batchId: batchId)
+                }
+                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
             }
         )
     }

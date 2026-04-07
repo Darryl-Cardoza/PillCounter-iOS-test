@@ -35,9 +35,6 @@ struct OPillCountView: View {
 
 
     @State private var showTransactionHistory: Bool = true
-
-
-
     @State private var isPaused: Bool = false
 
     @State private var showFullScreenImage = false
@@ -177,6 +174,7 @@ struct OPillCountView: View {
             cameraService.configureInitialOrientation()
             cameraService.startObservingOrientation()
             initializeTransaction()
+            pillScanViewModel.addCurrentOpenPillCount = 0
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -318,7 +316,7 @@ extension OPillCountView {
         )
     }
 
-    // Async task to fetch transaction data on load.
+//    // Async task to fetch transaction data on load.
     private func initializeTransaction() {
         Task {
             if pillScanViewModel.currentTransaction == nil {
@@ -581,6 +579,11 @@ extension OPillCountView {
                 if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                     router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
                 }else{
+                    stockCountViewModel.updateCounts(
+                        txnId: pillScanViewModel.currentTransaction?.txn_id ,
+                        bottleQty: nil,
+                        looseQty: pillScanViewModel.addCurrentOpenPillCount
+                    )
                     router.setRoot(
                         to: .authentication(
                             .login(
@@ -950,12 +953,12 @@ extension OPillCountView {
         }
         
         if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue{
-            stockCountViewModel.updateCounts(
-                txnId: pillScanViewModel.currentTransaction?.txn_id ,
-                bottleQty: nil,
-                looseQty: cameraService.stableCount
-            )
-            pillScanViewModel.addCurrentOpenPillCount = cameraService.stableCount
+//            stockCountViewModel.updateCounts(
+//                txnId: pillScanViewModel.currentTransaction?.txn_id ,
+//                bottleQty: nil,
+//                looseQty: cameraService.stableCount
+//            )
+            pillScanViewModel.addCurrentOpenPillCount += cameraService.stableCount
         }else{
             pillScanViewModel.addTransactionDetailToCurrentTransaction(
                 pillCount: Int32(cameraService.stableCount),
@@ -966,7 +969,6 @@ extension OPillCountView {
     }
     
     private func handleComplete() {
-        
         let stepTotal = Int(pillScanViewModel.getTotalCuntForCurrentStep())
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)

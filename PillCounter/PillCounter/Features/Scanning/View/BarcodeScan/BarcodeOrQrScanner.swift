@@ -65,7 +65,7 @@ struct QRBarcodeScannerView: View {
     @Environment(\.isLandscape) private var isLandscape
     @State private var stableIsLandscape: Bool = false
     @State private var landscapeDebounceTask: Task<Void, Never>? = nil
-
+   
     // UI States
     @State private var showScannedData = false
     @State private var showMannualEntryPopup: Bool = false
@@ -74,16 +74,15 @@ struct QRBarcodeScannerView: View {
     @State private var scannedData: String?
     @State private var manualEntryError: String?
     @State private var tempCapturedImage: UIImage?
-
     private let labelWidth: CGFloat = 110
 
     @State private var scanTimeoutTask: Task<Void, Never>?
     private let scanTimeoutSeconds: UInt64 = 6
 
     @FocusState private var focusedField: InputField?
-
-    
     @State private var scannedBottleContainerStatus: StockCountOptionContainerStatus = .sealed
+    
+    let scanType: ScanType
 
     var body: some View {
         ZStack {
@@ -113,6 +112,18 @@ struct QRBarcodeScannerView: View {
                             if cameraManager.scannedCode.isEmpty && cameraManager.isAuthorized {
                                 BarcodeScanBox()
                             }
+                            
+                            VStack {
+                                 Spacer()
+                                 VStack(spacing: 8) {
+                                     if let batchId = stockCountVieModel.currentBatchId {
+                                         PillCountInstructionOverlay(
+                                             text: String("Batch \(batchId)")
+                                         )
+                                     }
+                                 }
+                                 .padding(.bottom, 30)
+                            }
                         }
                     }
                 },
@@ -121,16 +132,14 @@ struct QRBarcodeScannerView: View {
                     EmptyView()
                 },
                 headerActions: {
-                    let instruction = ControlledStep.scan.displayText
+                    let instruction = scanType.instructionText
 
-                    if !instruction.isEmpty {
-                        HStack {
-                            Spacer()
-                            PillCountInstructionOverlay(text: instruction)
-                            Spacer()
-                        }
-                        .padding(.vertical, 10)
+                    HStack {
+                        Spacer()
+                        PillCountInstructionOverlay(text: instruction)
+                        Spacer()
                     }
+                    .padding(.vertical, 10)
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,  // We have a manual entry button instead
@@ -154,6 +163,7 @@ struct QRBarcodeScannerView: View {
         }
         .onAppear {
             // Reset ViewModel state so we are ready for a NEW transaction
+            stockCountVieModel.reset()
             pillScanViewModel.resetScanningState()
             cameraManager.configureInitialOrientation()
             cameraManager.startObservingOrientation()
@@ -161,8 +171,8 @@ struct QRBarcodeScannerView: View {
             showScannedData = false
             isFromScanning = false
             scannedData = nil
-
-            handleStepVoice(pillScanViewModel.currentControlledStep)
+            
+            handleStepVoice()
         }
         // MARK: - LIFECYCLE
         .task {
@@ -170,13 +180,12 @@ struct QRBarcodeScannerView: View {
             startScanTimeout()
         }
         .onDisappear {
-            //            cameraManager.stopSession()
             pillScanViewModel.ndcNumber = ""
             pillScanViewModel.selectedTransaction = nil
             pillScanViewModel.targetCount = ["", "", "", ""]
             pillScanViewModel.drugNameMannuallyEntered = ""
-            cameraManager.stopSession()
             pillScanViewModel.reset()
+            cameraManager.stopSession()
         }
         // MARK: - LOGIC HANDLERS
         .onChange(of: cameraManager.scannedCode) { _, newValue in
@@ -186,7 +195,15 @@ struct QRBarcodeScannerView: View {
             handleDrugFoundState(newValue)
         }
         .onChange(of: pillScanViewModel.isNdcAdded){oldValue, newValue in
-            router.navigateBack()
+            router.setRoot(
+                to: .authentication(
+                    .login(
+                        .dashboard(
+                            .pillCount(.stockCount(.stockCountBatchDetail))
+                        )
+                    )
+                )
+            )
         }
         .onChange(of: showMannualEntryPopup) { _, isShown in
             if isShown {
@@ -214,6 +231,9 @@ struct QRBarcodeScannerView: View {
         ) {
             showNdcEquivalencePopup
         }
+        .customPopup(isPresented: $stockCountVieModel.barcodeNotFound){
+            showBarcodeNotFoundPopup
+        }
         .customPopup(
             isPresented: $stockCountVieModel.showStockCountScannedDetails,
             dismissOnBackgroundTap: false
@@ -222,10 +242,8 @@ struct QRBarcodeScannerView: View {
         }
     }
 
-    private func handleStepVoice(_ step: ControlledStep) {
-        if step == .scan {
-            SpeechManager.shared.speak(step.displayText)
-        }
+    private func handleStepVoice() {
+        SpeechManager.shared.speak(scanType.instructionText)
     }
 
     private var scanInstructionOverlay: some View {
@@ -254,6 +272,7 @@ struct QRBarcodeScannerView: View {
             }
         }
     }
+    
     private var stockCountScannedDetailsPopUp: some View {
         VStack(spacing: 23) {
             ScrollView {
@@ -1158,6 +1177,24 @@ extension QRBarcodeScannerView {
         }
     }
 
+    private var showBarcodeNotFoundPopup : some View{
+        ConfirmationDialogue(
+            title: "",
+            message: "The scanned barcode is not recognized. Please try again.",
+            cancelButtonText: "Cancel",
+            confirmButtonText: "Rescan",
+            showSingleConfirmButton: true,
+            onCancel: {
+                restartFullScannerFlow()
+                stockCountVieModel.barcodeNotFound = false
+            },
+            onConfirm: {
+                restartFullScannerFlow()
+                stockCountVieModel.barcodeNotFound = false
+            }
+        )
+    }
+    
     private func restartFullScannerFlow() {
         showScannedData = false
         showMannualEntryPopup = false

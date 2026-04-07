@@ -18,11 +18,13 @@ extension PillScanViewModel {
         containerStatus: StockCountOptionContainerStatus,
         image: UIImage? = nil
     ) async {
-        
+                
         guard !ndc.isEmpty else { return }
         
         let decoded = decoder.decode(rawValueFromBarcodeOrQr ?? "")
         let gtin = decoded.gtin ?? ""
+        let expiryString = formatExpiry(decoded.expirationDate)
+    
 
         // MARK: 1️⃣ Check existing txn
         let existingTxn = pillDataLocalStorage
@@ -30,18 +32,20 @@ extension PillScanViewModel {
             .first {
                 $0.drug?.ndc == ndc &&
                 $0.drug?.package_qty == quantity &&
-                $0.is_deleted == false
+                $0.is_deleted == false &&
+                $0.expiry == expiryString &&
+                $0.lot_no == decoded.lotNumber
             }
 
         if let txn = existingTxn {
             
-            print(" Existing txn found → merging")
+            print("Existing txn found → merging")
 
             // MARK: 2️⃣ Update counts
             pillDataLocalStorage.updateCounts(
                 txnId: txn.txn_id,
                 bottleQty: containerStatus == .sealed ? 1 : nil,
-                looseQty: containerStatus == .opened ? quantity : nil
+                looseQty: containerStatus == .opened ? 0 : nil
             )
 
             // MARK: 3️⃣ Update current transaction (IMPORTANT FIX)
@@ -52,7 +56,7 @@ extension PillScanViewModel {
 
             // MARK: 4️⃣ UI Updates
             handlePostScanUI(containerStatus: containerStatus)
-            getAllTransactionDetailsOfTheCurrentTransaction()
+//            getAllTransactionDetailsOfTheCurrentTransaction()
 
             return
         }
@@ -67,7 +71,8 @@ extension PillScanViewModel {
                     ndc: ndc,
                     gtin: gtin,
                     drugId: newId,
-                    drugName: drugName
+                    drugName: drugName,
+                    packageQty: quantity
                 )
                 return newId
             }
@@ -78,35 +83,58 @@ extension PillScanViewModel {
             drugId: drugIdToUse,
             countType: countType,
             barcodeImage: image,
-            targetCount: quantity,
             drugName: drugName,
-            batchId: batchId
+            batchId: batchId,
+            expirationDate: expiryString,
+            lotNumber: decoded.lotNumber
         )
 
         // MARK: 7️⃣ Fetch newly created txn
-        guard let newTxn = pillDataLocalStorage
+        let allTxns = pillDataLocalStorage
             .fetchTransactionsByBatch(batchId: batchId)
-            .last else { return }
+            .filter { $0.is_deleted == false }
+
+        // pick latest using txn_id (reliable)
+        guard let latestTxn = allTxns.max(by: { $0.txn_id < $1.txn_id }) else {
+            print("Failed to get latest txn")
+            return
+        }
 
         // MARK: 8️⃣ Set initial counts
         pillDataLocalStorage.updateCounts(
-            txnId: newTxn.txn_id,
+            txnId: latestTxn.txn_id,
             bottleQty: containerStatus == .sealed ? 1 : nil,
-            looseQty: containerStatus == .opened ? quantity : nil
+            looseQty: containerStatus == .opened ? 0 : nil
         )
 
         // MARK: 9️⃣ Update current txn
         if let updatedTxn = pillDataLocalStorage
-            .fetchPillCountTransactionByTransactionId(txnId: newTxn.txn_id) {
+            .fetchPillCountTransactionByTransactionId(txnId: latestTxn.txn_id) {
+
             self.currentTransaction = updatedTxn
+
+            print("New txn set:", updatedTxn.txn_id)
+        } else {
+            print("New txn not found")
         }
 
         // MARK: 🔟 UI Updates
         handlePostScanUI(containerStatus: containerStatus)
-        getAllTransactionDetailsOfTheCurrentTransaction()
+//        getAllTransactionDetailsOfTheCurrentTransaction()
 
-        print("🆕 Batch Txn Created → NDC:", ndc, "Batch:", batchId)
+        print("Batch Txn Created → NDC:", ndc, "Batch:", batchId)
     }
+ 
+    func formatExpiry(_ date: Date?) -> String? {
+        guard let date else { return nil }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+
+        return formatter.string(from: date)
+    }
+    
     private func handlePostScanUI(containerStatus: StockCountOptionContainerStatus) {
         if containerStatus == .sealed {
             isNdcAdded = true
@@ -117,6 +145,6 @@ extension PillScanViewModel {
     
     func reset(){
         isNdcAdded = false
+        isDrugFound = false
     }
-    
 }

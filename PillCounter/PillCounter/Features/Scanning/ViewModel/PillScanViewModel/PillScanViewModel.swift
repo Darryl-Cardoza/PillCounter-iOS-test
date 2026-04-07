@@ -351,7 +351,9 @@ class PillScanViewModel: ObservableObject {
         isControlled:Bool? = nil,
         targetCount: Int32? = nil,
         drugName: String? = nil,
-        batchId: Int64? = nil
+        batchId: Int64? = nil,
+        expirationDate: String? = nil,
+        lotNumber: String? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.
@@ -389,7 +391,8 @@ class PillScanViewModel: ObservableObject {
             drugName: drugName,
             targetCount: targetCount,
             isControlled: isControlled,
-            // temporary true
+            expirationDate: expirationDate,
+            lotNumber: lotNumber
         )
     
 

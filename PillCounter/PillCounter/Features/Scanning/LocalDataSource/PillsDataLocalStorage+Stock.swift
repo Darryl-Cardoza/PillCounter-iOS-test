@@ -13,7 +13,7 @@ extension  PillsDataLocalStorage {
     func createBatch(
         bucketId: String? = nil,
         note: String? = nil,
-        status: String = "ACTIVE"
+        status: String = "partial"
     ) -> Int64 {
         
         let batchId = Int64(Date().timeIntervalSince1970 * 1000)
@@ -49,19 +49,17 @@ extension  PillsDataLocalStorage {
     func fetchAllBatches() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> =
             BatchCountEntity.fetchRequest()
-
-        request.predicate = NSPredicate(format: "is_deleted == false")
-
+        request.predicate = NSPredicate(
+            format: "is_deleted == false AND status == %@",
+            "partial"
+        )
         request.sortDescriptors = [
             NSSortDescriptor(key: "start_date_time", ascending: false)
         ]
-
         return (try? mainThreadContext.fetch(request)) ?? []
     }
     
-    
     func fetchTransactionsByBatch(batchId: Int64) -> [PillCountTransactionEntity] {
-
         let request: NSFetchRequest<PillCountTransactionEntity> =
             PillCountTransactionEntity.fetchRequest()
 
@@ -73,10 +71,6 @@ extension  PillsDataLocalStorage {
         request.sortDescriptors = [
             NSSortDescriptor(key: "created_at", ascending: false)
         ]
-
         return (try? mainThreadContext.fetch(request)) ?? []
     }
-    
-    
-    
 }

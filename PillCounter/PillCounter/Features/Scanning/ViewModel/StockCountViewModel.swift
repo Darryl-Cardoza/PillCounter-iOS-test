@@ -35,6 +35,8 @@ class StockCountViewModel: ObservableObject {
     @Published var showScanError: Bool = false
     @Published var isLoading:Bool = false
     
+    @Published var barcodeNotFound: Bool = false
+    
     
     // Creating New Batch in Database
     func createNewBatch() {
@@ -61,8 +63,8 @@ class StockCountViewModel: ObservableObject {
             return
         }
         self.regularCountTransactions =
-        pillDataLocalStorage.fetchAllTransactionFixedOrRegularPartial(
-                for: user, countType: countType)
+        pillDataLocalStorage.fetchAllTransactionFixedOrRegularPartialFromPms(
+            for: user, countType: countType)
 
         self.totalNdcRequests = 0
 
@@ -164,20 +166,24 @@ class StockCountViewModel: ObservableObject {
             let response = try await controlledRepo
                 .getControlledDrugInfo(ndcValidationRequest: request)
 
+            let ndcData = response.data?.scannedNdc ?? response.data?.targetNdc
+
+            
             scannedDrugData = ScannedDrugData(
                 drugName: response.data?.scannedNdc?.lookupName ?? "",
                 ndc: response.data?.scannedNdc?.packageNdc ?? "",
                 gtin:response.data?.scannedNdc?.packageNdc ?? "",
-                quantity: 0
+                quantity: ndcData?.safeQuantity ?? 0
             )
 
             isLoading = false
             showStockCountScannedDetails = true
-            print("Fetched response from API")
+            print("Fetched response from API\(response)")
         } catch {
             scannedDrugData = nil
             isLoading = false
             showScanError = true
+            barcodeNotFound = true
         }
     }
     
@@ -201,7 +207,26 @@ class StockCountViewModel: ObservableObject {
     
     
  
-    
+    func completeBatch(batchId: Int64) {
+        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
+
+        for txn in txns {
+            pillDataLocalStorage.updateTransactionStatus(
+                txnId: txn.txn_id,
+                newStatus: .COMPLETED
+            )
+        }
+
+        pillDataLocalStorage.updateBatchStatus(
+            batchId: batchId,
+            status: "completed"
+        )
+
+        // reload UI
+        loadTransactions()
+
+        print("Batch \(batchId) marked as COMPLETED")
+    }
     
     // Formatting Date
     func formatDate(_ timestamp: Int64?) -> String {

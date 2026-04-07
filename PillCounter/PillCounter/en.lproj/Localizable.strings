@@ -119,4 +119,18 @@
 "END_BATCH" = "END BATCH";
 
 
+//MARK: CONTROLLED STEP
+"CONTROLLED_SCAN" = "Scan Container QR Code";
+"CONTROLLED_CONTAINER_INITIATE" = "Count all pills from container";
+"CONTROLLED_TARGET_VERIFICATION" = "Count Prescribed quantity";
+"CONTROLLED_TARGET_REVERIFICATION" = "Recount Prescribed Quantity.";
+"CONTROLLED_VIAL" = "Take picture of the counted Pills Vial";
+"CONTROLLED_CONTAINER_PENDING" = "Count all remaining Pills from Container";
+"SCAN_BARCODE" = "Scan container QR code";
+"SCAN_STOCK_COUNT_BARCODE" = "Scan Stock Bottle";
+"SCAN_RX_LABEL_BARCODE" = "Scan Rx Label";
+
 // MARK: ERROR
+
+
+

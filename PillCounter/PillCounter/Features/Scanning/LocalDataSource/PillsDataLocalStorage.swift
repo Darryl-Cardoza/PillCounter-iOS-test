@@ -48,7 +48,7 @@ final class PillsDataLocalStorage {
         gtin: String = "",
         drugId: Int64,
         drugName: String,
-        drugType: String? = nil,
+        drugType: String = "",
         packageQty: Int32 = 0
     ) {
         let entity = fetchOrCreateDrug(ndc: ndc, drugId: drugId)
@@ -74,8 +74,11 @@ final class PillsDataLocalStorage {
         let entity = DrugMasterEntity(context: mainThreadContext)
         entity.drug_id = drugId
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
-        return entity
-    }
+        entity.drug_name = drugName
+        entity.ndc = ndc
+        entity.gtin = gtin
+        entity.drug_type = drugType
+        entity.package_qty = packageQty
 
     /// Remove duplicate DrugMasterEntity rows that share the same ndc,
     /// keeping only the first (oldest created_at).
@@ -149,9 +152,7 @@ final class PillsDataLocalStorage {
         targetCount: Int32? = nil,
         isControlled: Bool? = nil,
         expirationDate: String? = nil,
-        lotNumber: String? = nil,
-        rxNo: String? = nil,
-        bucketId: String? = nil
+        lotNumber: String? = nil
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -193,7 +194,6 @@ final class PillsDataLocalStorage {
       
         entity.expiry = expirationDate
         entity.lot_no = lotNumber
-        entity.bucket_id = bucketId
         // finally save the transaction in core data.
         CoreDataManager.shared.save(context: mainThreadContext)
         debugPrintAllTransactions()
@@ -789,15 +789,14 @@ final class PillsDataLocalStorage {
         print("[DB][SYNC] After update → isSynced =", txn.is_synced)
     }
     
-    func updateBatchStatus(batchId: Int64, status: CountStatus) {
+    func updateBatchStatus(batchId: Int64, status: String) {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
 
         request.predicate = NSPredicate(format: "batch_id == %lld", batchId)
 
         if let batch = try? mainThreadContext.fetch(request).first {
-            batch.status = status.rawValue
+            batch.status = status
             CoreDataManager.shared.save(context: mainThreadContext)
-            transactionsDidChange.send()
 
             print("Batch status updated to \(status)")
         } else {
@@ -1168,9 +1167,6 @@ final class PillsDataLocalStorage {
                        package quantity \(txn.drug?.package_qty ?? 0)
                        expirary \(txn.expiry)
                        lotno \(txn.lot_no)
-                       bucket \(txn.bucket_id ?? "")
-                       drugTyp \(txn.drug?.drug_type ?? "")
-                       ndc\(txn.drug?.ndc)
                     ---------------------------------
                     ------------------
                     """)

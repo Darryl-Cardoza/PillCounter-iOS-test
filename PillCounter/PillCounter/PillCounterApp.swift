@@ -34,7 +34,7 @@ struct PillCounterApp: App {
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised
 
-//        FirebaseApp.configure()
+        FirebaseApp.configure()
         UIApplication.shared.registerForRemoteNotifications()
         // Only bootstrap when secure
         if !compromised {

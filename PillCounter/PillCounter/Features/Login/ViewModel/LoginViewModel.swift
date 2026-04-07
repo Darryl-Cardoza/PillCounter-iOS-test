@@ -189,9 +189,13 @@ class LoginViewModel: ObservableObject {
 
         do {
             defer { isLoading = false }
+//            let fcmToken: String
 
-//            let fcmToken = await FCMManager.shared.getToken()
-
+//            if let existing = FCMManager.shared.currentToken {
+//                fcmToken = existing
+//            } else {
+//                fcmToken = await FCMManager.shared.getToken()
+//            }
             let verifyOTPresult = try await loginrepo.verifyOTP(
                 email: userEmail,
                 otp: otpString,

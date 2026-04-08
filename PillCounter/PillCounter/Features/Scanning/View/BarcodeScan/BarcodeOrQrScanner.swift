@@ -365,7 +365,18 @@ struct QRBarcodeScannerView: View {
                         // 1. create a batch
                         // 2. create a transaction for the current scanned bottle.
                         // 3. add the current transaction to the current batch that has been created or the one which are working on.
-                        handleStockCountAddAction()
+            
+                        if pillScanViewModel.selectedTransaction?.is_from_pms == true{
+                            if let txn = pillScanViewModel.selectedTransaction {
+                                pillScanViewModel.updatePmsTxnCount(
+                                    txn: txn,
+                                    containerStatus: scannedBottleContainerStatus,
+                                    scannedQty: Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)
+                                )
+                            }
+                        } else {
+                            handleStockCountAddAction()
+                        }
                     }
                 )
             }
@@ -579,12 +590,13 @@ extension QRBarcodeScannerView {
                         if pillScanViewModel.selectedTransaction?.is_from_pms
                             == true
                         {
-                            pillScanViewModel.scnnedPmsPill(
-                                rawValueFromBarcodeOrQr: newValue,
-                                countType: router.selectedPillScanningType
-                                    ?? .FIXED,
-                                image: tempCapturedImage
-                            )
+//                            pillScanViewModel.scnnedPmsPill(
+//                                rawValueFromBarcodeOrQr: newValue,
+//                                countType: router.selectedPillScanningType
+//                                    ?? .FIXED,
+//                                image: tempCapturedImage
+//                            )
+                            await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                         } else {
                             
 //                            await pillScanViewModel.scannedPill(
@@ -594,7 +606,6 @@ extension QRBarcodeScannerView {
 //                                image: tempCapturedImage
 //                            )
 //
-                            
                             await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                         }
                     }

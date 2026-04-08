@@ -21,11 +21,14 @@ struct StockCountRequestedList: View {
 
     @EnvironmentObject private var stockViewModel: StockCountViewModel
     @EnvironmentObject private var userViewModel: UserViewModel
+    @EnvironmentObject private var pillScanViewModel: PillScanViewModel
 
-    @State private var selectedBatchId: Int64?
+    @State private var selectedTxnId: Int64?
 
     @State private var pendingAction: TransactionAction?
-
+    @State private var showMenuOptions: Bool = false
+    @State private var selectedTransactionDetailOption:
+        TransactionDetailOption = .resume
 
 
 
@@ -65,12 +68,15 @@ struct StockCountRequestedList: View {
             
             //  ROW TAP
             onRowTap: { batch in
-                // TODO: Navigate to batch details
+                selectedTxnId = batch.txn_id
+                stockViewModel.currentBatchId = nil
+                handleResume()
             },
             
             //  MENU TAP (IMPORTANT)
             onMenuTap: { batch in
-                selectedBatchId = batch.batch_id
+                selectedTxnId = batch.txn_id
+                
             },
             
             //  DELETE (MULTI)
@@ -100,6 +106,9 @@ struct StockCountRequestedList: View {
                 commonConfirmationDialog
             }
         }
+        .customPopup(isPresented: $showMenuOptions) {
+            menuOptions
+        }
     }
     
     private func batchRow(
@@ -109,7 +118,6 @@ struct StockCountRequestedList: View {
     ) -> some View {
 
         HStack(spacing: 16) {
-
             if isEditing {
                 PillCounterCheckbox(
                     isChecked: Binding(
@@ -131,11 +139,11 @@ struct StockCountRequestedList: View {
             )
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(txn.drug?.drug_name ?? "Unknown Drug")
+                Text("NDC \(txn.drug?.ndc ?? "123456789")")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(appColors.text)
 
-                Text(String(txn.created_at))
+                Text(getCurrentFormattedDate())
                     .font(.system(size: 12))
                     .foregroundColor(appColors.text.opacity(0.7))
             }
@@ -147,7 +155,8 @@ struct StockCountRequestedList: View {
 
             if !isEditing {
                 Button {
-                    selectedBatchId = txn.txn_id
+                    selectedTxnId = txn.txn_id
+                    showMenuOptions = true
                 } label: {
                     Image(systemName: "ellipsis")
                         .rotationEffect(.degrees(90))
@@ -160,6 +169,75 @@ struct StockCountRequestedList: View {
         .cornerRadius(10)
     }
 
+    
+    private func handleResume() {
+        guard let txnId = selectedTxnId,
+            let txn = userViewModel.getTransactionEntity(by: txnId)
+        else {
+            print("Resume failed")
+            return
+        }
+
+        userViewModel.currentTransactionTxnId = txnId
+        stockViewModel.selectedTransaction = txn.is_from_pms ? txn : nil
+        pillScanViewModel.selectedTransaction = txn
+
+        router.navigate(
+            to: .authentication(
+                .login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))
+            )
+        )
+    }
+    
+    func getCurrentFormattedDate() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd-MM-yyyy HH:mm a"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.string(from: Date())
+    }
+}
+
+
+// MARK: POPUP
+extension StockCountRequestedList {
+    
+    private var menuOptions: some View {
+        MenuOption(
+            options: TransactionDetailOption.allCases,
+            selectedOption: $selectedTransactionDetailOption,
+            isPresented: $showMenuOptions,
+            label: { $0.rawValue },
+            onSelect: { option in
+                switch option {
+                    case .resume:
+                        stockViewModel.currentBatchId = nil
+                        router.navigate(
+                            to: .authentication(
+                                .login(
+                                    .dashboard(
+                                        .pillCount(.barcodeScanning(ScanType.stockCount))
+                                    )
+                                )
+                            )
+                        )
+                    case .delete:
+                        if let id = selectedTxnId {
+                            showMenuOptions = false
+                            pendingAction = .delete(id)
+                        }
+                    case .forceComplete:
+                        if let id = selectedTxnId {
+                            showMenuOptions = false
+                            pendingAction = .delete(id)
+                        }
+                    
+                }
+            }
+        )
+    }
+
+    
+    
     private var commonConfirmationDialog: some View {
         ConfirmationDialogue(
             title: dialogTitle,
@@ -192,10 +270,7 @@ struct StockCountRequestedList: View {
             
         case .multiDelete(let ids):
             // TODO: Delete multiple batches API
-            
-            withAnimation {
-//                /*tx*/.removeAll { ids.contains($0.id) }
-            }
+            print("Multi Delete \(ids)")
         }
     }
 
@@ -236,4 +311,3 @@ struct StockCountRequestedList: View {
         }
     }
 }
-

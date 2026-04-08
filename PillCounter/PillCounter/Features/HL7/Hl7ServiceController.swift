@@ -173,11 +173,15 @@ final class Hl7ServiceController: ObservableObject {
     }
 
     // MARK: - Send Queue Logic
-
     private func resendPendingHl7Transactions() {
+        print("🔄 [HL7] Resend Pending Transactions START")
+
         let pending = pillDataLocalStorage.getPendingHl7Txn()
+        print("📦 [HL7] Pending Count:", pending.count)
+        print("📦 [HL7] Pending Txns:", pending.map { $0.txn_id })
 
         guard !pending.isEmpty else {
+            print("⚠️ [HL7] No pending transactions found")
             return
         }
 
@@ -186,20 +190,28 @@ final class Hl7ServiceController: ObservableObject {
         currentMessageId = nil
         retryCount = 0
 
+        print("✅ [HL7] Queue initialized. Starting send...")
+
         sendNextIfPossible()
     }
 
     private func sendNextIfPossible() {
+        print("➡️ [HL7] Attempting to send next transaction")
+
         // Already waiting for an ACK
         guard currentTxn == nil else {
+            print("⏳ [HL7] Waiting for ACK. Current txn in progress:", currentTxn?.txn_id ?? -1)
             return
         }
 
         guard !sendingQueue.isEmpty else {
+            print("✅ [HL7] Queue empty. Nothing to send")
             return
         }
 
         let txn = sendingQueue.first!
+        print("📤 [HL7] Next txn to send:", txn.txn_id)
+
         sendTransaction(txn)
     }
 
@@ -210,7 +222,13 @@ final class Hl7ServiceController: ObservableObject {
         let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
         currentMessageId = messageId
 
+        print("🚀 [HL7] Sending Transaction")
+        print("🆔 [HL7] txn_id:", txn.txn_id)
+        print("🔁 [HL7] Retry count:", retryCount)
+        print("🧾 [HL7] Message ID:", messageId)
+
         guard let user = txn.user else {
+            print("❌ [HL7] Missing user for txn:", txn.txn_id)
             return
         }
 
@@ -219,27 +237,45 @@ final class Hl7ServiceController: ObservableObject {
             messageId: messageId,
             user: user
         )
+
+        print("📡 [HL7] HL7 Payload:", hl7)
+
         hl7Manager?.sendClientHL7(hl7)
+        print("📤 [HL7] Message sent to server")
     }
 
     private func handleSendFailure() {
-        guard let txn = currentTxn else { return }
+        guard let txn = currentTxn else {
+            print("❌ [HL7] handleSendFailure called but no currentTxn")
+            return
+        }
+
+        print("⚠️ [HL7] Send failure for txn:", txn.txn_id)
+        print("🔁 [HL7] Current retry:", retryCount, "/", maxRetries)
 
         if retryCount < maxRetries {
+            print("🔄 [HL7] Retrying txn:", txn.txn_id)
             sendTransaction(txn)
             return
         }
 
+        print("❌ [HL7] Max retries reached for txn:", txn.txn_id)
+        print("🔀 [HL7] Moving txn to end of queue")
+
         // Max retries exhausted → move to end of queue, try others
         sendingQueue.removeFirst()
         sendingQueue.append(txn)
+
+        print("📦 [HL7] Updated Queue:", sendingQueue.map { $0.txn_id })
+
         currentTxn = nil
         currentMessageId = nil
         retryCount = 0
 
+        print("➡️ [HL7] Trying next transaction")
+
         sendNextIfPossible()
     }
-
     private func resetQueueState() {
         sendingQueue.removeAll()
         currentTxn = nil

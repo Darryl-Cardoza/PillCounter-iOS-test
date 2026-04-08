@@ -24,7 +24,6 @@ extension PillScanViewModel {
             switch inboundType {
             case .FIXED:
                  await createFixedHl7Transaction(message:message, inboundType: .FIXED, callback: callback)
-
             case .REGULAR:
                  await createRegularHl7Transaction(message:message, inboundType: .REGULAR, callback: callback)
             }
@@ -44,7 +43,6 @@ extension PillScanViewModel {
             return
         }
 
-        let orderId = order.placerOrderId
 
         guard !message.medications.isEmpty else {
             callback?(false)
@@ -62,18 +60,20 @@ extension PillScanViewModel {
             // RXE-3
             let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
 
+            let orderId = order.placerOrderId
             
-
             await processHl7DrugAndCreateTransaction(
                 ndc: ndc,
                 drugName: drugName,
                 countType: inboundType,
-                targetCount: targetCount
+                targetCount: targetCount,
+                rxNo: orderId
             )
         }
 
         callback?(true)
     }
+    
     
     @MainActor
     private func createRegularHl7Transaction(
@@ -81,27 +81,32 @@ extension PillScanViewModel {
         inboundType: CountType,
         callback: HL7SimpleCallback? = nil
     ) async {
-    
+
         guard let inventory = message.inventoryItems.first else {
-            print("Regular Count: No RXE medication found")
+            print("Regular Count: No inventory found")
+            callback?(false)
             return
         }
 
-        let ndc = inventory.substanceCode ?? ""
-        let drugName = inventory.description
-          
-        print("Regular Count Drug Info: \(ndc), \(drugName)")
+        // FIXED MAPPING (based on your HL7 format)
+        let ndc = inventory.substanceStatusCode ?? ""
+        let drugName = inventory.substanceStatusDescription ?? "Unknown Drug"
+        let targetCount = Int32(inventory.substanceTypeCode ?? "") ?? 0
+
+        print("Parsed INV → NDC: \(ndc), Name: \(drugName), Count: \(targetCount)")
 
         await processHl7DrugAndCreateTransaction(
             ndc: ndc,
             drugName: drugName,
-            countType: inboundType
+            countType: inboundType,
+            targetCount: targetCount,
+            rxNo: message.order?.placerOrderId
         )
+
         callback?(true)
     }
 
 
-    
     private func classifyInboundMessage(
         _ message: CompleteHL7Message
     ) -> CountType? {
@@ -112,7 +117,7 @@ extension PillScanViewModel {
         }
 
         if message.messageType == "INR",
-           message.triggerEvent == "U06",
+           message.triggerEvent == "U05",
            !message.inventoryItems.isEmpty {
             return .REGULAR
         }
@@ -125,7 +130,8 @@ extension PillScanViewModel {
         ndc: String,
         drugName: String,
         countType: CountType,
-        targetCount: Int32? = nil
+        targetCount: Int32? = nil,
+        rxNo: String? = nil
     ) async {
 
         print("🧾 HL7 Drug Processing → NDC: \(ndc), Name: \(drugName)")
@@ -153,9 +159,9 @@ extension PillScanViewModel {
             countType: countType,
             isComingFromPms: true,
             isControlled: true,
-
             targetCount: targetCount,
-            drugName: drugName
+            drugName: drugName,
+            rxNo: rxNo
         )
 
         // 4️⃣ Refresh transaction details

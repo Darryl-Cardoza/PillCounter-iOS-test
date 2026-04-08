@@ -9,63 +9,32 @@ import Foundation
 import FirebaseMessaging
 import UIKit
 
-final class FCMManager: NSObject {
-    
+class FCMManager {
     static let shared = FCMManager()
-    
-    private var continuation: CheckedContinuation<String, Never>?
-    
-    private override init() {
-        super.init()
-        Messaging.messaging().delegate = self
-    }
-    
-    var currentToken: String? {
-        UserDefaults.standard.string(forKey: "fcm_token")
-    }
-    
-    // MARK: - Public async function
-    func getToken() async -> String {
-        
-        // 1. If already stored → return immediately
-        if let token = UserDefaults.standard.string(forKey: "fcm_token") {
-            return token
-        }
-        
-        // 2. Try direct fetch (fast path)
-        if let token = try? await Messaging.messaging().token() {
-            saveToken(token)
-            return token
-        }
-        
-        // 3. Wait for delegate callback
-        return await withCheckedContinuation { continuation in
-            self.continuation = continuation
-        }
-    }
-    
-    private func saveToken(_ token: String) {
-        UserDefaults.standard.set(token, forKey: "fcm_token")
-    }
-}
 
-// MARK: - MessagingDelegate
-extension FCMManager: MessagingDelegate {
-    
-    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        
-        guard let token = fcmToken else { return }
-        
-        print("FCM Token:", token)
-        
-        saveToken(token)
-        
-        // Resume async call if waiting
+    private init() {}
+
+    private var continuation: CheckedContinuation<String, Never>?
+
+    var currentToken: String?
+
+    // Called when token is received
+    func updateToken(_ token: String) {
+        currentToken = token
         continuation?.resume(returning: token)
         continuation = nil
     }
+
+    // Wait for token if not available
+    func getToken() async -> String {
+        if let token = currentToken {
+            return token
+        }
+
+        return await withCheckedContinuation { cont in
+            self.continuation = cont
+        }
+    }
 }
-
-
 
 

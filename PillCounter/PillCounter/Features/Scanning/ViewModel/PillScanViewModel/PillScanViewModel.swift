@@ -353,7 +353,8 @@ class PillScanViewModel: ObservableObject {
         drugName: String? = nil,
         batchId: Int64? = nil,
         expirationDate: String? = nil,
-        lotNumber: String? = nil
+        lotNumber: String? = nil,
+        rxNo:String? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.

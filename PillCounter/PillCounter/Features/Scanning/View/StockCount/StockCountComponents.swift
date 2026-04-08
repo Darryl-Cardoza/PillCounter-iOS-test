@@ -49,7 +49,6 @@ struct StockTransactionListView: View {
                             set: { expandedId = $0 ? txn.id : nil }
                         )
                     ) {
-
                         // HEADER
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
@@ -57,11 +56,19 @@ struct StockTransactionListView: View {
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(appColors.text)
 
-                                Text(txn.ndc)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(
-                                        appColors.text.opacity(0.7)
-                                    )
+                                HStack(spacing: 15){
+                                    Text(txn.ndc)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(
+                                            appColors.text.opacity(0.7)
+                                        )
+                                    
+                                     if !txn.expiray.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                         Text("Expiry \(txn.expiray)")
+                                             .font(.system(size: 12))
+                                             .foregroundColor(appColors.text.opacity(0.7))
+                                     }
+                                }
                             }
 
                             Spacer()
@@ -70,7 +77,6 @@ struct StockTransactionListView: View {
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(appColors.secondary)
                         }
-
                     }
                     content: {
                         VStack(spacing: 12) {

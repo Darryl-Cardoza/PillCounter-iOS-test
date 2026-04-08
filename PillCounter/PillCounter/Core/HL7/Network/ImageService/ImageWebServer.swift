@@ -84,18 +84,26 @@ class ImageWebServer {
     
     private func configureTLS() throws -> NWProtocolTLS.Options {
         guard let identity = TlsImageKeystoreUtil.shared.ensureIdentity() else {
-            throw NSError(domain: "ImageWebServer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get TLS identity"])
+            throw NSError(domain: "TLS", code: -1, userInfo: [NSLocalizedDescriptionKey: "No identity"])
         }
         
-        let tlsOptions = NWProtocolTLS.Options()
+        let options = NWProtocolTLS.Options()
         
-        sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-        sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv13)
+        sec_protocol_options_set_min_tls_protocol_version(options.securityProtocolOptions, .TLSv12)
         
-        // Set identity
-        sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, sec_identity_create(identity)!)
+        sec_protocol_options_set_local_identity(
+            options.securityProtocolOptions,
+            sec_identity_create(identity)!
+        )
         
-        return tlsOptions
+        //  IMPORTANT (helps debugging + compatibility)
+        sec_protocol_options_set_verify_block(
+            options.securityProtocolOptions,
+            { _, _, complete in complete(true) },
+            DispatchQueue.global()
+        )
+        
+        return options
     }
     
     // MARK: - Connection Handling

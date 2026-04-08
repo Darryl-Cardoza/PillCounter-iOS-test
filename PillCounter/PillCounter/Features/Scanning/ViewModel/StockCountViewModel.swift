@@ -37,21 +37,18 @@ class StockCountViewModel: ObservableObject {
     
     @Published var barcodeNotFound: Bool = false
     
+    @Published var selectedTransaction: PillCountTransactionEntity? = nil
     
     // Creating New Batch in Database
     func createNewBatch() {
-        let batchId = Int64(Date().timeIntervalSince1970 * 1000)
-
+        let batchId = Int64(Date().timeIntervalSince1970 * 1000) 
         let context = pillDataLocalStorage.mainThreadContext
-
         let batch = BatchCountEntity(context: context)
         batch.batch_id = batchId
         batch.start_date_time = batchId
         batch.status = "partial"
         batch.is_deleted = false
-
         CoreDataManager.shared.save(context: context)
-
         currentBatchId = batchId // Get current batch
         updateBatchCount() //Update count of batch
     }
@@ -113,7 +110,8 @@ class StockCountViewModel: ObservableObject {
                 ndc: txn.drug?.ndc ?? "",
                 total: Int32(txn.target_count),
                 stockBottles: (txn.bottle_qty) * (txn.drug?.package_qty ?? 0),
-                openPills: txn.loose_qty
+                openPills: txn.loose_qty,
+                expiray: txn.expiry ?? ""
             )
         }
     }
@@ -122,7 +120,6 @@ class StockCountViewModel: ObservableObject {
     func getScannedDrugData(
         rawValue: String
     ) async {
-
         let decoded = decoder.decode(rawValue)
         let gtin = decoded.gtin ?? ""
 
@@ -187,7 +184,6 @@ class StockCountViewModel: ObservableObject {
         }
     }
     
-    
     // Update Count in Txn
     func updateCounts(
         txnId: Int64?,
@@ -205,7 +201,7 @@ class StockCountViewModel: ObservableObject {
         loadTransactions()
     }
     
-    
+
  
     func completeBatch(batchId: Int64) {
         let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
@@ -222,7 +218,6 @@ class StockCountViewModel: ObservableObject {
             status: "completed"
         )
 
-        // reload UI
         loadTransactions()
 
         print("Batch \(batchId) marked as COMPLETED")
@@ -272,5 +267,6 @@ struct StockTransaction: Identifiable, Hashable {
     let total: Int32
     let stockBottles: Int32
     let openPills: Int32
+    let expiray: String
 }
 

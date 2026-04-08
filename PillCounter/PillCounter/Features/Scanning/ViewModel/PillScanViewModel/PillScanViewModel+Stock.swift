@@ -127,7 +127,6 @@ extension PillScanViewModel {
  
     func formatExpiry(_ date: Date?) -> String? {
         guard let date else { return nil }
-
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
@@ -143,6 +142,49 @@ extension PillScanViewModel {
         }
     }
     
+    func updatePmsTxnCount(
+        txn: PillCountTransactionEntity,
+        containerStatus: StockCountOptionContainerStatus,
+        scannedQty: Int
+    ) {
+        
+        let currentBottle = Int(txn.bottle_qty)
+        let currentLoose = Int(txn.loose_qty)
+        
+        switch containerStatus {
+            
+        case .sealed:
+            // Add full bottle
+//            updateCounts(
+//                txnId: txn.txn_id,
+//                bottleQty: currentBottle + 1,
+//                looseQty: currentLoose
+//            )
+            
+            pillDataLocalStorage.updateCounts(
+                txnId: txn.txn_id,
+                bottleQty: Int32(currentBottle + 1),
+                looseQty: Int32(currentLoose)
+            )
+            
+            handlePostScanUI(containerStatus: containerStatus)
+
+            
+        case .opened:
+            // Add loose pills
+//            updateCounts(
+//                txnId: txn.txn_id,
+//                bottleQty: currentBottle,
+//                looseQty: currentLoose + scannedQty
+//            )
+            pillDataLocalStorage.updateCounts(
+                txnId: txn.txn_id,
+                bottleQty: Int32(currentBottle),
+                looseQty:Int32(currentLoose + scannedQty)
+            )
+            handlePostScanUI(containerStatus: containerStatus)
+        }
+    }
     func reset(){
         isNdcAdded = false
         isDrugFound = false

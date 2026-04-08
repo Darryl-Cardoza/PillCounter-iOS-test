@@ -121,7 +121,8 @@ final class PillsDataLocalStorage {
         targetCount: Int32? = nil,
         isControlled: Bool? = nil,
         expirationDate: String? = nil,
-        lotNumber: String? = nil
+        lotNumber: String? = nil,
+        rxNo: String? = nil
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -132,7 +133,7 @@ final class PillsDataLocalStorage {
         entity.drug_id = drugId ?? 0
 
         entity.batch_id = batchId ?? 0
-
+        entity.rx_no = rxNo
         // relation ship.
         // ONE DRUG --> MULTIPLE TRANSACTION --> THIS LINKS THE CREATED TRANSACTION TO THAT DRUG.
         if let drugId = drugId, let drugEntity = fetchDrugById(drugId) {

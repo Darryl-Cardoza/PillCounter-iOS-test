@@ -16,7 +16,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
     // data
     let items: [Item]
     let title: String
-
+    let resetTrigger: Bool
     // UI
     let rowView: (Item, Bool, Set<Int64>) -> AnyView
 
@@ -79,6 +79,11 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
         }
         .onChange(of: searchText) { _, new in
             debounce(new)
+        }
+        .onChange(of: resetTrigger) { _, _ in
+            print("Reset Triggered")
+            isEditing = false
+            selectedIds.removeAll()
         }
     }
 }

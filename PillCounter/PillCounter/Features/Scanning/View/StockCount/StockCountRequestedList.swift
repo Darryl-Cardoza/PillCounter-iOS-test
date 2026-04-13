@@ -29,7 +29,7 @@ struct StockCountRequestedList: View {
     @State private var showMenuOptions: Bool = false
     @State private var selectedTransactionDetailOption:
         TransactionDetailOption = .resume
-
+    @State private var resetList: Bool = false
 
 
     // MARK: - FILTER
@@ -48,7 +48,8 @@ struct StockCountRequestedList: View {
         GenericListScreen<PillCountTransactionEntity, TransactionDetailOption>(
             items: stockViewModel.regularCountTransactions,
             title: "NDC REQUESTS",
-            
+            resetTrigger: resetList,
+
             // 🔹 ROW UI
             rowView: { batch, isEditing, selectedIds in
                 AnyView(
@@ -69,7 +70,7 @@ struct StockCountRequestedList: View {
             //  ROW TAP
             onRowTap: { batch in
                 selectedTxnId = batch.txn_id
-                stockViewModel.currentBatchId = nil
+                stockViewModel.currentBatch = nil
                 handleResume()
             },
             
@@ -210,7 +211,6 @@ extension StockCountRequestedList {
             onSelect: { option in
                 switch option {
                     case .resume:
-                        stockViewModel.currentBatchId = nil
                         router.navigate(
                             to: .authentication(
                                 .login(

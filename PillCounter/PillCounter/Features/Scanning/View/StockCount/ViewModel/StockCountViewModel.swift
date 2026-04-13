@@ -22,12 +22,11 @@ class StockCountViewModel: ObservableObject {
     }
     
     // MARK: Stock Count State
-    @Published var batchTransactions: [PillCountTransactionEntity] = []
-    @Published var batchMappedTransactions: [StockTransaction] = []
+    @Published var groupedTransactions:[GroupedTransaction] = []
     @Published var regularCountTransactions: [PillCountTransactionEntity] = []
 
     
-    @Published var currentBatchId: Int64?
+    @Published var currentBatch: BatchCountEntity?
     @Published var totalBatchCount: Int = 0
     @Published var totalNdcRequests: Int = 0
     @Published var scannedDrugData: ScannedDrugData?
@@ -36,21 +35,17 @@ class StockCountViewModel: ObservableObject {
     @Published var isLoading:Bool = false
     
     @Published var barcodeNotFound: Bool = false
+    @Published var showScannedNdcDoesNotMatch: Bool = false
     
+    @Published var batchNdcSet: Set<String> = []
     @Published var selectedTransaction: PillCountTransactionEntity? = nil
     
     // Creating New Batch in Database
-    func createNewBatch() {
-        let batchId = Int64(Date().timeIntervalSince1970 * 1000) 
-        let context = pillDataLocalStorage.mainThreadContext
-        let batch = BatchCountEntity(context: context)
-        batch.batch_id = batchId
-        batch.start_date_time = batchId
-        batch.status = "partial"
-        batch.is_deleted = false
-        CoreDataManager.shared.save(context: context)
-        currentBatchId = batchId // Get current batch
-        updateBatchCount() //Update count of batch
+    func createNewBatch(bucketId: String) {
+        if let batch = pillDataLocalStorage.createBatch(bucketId: bucketId, isFromPms: false) {
+            currentBatch = batch
+            updateBatchCount()
+        }
     }
     
     // Load NDC requests
@@ -73,48 +68,22 @@ class StockCountViewModel: ObservableObject {
     }
     
     // Loading all batches from database
-    func loadBatches() -> [StockCountPartialBatchListScreen.Batch] {
-        let batches = pillDataLocalStorage.fetchAllBatches()
-        
-        return batches.map { batch in
-
-            let count = pillDataLocalStorage.getTransactionCount(
-                for: batch.batch_id
-            )
-
-            return StockCountPartialBatchListScreen.Batch(
-                id: batch.batch_id,
-                name: "Batch \(batch.batch_id)",
-                date: formatDate(Int64(batch.start_date_time)),
-                total: "\(count)"
-            )
-        }
-        
+    func loadBatches() -> [BatchCountEntity] {
+        return pillDataLocalStorage.fetchAllBatches()
     }
-    
+
     func loadTransactions() {
-        guard let batchId = currentBatchId else {
-            self.batchTransactions = []
-            self.batchMappedTransactions = []
+        guard let batchId = currentBatch?.batch_id else {
+            self.groupedTransactions = []
             return
         }
 
         let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
-
-        self.batchTransactions = txns
-
-        self.batchMappedTransactions = txns.map { txn in
-            StockTransaction(
-                id: txn.txn_id,
-                drugName: txn.drug?.drug_name ?? "Unknown",
-                ndc: txn.drug?.ndc ?? "",
-                total: Int32(txn.target_count),
-                stockBottles: (txn.bottle_qty) * (txn.drug?.package_qty ?? 0),
-                openPills: txn.loose_qty,
-                expiray: txn.expiry ?? ""
-            )
-        }
+        
+        self.groupedTransactions = mapGroupedTransactions(txns: txns)
+        batchNdcSet = Set(txns.compactMap { $0.drug?.ndc })
     }
+    
     
     // MARK: Scan Stock count Barcode
     func getScannedDrugData(
@@ -122,10 +91,9 @@ class StockCountViewModel: ObservableObject {
     ) async {
         let decoded = decoder.decode(rawValue)
         let gtin = decoded.gtin ?? ""
-
+    
         await fetchDrugDataOnly(gtin: gtin)
     }
-    
     
     
     private func fetchDrugDataOnly(gtin: String) async {
@@ -140,6 +108,17 @@ class StockCountViewModel: ObservableObject {
 
         // 1. LOCAL DB
         if let localDrug = pillDataLocalStorage.getPillByGtin(by: gtin) {
+            let ndc = localDrug.ndc ?? ""
+
+            if currentBatch?.is_from_pms == true {
+                if !batchNdcSet.contains(ndc) {
+                    isLoading = false
+                    showStockCountScannedDetails = false
+                    showScannedNdcDoesNotMatch = true
+                    return
+                }
+            }
+            
             scannedDrugData = ScannedDrugData(
                 drugName: localDrug.drug_name ?? "",
                 ndc: localDrug.ndc ?? "",
@@ -163,17 +142,27 @@ class StockCountViewModel: ObservableObject {
             let response = try await controlledRepo
                 .getControlledDrugInfo(ndcValidationRequest: request)
 
-            let ndcData = response.data?.scannedNdc ?? response.data?.targetNdc
+            let ndc = response.data?.scannedNdc?.packageNdc ?? ""
 
-            
+            if currentBatch?.is_from_pms == true {
+                if !batchNdcSet.contains(ndc) {
+                    isLoading = false
+                    showStockCountScannedDetails = false
+                    showScannedNdcDoesNotMatch = true
+                    print("❌ NDC not part of PMS batch\(ndc) \(batchNdcSet)")
+                    return
+                }
+            }
+
             scannedDrugData = ScannedDrugData(
                 drugName: response.data?.scannedNdc?.lookupName ?? "",
                 ndc: response.data?.scannedNdc?.packageNdc ?? "",
                 gtin:response.data?.scannedNdc?.packageNdc ?? "",
-                quantity: ndcData?.safeQuantity ?? 0
+                quantity: response.data?.scannedNdc?.safeQuantity ?? 0
             )
 
             isLoading = false
+            // just compare here and add condition here also
             showStockCountScannedDetails = true
             print("Fetched response from API\(response)")
         } catch {
@@ -201,8 +190,7 @@ class StockCountViewModel: ObservableObject {
         loadTransactions()
     }
     
-
- 
+    
     func completeBatch(batchId: Int64) {
         let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
 
@@ -223,6 +211,7 @@ class StockCountViewModel: ObservableObject {
         print("Batch \(batchId) marked as COMPLETED")
     }
     
+    
     // Formatting Date
     func formatDate(_ timestamp: Int64?) -> String {
         guard let timestamp else { return "" }
@@ -230,6 +219,63 @@ class StockCountViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd MMM • hh:mm a"
         return formatter.string(from: date)
+    }
+    
+    
+    // Mapper function
+    func mapGroupedTransactions(txns: [PillCountTransactionEntity]) -> [GroupedTransaction] {
+        
+        // 1. Group by NDC
+        let groupedByNdc = Dictionary(grouping: txns) { $0.drug?.ndc ?? "" }
+        
+        return groupedByNdc.map { (ndc, txnList) in
+            
+            let drugName = txnList.first?.drug?.drug_name ?? "Unknown"
+            
+            // 2. Group by LOT + EXPIRY
+            let lotGrouped = Dictionary(grouping: txnList) {
+                "\($0.lot_no ?? "-")|\($0.expiry ?? "-")"
+            }
+            
+            var lotDetails: [LotDetail] = []
+            var totalSealed: Int32 = 0
+            var totalOpen: Int32 = 0
+            
+            for (_, lotTxns) in lotGrouped {
+                
+                let lot = lotTxns.first?.lot_no ?? "-"
+                let expiry = lotTxns.first?.expiry ?? "-"
+                
+                let sealed = lotTxns.reduce(0) {
+                    $0 + ($1.bottle_qty * ($1.drug?.package_qty ?? 0))
+                }
+                
+                let open = lotTxns.reduce(0) {
+                    $0 + $1.loose_qty
+                }
+                
+                totalSealed += sealed
+                totalOpen += open
+                
+                lotDetails.append(
+                    LotDetail(
+                        lot: lot,
+                        expiry: expiry,
+                        sealedQty: sealed,
+                        openQty: open
+                    )
+                )
+            }
+            
+            return GroupedTransaction(
+                ndc: ndc,
+                drugName: drugName,
+                total: totalSealed + totalOpen,
+                sealedBottles: totalSealed,
+                openPills: totalOpen,
+                lotDetails: lotDetails
+            )
+        }
     }
     
     
@@ -243,6 +289,7 @@ class StockCountViewModel: ObservableObject {
     func getCountData(){
         updateBatchCount()
     }
+    
     
     func reset(){
         scannedDrugData = nil
@@ -270,3 +317,27 @@ struct StockTransaction: Identifiable, Hashable {
     let expiray: String
 }
 
+
+struct GroupedTransaction {
+    let ndc: String
+    let drugName: String
+    let total: Int32
+    
+    let sealedBottles: Int32
+    let openPills: Int32
+    
+    let lotDetails: [LotDetail]
+}
+
+struct LotDetail {
+    let lot: String
+    let expiry: String
+    let sealedQty: Int32
+    let openQty: Int32
+}
+
+
+// If the conflict persists, use @objc to override
+extension BatchCountEntity: ListItemIdentifiable {
+    @objc public var id: Int64 { batch_id }
+}

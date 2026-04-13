@@ -65,6 +65,8 @@ struct UserProfile: Codable {
     let pharmacyName: String?
     let npiID: String?
     let isVerified: Bool?
+    let isHl7Enabled: Bool?
+    let bucket: [String]
     let role: UserRole?
     let userId: String?
 
@@ -78,6 +80,8 @@ struct UserProfile: Codable {
         case pharmacyName = "pharmacy_name"
         case npiID = "npi_id"
         case isVerified = "is_verified"
+        case isHl7Enabled =  "is_hl7_enabled"
+        case bucket = "bucket"
         case role = "role"
         case userId = "user_id"
     }

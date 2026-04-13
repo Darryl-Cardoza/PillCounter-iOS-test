@@ -75,38 +75,62 @@ extension PillScanViewModel {
     }
     
     
+//    @MainActor
+//    private func createRegularHl7Transaction(
+//        message: CompleteHL7Message,
+//        inboundType: CountType,
+//        callback: HL7SimpleCallback? = nil
+//    ) async {
+//
+//        guard let inventory = message.inventoryItems.first else {
+//            print("Regular Count: No inventory found")
+//            callback?(false)
+//            return
+//        }
+//
+//        // FIXED MAPPING (based on your HL7 format)
+//        let ndc = inventory.substanceStatusCode ?? ""
+//        let drugName = inventory.substanceStatusDescription ?? "Unknown Drug"
+//        let lotNo = inventory.lotNumber ?? ""
+//        let expiryRaw = inventory.expirationDateTime ?? ""
+
+//        print("Parsed INV → NDC: \(ndc), Name: \(drugName), Count: \(targetCount)")
+//
+////        await processHl7DrugAndCreateTransaction(
+////            ndc: ndc,
+////            drugName: drugName,
+////            countType: inboundType,
+////            targetCount: targetCount,
+////            rxNo: message.order?.placerOrderId
+////        )
+////
+//        
+//        
+//        callback?(true)
+//    }
+
     @MainActor
     private func createRegularHl7Transaction(
         message: CompleteHL7Message,
         inboundType: CountType,
         callback: HL7SimpleCallback? = nil
     ) async {
-
-        guard let inventory = message.inventoryItems.first else {
-            print("Regular Count: No inventory found")
+        guard !message.inventoryItems.isEmpty else {
+            print("[HL7] Regular Count: No inventory items found")
             callback?(false)
             return
         }
 
-        // FIXED MAPPING (based on your HL7 format)
-        let ndc = inventory.substanceStatusCode ?? ""
-        let drugName = inventory.substanceStatusDescription ?? "Unknown Drug"
-        let targetCount = Int32(inventory.substanceTypeCode ?? "") ?? 0
-
-        print("Parsed INV → NDC: \(ndc), Name: \(drugName), Count: \(targetCount)")
-
-        await processHl7DrugAndCreateTransaction(
-            ndc: ndc,
-            drugName: drugName,
+        await createBatchAndTxnsFromHL7(
+            inventoryItems: message.inventoryItems,
             countType: inboundType,
-            targetCount: targetCount,
-            rxNo: message.order?.placerOrderId
+            rxNo: message.order?.placerOrderId,
+            bucketId: ""
         )
-
         callback?(true)
     }
 
-
+    
     private func classifyInboundMessage(
         _ message: CompleteHL7Message
     ) -> CountType? {

@@ -959,7 +959,7 @@ extension OPillCountView {
 //                looseQty: cameraService.stableCount
 //            )
             pillScanViewModel.addCurrentOpenPillCount += cameraService.stableCount
-        }else{
+        }else {
             pillScanViewModel.addTransactionDetailToCurrentTransaction(
                 pillCount: Int32(cameraService.stableCount),
                 imagePath: savedPath,

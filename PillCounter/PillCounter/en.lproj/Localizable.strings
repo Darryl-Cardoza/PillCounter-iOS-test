@@ -40,7 +40,7 @@
 "CONTINUE_LAST_BATCH" = "Continue last Batch";
 "CREATE_NEW_BATCH" = "Create a new Batch";
 "WHAT_WOULD_YOU_DO"= "What would you like to do?";
-
+"SELECT_BUCKET" = "Select Bucket";
 // MARK: - FIXED COUNT
 
 "FIXED_COUNT_TITLE" = "Dispense";

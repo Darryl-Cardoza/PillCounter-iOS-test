@@ -28,7 +28,14 @@ class UserViewModel: ObservableObject {
     @AppStorage(AppStorageManager.AppStorageKeys.pillCounterHostName)
     var pillCounterHostName: String = ""
 
+    @AppStorage(AppStorageManager.AppStorageKeys.barcodeFormat)
+    private var barcodeFormat: String = ""
 
+    @AppStorage(AppStorageManager.AppStorageKeys.bucketList)
+    private var bucketData: Data = Data()
+    
+    
+    
     // MARK: PUBLISHED VARIABLES
     // general loading  
     @Published var isLoading: Bool = false
@@ -81,6 +88,16 @@ class UserViewModel: ObservableObject {
     @Published var unsyncedTransactions: [PillCountTransactionEntity] = []
 
     @Published var pmsConnectionState: PmsConnectionState = .disconnected
+    
+    var bucket: [String] {
+        get {
+            (try? JSONDecoder().decode([String].self, from: bucketData)) ?? []
+        }
+        set {
+            bucketData = (try? JSONEncoder().encode(newValue)) ?? Data()
+        }
+    }
+
 
     // MARK: DATABASE
     // get the user db
@@ -96,6 +113,7 @@ class UserViewModel: ObservableObject {
     let settingsRepo = SettingsRepository.shared
  
     
+ 
 
     // MARK: MOBILE SETTINGS
     // mobile color settings.
@@ -127,6 +145,8 @@ class UserViewModel: ObservableObject {
                     
                     self.pmsHostName = response.data?.hl7Config?.pmsHostName ?? ""
                     self.pillCounterHostName = response.data?.hl7Config?.pillCounterHostName ?? ""
+                    self.barcodeFormat = response.data?.hl7Config?.barcodeFormat ?? ""
+                    print("Barcode format \(response.data?.hl7Config?.barcodeFormat ?? "")")
                 }
 
             } catch {
@@ -163,7 +183,7 @@ class UserViewModel: ObservableObject {
 
             getAllTransactionsAndFilterByCountType()
 
-            return
+//            return
         }
 
 
@@ -221,6 +241,11 @@ class UserViewModel: ObservableObject {
         phoneNumber = user.phoneNumber ?? ""
         pharmacyName = user.pharmacyName ?? ""
         npiID = user.npiID ?? ""
+        
+        if !user.bucket.isEmpty {
+            self.bucket = user.bucket
+            print("✅ Bucket saved:", user.bucket)
+        }
 
         self.fullName = fullName
     }

@@ -56,7 +56,7 @@ struct AppNavigation: View {
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(.login(.dashboard(.pillCount(.barcodeScanning(let scanType))))):
-                        QRBarcodeScannerView(scanType: scanType)
+                        QRBarcodeScannerView(currentScanType: scanType)
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(

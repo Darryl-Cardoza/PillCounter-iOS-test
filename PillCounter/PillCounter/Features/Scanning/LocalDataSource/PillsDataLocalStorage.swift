@@ -55,7 +55,7 @@ final class PillsDataLocalStorage {
         gtin: String = "",
         drugId: Int64,
         drugName: String,
-        drugType: String = "",
+        drugType: String? = nil,
         packageQty: Int32 = 0
     ) {
         let entity = DrugMasterEntity(context: mainThreadContext)
@@ -122,7 +122,8 @@ final class PillsDataLocalStorage {
         isControlled: Bool? = nil,
         expirationDate: String? = nil,
         lotNumber: String? = nil,
-        rxNo: String? = nil
+        rxNo: String? = nil,
+        bucketId: String? = nil
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -164,6 +165,7 @@ final class PillsDataLocalStorage {
       
         entity.expiry = expirationDate
         entity.lot_no = lotNumber
+        entity.bucket_id = bucketId
         // finally save the transaction in core data.
         CoreDataManager.shared.save(context: mainThreadContext)
         debugPrintAllTransactions()
@@ -1042,6 +1044,9 @@ final class PillsDataLocalStorage {
                        package quantity \(txn.drug?.package_qty ?? 0)
                        expirary \(txn.expiry)
                        lotno \(txn.lot_no)
+                       bucket \(txn.bucket_id ?? "")
+                       drugTyp \(txn.drug?.drug_type ?? "")
+                       ndc\(txn.drug?.ndc)
                     ---------------------------------
                     ------------------
                     """)

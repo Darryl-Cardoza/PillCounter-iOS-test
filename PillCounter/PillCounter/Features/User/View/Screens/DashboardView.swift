@@ -12,6 +12,7 @@ struct DashboardView: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @State private var someParialValue: Int = 1
     @State private var someParialValue2: Int = 2
     @State private var someCompletedValue: Int = 3
@@ -24,6 +25,7 @@ struct DashboardView: View {
 
     @State private var showStockCountPopup: Bool = false
     @State private var selectedStockCountOption: StockCountOption = .newBatch
+    @State private var showSelectBucketIdPopup : Bool = false
     
     
     // MARK: - LOCAL STATE
@@ -71,9 +73,9 @@ struct DashboardView: View {
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
-//                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
                                     
-                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
+//                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
                                 },
                                 iconColor: appColors.primary
                             )
@@ -114,7 +116,7 @@ struct DashboardView: View {
                             to: .authentication(
                                 .login(
                                     .dashboard(
-                                        .pillCount(.barcodeScanning(.barcode))))))
+                                        .pillCount(.barcodeScanning(.rx_label))))))
                     }
                 
                 }
@@ -222,7 +224,6 @@ struct DashboardView: View {
 
         )
         .onAppear {
-    
             Task(priority: .background) {
                 await userViewModel.checkAndRefreshTokenIfNeeded()
             }
@@ -239,9 +240,16 @@ struct DashboardView: View {
                     stockCountViewModel.getCountData()
                 }
             }
+            //Load Buckets
+            let buckets = userViewModel.bucket
+            pillScanViewModel.bucketOptions = buckets
+            pillScanViewModel.selectedBucket = buckets.first ?? ""
         }
         .customPopup(isPresented: $showStockCountPopup) {
             stockCountPopUp
+        }
+        .customPopup(isPresented: $showSelectBucketIdPopup ){
+            selectBucketPopUp
         }
     }
     
@@ -320,7 +328,8 @@ struct DashboardView: View {
                             // some action to be performed
                             // navigate to the barcode scan screen for scanning the bottles.
                             // for this we would need to note the flow and clear it.
-                            handleStockCountSelectedOption()
+//                            handleStockCountSelectedOption()
+                            showSelectBucketIdPopup = true
                             showStockCountPopup = false
                         }
                     )
@@ -334,13 +343,91 @@ struct DashboardView: View {
         )
     }
     
+    private var selectBucketPopUp: some View {
+        return (
+            VStack(spacing: 35) {
+                
+                // title for the pop up.
+                VStack (alignment: .leading) {
+                    Text(NSLocalizedString("SELECT_BUCKET", comment: ""))
+                        .font(.system(size: 16))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(appColors.text)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                
+                
+                VStack(alignment: .leading, spacing: 28) {
+                    
+                    ForEach(pillScanViewModel.bucketOptions, id: \.self) { bucket in
+                        
+                        PillCountingRadioButton(
+                            option: bucket,
+                            selectedOption: $pillScanViewModel.selectedBucket,
+                            label: bucket,
+                            selectedColor: appColors.secondary,
+                            unselectedColor: .gray,
+                            size: 20,
+                            lineWidth: 2,
+                            textColor: appColors.text
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                EqualWidthHStackButtons(spacing: 20) {
+
+                    // DELETE
+                    PillCountingButton(
+                        iconName: nil,
+                        title: NSLocalizedString("CANCEL", comment: ""),
+                        textColor: appColors.text,
+                        backgroundColor: .clear,
+                        borderColor: appColors.primary,
+                        font: .system(size: 14, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 32,
+                        verticalPadding: 20,
+                        iconSize: 0,
+                        action: {
+                            showSelectBucketIdPopup = false
+                        }
+                    )
+
+                    // OK
+                    PillCountingButton(
+                        iconName: nil,
+                        title: "OK",
+                        textColor: Color.white,
+                        backgroundColor: appColors.primary,
+                        borderColor: .clear,
+                        font: .system(size: 14, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 32,
+                        verticalPadding: 20,
+                        iconSize: 0,
+                        action: {
+                            handleStockCountSelectedOption()
+                            showSelectBucketIdPopup = false
+                        }
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            
+                
+            }
+                .padding(.horizontal, 8)
+        )
+    }
+    
     private func handleStockCountSelectedOption() {
         switch selectedStockCountOption {
         case .newBatch:
             // navigate to the barcode scanning screen
             print("new batch selected")
             // we will create a new batch and directly navigate to the barcode scanning screen for the first entry to be added in the batch.
-            stockCountViewModel.createNewBatch()
+            stockCountViewModel.createNewBatch(bucketId: pillScanViewModel.selectedBucket)
             router.selectedPillScanningType = .REGULAR
             router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
             resetStockCountSelection()

@@ -298,7 +298,7 @@ struct BottomControlsView: View {
         }else if(pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue){
             return 0
         } else {
-            return pillScanViewModel.currentTransaction?.target_count ?? 0
+            return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
         }
     }
 

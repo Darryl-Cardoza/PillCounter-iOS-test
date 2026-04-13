@@ -25,10 +25,12 @@ final class AppStorageManager {
         static let isNewUser = "is_new_user"
         static let tokenExpiryTimestamp = "token_expiry_timestamp"
         static let saveHistoryOption = "save_history_option"
+        
         static let isHl7Enable: String = "is_hl7_enable"
         static let pmsHostName = "pms_host_name"
         static let pillCounterHostName = "pillcounter_host_name"
-        
+        static let barcodeFormat = "barcode_format"
+        static let bucketList = "bucket_list"
     
        static let isPillCountingEnabled = "isPillCountingEnabled"
        static let isDoubleCountRequired = "isDoubleCountRequired"
@@ -165,7 +167,23 @@ final class AppStorageManager {
         }
     }
     
+    var barcodeFormat: String {
+        get {
+            defaults.string(forKey: AppStorageKeys.barcodeFormat) ?? ""
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.barcodeFormat)
+        }
+    }
     
+    var bucket: [String] {
+        get {
+            defaults.stringArray(forKey: AppStorageKeys.bucketList) ?? []
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.bucketList)
+        }
+    }
     
     //MARK: - Pill Counting HL7 enabled
     var isHl7Enabled: Bool {

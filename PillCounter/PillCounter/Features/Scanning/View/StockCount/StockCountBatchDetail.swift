@@ -17,12 +17,14 @@ struct StockCountBatchDetail: View {
 
     // delete state
     @State private var isEditing: Bool = false
-    @State private var selectedTxnIds: Set<Int64> = []
-
+    @State private var selectedTxnIds: Set<String> = []
     // end batch
     @State private var showEndBatchPopUp: Bool = false
     @State private var showExportPopUp: Bool = false
 
+    private var allIds: Set<String> {
+        Set(stockCountVieModel.groupedTransactions.map { $0.ndc })
+    }
 
 
     var body: some View {
@@ -135,7 +137,7 @@ struct StockCountBatchDetail: View {
                 },
                 showBackButton: !isEditing,
                 showHamburgerMenu: false,
-                title: isEditing ? "" : "BATCH ID \(String(stockCountVieModel.currentBatchId ?? 0))",
+                title: isEditing ? "" :  String( "BATCH ID \(stockCountVieModel.currentBatch?.batch_id ?? 0)"),
                 headerActionsBackground: appColors.primaryBackground,
                 onBack: {
                     router.navigateBack()
@@ -160,7 +162,7 @@ struct StockCountBatchDetail: View {
         VStack(spacing: 0) {
 
             // SCROLLABLE CONTENT
-            if stockCountVieModel.batchMappedTransactions.isEmpty {
+            if stockCountVieModel.groupedTransactions.isEmpty {
                 EmptyStateView(
                     imageName: "fixed_count",
                     systemImageName: nil,
@@ -171,7 +173,7 @@ struct StockCountBatchDetail: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 16) {
                         StockTransactionListView(
-                            transactions: $stockCountVieModel.batchMappedTransactions,
+                            transactions: $stockCountVieModel.groupedTransactions,
                             selectedIds: $selectedTxnIds,
                             isEditing: $isEditing
                         )
@@ -233,14 +235,10 @@ struct StockCountBatchDetail: View {
 
     // MARK: HELPERS
     private var areAllSelected: Bool {
-        // replace with your actual data source
-        let allIds: Set<Int64> = [1, 2, 3, 4]
-        return !allIds.isEmpty && selectedTxnIds == allIds
+        !allIds.isEmpty && selectedTxnIds == allIds
     }
 
     private func toggleSelectAll() {
-        let allIds: Set<Int64> = [1, 2, 3, 4]  // replace with real txn IDs
-
         if selectedTxnIds == allIds {
             selectedTxnIds.removeAll()
         } else {
@@ -249,12 +247,8 @@ struct StockCountBatchDetail: View {
     }
 
     private func deleteSelectedTransactions() {
-        // TODO: Replace with API call
-        // viewmodel.deleteTransactions(selectedTxnIds)
         withAnimation(.easeInOut(duration: 0.30)) {
-            stockCountVieModel.batchTransactions.removeAll { txn in
-                selectedTxnIds.contains(txn.txn_id)
-            }
+           
         }
 
         selectedTxnIds.removeAll()
@@ -278,7 +272,7 @@ extension StockCountBatchDetail{
             },
             onConfirm: {
                 showEndBatchPopUp = false
-                if let batchId = stockCountVieModel.currentBatchId {
+                if let batchId = stockCountVieModel.currentBatch?.batch_id {
                     stockCountVieModel.completeBatch(batchId: batchId)
                 }
                 router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))

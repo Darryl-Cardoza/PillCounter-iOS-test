@@ -66,13 +66,13 @@ extension PillScanViewModel{
         switch currentControlledStep {
 
         case .containerInitiate:
-            return stepTotal > 0
+            return stepTotal > target
             
         case .targetVerification:
             if currentTransaction?.count_type == CountType.FIXED.rawValue {
                 return stepTotal == target
             } else {
-                return true  //stepTotal > 0
+                return true
             }
             
         case .targetReverification:
@@ -125,16 +125,15 @@ extension PillScanViewModel{
 
         // Fetch last saved step
         guard let lastStep = pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id) else {
-            if txn.is_from_pms == true {
+            if let type = txn.drug?.drug_type, !type.trimmingCharacters(in: .whitespaces).isEmpty {
                 currentControlledStep = .containerInitiate
             } else {
                 currentControlledStep = .targetVerification
             }
-
             updateControlledTargetCount()
             return
         }
-
+        print("Last controlled step \(lastStep)")
         currentControlledStep = lastStep
         updateControlledTargetCount()
     }
@@ -162,7 +161,7 @@ extension PillScanViewModel{
         countType: CountType,
         image: UIImage?
     ) async {
-
+        
         let decoded = decoder.decode(rawValue)
         let gtin = decoded.gtin ?? ""
 

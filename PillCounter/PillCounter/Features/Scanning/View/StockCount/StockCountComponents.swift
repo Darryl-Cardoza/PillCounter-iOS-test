@@ -5,48 +5,44 @@
 //  Created by Bhushan Patil on 01/04/26.
 //
 
-import SwiftUI
 
+import SwiftUI
 
 struct StockTransactionListView: View {
 
-    // binding variables -- for the transactions
-    @Binding var transactions: [StockTransaction]
-    @Binding var selectedIds: Set<Int64>
+    @Binding var transactions: [GroupedTransaction]
+    @Binding var selectedIds: Set<String>   // keyed by ndc
     @Binding var isEditing: Bool
 
     @EnvironmentObject private var appColors: AppColors
 
-    // Only ONE open at a time
-    @State private var expandedId: Int64? = nil
+    @State private var expandedNdc: String? = nil
 
     var body: some View {
         VStack(spacing: 12) {
-
-            ForEach(transactions) { txn in
-
+            ForEach(transactions, id: \.ndc) { txn in
                 HStack(spacing: 12) {
 
                     // CHECKBOX
                     if isEditing {
                         Image(
-                            systemName: selectedIds.contains(txn.id)
+                            systemName: selectedIds.contains(txn.ndc)
                                 ? "checkmark.square.fill"
                                 : "square"
                         )
                         .foregroundColor(
-                            selectedIds.contains(txn.id)
+                            selectedIds.contains(txn.ndc)
                                 ? appColors.secondary : .gray
                         )
                         .onTapGesture {
-                            toggleSelection(txn.id)
+                            toggleSelection(txn.ndc)
                         }
                     }
 
                     ControlledCollapsibleBox(
                         isExpanded: Binding(
-                            get: { expandedId == txn.id },
-                            set: { expandedId = $0 ? txn.id : nil }
+                            get: { expandedNdc == txn.ndc },
+                            set: { expandedNdc = $0 ? txn.ndc : nil }
                         )
                     ) {
                         // HEADER
@@ -56,98 +52,115 @@ struct StockTransactionListView: View {
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(appColors.text)
 
-                                HStack(spacing: 15){
-                                    Text(txn.ndc)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(
-                                            appColors.text.opacity(0.7)
-                                        )
-                                    
-                                     if !txn.expiray.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                         Text("Expiry \(txn.expiray)")
-                                             .font(.system(size: 12))
-                                             .foregroundColor(appColors.text.opacity(0.7))
-                                     }
-                                }
+                                Text(txn.ndc)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(appColors.text.opacity(0.7))
                             }
-
                             Spacer()
-
-                            Text("\(txn.openPills  + txn.stockBottles )")
+                            Text("\(txn.total)")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(appColors.secondary)
                         }
-                    }
-                    content: {
-                        VStack(spacing: 12) {
-                            HStack {
-                                Text("Stock Bottles")
-                                    .font(.system(size: 14, weight: .regular))
-                                Spacer()
-                                Text("\(txn.stockBottles) pills")
-                                    .font(.system(size: 14, weight: .regular))
-                            }
-                            
-                            Divider()
+                    } content: {
+                        VStack(spacing: 0) {
 
+                            // ── SEALED BOTTLES SECTION ──
                             HStack {
-                                Text("Open Pills")
-                                    .font(.system(size: 14, weight: .regular))
+                                Text("Sealed Bottles")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(appColors.text)
                                 Spacer()
-                                Text("\(txn.openPills) pills")
-                                    .font(.system(size: 14, weight: .regular))
+                                Text("\(txn.sealedBottles)")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(appColors.text)
+                            }
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 4)
+
+                            // Lot rows for sealed
+                            ForEach(txn.lotDetails.filter { $0.sealedQty > 0 }, id: \.lot) { detail in
+                                LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.sealedQty, appColors: appColors)
+                            }
+                            // ── OPENED BOTTLES SECTION ──
+                            HStack {
+                                Text("Opened Bottles")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(appColors.text)
+                                Spacer()
+                                Text("\(txn.openPills)")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(appColors.text)
+                         
+                            }
+                            .padding(.top, 8)
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 4)
+
+                            // Lot rows for opened
+                            ForEach(txn.lotDetails.filter { $0.openQty > 0 }, id: \.lot) { detail in
+                                LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.openQty, appColors: appColors)
                             }
                         }
-                        .padding(.horizontal,8)
-                        .foregroundColor(appColors.text)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 8)
                     }
                 }
             }
-
         }
         .padding(.horizontal)
     }
 
-    @ViewBuilder
-    private func transactionHeader(_ txn: StockTransaction) -> some View {
-        HStack {
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(txn.drugName)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(appColors.text)
-
-                Text(txn.ndc)
-                    .font(.system(size: 12))
-                    .foregroundColor(appColors.text.opacity(0.7))
-            }
-
-            Spacer()
-
-            Text("\(txn.total)")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(appColors.secondary)
-        }
-        .padding()
-    }
-
-
-    private func toggleExpansion(_ id: Int64) {
-        if expandedId == id {
-            expandedId = nil
+    private func toggleSelection(_ ndc: String) {
+        if selectedIds.contains(ndc) {
+            selectedIds.remove(ndc)
         } else {
-            expandedId = id
-        }
-    }
-    
-    private func toggleSelection(_ id: Int64) {
-        if selectedIds.contains(id) {
-            selectedIds.remove(id)
-        } else {
-            selectedIds.insert(id)
+            selectedIds.insert(ndc)
         }
     }
 }
+
+// MARK: - Lot Row
+
+private struct LotRow: View {
+    let lot: String
+    let expiry: String
+    let qty: Int32
+    let appColors: AppColors
+
+    var body: some View {
+        VStack(spacing: 0) {
+
+            Divider()
+                .padding(.vertical,5)
+
+            HStack {
+                // LOT COLUMN (flexible)
+                Text("Lot \(lot)")
+                    .font(.system(size: 13))
+                    .foregroundColor(appColors.text.opacity(0.8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // EXP COLUMN (fixed width)
+                if !expiry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("Exp \(expiry)")
+                        .font(.system(size: 13))
+                        .foregroundColor(appColors.text.opacity(0.6))
+                        .frame(width: 110, alignment: .leading)
+                }
+
+                // QTY COLUMN (fixed width, right aligned)
+                Text("\(qty)")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(appColors.text)
+                    .frame(minWidth: 50, alignment: .trailing)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 4)
+        }
+    }
+}
+
+// MARK: - ControlledCollapsibleBox (unchanged)
 
 struct ControlledCollapsibleBox<Header: View, Content: View>: View {
 
@@ -169,8 +182,6 @@ struct ControlledCollapsibleBox<Header: View, Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-
-            // HEADER
             header
                 .padding(16)
                 .contentShape(Rectangle())
@@ -180,9 +191,8 @@ struct ControlledCollapsibleBox<Header: View, Content: View>: View {
                     }
                 }
 
-            // EXPANDED CONTENT
             if isExpanded {
-                VStack(spacing: 18) {
+                VStack(spacing: 0) {
                     content
                 }
                 .padding(.horizontal, 16)
@@ -195,3 +205,4 @@ struct ControlledCollapsibleBox<Header: View, Content: View>: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }
+

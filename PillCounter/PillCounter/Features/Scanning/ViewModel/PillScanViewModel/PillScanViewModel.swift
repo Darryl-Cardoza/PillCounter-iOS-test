@@ -84,6 +84,12 @@ class PillScanViewModel: ObservableObject {
     // MARK: Stock Count State
     @Published var addCurrentOpenPillCount: Int = 0
 
+    //MARK: RX FLow
+    @Published var showRxFlowPopup: Bool = false
+    @Published var scannedRxData: ParsedScanData? = nil
+    @Published var bucketOptions: [String] = []
+    @Published var selectedBucket: String = ""
+    @Published var showScannedDrugInfoPopoup: Bool = false
     
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
@@ -354,7 +360,8 @@ class PillScanViewModel: ObservableObject {
         batchId: Int64? = nil,
         expirationDate: String? = nil,
         lotNumber: String? = nil,
-        rxNo:String? = nil
+        rxNo:String? = nil,
+        bucketId: String? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.
@@ -393,7 +400,8 @@ class PillScanViewModel: ObservableObject {
             targetCount: targetCount,
             isControlled: isControlled,
             expirationDate: expirationDate,
-            lotNumber: lotNumber
+            lotNumber: lotNumber,
+            bucketId: bucketId
         )
     
 

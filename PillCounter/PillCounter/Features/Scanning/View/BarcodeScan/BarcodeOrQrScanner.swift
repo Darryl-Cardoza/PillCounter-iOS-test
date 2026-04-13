@@ -82,7 +82,8 @@ struct QRBarcodeScannerView: View {
     @FocusState private var focusedField: InputField?
     @State private var scannedBottleContainerStatus: StockCountOptionContainerStatus = .sealed
     
-    let scanType: ScanType
+    let currentScanType: ScanType
+    @State var scanType: ScanType = .barcode
 
     var body: some View {
         ZStack {
@@ -107,36 +108,37 @@ struct QRBarcodeScannerView: View {
                                 Color.black.ignoresSafeArea()
                                 CameraPermissionView()
                             }
-
+                            
                             // The SquareBreathing Box in camera view
                             if cameraManager.scannedCode.isEmpty && cameraManager.isAuthorized {
                                 BarcodeScanBox()
                             }
                             
-                            VStack {
-                                 Spacer()
-                                 VStack(spacing: 8) {
-                                     if let batchId = stockCountVieModel.currentBatchId {
-                                         PillCountInstructionOverlay(
-                                             text: String("Batch \(batchId)")
-                                         )
-                                     }
-                                 }
-                                 .padding(.bottom, 30)
+                            //Show BatchID at bottom
+                            if currentScanType == .stockCount{
+                                VStack {
+                                    Spacer()
+                                    VStack(spacing: 8) {
+                                        if let batchId = stockCountVieModel.currentBatch?.batch_id {
+                                            PillCountInstructionOverlay(
+                                                text: String("Batch \(batchId)")
+                                            )
+                                        }
+                                    }
+                                    .padding(.bottom, 30)
+                                }
                             }
                         }
                     }
                 },
-
+                
                 bottomContent: {
                     EmptyView()
                 },
                 headerActions: {
-                    let instruction = scanType.instructionText
-
                     HStack {
                         Spacer()
-                        PillCountInstructionOverlay(text: instruction)
+                        PillCountInstructionOverlay(text: scanType.instructionText)
                         Spacer()
                     }
                     .padding(.vertical, 10)
@@ -149,17 +151,17 @@ struct QRBarcodeScannerView: View {
             .onTapGesture {
                 UIApplication.hideKeyboard()
             }
-
+            
             //ShowLoader when loading api
             if pillScanViewModel.isCheckingNdc || stockCountVieModel.isLoading {
                 ZStack {
                     Color.black.opacity(0.5)
                         .ignoresSafeArea()
-
+                    
                     PillCountingLoader()
                 }
             }
-
+            
         }
         .onAppear {
             // Reset ViewModel state so we are ready for a NEW transaction
@@ -171,8 +173,8 @@ struct QRBarcodeScannerView: View {
             showScannedData = false
             isFromScanning = false
             scannedData = nil
-            
-            handleStepVoice()
+            scanType = currentScanType
+            loadBuckets()
         }
         // MARK: - LIFECYCLE
         .task {
@@ -210,21 +212,24 @@ struct QRBarcodeScannerView: View {
                 scanTimeoutTask?.cancel()
             }
         }
-        .onChange(of: showPillTargetCountPopup) { _, newValue in
-            if newValue == false {
-                restartFullScannerFlow()
-            }
+//        .onChange(of: showPillTargetCountPopup) { _, newValue in
+//            if newValue == false {
+//                restartFullScannerFlow()
+//            }
+//        }
+        .onChange(of: scanType){_, newValue in
+            handleStepVoice()
         }
-        .onChange(of: pillScanViewModel.shouldAutoProceedToCount) {
-            _,
-            shouldProceed in
-            guard shouldProceed else { return }
-            handleSubstitute()
-            pillScanViewModel.shouldAutoProceedToCount = false
-        }
-        .customPopup(isPresented: $showPillTargetCountPopup) {
-            mannulaEntryTargetCount
-        }
+//        .onChange(of: pillScanViewModel.shouldAutoProceedToCount) {
+//            _,
+//            shouldProceed in
+//            guard shouldProceed else { return }
+//            handleSubstitute()
+//            pillScanViewModel.shouldAutoProceedToCount = false
+//        }
+//        .customPopup(isPresented: $showPillTargetCountPopup) {
+//            mannulaEntryTargetCount
+//        }
         .customPopup(
             isPresented: $pillScanViewModel.showNdcEquivalencePopup,
             dismissOnBackgroundTap: false
@@ -239,6 +244,15 @@ struct QRBarcodeScannerView: View {
             dismissOnBackgroundTap: false
         ) {
             stockCountScannedDetailsPopUp
+        }
+        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup){
+            rxScanSuccessPopup
+        }
+        .customPopup(isPresented: $pillScanViewModel.showScannedDrugInfoPopoup,  dismissOnBackgroundTap: false){
+            scannedQrSuccessfullPopup
+        }
+        .customPopup(isPresented: $stockCountVieModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false){
+            scannedNdcDoesNotMatchPmsBatchPopoup
         }
     }
 
@@ -272,239 +286,14 @@ struct QRBarcodeScannerView: View {
             }
         }
     }
-    
-    private var stockCountScannedDetailsPopUp: some View {
-        VStack(spacing: 23) {
-            ScrollView {
-                VStack {
-                    Text("QR Scanned Successfully")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(appColors.text)
-                }
-                .padding(.top)
-                
-                VStack(spacing: 16) {
-                    
-                    KeyValueInfoCard(
-                        title: "NDC Number",
-                        value: stockCountVieModel.scannedDrugData?.ndc ?? "" // here to come the ndc of the drug that i have scanned.
-                    )
-                    
-                    KeyValueInfoCard(
-                        title: "Drug Name",
-                        value: stockCountVieModel.scannedDrugData?.drugName ?? ""
-                    )
-                    
-                    KeyValueInfoCard(
-                        title: "Quantity",
-                        value: String(stockCountVieModel.scannedDrugData?.quantity ?? 0 )
-                    )
-                }
-                
-                VStack(alignment: .leading) {
-                    Text("Select Container Status")
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundColor(appColors.text)
-                }
-                .padding(.vertical,3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                SegmentedPillSelector(
-                    options: [.sealed, .opened],
-                    selected: $scannedBottleContainerStatus
-                ) { option in
-                    switch option {
-                    case .sealed: return "Sealed"
-                    case .opened: return "Opened"
-                    }
-                }
-            }
-            .scrollIndicators(.hidden)
-            .fixedSize(horizontal: false, vertical: !isLandscape)
-            
-            EqualWidthHStackButtons(spacing: 30){
 
-                // DELETE
-                PillCountingButton(
-                    iconName: nil,
-                    title: "CANCEL",
-                    textColor: appColors.primary,
-                    backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 20,
-                    iconSize: 0,
-                    action: {
-                        stockCountVieModel.showStockCountScannedDetails = false
-                        restartFullScannerFlow()
-                    }
-                )
-                
 
-                // ADD button
-                PillCountingButton(
-                    iconName: nil,
-                    title: "ADD",
-                    textColor: Color.white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 20,
-                    iconSize: 0,
-                    action: {
-                        // some action to be performed
-                        // navigate to the list screen of the current batch -- if the "SEALED" option has been selected.
-                        // navigate to the Pill Count View for counting the pills -- if the "OPENED" has been selected.
-                        // for this we would need to note the flow and clear it.
-                        stockCountVieModel.showStockCountScannedDetails = false
-                        // things to do on Add click button
-                        // 1. create a batch
-                        // 2. create a transaction for the current scanned bottle.
-                        // 3. add the current transaction to the current batch that has been created or the one which are working on.
-            
-                        if pillScanViewModel.selectedTransaction?.is_from_pms == true{
-                            if let txn = pillScanViewModel.selectedTransaction {
-                                pillScanViewModel.updatePmsTxnCount(
-                                    txn: txn,
-                                    containerStatus: scannedBottleContainerStatus,
-                                    scannedQty: Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)
-                                )
-                            }
-                        } else {
-                            handleStockCountAddAction()
-                        }
-                    }
-                )
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-    }
-
-//    private var stockCountScannedDetailsPopUp: some View {
-//        VStack(spacing: 0) {
-//
-//            // Scrollable Content
-//            ScrollView {
-//                VStack(spacing: 20) {
-//
-//                    VStack {
-//                        Text("QR Scanned Successfully")
-//                            .font(.system(size: 18, weight: .bold))
-//                            .foregroundColor(appColors.text)
-//                    }
-//                    .padding(.top)
-//
-//                    VStack(spacing: 16) {
-//
-//                        KeyValueInfoCard(
-//                            title: "NDC Number",
-//                            value: stockCountVieModel.scannedDrugData?.ndc ?? ""
-//                        )
-//
-//                        KeyValueInfoCard(
-//                            title: "Drug Name",
-//                            value: stockCountVieModel.scannedDrugData?.drugName ?? ""
-//                        )
-//
-//                        KeyValueInfoCard(
-//                            title: "Quantity",
-//                            value: stockCountVieModel.scannedDrugData?.quantity ?? ""
-//                        )
-//                    }
-//
-//                    VStack(alignment: .leading) {
-//                        Text("Select Container Status")
-//                            .font(.system(size: 16, weight: .regular))
-//                            .foregroundColor(appColors.text)
-//                    }
-//                    .frame(maxWidth: .infinity, alignment: .leading)
-//
-//                    SegmentedPillSelector(
-//                        options: [.sealed, .opened],
-//                        selected: $scannedBottleContainerStatus
-//                    ) { option in
-//                        switch option {
-//                        case .sealed: return "Sealed"
-//                        case .opened: return "Opened"
-//                        }
-//                    }
-//                }
-//                .padding()
-//                .frame(maxWidth: .infinity)
-//            }
-//            .scrollIndicators(.hidden)
-//            .fixedSize(horizontal: false, vertical: !isLandscape)
-//
-//            EqualWidthHStackButtons(spacing: 30) {
-//
-//                // CANCEL
-//                PillCountingButton(
-//                    iconName: nil,
-//                    title: "CANCEL",
-//                    textColor: appColors.primary,
-//                    backgroundColor: .clear,
-//                    borderColor: appColors.primary,
-//                    font: .system(size: 14, weight: .semibold),
-//                    cornerRadius: 30,
-//                    horizontalPadding: 32,
-//                    verticalPadding: 20,
-//                    iconSize: 0,
-//                    action: {
-//                        stockCountVieModel.showStockCountScannedDetails = false
-//                        restartFullScannerFlow()
-//                    }
-//                )
-//
-//                // ADD
-//                PillCountingButton(
-//                    iconName: nil,
-//                    title: "ADD",
-//                    textColor: .white,
-//                    backgroundColor: appColors.primary,
-//                    borderColor: .clear,
-//                    font: .system(size: 14, weight: .semibold),
-//                    cornerRadius: 30,
-//                    horizontalPadding: 32,
-//                    verticalPadding: 20,
-//                    iconSize: 0,
-//                    action: {
-//                        stockCountVieModel.showStockCountScannedDetails = false
-//                        handleStockCountAddAction()
-//                    }
-//                )
-//            }
-//            .background(appColors.primaryBackground)
-//        }
-//    }
-    
-//    private func handleStockCountAddAction() {
-//        Task {
-//            guard let batchId = stockCountVieModel.currentBatchId else {
-//                // Handle error or simply return early if batchId is nil
-//                // e.g. DLOG("Current Batch ID is nil, cannot add/update transaction.")
-//                return
-//            }
-//            stockCountVieModel.addOrUpdateTransactionForBatch(
-//                ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
-//                drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
-//                quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
-//                countType: .REGULAR,
-//                batchId: batchId
-//            )
-//            stockCountVieModel.showStockCountScannedDetails = false
-//        }
-//    }   
-//}
     
     private func handleStockCountAddAction() {
         switch scannedBottleContainerStatus {
         case .sealed:
             Task {
-                guard let batchId = stockCountVieModel.currentBatchId else {
+                guard let batchId = stockCountVieModel.currentBatch?.batch_id else {
                     return
                 }
                 await pillScanViewModel.createTxnForBatchFromScan(
@@ -521,7 +310,7 @@ struct QRBarcodeScannerView: View {
             
         case .opened:
             Task {
-                guard let batchId = stockCountVieModel.currentBatchId else {
+                guard let batchId = stockCountVieModel.currentBatch?.batch_id else {
                     return
                 }
                 await pillScanViewModel.createTxnForBatchFromScan(
@@ -578,37 +367,38 @@ extension QRBarcodeScannerView {
                     pillScanViewModel.checkIsNdcMatch(
                         rawValueFromBarcodeOrQr: newValue
                     )
-                    else { return }
+                    else {
+                        return
+                    }
 
                     if router.selectedPillScanningType == .FIXED
-                        && pillScanViewModel.selectedTransaction?.target_count
-                            == nil
-                    {
-                        showPillTargetCountPopup = true
-                        isFromScanning = true
-                    } else {
-                        if pillScanViewModel.selectedTransaction?.is_from_pms
-                            == true
-                        {
-//                            pillScanViewModel.scnnedPmsPill(
-//                                rawValueFromBarcodeOrQr: newValue,
-//                                countType: router.selectedPillScanningType
-//                                    ?? .FIXED,
-//                                image: tempCapturedImage
-//                            )
-                            await stockCountVieModel.getScannedDrugData(rawValue: newValue)
-                        } else {
-                            
-//                            await pillScanViewModel.scannedPill(
-//                                rawValueFromBarcodeOrQr: newValue,
-//                                countType: router.selectedPillScanningType
-//                                    ?? .FIXED,
-//                                image: tempCapturedImage
-//                            )
-//
-                            await stockCountVieModel.getScannedDrugData(rawValue: newValue)
-                        }
-                    }
+                         && pillScanViewModel.selectedTransaction?.target_count
+                             == nil
+                     {
+                         switch currentScanType {
+                         case .rx_label:
+                             if pillScanViewModel.matchesBarcodeFormat(newValue) && currentScanType == .rx_label {
+                                 pillScanViewModel.parseScanData(actualValue: newValue)
+                             } else {
+                                 pillScanViewModel.showToastMessage(text: "Invalid RX Barcode")
+                                 restartFullScannerFlow()
+                             }
+                         case .barcode:
+                             // Normal QR / barcode scan flow
+                             pillScanViewModel.showScannedDrugInfoPopoup = true
+                         
+                         case .stockCount:
+                             return
+                         }
+                         
+                         
+                     } else {
+                         if stockCountVieModel.currentBatch?.is_from_pms == true{
+                             await stockCountVieModel.getScannedDrugData(rawValue: newValue)
+                         }else{
+                             await stockCountVieModel.getScannedDrugData(rawValue: newValue)
+                         }
+                     }
                 }
             }
         }
@@ -647,6 +437,12 @@ extension QRBarcodeScannerView {
             showMannualEntryPopup = false
         }
     }
+    
+    func loadBuckets() {
+        let buckets = userViewModel.bucket
+        pillScanViewModel.bucketOptions = buckets
+        pillScanViewModel.selectedBucket = buckets.first ?? ""
+    }
 }
 
 enum InputField: Hashable {
@@ -656,322 +452,6 @@ enum InputField: Hashable {
 
 // MARK: - UI COMPONENTS
 extension QRBarcodeScannerView {
-
-    private var portraitBottomContent: some View {
-
-        VStack(spacing: 16) {
-            // NDC Number row
-            HStack(spacing: 12) {
-                Text("NDC Number:")
-                    .foregroundStyle(appColors.text)
-                    .frame(width: labelWidth, alignment: .leading)
-
-                PillCounterInputField(
-                    imageName: nil,
-                    placeholder: "",
-                    disabled: false,
-                    text: Binding(
-                        get: { pillScanViewModel.ndcNumber },
-                        set: { newValue in
-                            pillScanViewModel.ndcNumber = formatNDC(newValue)
-                        }
-                    ),
-                    keyboardType: .phonePad,
-                    validation: .none,
-                    maxLength: 13,
-                    field: .ndcNumber,
-                    focusedField: $focusedField
-                )
-                .frame(maxWidth: .infinity)
-            }
-            .padding(.top, 30)
-
-            HStack(spacing: 12) {
-                Text("Drug Name:")
-                    .foregroundStyle(appColors.text)
-                    .frame(width: labelWidth, alignment: .leading)
-
-                PillCounterInputField(
-                    imageName: nil,
-                    placeholder: "",
-                    disabled: false,
-                    text: $pillScanViewModel.drugNameMannuallyEntered,
-                    keyboardType: .default,
-                    validation: .none,
-                    field: .drugName,
-                    focusedField: $focusedField
-                )
-
-                .frame(maxWidth: .infinity)
-            }
-
-            if let manualEntryError {
-                Text(manualEntryError)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
-
-            HStack(spacing: 16) {
-                PillCountingButton(
-                    iconName: nil,
-                    title: "CANCEL",
-                    textColor: appColors.text,
-                    backgroundColor: appColors.primaryBackground,
-                    borderColor: appColors.primary,
-                    font: .system(size: 12, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 18,
-                    iconSize: 0,
-                    action: {
-                        stockCountVieModel.showStockCountScannedDetails = true
-                        //                        router.navigateBack()
-                        //                        pillScanViewModel.ndcNumber = ""
-                        //                        pillScanViewModel.drugName = ""
-                        //                        pillScanViewModel.drugNameMannuallyEntered = ""
-                        //                        showMannualEntryPopup = false
-                    }
-                )
-
-                PillCountingButton(
-                    iconName: nil,
-                    title: "OK",
-                    textColor: .white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 12, weight: .regular),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 18,
-                    iconSize: 0,
-                    action: {
-                        //Validate NDC
-                        guard
-                            !pillScanViewModel.ndcNumber
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                                .isEmpty
-                        else {
-                            manualEntryError = "NDC is required."
-                            return
-                        }
-
-                        // Validate Drug Name
-                        //                        guard !pillScanViewModel.drugNameMannuallyEntered
-                        //                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                        //                            .isEmpty else {
-                        //                            manualEntryError = "Drug name is required."
-                        //                            return
-                        //                        }
-
-                        if router.selectedPillScanningType == .FIXED {
-                            if pillScanViewModel.selectedTransaction?
-                                .is_from_pms == true
-                            {
-                                pillScanViewModel.manualEnterdControlledDrug(
-                                    scannedNdc: pillScanViewModel.ndcNumber
-                                )
-                            } else {
-                                showPillTargetCountPopup = true
-                            }
-                        } else {
-                            Task {
-                                if isFromScanning {
-                                    isFromScanning = false
-                                    await pillScanViewModel.scannedPill(
-                                        rawValueFromBarcodeOrQr: scannedData
-                                            ?? "",
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED,
-                                        image: tempCapturedImage
-                                    )
-                                } else {
-                                    await pillScanViewModel
-                                        .manualEntryDirectUpsert(
-                                            ndc: pillScanViewModel.ndcNumber,
-                                            drugName: pillScanViewModel
-                                                .drugNameMannuallyEntered,
-                                            countType: router
-                                                .selectedPillScanningType
-                                                ?? .FIXED
-                                        )
-
-                                }
-                                showMannualEntryPopup = false
-                            }
-                        }
-                    }
-                )
-            }
-            .padding(.top, 8)
-        }
-
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 20)
-        .background(appColors.primaryBackground)
-        .cornerRadius(24)
-    }
-
-    private var bottomContent: some View {
-        Group {
-            if stableIsLandscape {
-                landscapeBottomContent
-            } else {
-                portraitBottomContent
-            }
-        }
-    }
-
-    private var landscapeBottomContent: some View {
-        VStack(spacing: 14) {
-
-            // NDC Number
-            Text("NDC Number:")
-                .foregroundStyle(appColors.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
-                text: Binding(
-                    get: { pillScanViewModel.ndcNumber },
-                    set: { newValue in
-                        pillScanViewModel.ndcNumber = formatNDC(newValue)
-                    }
-                ),
-                keyboardType: .phonePad,
-                validation: .none,
-                maxLength: 11,
-                field: .ndcNumber,
-                focusedField: $focusedField
-            )
-
-            //
-            // Drug Name
-            Text("Drug Name:")
-                .foregroundStyle(appColors.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
-                text: $pillScanViewModel.drugNameMannuallyEntered,
-                keyboardType: .default,
-                validation: .none,
-                maxLength: nil,
-                field: .drugName,
-                focusedField: $focusedField
-            )
-
-            if let manualEntryError {
-                Text(manualEntryError)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
-
-            HStack(spacing: 16) {
-                PillCountingButton(
-                    iconName: nil,
-                    title: "CANCEL",
-                    textColor: appColors.text,
-                    backgroundColor: appColors.primaryBackground,
-                    borderColor: appColors.primary,
-                    font: .system(size: 12, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 18,
-                    iconSize: 0,
-                    action: {
-                        stockCountVieModel.showStockCountScannedDetails.toggle()
-                        //                        pillScanViewModel.ndcNumber = ""
-                        //                        pillScanViewModel.drugName = ""
-                        //                        pillScanViewModel.drugNameMannuallyEntered = ""
-                        //                        showMannualEntryPopup = false
-                    }
-                )
-
-                PillCountingButton(
-                    iconName: nil,
-                    title: "OK",
-                    textColor: .white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 12, weight: .regular),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 18,
-                    iconSize: 0,
-                    action: {
-                        guard
-                            !pillScanViewModel.ndcNumber
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                                .isEmpty
-                        else {
-                            manualEntryError = "NDC is required."
-                            return
-                        }
-
-                        // Validate Drug Name
-                        guard
-                            !pillScanViewModel.drugNameMannuallyEntered
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                                .isEmpty
-                        else {
-                            manualEntryError = "Drug name is required."
-                            return
-                        }
-
-                        if router.selectedPillScanningType == .FIXED {
-                            if pillScanViewModel.selectedTransaction?
-                                .is_from_pms == true
-                            {
-                                pillScanViewModel.manualEnterdControlledDrug(
-                                    scannedNdc: pillScanViewModel.ndcNumber
-                                )
-                            } else {
-                                showPillTargetCountPopup = true
-                            }
-                        } else {
-                            Task {
-                                if isFromScanning {
-                                    isFromScanning = false
-                                    await pillScanViewModel.scannedPill(
-                                        rawValueFromBarcodeOrQr: scannedData
-                                            ?? "",
-                                        countType: router
-                                            .selectedPillScanningType ?? .FIXED
-                                    )
-                                } else {
-                                    await pillScanViewModel
-                                        .manualEntryDirectUpsert(
-                                            ndc: pillScanViewModel.ndcNumber,
-                                            drugName: pillScanViewModel
-                                                .drugNameMannuallyEntered,
-                                            countType: router
-                                                .selectedPillScanningType
-                                                ?? .FIXED
-                                        )
-                                }
-                                showMannualEntryPopup = false
-                            }
-                        }
-                    }
-                )
-            }
-            .padding(.top, 12)
-            .padding(.top, 12)
-        }
-        .padding(.top, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 24)
-        .background(appColors.primaryBackground)
-        .cornerRadius(24)
-    }
 
     private var scannedCodeCard: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1156,7 +636,9 @@ extension QRBarcodeScannerView {
 
             onConfirm: {
                 if pillScanViewModel.isNdcEquivalent {
-                    handleSubstitute()
+//                    handleSubstitute()
+                    pillScanViewModel.showNdcEquivalencePopup = false
+                    pillScanViewModel.showScannedDrugInfoPopoup = true
                 } else {
                     restartFullScannerFlow()
                 }
@@ -1188,23 +670,7 @@ extension QRBarcodeScannerView {
         }
     }
 
-    private var showBarcodeNotFoundPopup : some View{
-        ConfirmationDialogue(
-            title: "",
-            message: "The scanned barcode is not recognized. Please try again.",
-            cancelButtonText: "Cancel",
-            confirmButtonText: "Rescan",
-            showSingleConfirmButton: true,
-            onCancel: {
-                restartFullScannerFlow()
-                stockCountVieModel.barcodeNotFound = false
-            },
-            onConfirm: {
-                restartFullScannerFlow()
-                stockCountVieModel.barcodeNotFound = false
-            }
-        )
-    }
+ 
     
     private func restartFullScannerFlow() {
         showScannedData = false
@@ -1225,6 +691,324 @@ extension QRBarcodeScannerView {
         pillScanViewModel.drugNameMannuallyEntered = ""
     }
 }
+
+// MARK: - POPUP
+extension QRBarcodeScannerView {
+   
+   private var stockCountScannedDetailsPopUp: some View {
+       VStack(spacing: 23) {
+           ScrollView {
+               VStack {
+                   Text("QR Scanned Successfully")
+                       .font(.system(size: 18, weight: .bold))
+                       .foregroundColor(appColors.text)
+                }
+               .padding(.top)
+               
+               VStack(spacing: 16) {
+                   
+                   KeyValueInfoCard(
+                       title: "NDC Number",
+                       value: stockCountVieModel.scannedDrugData?.ndc ?? "" // here to come the ndc of the drug that i have scanned.
+                   )
+                   
+                   KeyValueInfoCard(
+                       title: "Drug Name",
+                       value: stockCountVieModel.scannedDrugData?.drugName ?? ""
+                   )
+                   
+                   KeyValueInfoCard(
+                       title: "Quantity",
+                       value: String(stockCountVieModel.scannedDrugData?.quantity ?? 0 )
+                   )
+               }
+               
+               VStack(alignment: .leading) {
+                   Text("Select Container Status")
+                       .font(.system(size: 16, weight: .regular))
+                       .foregroundColor(appColors.text)
+               }
+               .padding(.vertical,3)
+               .frame(maxWidth: .infinity, alignment: .leading)
+               
+               SegmentedPillSelector(
+                   options: [.sealed, .opened],
+                   selected: $scannedBottleContainerStatus
+               ) { option in
+                   switch option {
+                   case .sealed: return "Sealed"
+                   case .opened: return "Opened"
+                   }
+               }
+           }
+           .scrollIndicators(.hidden)
+           .fixedSize(horizontal: false, vertical: !isLandscape)
+           
+           
+           EqualWidthHStackButtons(spacing: 30){
+               // DELETE
+               PillCountingButton(
+                   iconName: nil,
+                   title: "CANCEL",
+                   textColor: appColors.primary,
+                   backgroundColor: .clear,
+                   borderColor: appColors.primary,
+                   font: .system(size: 14, weight: .semibold),
+                   cornerRadius: 30,
+                   horizontalPadding: 32,
+                   verticalPadding: 20,
+                   iconSize: 0,
+                   action: {
+                       stockCountVieModel.showStockCountScannedDetails = false
+                       restartFullScannerFlow()
+                   }
+               )
+               
+               // ADD button
+               PillCountingButton(
+                   iconName: nil,
+                   title: "ADD",
+                   textColor: Color.white,
+                   backgroundColor: appColors.primary,
+                   borderColor: .clear,
+                   font: .system(size: 14, weight: .semibold),
+                   cornerRadius: 30,
+                   horizontalPadding: 32,
+                   verticalPadding: 20,
+                   iconSize: 0,
+                   action: {
+                       // some action to be performed
+                       // navigate to the list screen of the current batch -- if the "SEALED" option has been selected.
+                       // navigate to the Pill Count View for counting the pills -- if the "OPENED" has been selected.
+                       // for this we would need to note the flow and clear it.
+                       stockCountVieModel.showStockCountScannedDetails = false
+                       // things to do on Add click button
+                       // 1. create a batch
+                       // 2. create a transaction for the current scanned bottle.
+                       // 3. add the current transaction to the current batch that has been created or the one which are working on.
+           
+                       if pillScanViewModel.selectedTransaction?.is_from_pms == true{
+                           if let txn = pillScanViewModel.selectedTransaction {
+                               pillScanViewModel.updatePmsTxnCount(
+                                   txn: txn,
+                                   containerStatus: scannedBottleContainerStatus,
+                                   scannedQty: Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)
+                               )
+                           }
+                       } else {
+                           handleStockCountAddAction()
+                       }
+                   }
+               )
+           }
+           .frame(maxWidth: .infinity, alignment: .center)
+       }
+   }
+    
+   private var rxScanSuccessPopup: some View {
+       VStack(spacing: 23) {
+           ScrollView {
+               VStack {
+                   Text("Label Scanned Successfully")
+                       .font(.system(size: 18, weight: .bold))
+                       .foregroundColor(appColors.text)
+               }
+               .padding(.top)
+               VStack(spacing: 16) {
+                   
+                   KeyValueInfoCard(
+                       title: "Rx Number",
+                       value: pillScanViewModel.scannedRxData?.rxNo ?? "-"
+                   )
+                   KeyValueInfoCard(
+                       title: "NDC Number",
+                       value: pillScanViewModel.scannedRxData?.ndcNo ?? "-"
+                   )
+                   KeyValueInfoCard(
+                       title: "Drug Name",
+                       value: pillScanViewModel.scannedRxData?.drugName ?? "-"
+                   )
+                   KeyValueInfoCard(
+                       title: "Quantity",
+                       value: pillScanViewModel.scannedRxData?.qty ?? "-"
+                   )
+                   
+                   VStack(alignment: .leading, spacing: 8) {
+                       Text("Select Bucket")
+                           .font(.system(size: 14))
+                           .foregroundColor(appColors.text)
+
+                       Menu {
+                           ForEach(pillScanViewModel.bucketOptions, id: \.self) { bucket in
+                               Button(bucket) {
+                                   pillScanViewModel.selectedBucket = bucket
+                               }
+                           }
+                       } label: {
+                           HStack {
+                               Text(pillScanViewModel.selectedBucket.isEmpty ? "Select Bucket" : pillScanViewModel.selectedBucket)
+                                   .foregroundColor(appColors.text)
+
+                               Spacer()
+
+                               Image(systemName: "chevron.down")
+                                   .foregroundColor(appColors.text.opacity(0.7))
+                           }
+                           .padding()
+                           .frame(maxWidth: .infinity)
+                           .background(appColors.secondaryBackground)
+                           .cornerRadius(10)
+                           .overlay(
+                               RoundedRectangle(cornerRadius: 10)
+                                   .stroke(appColors.primary, lineWidth: 1.5)
+                           )
+                       }
+                   }
+               }
+           }
+           .scrollIndicators(.hidden)
+           .fixedSize(horizontal: false, vertical: !isLandscape)
+           // MARK: Buttons
+           EqualWidthHStackButtons(spacing: 30) {
+               PillCountingButton(
+                   iconName: nil,
+                   title: "CANCEL",
+                   textColor: appColors.primary,
+                   backgroundColor: .clear,
+                   borderColor: appColors.primary,
+                   font: .system(size: 14, weight: .semibold),
+                   cornerRadius: 30,
+                   horizontalPadding: 32,
+                   verticalPadding: 20,
+                   iconSize: 0,
+                   action: {
+                       pillScanViewModel.showRxFlowPopup = false
+                       restartFullScannerFlow()
+                   }
+               )
+               PillCountingButton(
+                   iconName: nil,
+                   title: "PROCEED",
+                   textColor: appColors.text,
+                   backgroundColor: appColors.primary,
+                   borderColor: .clear,
+                   font: .system(size: 14, weight: .semibold),
+                   cornerRadius: 30,
+                   horizontalPadding: 32,
+                   verticalPadding: 20,
+                   iconSize: 0,
+                   action: {
+                       Task {
+                           await pillScanViewModel.createTransactionFromRxScan()
+                           scanType = .barcode
+                           restartFullScannerFlow()
+                       }
+                   }
+               )
+           }
+           .frame(maxWidth: .infinity)
+       }
+   }
+   
+   private var scannedQrSuccessfullPopup: some View {
+       VStack(spacing: 23) {
+           ScrollView {
+               VStack {
+                   Text("QR Scanned Successfully")
+                       .font(.system(size: 18, weight: .bold))
+                       .foregroundColor(appColors.text)
+               }
+               .padding(.top)
+               VStack(spacing: 16) {
+                   KeyValueInfoCard(
+                       title: "NDC Number",
+                       value: pillScanViewModel.scannedRxData?.ndcNo ?? "-"
+                   )
+                   
+                   KeyValueInfoCard(
+                       title: "Drug Name",
+                       value: pillScanViewModel.scannedRxData?.drugName ?? "-"
+                   )
+               }
+           }
+           .scrollIndicators(.hidden)
+           .fixedSize(horizontal: false, vertical: !isLandscape)
+           //  BUTTONS
+           EqualWidthHStackButtons(spacing: 30) {
+               PillCountingButton(
+                   iconName: nil,
+                   title: "CANCEL",
+                   textColor: appColors.primary,
+                   backgroundColor: .clear,
+                   borderColor: appColors.primary,
+                   font: .system(size: 14, weight: .semibold),
+                   cornerRadius: 30,
+                   horizontalPadding: 32,
+                   verticalPadding: 20,
+                   iconSize: 0,
+                   action: {
+                       pillScanViewModel.showScannedDrugInfoPopoup = false
+                       restartFullScannerFlow()
+                   }
+               )
+               PillCountingButton(
+                   iconName: nil,
+                   title: "PROCEED",
+                   textColor: Color.white,
+                   backgroundColor: appColors.primary,
+                   borderColor: .clear,
+                   font: .system(size: 14, weight: .semibold),
+                   cornerRadius: 30,
+                   horizontalPadding: 32,
+                   verticalPadding: 20,
+                   iconSize: 0,
+                   action: {
+                       pillScanViewModel.showScannedDrugInfoPopoup = false
+                       handleSubstitute()
+                   }
+               )
+           }
+           .frame(maxWidth: .infinity)
+       }
+   }
+    
+    private var showBarcodeNotFoundPopup : some View{
+        ConfirmationDialogue(
+            title: "",
+            message: "The scanned barcode is not recognized. Please try again.",
+            cancelButtonText: "Cancel",
+            confirmButtonText: "Rescan",
+            showSingleConfirmButton: true,
+            onCancel: {
+                restartFullScannerFlow()
+                stockCountVieModel.barcodeNotFound = false
+            },
+            onConfirm: {
+                restartFullScannerFlow()
+                stockCountVieModel.barcodeNotFound = false
+            }
+        )
+    }
+    
+    private var scannedNdcDoesNotMatchPmsBatchPopoup : some View{
+        ConfirmationDialogue(
+            title: "Incorrect NDC",
+            message: "You have scanned an incorrect NDC. This item does not match the PMS batch.",
+            cancelButtonText: "Cancel",
+            confirmButtonText: "Rescan",
+            showSingleConfirmButton: true,
+            onCancel: {
+                restartFullScannerFlow()
+                stockCountVieModel.showScannedNdcDoesNotMatch = false
+            },
+            onConfirm: {
+                restartFullScannerFlow()
+                stockCountVieModel.showScannedNdcDoesNotMatch = false
+            }
+        )
+    }
+}
+
 
 @discardableResult
 func DLOG(_ msg: String) -> Bool {

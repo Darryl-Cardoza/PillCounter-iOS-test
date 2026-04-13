@@ -42,6 +42,13 @@ extension PillScanViewModel {
                 }
             }
             let ndc = mappedData["NDCNO"] ?? ""
+            let bucket = mappedData["BUCKET"] ?? ""
+            
+            
+            self.selectedBucket = bucket
+            
+            print("Bucket Id\(selectedBucket)")
+            
             // MARK: 3️⃣ Resolve drug name then show popup
             Task {
                 let resolvedDrugName = await resolveDrugName(for: ndc)

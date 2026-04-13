@@ -174,7 +174,6 @@ struct QRBarcodeScannerView: View {
             isFromScanning = false
             scannedData = nil
             scanType = currentScanType
-            loadBuckets()
         }
         // MARK: - LIFECYCLE
         .task {
@@ -380,8 +379,9 @@ extension QRBarcodeScannerView {
                              if pillScanViewModel.matchesBarcodeFormat(newValue) && currentScanType == .rx_label {
                                  pillScanViewModel.parseScanData(actualValue: newValue)
                              } else {
+                                 pillScanViewModel.isNdcEquivalent = false
+                                 pillScanViewModel.showNdcEquivalencePopup = true
                                  pillScanViewModel.showToastMessage(text: "Invalid RX Barcode")
-                                 restartFullScannerFlow()
                              }
                          case .barcode:
                              // Normal QR / barcode scan flow
@@ -393,11 +393,7 @@ extension QRBarcodeScannerView {
                          
                          
                      } else {
-                         if stockCountVieModel.currentBatch?.is_from_pms == true{
-                             await stockCountVieModel.getScannedDrugData(rawValue: newValue)
-                         }else{
-                             await stockCountVieModel.getScannedDrugData(rawValue: newValue)
-                         }
+                         await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                      }
                 }
             }
@@ -438,11 +434,6 @@ extension QRBarcodeScannerView {
         }
     }
     
-    func loadBuckets() {
-        let buckets = userViewModel.bucket
-        pillScanViewModel.bucketOptions = buckets
-        pillScanViewModel.selectedBucket = buckets.first ?? ""
-    }
 }
 
 enum InputField: Hashable {
@@ -832,38 +823,41 @@ extension QRBarcodeScannerView {
                        title: "Quantity",
                        value: pillScanViewModel.scannedRxData?.qty ?? "-"
                    )
-                   
-                   VStack(alignment: .leading, spacing: 8) {
-                       Text("Select Bucket")
-                           .font(.system(size: 14))
-                           .foregroundColor(appColors.text)
-
-                       Menu {
-                           ForEach(pillScanViewModel.bucketOptions, id: \.self) { bucket in
-                               Button(bucket) {
-                                   pillScanViewModel.selectedBucket = bucket
-                               }
-                           }
-                       } label: {
-                           HStack {
-                               Text(pillScanViewModel.selectedBucket.isEmpty ? "Select Bucket" : pillScanViewModel.selectedBucket)
-                                   .foregroundColor(appColors.text)
-
-                               Spacer()
-
-                               Image(systemName: "chevron.down")
-                                   .foregroundColor(appColors.text.opacity(0.7))
-                           }
-                           .padding()
-                           .frame(maxWidth: .infinity)
-                           .background(appColors.secondaryBackground)
-                           .cornerRadius(10)
-                           .overlay(
-                               RoundedRectangle(cornerRadius: 10)
-                                   .stroke(appColors.primary, lineWidth: 1.5)
-                           )
-                       }
-                   }
+                   KeyValueInfoCard(
+                       title: "Bucket",
+                       value: pillScanViewModel.selectedBucket 
+                   )
+//                   VStack(alignment: .leading, spacing: 8) {
+//                       Text("Select Bucket")
+//                           .font(.system(size: 14))
+//                           .foregroundColor(appColors.text)
+//
+//                       Menu {
+//                           ForEach(pillScanViewModel.bucketOptions, id: \.self) { bucket in
+//                               Button(bucket) {
+//                                   pillScanViewModel.selectedBucket = bucket
+//                               }
+//                           }
+//                       } label: {
+//                           HStack {
+//                               Text(pillScanViewModel.selectedBucket.isEmpty ? "Select Bucket" : pillScanViewModel.selectedBucket)
+//                                   .foregroundColor(appColors.text)
+//
+//                               Spacer()
+//
+//                               Image(systemName: "chevron.down")
+//                                   .foregroundColor(appColors.text.opacity(0.7))
+//                           }
+//                           .padding()
+//                           .frame(maxWidth: .infinity)
+//                           .background(appColors.secondaryBackground)
+//                           .cornerRadius(10)
+//                           .overlay(
+//                               RoundedRectangle(cornerRadius: 10)
+//                                   .stroke(appColors.primary, lineWidth: 1.5)
+//                           )
+//                       }
+//                   }
                }
            }
            .scrollIndicators(.hidden)

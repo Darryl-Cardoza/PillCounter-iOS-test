@@ -29,6 +29,8 @@ extension  PillsDataLocalStorage {
         } catch {
             return nil
         }
+        
+        debugPrintFullDatabase()
     }
     
     

@@ -129,26 +129,32 @@ private struct LotRow: View {
 
     var body: some View {
         VStack(spacing: 0) {
-
             Divider()
                 .padding(.vertical,5)
 
             HStack {
-                // LOT COLUMN (flexible)
-                Text("Lot \(lot)")
-                    .font(.system(size: 13))
-                    .foregroundColor(appColors.text.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                let isLotEmpty = lot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let isExpiryEmpty = expiry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-                // EXP COLUMN (fixed width)
-                if !expiry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Exp \(expiry)")
+                if isLotEmpty && isExpiryEmpty {
+                    Text("-")
                         .font(.system(size: 13))
                         .foregroundColor(appColors.text.opacity(0.6))
-                        .frame(width: 110, alignment: .leading)
-                }
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                // QTY COLUMN (fixed width, right aligned)
+                } else {
+                    Text("Lot \(lot)")
+                        .font(.system(size: 13))
+                        .foregroundColor(appColors.text.opacity(0.8))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if !isExpiryEmpty {
+                        Text("Exp \(expiry)")
+                            .font(.system(size: 13))
+                            .foregroundColor(appColors.text.opacity(0.6))
+                            .frame(width: 110, alignment: .leading)
+                    }
+                }
                 Text("\(qty)")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(appColors.text)

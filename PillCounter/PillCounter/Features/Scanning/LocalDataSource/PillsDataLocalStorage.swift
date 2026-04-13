@@ -169,6 +169,7 @@ final class PillsDataLocalStorage {
         // finally save the transaction in core data.
         CoreDataManager.shared.save(context: mainThreadContext)
         debugPrintAllTransactions()
+        debugPrintFullDatabase()
     }
 
     // fetch pill count transaction.
@@ -1020,6 +1021,96 @@ final class PillsDataLocalStorage {
                 type: ControlledStep.vial.rawValue
             )
         }
+    }
+    
+    func debugPrintFullDatabase() {
+
+        print("\n================= 🧠 FULL DB DUMP =================")
+
+        // MARK: 🟦 BATCHES
+        let batchRequest: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        let batches = (try? mainThreadContext.fetch(batchRequest)) ?? []
+
+        print("\n📦 BATCHES: \(batches.count)")
+        for batch in batches {
+            print("""
+            ---------------- BATCH ----------------
+            🆔 Batch ID: \(batch.batch_id)
+            📅 Start: \(batch.start_date_time)
+            📦 Bucket: \(batch.bucket_id ?? "")
+            📊 Status: \(batch.status ?? "")
+            🗑️ Deleted: \(batch.is_deleted)
+            📡 From PMS: \(batch.is_from_pms)
+            ---------------------------------------
+            """)
+        }
+
+        // MARK: 🟩 DRUG MASTER
+        let drugRequest: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
+        let drugs = (try? mainThreadContext.fetch(drugRequest)) ?? []
+
+        print("\n💊 DRUG MASTER: \(drugs.count)")
+        for drug in drugs {
+            print("""
+            ---------------- DRUG ----------------
+            🆔 Drug ID: \(drug.drug_id)
+            💊 Name: \(drug.drug_name ?? "")
+            🔢 NDC: \(drug.ndc ?? "")
+            📦 GTIN: \(drug.gtin ?? "")
+            📊 Package Qty: \(drug.package_qty)
+            -------------------------------------
+            """)
+        }
+
+        // MARK: 🟥 TRANSACTIONS
+        let txnRequest: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        let txns = (try? mainThreadContext.fetch(txnRequest)) ?? []
+
+        print("\n🧾 TRANSACTIONS: \(txns.count)")
+        for txn in txns {
+            print("""
+            ---------------- TXN ----------------
+            🆔 Txn ID: \(txn.txn_id)
+            📦 Batch ID: \(txn.batch_id)
+            💊 Drug: \(txn.drug?.drug_name ?? "")
+            🔢 NDC: \(txn.drug?.ndc ?? "")
+            📦 Bucket: \(txn.bucket_id ?? "")
+            📅 Created: \(txn.created_at)
+
+            🧴 Bottle Qty: \(txn.bottle_qty)
+            💊 Loose Qty: \(txn.loose_qty)
+            🎯 Target: \(txn.target_count)
+
+            📆 Expiry: \(txn.expiry ?? "")
+            🏷 Lot: \(txn.lot_no ?? "")
+
+            📡 From PMS: \(txn.is_from_pms)
+            🔄 Synced: \(txn.is_synced)
+            🗑️ Deleted: \(txn.is_deleted)
+            ------------------------------------
+            """)
+        }
+
+        // MARK: 🟨 TRANSACTION DETAILS
+        let detailRequest: NSFetchRequest<PillCountTransactionDetailsEntity> =
+            PillCountTransactionDetailsEntity.fetchRequest()
+        let details = (try? mainThreadContext.fetch(detailRequest)) ?? []
+
+        print("\n📑 TXN DETAILS: \(details.count)")
+        for d in details {
+            print("""
+            ------------- DETAIL -------------
+            🆔 Detail ID: \(d.txn_details_id)
+            🔗 Txn ID: \(d.txn_id)
+            💊 Count: \(d.pill_count)
+            🖼 Image: \(d.image_path ?? "")
+            🧭 Type: \(d.type ?? "")
+            🗑️ Deleted: \(d.is_deleted)
+            ----------------------------------
+            """)
+        }
+
+        print("\n================= END DB DUMP =================\n")
     }
 
     // MARK: DEBUGGING

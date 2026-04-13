@@ -234,7 +234,7 @@ class StockCountViewModel: ObservableObject {
             
             // 2. Group by LOT + EXPIRY
             let lotGrouped = Dictionary(grouping: txnList) {
-                "\($0.lot_no ?? "-")|\($0.expiry ?? "-")"
+                "\($0.lot_no ?? "")|\($0.expiry ?? "")"
             }
             
             var lotDetails: [LotDetail] = []
@@ -243,8 +243,8 @@ class StockCountViewModel: ObservableObject {
             
             for (_, lotTxns) in lotGrouped {
                 
-                let lot = lotTxns.first?.lot_no ?? "-"
-                let expiry = lotTxns.first?.expiry ?? "-"
+                let lot = lotTxns.first?.lot_no ?? ""
+                let expiry = lotTxns.first?.expiry ?? ""
                 
                 let sealed = lotTxns.reduce(0) {
                     $0 + ($1.bottle_qty * ($1.drug?.package_qty ?? 0))

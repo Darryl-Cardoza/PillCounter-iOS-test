@@ -255,6 +255,7 @@ extension PillScanViewModel {
                     ndc: response.data?.scannedNdc?.packageNdc ?? "",
                     drugId: newId,
                     drugName: lookup,
+                    drugType: response.data?.scannedNdc?.deaSchedule,
                     packageQty: response.data?.scannedNdc?.safeQuantity ?? 0
                 )
 

@@ -240,10 +240,6 @@ struct DashboardView: View {
                     stockCountViewModel.getCountData()
                 }
             }
-            //Load Buckets
-            let buckets = userViewModel.bucket
-            pillScanViewModel.bucketOptions = buckets
-            pillScanViewModel.selectedBucket = buckets.first ?? ""
         }
         .customPopup(isPresented: $showStockCountPopup) {
             stockCountPopUp
@@ -325,10 +321,10 @@ struct DashboardView: View {
                         verticalPadding: 20,
                         iconSize: 0,
                         action: {
-                            // some action to be performed
-                            // navigate to the barcode scan screen for scanning the bottles.
-                            // for this we would need to note the flow and clear it.
-//                            handleStockCountSelectedOption()
+                            //Load Buckets
+                            let buckets = userViewModel.bucket
+                            pillScanViewModel.bucketOptions = buckets
+                            pillScanViewModel.selectedBucket = buckets.first ?? ""
                             showSelectBucketIdPopup = true
                             showStockCountPopup = false
                         }
@@ -361,7 +357,6 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     
                     ForEach(pillScanViewModel.bucketOptions, id: \.self) { bucket in
-                        
                         PillCountingRadioButton(
                             option: bucket,
                             selectedOption: $pillScanViewModel.selectedBucket,

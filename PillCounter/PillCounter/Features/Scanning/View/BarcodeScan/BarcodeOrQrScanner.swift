@@ -661,7 +661,7 @@ extension QRBarcodeScannerView {
         }
     }
 
- 
+
     
     private func restartFullScannerFlow() {
         showScannedData = false
@@ -733,7 +733,7 @@ extension QRBarcodeScannerView {
                }
            }
            .scrollIndicators(.hidden)
-           .fixedSize(horizontal: false, vertical: !isLandscape)
+           .fixedSize(horizontal: false, vertical: true ) //islandscape
            
            
            EqualWidthHStackButtons(spacing: 30){

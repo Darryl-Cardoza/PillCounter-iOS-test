@@ -475,10 +475,12 @@ struct BottomControlsViewBodyForPillScan: View {
     var body: some View {
         Group {
             if isLandscape {
+                Spacer().frame(height: 200)
                 // MARK: - LANDSCAPE LAYOUT
                 // 1. Center: Add Button
                 // 2. Below: Row with Total Count (Left) and All Done (Right)
-                VStack(spacing: 20) {
+                VStack(spacing: 5) {
+                    
                     addButton
 
                     HStack(alignment: .bottom) {

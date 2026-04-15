@@ -13,6 +13,8 @@ struct DashboardView: View {
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
+    @StateObject private var locationService = LocationService.shared
+
     @State private var someParialValue: Int = 1
     @State private var someParialValue2: Int = 2
     @State private var someCompletedValue: Int = 3
@@ -39,7 +41,7 @@ struct DashboardView: View {
                     VStack(spacing: 10) {
                         Spacer()
                         Spacer()
-                        VStack(spacing: 15) {
+//                        VStack(spacing: 15) {
                             Image("dispense_dashboard_icon")
                                 .renderingMode(.template)
                                 .resizable()
@@ -62,13 +64,14 @@ struct DashboardView: View {
                             Text("FIXED_COUNT_SUBTITLE")
                                 .foregroundStyle(appColors.text)
                             
-                        }
+//                        }
+                        Spacer()
                         
                         HStack {
                             PillCountingButton(
                                 iconName: "partial",
                                 title:
-                                    "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("PARTIAL", comment: ""))",
+                                    "\(userViewModel.fixedCountTransactionCompletedCount) Completed",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
@@ -86,7 +89,7 @@ struct DashboardView: View {
                             PillCountingButton(
                                 iconName: "new_rx",
                                 title:
-                                    "\(userViewModel.fixedCountTransactionPartialCount) \(NSLocalizedString("NEWRX", comment: ""))",
+                                    "\(userViewModel.fixedCountTransactionPartialCount) Partials",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
@@ -155,14 +158,12 @@ struct DashboardView: View {
                             PillCountingButton(
                                 iconName: "partial",
                                 title:
-                                    "\(stockCountViewModel.totalBatchCount) \(NSLocalizedString("PARTIAL", comment: ""))",
+                                    "\(stockCountViewModel.totalBatchCount) Completed",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
-//                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular))))).
-                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
-
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular)))))
                                 },
                                 iconColor: appColors.primary,
                             )
@@ -172,16 +173,19 @@ struct DashboardView: View {
                             
                             PillCountingButton(
                                 iconName: "new_rx",
-                                title:
-                                    "\(stockCountViewModel.totalNdcRequests) \(NSLocalizedString("NDCREQ", comment: ""))",
+//                                title:
+//                                    "\(stockCountViewModel.totalNdcRequests) \(NSLocalizedString("NDCREQ", comment: ""))",
+                                
+                                title: "\(stockCountViewModel.totalBatchCount) Partials",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
                                     // some action to be performed like opening or navigating
                                     // need to set this as regular.
-                                    router.selectedPillScanningType = .REGULAR
-                                    router.navigate(to: .authentication(
-                                        .login(.dashboard(.pillCount(.stockCount(.stockCountPendingBatchListScreen))))))
+//                                    router.selectedPillScanningType = .REGULAR
+//                                    router.navigate(to: .authentication(
+//                                        .login(.dashboard(.pillCount(.stockCount(.stockCountPendingBatchListScreen))))))
+                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
                                     
                                 },
                                 iconColor: appColors.primary
@@ -220,8 +224,6 @@ struct DashboardView: View {
             showHamburgerMenu: true,
             showPmsConnectionButton: isHl7Enable,
             pmsConnectionState : userViewModel.pmsConnectionState
-  
-
         )
         .onAppear {
             Task(priority: .background) {
@@ -240,6 +242,9 @@ struct DashboardView: View {
                     stockCountViewModel.getCountData()
                 }
             }
+            
+            locationService.requestPermission()
+            locationService.startUpdating()
         }
         .customPopup(isPresented: $showStockCountPopup) {
             stockCountPopUp

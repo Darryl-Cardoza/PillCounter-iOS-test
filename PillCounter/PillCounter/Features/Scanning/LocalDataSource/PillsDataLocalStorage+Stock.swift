@@ -10,7 +10,7 @@ import CoreData
 
 extension  PillsDataLocalStorage {
     
-    func createBatch(bucketId: String, isFromPms: Bool) -> BatchCountEntity? {
+    func createBatch(bucketId: String, isFromPms: Bool, requestId: String? = nil) -> BatchCountEntity? {
         let context = mainThreadContext
 
         let batchId = Int64(Date().timeIntervalSince1970 * 1000)
@@ -22,15 +22,14 @@ extension  PillsDataLocalStorage {
         batch.is_deleted = false
         batch.bucket_id = bucketId
         batch.is_from_pms = isFromPms
-
+        batch.req_id_from_pms = requestId
         do {
             try context.save()
+            debugPrintFullDatabase()
             return batch
         } catch {
             return nil
-        }
-        
-        debugPrintFullDatabase()
+        }        
     }
     
     

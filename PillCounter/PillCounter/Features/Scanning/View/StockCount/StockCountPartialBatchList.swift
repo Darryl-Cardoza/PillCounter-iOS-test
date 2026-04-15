@@ -104,6 +104,7 @@ struct StockCountPartialBatchListScreen: View {
         selectedIds: Set<Int64>
     ) -> some View {
         let count = batchCounts[batch.batch_id] ?? 0
+        
 
         return HStack(spacing: 16) {
 
@@ -121,7 +122,7 @@ struct StockCountPartialBatchListScreen: View {
 
             ThumbnailImageView(
                 imagePath: "",
-                placeholderImageName: "batch_icon",
+                placeholderImageName: batch.is_from_pms ? "new_rx" : "batch_icon",
                 isFromPms: false,
                 showImageBackground: appColors.primaryBackground
             )
@@ -132,7 +133,7 @@ struct StockCountPartialBatchListScreen: View {
                     .foregroundColor(appColors.text)
 
                 HStack(spacing: 10) {
-                    Text(stockCountViewMoel.formatDate(batch.start_date_time))
+                    Text(DateUtils.formatToDayMonthYearTime(batch.start_date_time))
                         .font(.system(size: 12))
                         .foregroundColor(appColors.text.opacity(0.7))
 

@@ -215,7 +215,7 @@ final class Hl7ServiceController: ObservableObject {
         sendTransaction(txn)
     }
 
-    private func sendTransaction(_ txn: PillCountTransactionEntity) {
+    func sendTransaction(_ txn: PillCountTransactionEntity) {
         currentTxn = txn
         retryCount += 1
 
@@ -227,15 +227,10 @@ final class Hl7ServiceController: ObservableObject {
         print("🔁 [HL7] Retry count:", retryCount)
         print("🧾 [HL7] Message ID:", messageId)
 
-        guard let user = txn.user else {
-            print("❌ [HL7] Missing user for txn:", txn.txn_id)
-            return
-        }
+      
 
         let hl7 = buildHl7Message(
-            txn: txn,
-            messageId: messageId,
-            user: user
+            txn: txn
         )
 
         print("📡 [HL7] HL7 Payload:", hl7)
@@ -284,16 +279,67 @@ final class Hl7ServiceController: ObservableObject {
     }
 
     // MARK: - HL7 Message Builder
-
+    
     private func buildHl7Message(
         txn: PillCountTransactionEntity,
-        messageId: String,
-        user: UserEntity?
     ) -> String {
+        
+        guard let user = txn.user else {
+            print("❌ [HL7] Missing user for txn:", txn.txn_id)
+            return ""
+        }
+        
         return HL7CompletionBuilder().buildCompletionMessage(txn: txn, user: user )
     }
 
-    
+    func sendBatchInventory(batchId: Int64) {
+
+        print("📦 [HL7] Sending batch inventory for batch:", batchId)
+
+        guard let batch = pillDataLocalStorage.fetchBatchById(batchId) else {
+            print("❌ [HL7] Batch not found:", batchId)
+            return
+        }
+
+        // ✅ GET TXNS FROM BATCH
+        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
+
+        guard !txns.isEmpty else {
+            print("❌ No transactions in batch")
+            return
+        }
+
+        // ✅ GET USER FROM FIRST TXN
+        guard let user = txns.first?.user else {
+            print("❌ Missing user from transactions")
+            return
+        }
+
+        // ✅ ONLY PMS BATCH
+        guard batch.is_from_pms else {
+            print("ℹ️ Not PMS batch → skip HL7")
+            return
+        }
+
+        // ✅ MUST HAVE REQUEST ID
+        guard let requestId = batch.req_id_from_pms else {
+            print("❌ Missing requestId → cannot respond")
+            return
+        }
+
+        let builder = HL7CompletionBuilder()
+
+        let hl7 = builder.buildInventoryMessage(
+            batch: batch,
+            user: user
+        )
+
+        print("📡 [HL7] Batch HL7 Payload:\n\(hl7)")
+
+        hl7Manager?.sendClientHL7(hl7)
+
+        print("✅ [HL7] Batch inventory sent")
+    }
     
     private func hl7Timestamp() -> String {
         let formatter = DateFormatter()

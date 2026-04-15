@@ -205,7 +205,8 @@ class StockCountViewModel: ObservableObject {
             batchId: batchId,
             status: "completed"
         )
-
+        
+        Hl7ServiceController.shared.sendBatchInventory(batchId: batchId)
         loadTransactions()
 
         print("Batch \(batchId) marked as COMPLETED")
@@ -213,13 +214,13 @@ class StockCountViewModel: ObservableObject {
     
     
     // Formatting Date
-    func formatDate(_ timestamp: Int64?) -> String {
-        guard let timestamp else { return "" }
-        let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd MMM • hh:mm a"
-        return formatter.string(from: date)
-    }
+//    func formatDate(_ timestamp: Int64?) -> String {
+//        guard let timestamp else { return "" }
+//        let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
+//        let formatter = DateFormatter()
+//        formatter.dateFormat = "dd MMM • hh:mm a"
+//        return formatter.string(from: date)
+//    }
     
     
     // Mapper function

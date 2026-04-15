@@ -14,6 +14,8 @@ import ComposeApp
 class UserViewModel: ObservableObject {
     // MARK: - APP STORAGE
     let pillDataLocalStorage = PillsDataLocalStorage.shared
+    
+     
     // get the access token from the app storage
     @AppStorage(AppStorageManager.AppStorageKeys.accessToken) var accessToken:
         String = ""

@@ -15,6 +15,7 @@ extension PillScanViewModel {
     ){
         print("Received message parsed message \(message)")
         guard let inboundType = classifyInboundMessage(message) else {
+            print("Inbount Type not found")
             return
         }
         
@@ -115,18 +116,12 @@ extension PillScanViewModel {
         inboundType: CountType,
         callback: HL7SimpleCallback? = nil
     ) async {
-        guard !message.inventoryItems.isEmpty else {
-            print("[HL7] Regular Count: No inventory items found")
-            callback?(false)
-            return
-        }
-
-        await createBatchAndTxnsFromHL7(
-            inventoryItems: message.inventoryItems,
-            countType: inboundType,
-            rxNo: message.order?.placerOrderId,
+        await createBatchAndTxnsFromHL7Request(
+            medications: message.medications,
+            requestId: message.header.messageControlId,
             bucketId: ""
         )
+        
         callback?(true)
     }
 
@@ -141,8 +136,8 @@ extension PillScanViewModel {
         }
 
         if message.messageType == "INR",
-           message.triggerEvent == "U05",
-           !message.inventoryItems.isEmpty {
+           message.triggerEvent == "U04",
+           !message.medications.isEmpty {
             return .REGULAR
         }
         return nil

@@ -59,7 +59,7 @@ class TlsImageKeystoreUtil {
     }
     
     private func loadFromP12AndStore() -> SecIdentity? {
-        guard let url = Bundle.main.url(forResource: "android-server", withExtension: "p12"),
+        guard let url = Bundle.main.url(forResource: "ios-server", withExtension: "p12"),
               let data = try? Data(contentsOf: url) else {
             print("❌ Failed to load p12 file")
             return nil

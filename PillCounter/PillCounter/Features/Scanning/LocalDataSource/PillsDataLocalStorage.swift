@@ -1041,6 +1041,7 @@ final class PillsDataLocalStorage {
             📊 Status: \(batch.status ?? "")
             🗑️ Deleted: \(batch.is_deleted)
             📡 From PMS: \(batch.is_from_pms)
+               requstId:\(batch.req_id_from_pms)
             ---------------------------------------
             """)
         }

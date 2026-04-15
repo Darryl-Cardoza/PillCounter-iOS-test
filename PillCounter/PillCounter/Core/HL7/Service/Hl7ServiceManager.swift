@@ -410,7 +410,6 @@ final class Hl7ServiceManager {
     }
 
     // MARK: - MLLP Frame Parsing
-
     private func processReceiveBuffer() {
         let start: UInt8 = 0x0B
         let end1: UInt8 = 0x1C

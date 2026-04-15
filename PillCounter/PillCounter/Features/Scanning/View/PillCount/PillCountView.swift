@@ -22,6 +22,7 @@ struct OPillCountView: View {
     // MARK: - STATE MANAGEMENT
     // @StateObject ensures the camera session survives view updates and rotations.
     @StateObject var cameraService = CameraService()
+    @StateObject private var locationService = LocationService.shared
     @State private var showZeroCountPopup: Bool = false
     @State private var showNoteOption: Bool = false
     @State private var showConfirmCompletionPopup: Bool = false
@@ -175,6 +176,7 @@ struct OPillCountView: View {
             cameraService.startObservingOrientation()
             initializeTransaction()
             pillScanViewModel.addCurrentOpenPillCount = 0
+
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -578,6 +580,14 @@ extension OPillCountView {
                 vialCapturedImagePath = nil
                 if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                     router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+                    
+                    guard let txn = pillScanViewModel.currentTransaction else {
+                        print("❌ No current transaction")
+                        return
+                    }
+
+                    Hl7ServiceController.shared.sendTransaction(txn)
+                
                 }else{
                     stockCountViewModel.updateCounts(
                         txnId: pillScanViewModel.currentTransaction?.txn_id ,
@@ -946,18 +956,49 @@ extension OPillCountView {
             showSuccessAnimation = false
         }
         
-        var savedPath: String? = nil
+//        var savedPath: String? = nil
+//        if let compositeImage = cameraService.captureSnapshotWithOverlays() {
+//            savedPath = PhotoFileManager.shared.saveImage(compositeImage)
+//        }
         
-        if let compositeImage = cameraService.captureSnapshotWithOverlays() {
-            savedPath = PhotoFileManager.shared.saveImage(compositeImage)
+        var savedPath: String? = nil
+
+        if let rawImage = cameraService.captureSnapshotWithOverlays() {
+            let user = [
+                pillScanViewModel.currentTransaction?.user?.fname,
+                pillScanViewModel.currentTransaction?.user?.lname
+            ]
+            .compactMap { $0 }
+            .joined(separator: " ")
+
+            let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+
+            // Step 1: Process image
+            guard let processed = rawImage
+                .compressedGrayscale(maxWidth: 1080, quality: 0.5)
+            else { return }
+
+            // Step 2: Get file size FIRST
+            guard let data = processed.jpegData(compressionQuality: 0.5) else { return }
+            let fileSizeKB = Double(data.count) / 1024.0
+
+            // Step 3: Add overlay
+            let finalImage = processed.addingMetadataOverlay(
+                ndc: pillScanViewModel.currentTransaction?.drug?.ndc ?? "",
+                user: user,
+                count: cameraService.stableCount,
+                rx: pillScanViewModel.currentTransaction?.rx_no ?? "",
+                location: locationService.locationString,
+                timestamp: timestamp,
+                fileSizeKB: fileSizeKB
+            )
+
+            // Step 4: Save
+            savedPath = PhotoFileManager.shared.saveImage(finalImage)
         }
         
+        
         if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue{
-//            stockCountViewModel.updateCounts(
-//                txnId: pillScanViewModel.currentTransaction?.txn_id ,
-//                bottleQty: nil,
-//                looseQty: cameraService.stableCount
-//            )
             pillScanViewModel.addCurrentOpenPillCount += cameraService.stableCount
         }else {
             pillScanViewModel.addTransactionDetailToCurrentTransaction(

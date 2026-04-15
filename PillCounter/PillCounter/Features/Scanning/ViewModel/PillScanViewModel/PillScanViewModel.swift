@@ -401,6 +401,7 @@ class PillScanViewModel: ObservableObject {
             isControlled: isControlled,
             expirationDate: expirationDate,
             lotNumber: lotNumber,
+            rxNo: rxNo,
             bucketId: bucketId
         )
     

@@ -149,7 +149,7 @@ private struct LotRow: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     if !isExpiryEmpty {
-                        Text("Exp \(expiry)")
+                        Text("\(expiry)")
                             .font(.system(size: 13))
                             .foregroundColor(appColors.text.opacity(0.6))
                             .frame(width: 110, alignment: .leading)

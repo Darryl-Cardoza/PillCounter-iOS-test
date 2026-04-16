@@ -245,3 +245,46 @@ public enum StockCountOptionContainerStatus: Hashable {
     case sealed
     case opened
 }
+
+
+//HL7 ENUMS
+
+public enum PmsConnectionState {
+    case connected
+    case disconnected
+    case connecting
+    case notAvailable
+}
+
+
+/// Handles MLLP framing for HL7 messages over TCP.
+enum MLLP {
+
+    /// Start block <VT>
+    static let start: UInt8 = 0x0B
+
+    /// End block <FS>
+    static let end1: UInt8 = 0x1C
+
+    /// Carriage return <CR>
+    static let end2: UInt8 = 0x0D
+
+    /// Wraps HL7 message with MLLP framing.
+    static func frame(_ message: String) -> Data {
+        var data = Data([start])
+        data.append(message.data(using: .utf8)!) // HL7 payload
+        data.append(contentsOf: [end1, end2])    // End markers
+        return data
+    }
+
+    /// Extracts HL7 message from MLLP framed data.
+    static func unwrap(_ data: Data) -> String? {
+        guard
+            let startIndex = data.firstIndex(of: start),
+            let endIndex = data.firstIndex(of: end1)
+        else { return nil }
+
+        let payload = data[(startIndex + 1)..<endIndex]
+        return String(data: payload, encoding: .utf8)
+    }
+}

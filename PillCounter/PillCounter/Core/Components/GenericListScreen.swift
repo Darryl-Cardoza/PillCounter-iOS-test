@@ -107,15 +107,26 @@ extension GenericListScreen {
                     ForEach(filteredItems) { item in
                         row(item)
                     }
-
                     if filteredItems.isEmpty {
-                        EmptyStateView(
-                            imageName: nil,
-                            systemImageName: "magnifyingglass",
-                            title: "No results found",
-                            subtitle: nil
-                        )
-                        .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
+                        if debouncedSearchText.isEmpty {
+                            // No data at all
+                            EmptyStateView(
+                                imageName: nil,
+                                systemImageName: nil,
+                                title:  "No partial counts available",
+                                subtitle: nil
+                            )
+                            .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
+                        } else {
+                            // Search active but no match
+                            EmptyStateView(
+                                imageName: nil,
+                                systemImageName: "magnifyingglass",
+                                title: "No results found",
+                                subtitle: nil
+                            )
+                            .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
+                        }
                     }
                 }
                 .padding(.horizontal)

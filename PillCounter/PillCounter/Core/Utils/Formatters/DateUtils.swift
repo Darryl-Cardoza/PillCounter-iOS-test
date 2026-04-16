@@ -21,4 +21,13 @@ struct DateUtils {
 
         return formatter.string(from: date)
     }
+    
+    
+    // MARK: - Timestamp
+    static func currentTimestamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMddHHmmss"
+        return formatter.string(from: Date())
+    }
+
 }

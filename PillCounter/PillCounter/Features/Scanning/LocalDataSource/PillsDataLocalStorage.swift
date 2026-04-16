@@ -1040,7 +1040,7 @@ final class PillsDataLocalStorage {
             📦 Bucket: \(batch.bucket_id ?? "")
             📊 Status: \(batch.status ?? "")
             🗑️ Deleted: \(batch.is_deleted)
-            📡 From PMS: \(batch.is_from_pms)
+            📡 From PMS: \(batch.req_id_from_pms)
                requstId:\(batch.req_id_from_pms)
             ---------------------------------------
             """)

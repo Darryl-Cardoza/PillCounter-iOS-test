@@ -604,34 +604,24 @@ struct CountHistoryView: View {
     }
 
     private func handleResume() {
-
         guard let txnId = selectedTransasctionId,
             let txn = userViewModel.getTransactionEntity(by: txnId)
         else {
-            print("Resume failed")
             return
         }
 
         userViewModel.currentTransactionTxnId = txnId
-        pillScanViewmodel.selectedTransaction = txn.is_from_pms ? txn : nil
+        pillScanViewmodel.selectedTransaction = txn 
 
         // TODO: Simplify this branching later
-        if txn.is_from_pms {
-            let lastStep = pillScanViewmodel.getLastSavedControlledStep()
+        let lastStep = pillScanViewmodel.getLastSavedControlledStep()
 
-            if lastStep == nil && txn.is_ndc_verfied == false {
-                router.navigate(
-                    to: .authentication(
-                        .login(.dashboard(.pillCount(.barcodeScanning(.barcode))))
-                    )
+        if lastStep == nil && txn.is_ndc_verfied == false {
+            router.navigate(
+                to: .authentication(
+                    .login(.dashboard(.pillCount(.barcodeScanning(.barcode))))
                 )
-            } else {
-                router.navigate(
-                    to: .authentication(
-                        .login(.dashboard(.pillCount(.pillCountView)))
-                    )
-                )
-            }
+            )
         } else {
             router.navigate(
                 to: .authentication(

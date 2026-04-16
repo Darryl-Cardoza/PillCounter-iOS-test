@@ -21,6 +21,9 @@ struct StockCountBatchDetail: View {
     // end batch
     @State private var showEndBatchPopUp: Bool = false
     @State private var showExportPopUp: Bool = false
+    
+    @State private var exportedPDFURL: URL? = nil
+    @State private var showShareSheet:  Bool = false
 
     private var allIds: Set<String> {
         Set(stockCountVieModel.groupedTransactions.map { $0.ndc })
@@ -203,7 +206,7 @@ struct StockCountBatchDetail: View {
                 )
 
                 PillCountingButton(
-                    title: "ADD",
+                    title: "+ ADD",
                     textColor: .white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,

@@ -21,7 +21,6 @@ extension  PillsDataLocalStorage {
         batch.status = "partial"
         batch.is_deleted = false
         batch.bucket_id = bucketId
-        batch.is_from_pms = isFromPms
         batch.req_id_from_pms = requestId
         do {
             try context.save()
@@ -29,7 +28,7 @@ extension  PillsDataLocalStorage {
             return batch
         } catch {
             return nil
-        }        
+        }
     }
     
     
@@ -69,6 +68,22 @@ extension  PillsDataLocalStorage {
         return (try? mainThreadContext.fetch(request)) ?? []
     }
     
+    
+    func fetchCompletedBatches() -> [BatchCountEntity] {
+        let request: NSFetchRequest<BatchCountEntity> =
+            BatchCountEntity.fetchRequest()
+        
+        request.predicate = NSPredicate(
+            format: "is_deleted == false AND status == %@",
+            "completed"
+        )
+        
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "start_date_time", ascending: false)
+        ]
+        
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
     
     func fetchTransactionsByBatch(batchId: Int64) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> =
@@ -118,6 +133,28 @@ extension  PillsDataLocalStorage {
             print("✅ [Delete] Soft-deleted \(batches.count) batch(es) and \(transactions.count) txn(s)")
         } catch {
             print("❌ [Delete] Failed to delete batches: \(error.localizedDescription)")
+        }
+    }
+    
+    
+    func fetchLastCreatedBatch() -> BatchCountEntity? {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        
+        request.predicate = NSPredicate(
+            format: "is_deleted == false"
+        )
+        
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "start_date_time", ascending: false)
+        ]
+        
+        request.fetchLimit = 1
+
+        do {
+            return try mainThreadContext.fetch(request).first
+        } catch {
+            print("❌ Failed to fetch last created batch:", error)
+            return nil
         }
     }
 }

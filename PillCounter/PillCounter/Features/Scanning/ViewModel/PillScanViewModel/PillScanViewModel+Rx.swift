@@ -132,13 +132,10 @@ extension PillScanViewModel {
             let formatRange = NSRange(format.startIndex..., in: format)
             let matches = placeholderRegex.matches(in: format, range: formatRange)
             guard !matches.isEmpty else { return false }
-            // Build a full regex by escaping literal separators and replacing
-            // each {KEY} placeholder with a non-greedy capture group
             var regexParts: [String] = []
             var lastEnd = format.startIndex
             for match in matches {
                 guard let matchRange = Range(match.range, in: format) else { continue }
-                // Escape the literal separator before this placeholder (e.g. "|")
                 let literal = String(format[lastEnd..<matchRange.lowerBound])
                 if !literal.isEmpty {
                     regexParts.append(NSRegularExpression.escapedPattern(for: literal))
@@ -160,6 +157,9 @@ extension PillScanViewModel {
             return false
         }
     }
+    
+    
+    
     // MARK: - Drug Name Resolution (Local → API)
     private func resolveDrugName(for ndc: String) async -> String? {
         

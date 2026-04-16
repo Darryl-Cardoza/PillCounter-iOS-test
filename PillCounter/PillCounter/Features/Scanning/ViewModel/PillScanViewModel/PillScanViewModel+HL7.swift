@@ -13,13 +13,13 @@ extension PillScanViewModel {
         message: CompleteHL7Message,
         callback: HL7SimpleCallback? = nil
     ){
-        print("Received message parsed message \(message)")
         guard let inboundType = classifyInboundMessage(message) else {
-            print("Inbount Type not found")
             return
         }
         
-        print("Message Type \(inboundType)")
+        // Notify user about incoming order
+  
+        buildNotification(message: message, messageType: inboundType)
 
         Task(priority: .background) {
             switch inboundType {
@@ -38,6 +38,8 @@ extension PillScanViewModel {
         inboundType: CountType,
         callback: HL7SimpleCallback? = nil
     ) async {
+        var hasError = false
+
 
         guard let order = message.order else {
             callback?(false)
@@ -54,6 +56,7 @@ extension PillScanViewModel {
 
             // RXE-2.1
             let ndc = medication.drugCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            let qty = Int(medication.requestedQty ?? "")
 
             // RXE-2.2
             let drugName = medication.drugName
@@ -62,6 +65,11 @@ extension PillScanViewModel {
             let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
 
             let orderId = order.placerOrderId
+            
+            if ndc.isEmpty ||   qty == nil {
+                hasError = true
+                break
+            }
             
             await processHl7DrugAndCreateTransaction(
                 ndc: ndc,
@@ -72,43 +80,9 @@ extension PillScanViewModel {
             )
         }
 
-        callback?(true)
+        callback?(!hasError)
     }
     
-    
-//    @MainActor
-//    private func createRegularHl7Transaction(
-//        message: CompleteHL7Message,
-//        inboundType: CountType,
-//        callback: HL7SimpleCallback? = nil
-//    ) async {
-//
-//        guard let inventory = message.inventoryItems.first else {
-//            print("Regular Count: No inventory found")
-//            callback?(false)
-//            return
-//        }
-//
-//        // FIXED MAPPING (based on your HL7 format)
-//        let ndc = inventory.substanceStatusCode ?? ""
-//        let drugName = inventory.substanceStatusDescription ?? "Unknown Drug"
-//        let lotNo = inventory.lotNumber ?? ""
-//        let expiryRaw = inventory.expirationDateTime ?? ""
-
-//        print("Parsed INV → NDC: \(ndc), Name: \(drugName), Count: \(targetCount)")
-//
-////        await processHl7DrugAndCreateTransaction(
-////            ndc: ndc,
-////            drugName: drugName,
-////            countType: inboundType,
-////            targetCount: targetCount,
-////            rxNo: message.order?.placerOrderId
-////        )
-////
-//        
-//        
-//        callback?(true)
-//    }
 
     @MainActor
     private func createRegularHl7Transaction(
@@ -153,8 +127,6 @@ extension PillScanViewModel {
         rxNo: String? = nil
     ) async {
 
-        print("🧾 HL7 Drug Processing → NDC: \(ndc), Name: \(drugName)")
-
         var drugIdToUse: Int64
 
         // Create new drug synchronously
@@ -192,4 +164,46 @@ extension PillScanViewModel {
         }
     }
     
+    
+    func buildNotification(
+        message: CompleteHL7Message,
+        messageType: CountType
+    ) {
+
+        let orderId = message.order?.placerOrderId ?? ""
+        let meds = message.medications
+
+        let title: String
+        let body: String
+
+        if messageType == .FIXED {
+
+            title = "New RX Fill Request"
+
+            if meds.count == 1 {
+                let med = meds[0]
+                let name = med.drugName
+                let qty = Int(med.requestedQty ?? "0") ?? 0
+
+                body = "Rx \(orderId) • \(name) • Qty: \(qty)"
+            } else {
+                body = "Rx \(orderId) • \(meds.count) items to fill"
+            }
+
+        } else {
+            title = "Inventory Request"
+
+            if meds.count == 1 {
+                let med = meds[0]
+                body = "\(meds.count) Stock count requested"
+            } else {
+                body = "\(meds.count) items need stock count"
+            }
+        }
+
+        HL7NotificationManager.show(
+            title: title,
+            body: body
+        )
+    }
 }

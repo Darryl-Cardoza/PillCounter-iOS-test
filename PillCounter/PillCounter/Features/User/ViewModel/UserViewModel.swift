@@ -243,12 +243,7 @@ class UserViewModel: ObservableObject {
         phoneNumber = user.phoneNumber ?? ""
         pharmacyName = user.pharmacyName ?? ""
         npiID = user.npiID ?? ""
-        
-        if !user.bucket.isEmpty {
-            self.bucket = user.bucket
-            print("✅ Bucket saved:", user.bucket)
-        }
-
+        self.bucket = user.bucket
         self.fullName = fullName
     }
 

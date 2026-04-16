@@ -7,16 +7,17 @@ import ComposeApp
 import UIKit
 import Darwin
 
-// MARK: - Constants
+//// MARK: - Constants
+//
+//private enum HL7BuilderConstants {
+//    static let imagePort = 8443
+//    static let encodingCharacters = "^~\\&"
+//    static let processingId = "P"
+//    static let versionId = "2.5"
+//}
 
-private enum HL7BuilderConstants {
-    static let imagePort = 8443
-    static let encodingCharacters = "^~\\&"
-    static let processingId = "P"
-    static let versionId = "2.5"
-}
 
-// MARK: - Config
+
 
 struct HL7Config {
     let sendingApplication: String
@@ -26,80 +27,19 @@ struct HL7Config {
     let versionId: String
 }
 
-final class HL7ConfigProvider {
-
-    static func getConfig(user: UserEntity?) -> HL7Config {
-        return HL7Config(
-            sendingApplication: "PillCounter",
-            sendingFacility: "PillCounter-\(UIDevice.current.model)",
-            receivingApplication: "PMS",
-            receivingFacility: "PHARMACY",
-            versionId: HL7BuilderConstants.versionId
-        )
-    }
-}
-
-// MARK: - Native Network Utils
-// iOS equivalent of Android's NetworkUtils.getLocalIpAddress()
-
-enum iOSNetworkUtils {
-
-    /// Returns the device's current Wi-Fi / LAN IPv4 address, or nil if unavailable.
-    /// Prefers en0 (Wi-Fi), falls back to en1. Skips loopback (127.x.x.x).
-    static func getLocalIPAddress() -> String? {
-        var address: String?
-        var ifaddr: UnsafeMutablePointer<ifaddrs>?
-
-        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else { return nil }
-        defer { freeifaddrs(ifaddr) }
-
-        var ptr = firstAddr
-        while true {
-            let interface = ptr.pointee
-            let addrFamily = interface.ifa_addr.pointee.sa_family
-
-            if addrFamily == UInt8(AF_INET) {
-                let name = String(cString: interface.ifa_name)
-                // en0 = Wi-Fi, en1 = Ethernet adapter (iPad etc.)
-                if name == "en0" || (address == nil && name == "en1") {
-                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                    if getnameinfo(
-                        interface.ifa_addr,
-                        socklen_t(interface.ifa_addr.pointee.sa_len),
-                        &hostname,
-                        socklen_t(hostname.count),
-                        nil,
-                        0,
-                        NI_NUMERICHOST
-                    ) == 0 {
-                        address = String(cString: hostname)
-                    }
-                    // Stop as soon as we find en0
-                    if name == "en0" { break }
-                }
-            }
-
-            guard let next = ptr.pointee.ifa_next else { break }
-            ptr = next
-        }
-
-        return address
-    }
-}
 
 // MARK: - Builder
 
 final class HL7CompletionBuilder {
-    
+    let encodingCharacters = "2.5"
 
     // MARK: - Dispense Message (RDS O13)
-
     func buildCompletionMessage(
         txn: PillCountTransactionEntity,
         user: UserEntity?
     ) -> String {
 
-        let now = currentHL7Timestamp()
+        let now = DateUtils.currentTimestamp()
         let messageId = "\(Int64(Date().timeIntervalSince1970 * 1000))"
 
         let details = pillCountDetails(from: txn)
@@ -238,7 +178,7 @@ final class HL7CompletionBuilder {
         user: UserEntity?
     ) -> String {
 
-        let now = currentHL7Timestamp()
+        let now = DateUtils.currentTimestamp()
         let messageId = "RES\(Int(Date().timeIntervalSince1970))"
 
         let requestId = batch.req_id_from_pms ?? ""
@@ -317,7 +257,6 @@ final class HL7CompletionBuilder {
 }
 
 // MARK: - Shared Private Helpers
-
 private extension HL7CompletionBuilder {
 
     // MARK: Header Builder
@@ -331,7 +270,7 @@ private extension HL7CompletionBuilder {
     ) -> MessageHeaderData {
         return MessageHeaderData(
             fieldSeparator: "|",
-            encodingCharacters: HL7BuilderConstants.encodingCharacters,
+            encodingCharacters: encodingCharacters,
             sendingApplication: config.sendingApplication,
             sendingFacility: config.sendingFacility,
             receivingApplication: config.receivingApplication,
@@ -340,7 +279,7 @@ private extension HL7CompletionBuilder {
             messageType: type,
             triggerEvent: trigger,
             messageControlId: messageId,
-            processingId: HL7BuilderConstants.processingId,
+            processingId: encodingCharacters,
             versionId: config.versionId,
             countryCode: nil
         )
@@ -546,10 +485,7 @@ private extension HL7CompletionBuilder {
     }
 }
 
-// MARK: - Timestamp
 
-private func currentHL7Timestamp() -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyyMMddHHmmss"
-    return formatter.string(from: Date())
-}
+
+
+

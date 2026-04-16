@@ -29,12 +29,12 @@
 "ERROR_INVALID_OTP" = "";
 
 // MARK: - DASHBOARD
-
-"COMPLETED" = "completed";
-"PENDING" = "pending";
+"COMPLETED" = "Completed";
+"PENDING" = "Pending";
 "PARTIAL" = "Partials";
 "NEWRX"  = "New Rx";
 "NDCREQ" = "NDC Req.";
+
 
 // MARK: - DASHBOARD POPUP
 "CONTINUE_LAST_BATCH" = "Continue last Batch";

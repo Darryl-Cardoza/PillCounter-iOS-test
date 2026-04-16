@@ -29,20 +29,20 @@ struct StockCountPartialBatchListScreen: View {
             resetTrigger: resetList,
           
             
-
-            // 🔹 ROW UI — selectedIds is Set<Int64> from GenericListScreen
+            // ROW UI — selectedIds is Set<Int64> from GenericListScreen
             rowView: { batch, isEditing, selectedIds in
                 AnyView(
                     batchRow(batch, isEditing: isEditing, selectedIds: selectedIds)
                 )
             },
 
-            // 🔹 SEARCH
+            // SEARCH
             searchMatcher: { batch, query in
-                String(batch.batch_id).localizedCaseInsensitiveContains(query)
+                String(batch.batch_id).localizedCaseInsensitiveContains(query) ||
+                String(batch.bucket_id ?? "").localizedCaseInsensitiveContains(query)
             },
 
-            // 🔹 ROW TAP
+            // ROW TAP
             onRowTap: { batch in
                 guard let freshBatch = stockCountViewMoel.pillDataLocalStorage
                     .fetchBatchById(batch.batch_id) else {
@@ -61,17 +61,17 @@ struct StockCountPartialBatchListScreen: View {
                 )
             },
 
-            // 🔹 MENU LONG PRESS
+            // MENU LONG PRESS
             onMenuTap: { batch in
                 selectedBatchId = batch.batch_id
             },
 
-            // 🔹 DELETE — receives Set<Int64> directly, no mapping needed
+            //DELETE — receives Set<Int64> directly, no mapping needed
             onDelete: { ids in
                 pendingAction = .multiDelete(ids)
             },
 
-            // 🔹 MENU ACTIONS
+            //MENU ACTIONS
             onSelectOption: { option, _ in
                 handleMenuAction(option)
             },
@@ -105,7 +105,6 @@ struct StockCountPartialBatchListScreen: View {
     ) -> some View {
         let count = batchCounts[batch.batch_id] ?? 0
         
-
         return HStack(spacing: 16) {
 
             if isEditing {
@@ -122,7 +121,7 @@ struct StockCountPartialBatchListScreen: View {
 
             ThumbnailImageView(
                 imagePath: "",
-                placeholderImageName: batch.is_from_pms ? "new_rx" : "batch_icon",
+                placeholderImageName: batch.req_id_from_pms != nil ? "new_rx" : "batch_icon",
                 isFromPms: false,
                 showImageBackground: appColors.primaryBackground
             )

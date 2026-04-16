@@ -35,12 +35,10 @@ final class Hl7ServiceController: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - HL7 Layer
-
     private var hl7Manager: Hl7ServiceManager?
     private var hl7Handler: Hl7EventHandler?
 
     // MARK: - Send Queue
-
     /// Ordered queue of transactions waiting to be ACK'd by PMS.
     private var sendingQueue: [PillCountTransactionEntity] = []
 
@@ -51,12 +49,9 @@ final class Hl7ServiceController: ObservableObject {
     private var retryCount = 0
     private let maxRetries = 3
 
-    // MARK: - Init
 
-    private init() {}
 
     // MARK: - Bind (called once from SwiftUI root)
-
     func bind(
         pillScanViewModel: PillScanViewModel,
         userViewModel: UserViewModel
@@ -98,7 +93,6 @@ final class Hl7ServiceController: ObservableObject {
             pmsServiceType: pmsHostName,
             listener: handler
         )
-        // Hl7ServiceManager internally starts NWPathMonitor → NWBrowser → Client → Server
     }
 
     private func stopService() {
@@ -316,7 +310,7 @@ final class Hl7ServiceController: ObservableObject {
         }
 
         // ✅ ONLY PMS BATCH
-        guard batch.is_from_pms else {
+        guard batch.req_id_from_pms == nil else {
             print("ℹ️ Not PMS batch → skip HL7")
             return
         }

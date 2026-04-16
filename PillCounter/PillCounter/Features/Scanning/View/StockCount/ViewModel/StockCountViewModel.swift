@@ -28,6 +28,7 @@ class StockCountViewModel: ObservableObject {
     
     @Published var currentBatch: BatchCountEntity?
     @Published var totalBatchCount: Int = 0
+    @Published var totalCompletedBatchCount: Int = 0
     @Published var totalNdcRequests: Int = 0
     @Published var scannedDrugData: ScannedDrugData?
     @Published var showStockCountScannedDetails: Bool = false
@@ -110,7 +111,7 @@ class StockCountViewModel: ObservableObject {
         if let localDrug = pillDataLocalStorage.getPillByGtin(by: gtin) {
             let ndc = localDrug.ndc ?? ""
 
-            if currentBatch?.is_from_pms == true {
+            if currentBatch?.req_id_from_pms != nil {
                 if !batchNdcSet.contains(ndc) {
                     isLoading = false
                     showStockCountScannedDetails = false
@@ -144,7 +145,7 @@ class StockCountViewModel: ObservableObject {
 
             let ndc = response.data?.scannedNdc?.packageNdc ?? ""
 
-            if currentBatch?.is_from_pms == true {
+            if currentBatch?.req_id_from_pms != nil {
                 if !batchNdcSet.contains(ndc) {
                     isLoading = false
                     showStockCountScannedDetails = false
@@ -171,6 +172,15 @@ class StockCountViewModel: ObservableObject {
             showScanError = true
             barcodeNotFound = true
         }
+    }
+    
+    func continueLastBatch() -> Bool {
+        guard let lastBatch = pillDataLocalStorage.fetchLastCreatedBatch() else {
+            return false
+        }
+
+        self.currentBatch = lastBatch
+        return true
     }
     
     // Update Count in Txn
@@ -284,6 +294,7 @@ class StockCountViewModel: ObservableObject {
     func updateBatchCount() {
         let batches = pillDataLocalStorage.fetchAllBatches()
         totalBatchCount = batches.count
+        totalCompletedBatchCount = pillDataLocalStorage.fetchCompletedBatches().count
     }
     
     // Get Count Data

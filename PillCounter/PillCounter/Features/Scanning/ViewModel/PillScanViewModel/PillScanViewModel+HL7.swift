@@ -127,38 +127,78 @@ extension PillScanViewModel {
         rxNo: String? = nil
     ) async {
 
-        var drugIdToUse: Int64
+        guard !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Log("HL7: Missing NDC")
+            return
+        }
 
-        // Create new drug synchronously
-        drugIdToUse = generateUniqueDrugId()
+        var drugIdToUse: Int64 = 0
+        var resolvedName: String = drugName
 
-        print("Drug not found — creating new DrugMaster entry")
+        if let existing = pillDataLocalStorage.getPillByNdc(by: ndc),
+           let localName = existing.drug_name,
+           !localName.isEmpty {
 
-        pillDataLocalStorage.saveManualPill(
-            ndc: ndc,
-            drugId: drugIdToUse,
-            drugName: drugName,
-        
-        )
+            drugIdToUse = existing.drug_id
+            resolvedName = localName
 
-        self.drugName = drugName
-    
+            Log("HL7: Drug found locally → \(resolvedName)")
+        }
+        else {
 
-        // 3️⃣ Create transaction
+            let request = NdcValidationRequest(
+                targetNdc: ndc,
+                scannedNdc: ndc
+            )
+
+            do {
+                let response = try await controlledRepo.getControlledDrugInfo(
+                    ndcValidationRequest: request
+                )
+
+                if let lookup = response.data?.scannedNdc?.lookupName,
+                   !lookup.isEmpty {
+
+                    let newId = generateUniqueDrugId()
+
+                    drugIdToUse = newId
+                    resolvedName = lookup
+
+                    // Save to local DB
+                    pillDataLocalStorage.saveManualPill(
+                        ndc: response.data?.scannedNdc?.packageNdc ?? ndc,
+                        drugId: newId,
+                        drugName: lookup,
+                        drugType: response.data?.scannedNdc?.deaSchedule,
+                        packageQty: response.data?.scannedNdc?.safeQuantity ?? 0
+                    )
+
+                    Log("HL7: Drug created via API → \(lookup)")
+                } else {
+                    Log("HL7: API returned empty drug name")
+                    return
+                }
+
+            } catch {
+                Log("HL7: API failed for NDC \(ndc) → \(error.localizedDescription)")
+                return
+            }
+        }
+
+        // MARK: 3️⃣ Create Transaction
         await createTransaction(
             drugId: drugIdToUse,
             countType: countType,
             isComingFromPms: true,
             isControlled: true,
             targetCount: targetCount,
-            drugName: drugName,
+            drugName: resolvedName,
             rxNo: rxNo
         )
 
-        // 4️⃣ Refresh transaction details
+        // MARK: 4️⃣ Refresh UI / State
         getAllTransactionDetailsOfTheCurrentTransaction()
 
-        // 5️⃣ Update target count if fixed
         if countType == .FIXED {
             updateTargetCountForCurrentTransaction()
         }
@@ -194,8 +234,7 @@ extension PillScanViewModel {
             title = "Inventory Request"
 
             if meds.count == 1 {
-                let med = meds[0]
-                body = "\(meds.count) Stock count requested"
+                body = "\(meds.count) item need stock count"
             } else {
                 body = "\(meds.count) items need stock count"
             }

@@ -14,8 +14,8 @@ public func Log(
     function: String = #function,
     line: Int = #line
 ) {
-    #if DEBUG
+//    #if DEBUG
     let fileName = (file as NSString).lastPathComponent
     print("[\(fileName):\(line)] \(function) → \(message)")
-    #endif
+//    #endif
 }

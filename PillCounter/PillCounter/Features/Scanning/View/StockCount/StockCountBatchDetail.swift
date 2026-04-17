@@ -146,8 +146,8 @@ struct StockCountBatchDetail: View {
                     router.navigateBack()
                 }
             )
-            .onAppear(){
-                stockCountVieModel.loadTransactions()
+            .onAppear {
+                stockCountVieModel.getCountData()
             }
             .customPopup(isPresented: $showEndBatchPopUp) {
                 showEndBatchPopup
@@ -155,6 +155,7 @@ struct StockCountBatchDetail: View {
             .customPopup(isPresented: $showExportPopUp) {
                 showConfirmExportPopup
             }
+
         }
     }
 

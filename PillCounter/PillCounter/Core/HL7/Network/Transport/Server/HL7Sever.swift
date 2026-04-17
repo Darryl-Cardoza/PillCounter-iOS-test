@@ -132,22 +132,27 @@ final class HL7TLSServer {
                     switch validation {
 
                     case .invalid(let reason):
+                        Log("Invalid Hl7 message \(reason)")
                         let ack = HL7ACKBuilder.buildResponse(
                             from: hl7,
                             code: .AR,
                             errorMessage: reason
                         )
                         connection.send(content: MLLP.frame(ack), completion: .contentProcessed { _ in })
+                        self.onMessage?(hl7, messageId)
 
                     case .unsupported(let reason):
+                        Log("Unsupported Hl7 message \(reason)")
                         let ack = HL7ACKBuilder.buildResponse(
                             from: hl7,
                             code: .AR,
                             errorMessage: reason
                         )
                         connection.send(content: MLLP.frame(ack), completion: .contentProcessed { _ in })
+                        self.onMessage?(hl7, messageId)
 
                     case .valid:
+                        Log("valid Hl7 message")
                         self.onMessage?(hl7, messageId)
                         let ackMessage = HL7ACKBuilder.buildResponse(
                             from: hl7,

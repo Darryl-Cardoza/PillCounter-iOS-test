@@ -82,6 +82,11 @@ struct StockCountPartialBatchListScreen: View {
         .onAppear {
             reloadBatches()
         }
+        .onReceive(stockCountViewMoel.pillDataLocalStorage.transactionsDidChange
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+        ) { _ in
+            reloadBatches()
+        }
         .customPopup(
             isPresented: Binding(
                 get: { pendingAction != nil },

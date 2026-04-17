@@ -73,7 +73,7 @@ struct DashboardView: View {
                             
                             HStack {
                                 PillCountingButton(
-                                    iconName: "new_rx",
+                                    iconName: "check_with_circle",
                                     title:
                                         "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
                                     textColor: appColors.primary,
@@ -155,7 +155,7 @@ struct DashboardView: View {
                             
                             HStack {
                                 PillCountingButton(
-                                    iconName: "new_rx",
+                                    iconName: "check_with_circle",
                                     title: "\(stockCountViewModel.totalCompletedBatchCount) \(NSLocalizedString("COMPLETED", comment: ""))",
                                     textColor: appColors.primary,
                                     backgroundColor: appColors.secondaryBackground,

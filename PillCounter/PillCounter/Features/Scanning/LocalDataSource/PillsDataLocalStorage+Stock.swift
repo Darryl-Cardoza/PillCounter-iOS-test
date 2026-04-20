@@ -160,4 +160,17 @@ extension PillsDataLocalStorage {
             return nil
         }
     }
+    
+    func getBatchesForUserFilteredByDate(
+        startDateTs: Int64,
+        endDateTs: Int64
+    ) -> [BatchCountEntity] {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
+            startDateTs, endDateTs
+        )
+        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
 }

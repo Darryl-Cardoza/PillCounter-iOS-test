@@ -183,6 +183,12 @@ enum CountStatus: String, Codable {
     case FORCE_COMPLETED
 }
 
+enum HistoryStatusFilter: String, CaseIterable {
+    case all       = "All"
+    case completed = "Completed"
+    case pending   = "Pending"
+}
+
 public enum InputValidation {
     case none
     case name
@@ -193,14 +199,14 @@ public enum InputValidation {
     
 
 public enum HistoryFilterType: String, Codable, Hashable {
-    case all
+//    case all
     case fixed
     case regular
     
     var title: String {
           switch self {
-          case .all:
-              return NSLocalizedString("HISTORY", comment: "")
+//          case .all:
+//              return NSLocalizedString("HISTORY", comment: "")
           case .fixed:
               return "Fixed Count History"
           case .regular:

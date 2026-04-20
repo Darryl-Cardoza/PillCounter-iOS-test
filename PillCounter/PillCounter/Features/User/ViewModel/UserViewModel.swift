@@ -72,6 +72,11 @@ class UserViewModel: ObservableObject {
     @Published var filteredTransactionsOfUserByDate:
         [PillCountTransactionEntity] = []
 
+    @Published var filteredBatchesOfUserByDate: [BatchCountEntity] = []
+    
+    @Published var transactionRows: [TransactionRowData] = []
+    @Published var batchRows: [StockData] = []
+
     // variable to hold the actual counted pills for the fixed transactions.
     @Published var actualCountedPillsForTheTransactions: [Int64: Int] = [:]
 
@@ -129,7 +134,7 @@ class UserViewModel: ObservableObject {
                 let response = try await self.settingsRepo.getMobileSettings(
                     currentVersion: appVersion
                 )
-
+                print("Setting Repo resonse \(response)")
                 await MainActor.run {
                     if let colors = response.data?.settings?.colors {
                         AppColors.shared.update(with: colors)
@@ -356,7 +361,6 @@ class UserViewModel: ObservableObject {
         
 
         guard let user = userLocalDB.getUserByUserId(by: userID) else {
-            print("❌ no user found in the local DB")
             self.filteredTransactionsOfUserByDate = []
             return
         }
@@ -385,23 +389,24 @@ class UserViewModel: ObservableObject {
 
         switch filter {
 
-        case .all:
-            finalTransactions = allTransactions
+//        case .all:
+//            finalTransactions = allTransactions
 
         case .regular:
             finalTransactions = allTransactions.filter { txn in
-                txn.count_type == CountType.REGULAR.rawValue &&
-                (
-                    txn.status == CountStatus.COMPLETED.rawValue
-                )
+                txn.count_type == CountType.REGULAR.rawValue
+//                txn.count_type == CountType.REGULAR.rawValue &&
+//                (
+//                    txn.status == CountStatus.COMPLETED.rawValue
+//                )
             }
 
         case .fixed:
             finalTransactions = allTransactions.filter { txn in
-                txn.count_type == CountType.FIXED.rawValue &&
-                (
-                    txn.status == CountStatus.COMPLETED.rawValue
-                )
+                txn.count_type == CountType.FIXED.rawValue
+//                (
+//                    txn.status == CountStatus.COMPLETED.rawValue
+//                )
             }
         }
 
@@ -814,7 +819,138 @@ class UserViewModel: ObservableObject {
         pillDataLocalStorage.clearAllLocalData()
     }
     
+    func getBatchesByDate(startDate: Date, endDate: Date) async {
+//        guard let user = userLocalDB.getUserByUserId(by: userID) else {
+//            await MainActor.run { self.filteredBatchesOfUserByDate = [] }
+//            return
+//        }
 
+        let startOfDay = Calendar.current.startOfDay(for: startDate)
+        let endOfDay = Calendar.current.date(
+            byAdding: DateComponents(day: 1, second: -1),
+            to: Calendar.current.startOfDay(for: endDate)
+        )!
+
+        let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
+        let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)
+
+        let batches = pillLocalDB.getBatchesForUserFilteredByDate(
+            startDateTs: startTs,
+            endDateTs: endTs
+        )
+
+        await MainActor.run {
+            self.filteredBatchesOfUserByDate = batches
+        }
+    }
+    
+    
+    func applyFilters(
+        status: HistoryStatusFilter,
+        search: String,
+        pillScanViewModel: PillScanViewModel
+    ) {
+
+        // 🔹 Transactions
+        var txns = filteredTransactionsOfUserByDate
+
+        switch status {
+        case .completed:
+            txns = txns.filter { $0.status == CountStatus.COMPLETED.rawValue }
+        case .pending:
+            txns = txns.filter { $0.status == CountStatus.PARTIAL.rawValue }
+        case .all:
+            break
+        }
+
+        if !search.isEmpty {
+            let q = search.lowercased()
+            txns = txns.filter {
+                ($0.drug?.drug_name?.lowercased() ?? "").contains(q)
+                || ($0.note?.lowercased() ?? "").contains(q)
+                || ($0.status?.lowercased() ?? "").contains(q)
+            }
+        }
+
+        self.transactionRows = txns.map { txn in
+            let count = pillScanViewModel.getTotalPillCountOfCurrentTransactionByType(
+                type: .targetVerification,
+                details: (txn.pillCountTransactionDetails?.allObjects as? [PillCountTransactionDetailsEntity] ?? [])
+                    .filter { !$0.is_deleted }
+            )
+            return mapTransactionToRow(txn: txn, pillCount: count)
+        }
+
+        
+        // 🔹 Batches
+        var batches = filteredBatchesOfUserByDate
+
+        switch status {
+        case .completed:
+            batches = batches.filter { $0.status == "completed" }
+        case .pending:
+            batches = batches.filter { $0.status == "partial" }
+        case .all:
+            break
+        }
+        print("Batches \(filteredBatchesOfUserByDate)")
+        self.batchRows = batches.map {
+            StockData(
+                id: $0.batch_id,
+                batchId: $0.batch_id,
+                createdAt: $0.start_date_time,
+                ndcCount: 5,
+                targetCount: 5,
+                status: $0.status ?? "",
+                bucketId: $0.bucket_id ?? "",
+                isFromPms: false
+            )
+        }
+        print("Batches \(batchRows)")
+    }
+
+    func mapTransactionToRow(
+        txn: PillCountTransactionEntity,
+        pillCount: Int
+    ) -> TransactionRowData {
+        
+        return TransactionRowData(
+            id: txn.txn_id,
+            ndc: txn.drug?.ndc ?? "",
+            drugName: txn.drug?.drug_name ?? "Unknown Pill",
+            createdAt: txn.created_at,
+            barcodeImagePath: txn.barcode_image,
+            pillCount: pillCount,
+            targetCount: Int(txn.target_count),
+            countType: txn.count_type ?? "",
+            status: txn.status ?? "",
+            note: txn.note,
+            bucketId: "360B",
+            drugType: txn.drug?.drug_type ?? ""
+        )
+    }
+    
+    func getStatusCounts(for type: HistoryFilterType) -> (all: Int, completed: Int, pending: Int) {
+
+        if type == .fixed {
+            let txns = filteredTransactionsOfUserByDate
+
+            return (
+                all: txns.count,
+                completed: txns.filter { $0.status == CountStatus.COMPLETED.rawValue }.count,
+                pending: txns.filter { $0.status == CountStatus.PARTIAL.rawValue }.count
+            )
+
+        } else {
+            let batches = filteredBatchesOfUserByDate
+
+            return (
+                all: batches.count,
+                completed: batches.filter { $0.status == "completed" }.count,
+                pending: batches.filter { $0.status == "partial"}.count
+            )
+        }
+    }
     // MARK: - HARD RESET (called on logout)
     @MainActor
     func resetState() {
@@ -844,6 +980,8 @@ class UserViewModel: ObservableObject {
         // Transactions
         historyCountTransactions = []
         filteredTransactionsOfUserByDate = []
+        filteredBatchesOfUserByDate = []
+        
         actualCountedPillsForTheTransactions = [:]
         historyTotalTransactionsCount = 0
         currentTransactionTxnId = nil

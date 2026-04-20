@@ -338,7 +338,7 @@ struct HamburgerMenuView: View {
             router.navigate(to: .authentication(.user(.userSettings(.profile))))
 
         case .History:
-            router.navigate(to: .authentication(.user(.userSettings(.History(.all)))))
+            router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
 
         }
     }

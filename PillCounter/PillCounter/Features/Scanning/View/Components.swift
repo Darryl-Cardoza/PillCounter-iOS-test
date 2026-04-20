@@ -475,7 +475,7 @@ struct BottomControlsViewBodyForPillScan: View {
     var body: some View {
         Group {
             if isLandscape {
-                Spacer().frame(height: 200)
+//                Spacer().frame(height: 200)
                 // MARK: - LANDSCAPE LAYOUT
                 // 1. Center: Add Button
                 // 2. Below: Row with Total Count (Left) and All Done (Right)

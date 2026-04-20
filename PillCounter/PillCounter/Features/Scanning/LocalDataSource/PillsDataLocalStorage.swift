@@ -810,31 +810,30 @@ final class PillsDataLocalStorage {
             
             // MARK: 1️⃣ Delete All Transaction Details
             let detailFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
-            let detailDelete = NSBatchDeleteRequest(fetchRequest: detailFetch)
-            try context.execute(detailDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: detailFetch))
             
             // MARK: 2️⃣ Delete All Transactions
             let txnFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionEntity.fetchRequest()
-            let txnDelete = NSBatchDeleteRequest(fetchRequest: txnFetch)
-            try context.execute(txnDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: txnFetch))
             
-            // MARK: 3️⃣ Delete All Drugs
+            // MARK: 3️⃣ Delete All Batches  ✅ FIX HERE
+            let batchFetch: NSFetchRequest<NSFetchRequestResult> = BatchCountEntity.fetchRequest()
+            try context.execute(NSBatchDeleteRequest(fetchRequest: batchFetch))
+            
+            // MARK: 4️⃣ Delete All Drugs
             let drugFetch: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
-            let drugDelete = NSBatchDeleteRequest(fetchRequest: drugFetch)
-            try context.execute(drugDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: drugFetch))
             
-            // MARK: 4️⃣ Delete All Images from Documents Directory
+            // MARK: 5️⃣ Delete All Images
             if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
                 let files = try fileManager.contentsOfDirectory(at: documentsURL, includingPropertiesForKeys: nil)
-                
                 for fileURL in files {
                     try? fileManager.removeItem(at: fileURL)
                 }
-                
                 print("All local image files removed.")
             }
             
-            // MARK: 5️⃣ Reset Transaction ID Counters
+            // MARK: 6️⃣ Reset Counters
             UserDefaults.standard.removeObject(forKey: "txnTransactionIdCounter")
             UserDefaults.standard.removeObject(forKey: "txnDetailIdCounter")
             
@@ -846,7 +845,6 @@ final class PillsDataLocalStorage {
             print("Failed to clear local data:", error)
         }
     }
-    
 
     
     // For Controlled Drug

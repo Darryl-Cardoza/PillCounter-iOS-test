@@ -30,27 +30,12 @@ struct UserHistoryView: View {
     
     @StateObject private var pdfService = PDFShareService.shared
     
+    // MARK: - Filter State
     let filterType: HistoryFilterType
+    @State private var activeTypeFilter: HistoryFilterType = .regular
+    @State private var activeStatusFilter: HistoryStatusFilter = .all
 
-    private var displayedTransactions: [PillCountTransactionEntity] {
 
-        guard !searchText.isEmpty else {
-            return userViewModel.filteredTransactionsOfUserByDate
-        }
-
-        let lowercasedQuery = searchText.lowercased()
-
-        return userViewModel.filteredTransactionsOfUserByDate.filter { txn in
-
-            let drugName = txn.drug?.drug_name?.lowercased() ?? ""
-            let note = txn.note?.lowercased() ?? ""
-            let status = txn.status?.lowercased() ?? ""
-
-            return drugName.contains(lowercasedQuery)
-                || note.contains(lowercasedQuery)
-                || status.contains(lowercasedQuery)
-        }
-    }
 
     
 
@@ -118,35 +103,69 @@ struct UserHistoryView: View {
             }
         }
         .onAppear {
-            fetchTransactions()
+            activeTypeFilter = filterType
+            fetchAll()
         }
-        .onChange(of: startDate) { _, _ in
-            fetchTransactions()
+
+        .onChange(of: startDate) { _, _ in fetchAll() }
+        .onChange(of: endDate) { _, _ in fetchAll() }
+
+        .onChange(of: activeTypeFilter) { _, _ in
+            activeStatusFilter = .all
+            searchText = ""
+            fetchAll()
         }
-        .onChange(of: endDate) { _, _ in
-            fetchTransactions()
+
+        .onChange(of: activeStatusFilter) { _, _ in
+            userViewModel.applyFilters(
+                status: activeStatusFilter,
+                search: searchText,
+                pillScanViewModel: pillScanViewModel
+            )
+        }
+
+        .onChange(of: searchText) { _, _ in
+            userViewModel.applyFilters(
+                status: activeStatusFilter,
+                search: searchText,
+                pillScanViewModel: pillScanViewModel
+            )
         }
         .customPopup(isPresented: $showDeleteConfirmation) {
             deleteConfirmationPopUp
         }
     }
-    
-    private func fetchTransactions() {
 
+    private func fetchAll() {
         guard let start = startDate else {
             userViewModel.filteredTransactionsOfUserByDate = []
+            userViewModel.filteredBatchesOfUserByDate = []
             return
         }
+
+        let end = endDate ?? start
 
         Task {
             await userViewModel.getTransactionsByDate(
                 startDate: start,
-                endDate: endDate ?? start,
-                filter: filterType
+                endDate: end,
+                filter: activeTypeFilter
             )
+
+            await userViewModel.getBatchesByDate(
+                startDate: start,
+                endDate: end
+            )
+
+            await MainActor.run {
+                userViewModel.applyFilters(
+                    status: activeStatusFilter,
+                    search: searchText,
+                    pillScanViewModel: pillScanViewModel
+                )
+            }
         }
     }
-
     // MARK: DELETE CONFIRMATION POPUP
     private var deleteConfirmationPopUp: some View {
         VStack {
@@ -165,7 +184,7 @@ struct UserHistoryView: View {
                     await userViewModel.softDeleteTransactionsForSelectedDate(
                         startDate: start,
                         endDate: endDate ?? start,
-                        filter: filterType
+                        filter: activeTypeFilter
                     )
 
                     showDeleteConfirmation = false
@@ -179,129 +198,93 @@ struct UserHistoryView: View {
 
     // MARK: TRANSACTION LIST
     private var userHistoryTransactionsList: some View {
-        VStack {
-
-            if !userViewModel.filteredTransactionsOfUserByDate.isEmpty {
-                HStack(spacing: 15) {
-                    // MARK: DYNAMIC COUNTS
-                    // Shows: "5 Txns • 120 Pills" or similar
-                    Text(
-                        "\(displayedTransactions.count) counts"
-                    )
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(appColors.text)
-
-                    Spacer()
-
-                    // icons
-                    Button {
-                        // something
-                        if let vc = UIApplication.shared.topMostViewController(),
-                           let start = startDate {
-
-                            let exportStart = start
-                            let exportEnd = endDate ?? start
-
-                            let formattedDate = "\(Formatter.getDateString(from: Int64(exportStart.timeIntervalSince1970 * 1000))) - \(Formatter.getDateString(from: Int64(exportEnd.timeIntervalSince1970 * 1000)))"
-
-                            PDFShareService.shared.generateAndShareUserHistoryPDF(
-                                selectedDate: formattedDate,
-                                transactions: userViewModel.filteredTransactionsOfUserByDate,
-                                presentingVC: vc
-                            )
-                        }
-
-                    } label: {
-                        Image("pdf")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-                            .overlay(
-                                appColors.secondary
-                            )
-                            .mask(
-                                Image("pdf")
-                                    .resizable()
-                                    .scaledToFit()
-                            )
-                    }.padding(.trailing,20)
-
-                    Button {
-                        showDeleteConfirmation = true
-                    } label: {
-                        Image("delete")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-                            .overlay(
-                                appColors.secondary
-                            )
-                            .mask(
+        VStack (spacing:8){
+                VStack(spacing: 15){
+                    HStack{
+                        txnTypeFileter
+                        if !userViewModel.filteredTransactionsOfUserByDate.isEmpty {
+                            Button {
+                                showDeleteConfirmation = true
+                            } label: {
                                 Image("delete")
                                     .resizable()
                                     .scaledToFit()
-                            )
+                                    .frame(width: 24, height: 24)
+                                    .overlay(
+                                        appColors.primary
+                                    )
+                                    .mask(
+                                        Image("delete")
+                                            .resizable()
+                                            .scaledToFit()
+                                    )
+                            }
+                        }
                     }
-
+                    statusFilterChips
                 }
-                .padding(.horizontal, isLandscape ? 40 : 5)
-                .padding(.top, isLandscape ? SafeAreaInsets.top + 10 : 10)
-            }
+            
 
             // list of transactions.
-            Spacer().frame(height: 10)
+            Spacer().frame(height: 15)
 
             ScrollView(showsIndicators: false) {
-                if userViewModel.filteredTransactionsOfUserByDate.isEmpty {
-                    ContentUnavailableView(
-                        "No History",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text(
-                            "No transactions found for this period.")
-                    )
-                    .padding(.top, 40)
-                }else if displayedTransactions.isEmpty {
-                    
-                    // Search returned nothing
-                    ContentUnavailableView(
-                        "No Results",
-                        systemImage: "magnifyingglass",
-                        description: Text("No transactions match your search.")
-                    )
-                    .padding(.top, 40)
-
-                } else {
                     VStack(alignment: .leading) {
-                        ForEach(
-                            displayedTransactions,
-                            id: \.txn_id
-                        ) { txn in
-                            TransactionRow(txn: txn, appColors: appColors,pillScanViewModel: pillScanViewModel)
-                                .onTapGesture {
-                                    Task {
-                                        await pillScanViewModel
-                                            .getCurrentTransaction(
-                                                txnId: txn.txn_id)
+                        if activeTypeFilter == .fixed {
+                            if userViewModel.filteredTransactionsOfUserByDate.isEmpty {
+                                ContentUnavailableView(
+                                    "No History",
+                                    systemImage: "clock.arrow.circlepath",
+                                    description: Text(
+                                        "No transactions found for this period.")
+                                )
+                                .padding(.top, 40)
+                            }else if userViewModel.transactionRows.isEmpty {
+                                // Search returned nothing
+                                ContentUnavailableView(
+                                    "No Results",
+                                    systemImage: "magnifyingglass",
+                                    description: Text("No transactions match your search.")
+                                )
+                                .padding(.top, 40)
 
-                                        // making sure that current transaction of the pill scan view model for the tapped transaction.
-                                        router.navigate(
-                                            to: .authentication(
-                                                .user(
-                                                    .userSettings(
-                                                        .HistoryTransactionDetail
-                                                    ))))
-                                    }
+                            }else{
+                                ForEach(userViewModel.transactionRows) { row in
+                                    DispenseItemRowView(data: row, appColors: appColors)
                                 }
-
-                            Divider()
-                                .foregroundStyle(appColors.text)
+                            }
+                        } else {
+                            if userViewModel.filteredBatchesOfUserByDate.isEmpty {
+                                ContentUnavailableView(
+                                    "No History",
+                                    systemImage: "clock.arrow.circlepath",
+                                    description: Text(
+                                        "No Batches found for this period.")
+                                )
+                                .padding(.top, 40)
+                            }else if userViewModel.batchRows.isEmpty {
+                                // Search returned nothing
+                                ContentUnavailableView(
+                                    "No Results",
+                                    systemImage: "magnifyingglass",
+                                    description: Text("No Batches match your search.")
+                                )
+                                .padding(.top, 40)
+                                
+                            }else{
+                                ForEach(userViewModel.batchRows) { row in
+                                    StockItemRowView(data: row, appColors: appColors)
+                                }
+                            }
                         }
                     }
                     .padding(.bottom, 20)
-                }
-            }
 
+            }
+            .animation(nil, value: activeTypeFilter)
+            .animation(nil, value: userViewModel.transactionRows.count)
+            .animation(nil, value: userViewModel.batchRows.count)
+            
             Spacer()
         }
         .padding()
@@ -326,6 +309,65 @@ struct UserHistoryView: View {
         .padding(.leading, isLandscape ? SafeAreaInsets.leading : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(appColors.secondaryBackground)
+    }
+    
+    private var statusFilterChips: some View {
+        let counts = userViewModel.getStatusCounts(for: activeTypeFilter)
+        return HStack(spacing: 8) {
+              statusChip(label: "All", count: counts.all, status: .all)
+              statusChip(label: "Completed", count: counts.completed, status: .completed)
+              statusChip(label: "Pending", count: counts.pending, status: .pending)
+              Spacer()
+          }
+    }
+    
+    private var txnTypeFileter: some View {
+        let dispenseCount = userViewModel.filteredTransactionsOfUserByDate.count
+        let stockCount = userViewModel.filteredBatchesOfUserByDate.count
+        return HStack(spacing: 8) {
+
+            txnTypeStatusChip(label: "Dispensed", count: dispenseCount, status: .fixed)
+            txnTypeStatusChip(label: "Stock Count", count: stockCount, status: .regular)
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func statusChip(label: String, count: Int, status: HistoryStatusFilter) -> some View {
+        let isActive = activeStatusFilter == status
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { activeStatusFilter = status }
+        } label: {
+            Text("\(label) (\(count))")
+                .font(.system(size: 14, weight: isActive ? .semibold : .regular))
+                .foregroundColor(appColors.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(isActive ? appColors.primary: appColors.secondaryBackground)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+    
+    @ViewBuilder
+    private func txnTypeStatusChip(label: String, count: Int, status: HistoryFilterType) -> some View {
+        let isActive = activeTypeFilter == status
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                print("Before:", activeTypeFilter)
+                activeTypeFilter = status
+                print("After:", activeTypeFilter)
+            }
+        } label: {
+            Text("\(label) (\(count))")
+                .font(.system(size: 14, weight: isActive ? .semibold : .regular))
+                .foregroundColor(appColors.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(isActive ? appColors.primary: appColors.secondaryBackground)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -6,12 +6,6 @@
 //
 
 
-
-import Foundation
-import Security
-import CryptoKit
-import SwiftUI
-
 /// Builds a minimal self-signed X.509 v3 certificate from a key pair generated
 /// in the Secure Enclave. Apple provides no public API for this, so we hand-encode
 /// the DER structure (ASN.1) and sign it with the private key.
@@ -25,262 +19,254 @@ import SwiftUI
 ///
 /// This is accepted by NWListener / NWConnection for local mTLS.
 /// It is NOT suitable for public PKI or App Store distribution.
+//
+//  SelfSignedCertBuilder.swift
+//  PillCounter
+//
+
+
+//
+//  SelfSignedCertBuilder.swift
+//  PillCounter
+//
+
+import Foundation
+import Security
+import CryptoKit
+import UIKit
+import CommonCrypto
+
+/// Builds a minimal self-signed X.509 v3 certificate accepted by iOS TLS stack.
+///
+/// Two fixes vs previous version:
+///
+/// Fix 1 — SubjectKeyIdentifier (SKI) extension is now included.
+///   Apple's TLS stack requires SKI to be present in any certificate used
+///   as a server identity via NWListener. Without it, SecCertificateCreateWithData
+///   may succeed but the TLS handshake fails silently.
+///   SKI value = SHA-1 of the raw public key bytes (RFC 5280 §4.2.1.2, method 1).
+///
+/// Fix 2 — Signing uses `ecdsaSignatureDigestX962SHA256` with a pre-computed
+///   SHA-256 hash, NOT `ecdsaSignatureMessageX962SHA256`.
+///   The "Message" variant instructs the Security framework to hash internally,
+///   but on certain Secure Enclave firmware versions this results in a double-hash
+///   (SHA-256 of SHA-256), producing a signature that verifies correctly against
+///   the wrong data and causes SecCertificateCreateWithData to return nil.
 enum SelfSignedCertBuilder {
 
-    enum BuildError: Error {
-        case publicKeyExportFailed
-        case signingFailed
-        case certCreationFailed
+    enum BuildError: Error, LocalizedError {
+        case publicKeyExportFailed(String)
+        case signingFailed(String)
+        case certCreationFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .publicKeyExportFailed(let r): return "Public key export failed: \(r)"
+            case .signingFailed(let r):         return "Signing failed: \(r)"
+            case .certCreationFailed(let r):    return "SecCertificateCreateWithData failed — DER prefix: \(r)"
+            }
+        }
     }
 
     // MARK: - Public API
 
-    /// Creates a DER-encoded self-signed certificate and imports it as SecCertificate.
-    /// - Parameters:
-    ///   - publicKey:  The EC public key (P-256). Must match `privateKey`.
-    ///   - privateKey: The EC private key, may live in Secure Enclave.
-    /// - Returns: A `SecCertificate` ready to be stored in the Keychain.
     static func build(publicKey: SecKey, privateKey: SecKey) throws -> SecCertificate {
-
-        // Stable CN tied to this device — keeps the cert the same across rebuilds
-        // until the key is rotated.
         let cn = "PillCounter-\(UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString)"
 
-        // Export raw EC public key bytes (uncompressed point: 04 || X || Y = 65 bytes)
+        // Export raw EC public key bytes.
+        // SecKeyCopyExternalRepresentation on a Secure Enclave *public* key returns
+        // the uncompressed EC point: 04 || X || Y (65 bytes for P-256).
         var exportError: Unmanaged<CFError>?
-        guard let pubKeyData = SecKeyCopyExternalRepresentation(publicKey, &exportError) as Data? else {
-            throw BuildError.publicKeyExportFailed
+        guard let exported = SecKeyCopyExternalRepresentation(publicKey, &exportError) as Data? else {
+            let desc = exportError?.takeRetainedValue().localizedDescription ?? "nil"
+            throw BuildError.publicKeyExportFailed(desc)
         }
 
-        // Build TBSCertificate (the part that gets signed)
-        let tbs = try buildTBS(cn: cn, publicKeyBytes: pubKeyData)
+        // Normalise: some platforms return 64 bytes omitting the 0x04 prefix.
+        let pubKeyBytes: Data
+        switch exported.count {
+        case 65 where exported[0] == 0x04:
+            pubKeyBytes = exported
+        case 64:
+            pubKeyBytes = Data([0x04]) + exported
+        default:
+            throw BuildError.publicKeyExportFailed(
+                "Unexpected length \(exported.count), prefix \(exported.first ?? 0)"
+            )
+        }
 
-        // Sign TBSCertificate with private key (ES256 = ECDSA-SHA256)
-        let signature = try sign(data: tbs, privateKey: privateKey)
+        // Build TBSCertificate
+        let tbs = buildTBS(cn: cn, publicKeyBytes: pubKeyBytes)
 
-        // Wrap into full Certificate ::= SEQUENCE { tbs, signatureAlgorithm, signature }
-        let certDER = try wrapCertificate(tbs: tbs, signature: signature)
+        // Sign: hash TBS with SHA-256 first, then sign the digest.
+        // Using ecdsaSignatureDigestX962SHA256 (sign a pre-hashed digest)
+        // avoids the double-hash issue present in some SE firmware versions.
+        let tbsDigest = Data(SHA256.hash(data: tbs))
+        let signature = try sign(digest: tbsDigest, privateKey: privateKey)
+
+        // Assemble full Certificate DER
+        let certDER = buildCertificate(tbs: tbs, signature: signature)
 
         guard let cert = SecCertificateCreateWithData(nil, certDER as CFData) else {
-            throw BuildError.certCreationFailed
+            let prefix = certDER.prefix(32).map { String(format: "%02X", $0) }.joined(separator: " ")
+            throw BuildError.certCreationFailed(prefix)
         }
 
         return cert
     }
 
-    // MARK: - TBSCertificate
+    // MARK: - TBSCertificate  (RFC 5280 §4.1)
 
-    /// Encodes the TBSCertificate structure (RFC 5280 §4.1).
-    private static func buildTBS(cn: String, publicKeyBytes: Data) throws -> Data {
+    private static func buildTBS(cn: String, publicKeyBytes: Data) -> Data {
+        // version [0] EXPLICIT INTEGER 2  →  v3
+        let version = ctx(0xA0, integer([0x02]))
 
-        // version [0] EXPLICIT INTEGER ::= 2  (v3)
-        let version = derTagged(tag: 0xA0, value: derInteger(bytes: [0x02]))
+        // serialNumber — 8 random positive bytes
+        var serialBytes = [UInt8](repeating: 0, count: 8)
+        _ = SecRandomCopyBytes(kSecRandomDefault, 8, &serialBytes)
+        serialBytes[0] &= 0x7F   // clear high bit — keeps INTEGER positive without 0x00 pad
+        let serialNumber = integer(serialBytes)
 
-        // serialNumber — 8 random bytes keeps it unique per generation
-        var serial = Data(count: 8)
-        _ = serial.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 8, $0.baseAddress!) }
-        let serialNumber = derInteger(bytes: [UInt8](serial))
+        // signature AlgorithmIdentifier — ecdsa-with-SHA256, no parameters (RFC 5758 §3.2)
+        let sigAlg = ecdsaWithSHA256AlgID()
 
-        // signature AlgorithmIdentifier (ecdsa-with-SHA256)
-        let sigAlg = ecdsaSHA256AlgorithmIdentifier()
-
-        // issuer / subject — same DN: CN=<cn>
+        // issuer == subject (self-signed)
         let dn = buildDN(cn: cn)
 
-        // validity — now through 10 years
-        let now = Date()
+        // validity: now → +10 years (both within 2050 so UTCTime is correct)
+        let now    = Date()
         let expiry = Calendar.current.date(byAdding: .year, value: 10, to: now)!
-        let validity = derSequence(
-            derUTCTime(now) +
-            derUTCTime(expiry)
-        )
+        let validity = seq(utctime(now) + utctime(expiry))
 
-        // subjectPublicKeyInfo — EC P-256
+        // SubjectPublicKeyInfo
         let spki = buildSPKI(publicKeyBytes: publicKeyBytes)
 
-        // extensions — Basic Constraints (not a CA)
-        let basicConstraints = buildBasicConstraintsExtension()
-        let extensions = derTagged(tag: 0xA3, value: derSequence(basicConstraints))
+        // Extensions
+        let exts = ctx(0xA3, seq(
+            buildBasicConstraintsExtension() +
+            buildSubjectKeyIdentifierExtension(publicKeyBytes: publicKeyBytes)
+        ))
 
-        let tbsBody = version + serialNumber + sigAlg + dn + validity + dn + spki + extensions
-        return derSequence(tbsBody)
+        return seq(version + serialNumber + sigAlg + dn + validity + dn + spki + exts)
     }
 
-    // MARK: - Full Certificate wrapper
+    // MARK: - Full Certificate
 
-    private static func wrapCertificate(tbs: Data, signature: Data) throws -> Data {
-        let sigAlg = ecdsaSHA256AlgorithmIdentifier()
-
-        // signature is a DER BIT STRING — prepend 0x00 (zero unused bits)
-        let sigBitString = derBitString(signature)
-
-        let certBody = tbs + sigAlg + sigBitString
-        return derSequence(certBody)
+    private static func buildCertificate(tbs: Data, signature: Data) -> Data {
+        // Certificate ::= SEQUENCE { TBSCertificate, AlgorithmIdentifier, BIT STRING }
+        seq(tbs + ecdsaWithSHA256AlgID() + bitstring(signature))
     }
 
     // MARK: - Signing
 
-    private static func sign(data: Data, privateKey: SecKey) throws -> Data {
-        let algorithm = SecKeyAlgorithm.ecdsaSignatureMessageX962SHA256
+    private static func sign(digest: Data, privateKey: SecKey) throws -> Data {
+        // ecdsaSignatureDigestX962SHA256: Security signs a pre-hashed SHA-256 digest.
+        // The result is a DER-encoded SEQUENCE { INTEGER r, INTEGER s } — exactly
+        // what X.509 signatureValue expects inside the BIT STRING.
+        let algorithm = SecKeyAlgorithm.ecdsaSignatureDigestX962SHA256
 
         guard SecKeyIsAlgorithmSupported(privateKey, .sign, algorithm) else {
-            throw BuildError.signingFailed
+            throw BuildError.signingFailed("Algorithm not supported by this key")
         }
 
         var signError: Unmanaged<CFError>?
         guard let sig = SecKeyCreateSignature(
-            privateKey,
-            algorithm,
-            data as CFData,
-            &signError
+            privateKey, algorithm, digest as CFData, &signError
         ) as Data? else {
-            throw BuildError.signingFailed
+            let desc = signError?.takeRetainedValue().localizedDescription ?? "nil"
+            throw BuildError.signingFailed(desc)
         }
 
         return sig
     }
 
-    // MARK: - ASN.1 / DER helpers
+    // MARK: - X.509 Structures
 
-    /// SEQUENCE { contents }
-    static func derSequence(_ contents: Data) -> Data {
-        derTLV(tag: 0x30, value: contents)
+    /// AlgorithmIdentifier: SEQUENCE { OID(ecdsa-with-SHA256) }
+    /// No parameters field per RFC 5758 §3.2.
+    private static func ecdsaWithSHA256AlgID() -> Data {
+        seq(oid("1.2.840.10045.4.3.2"))
     }
 
-    /// INTEGER from raw bytes (prepends 0x00 if high bit set to keep positive)
-    static func derInteger(bytes: [UInt8]) -> Data {
-        var b = bytes
-        if let first = b.first, first & 0x80 != 0 {
-            b.insert(0x00, at: 0)   // ensure positive interpretation
+    /// SubjectPublicKeyInfo for EC P-256
+    private static func buildSPKI(publicKeyBytes: Data) -> Data {
+        let algID = seq(oid("1.2.840.10045.2.1") + oid("1.2.840.10045.3.1.7"))
+        return seq(algID + bitstring(publicKeyBytes))
+    }
+
+    /// RDNSequence: SEQUENCE { SET { SEQUENCE { OID(CN), UTF8String } } }
+    private static func buildDN(cn: String) -> Data {
+        seq(set_(seq(oid("2.5.4.3") + utf8str(cn))))
+    }
+
+    /// BasicConstraints: id-ce-basicConstraints, value = SEQUENCE {} (cA=FALSE default)
+    private static func buildBasicConstraintsExtension() -> Data {
+        seq(oid("2.5.29.19") + octetstr(seq(Data())))
+    }
+
+    /// SubjectKeyIdentifier: id-ce-subjectKeyIdentifier, value = SHA-1 of raw public key bytes.
+    /// RFC 5280 §4.2.1.2 method 1: SKI = SHA-1(BIT STRING content, i.e. the key bytes).
+    /// Required by Apple's TLS stack for NWListener server identities.
+    private static func buildSubjectKeyIdentifierExtension(publicKeyBytes: Data) -> Data {
+        // SHA-1 of the raw EC point bytes (not the BIT STRING wrapper)
+        var digest = [UInt8](repeating: 0, count: 20)
+        publicKeyBytes.withUnsafeBytes { ptr in
+            var ctx = CC_SHA1_CTX()
+            CC_SHA1_Init(&ctx)
+            CC_SHA1_Update(&ctx, ptr.baseAddress, CC_LONG(publicKeyBytes.count))
+            CC_SHA1_Final(&digest, &ctx)
         }
-        return derTLV(tag: 0x02, value: Data(b))
+        let skiValue = Data(digest)
+        // extnValue = OCTET STRING { OCTET STRING { sha1Hash } }
+        return seq(oid("2.5.29.14") + octetstr(octetstr(skiValue)))
     }
 
-    /// EXPLICIT context tag wrapper  [n] EXPLICIT
-    static func derTagged(tag: UInt8, value: Data) -> Data {
-        derTLV(tag: tag, value: value)
-    }
+    // MARK: - ASN.1 / DER Primitives
 
-    /// BIT STRING (unused-bits byte prepended)
-    static func derBitString(_ bytes: Data) -> Data {
-        var content = Data([0x00])   // 0 unused bits
-        content.append(bytes)
-        return derTLV(tag: 0x03, value: content)
-    }
-
-    /// UTF8String
-    static func derUTF8String(_ s: String) -> Data {
-        derTLV(tag: 0x0C, value: Data(s.utf8))
-    }
-
-    /// OID from dotted-decimal string
-    static func derOID(_ dotted: String) -> Data {
-        derTLV(tag: 0x06, value: encodeOID(dotted))
-    }
-
-    /// UTCTime — format: YYMMDDHHmmssZ
-    static func derUTCTime(_ date: Date) -> Data {
-        let f = DateFormatter()
-        f.dateFormat = "yyMMddHHmmss"
-        f.timeZone = TimeZone(identifier: "UTC")
-        let str = f.string(from: date) + "Z"
-        return derTLV(tag: 0x17, value: Data(str.utf8))
-    }
-
-    /// BOOLEAN
-    static func derBool(_ v: Bool) -> Data {
-        derTLV(tag: 0x01, value: Data([v ? 0xFF : 0x00]))
-    }
-
-    /// OCTET STRING
-    static func derOctetString(_ bytes: Data) -> Data {
-        derTLV(tag: 0x04, value: bytes)
-    }
-
-    // MARK: - TLV encoder
-
-    /// Core DER Tag-Length-Value encoder.
-    static func derTLV(tag: UInt8, value: Data) -> Data {
-        var out = Data()
-        out.append(tag)
+    static func tlv(_ tag: UInt8, _ value: Data) -> Data {
+        var out = Data([tag])
         let len = value.count
-        if len < 0x80 {
-            out.append(UInt8(len))
-        } else if len < 0x100 {
-            out.append(0x81)
-            out.append(UInt8(len))
-        } else {
-            out.append(0x82)
-            out.append(UInt8((len >> 8) & 0xFF))
-            out.append(UInt8(len & 0xFF))
-        }
-        out.append(value)
-        return out
+        if len < 0x80        { out.append(UInt8(len)) }
+        else if len < 0x100  { out += [0x81, UInt8(len)] }
+        else                  { out += [0x82, UInt8(len >> 8), UInt8(len & 0xFF)] }
+        return out + value
     }
 
-    // MARK: - OID encoding
+    static func seq(_ v: Data)             -> Data { tlv(0x30, v) }
+    static func set_(_ v: Data)            -> Data { tlv(0x31, v) }
+    static func ctx(_ tag: UInt8, _ v: Data) -> Data { tlv(tag,  v) }
+    static func octetstr(_ v: Data)        -> Data { tlv(0x04, v) }
+    static func utf8str(_ s: String)       -> Data { tlv(0x0C, Data(s.utf8)) }
 
-    /// Encodes a dotted-decimal OID string into DER bytes.
-    private static func encodeOID(_ dotted: String) -> Data {
+    static func bitstring(_ bytes: Data) -> Data {
+        tlv(0x03, Data([0x00]) + bytes)   // 0x00 = zero unused bits
+    }
+
+    static func integer(_ bytes: [UInt8]) -> Data {
+        var b = bytes
+        if b.first.map({ $0 & 0x80 != 0 }) ?? false { b.insert(0x00, at: 0) }
+        return tlv(0x02, Data(b))
+    }
+
+    static func utctime(_ date: Date) -> Data {
+        let f = DateFormatter()
+        f.dateFormat = "yyMMddHHmmss'Z'"
+        f.timeZone = TimeZone(abbreviation: "UTC")
+        return tlv(0x17, Data(f.string(from: date).utf8))
+    }
+
+    static func oid(_ dotted: String) -> Data {
         let parts = dotted.split(separator: ".").compactMap { Int($0) }
         guard parts.count >= 2 else { return Data() }
-
-        var bytes = Data()
-        bytes.append(UInt8(parts[0] * 40 + parts[1]))
-
-        for i in 2..<parts.count {
-            bytes.append(contentsOf: encodeBase128(parts[i]))
-        }
-        return bytes
+        var body = Data([UInt8(parts[0] * 40 + parts[1])])
+        for n in parts.dropFirst(2) { body += base128(n) }
+        return tlv(0x06, body)
     }
 
-    private static func encodeBase128(_ value: Int) -> [UInt8] {
-        var v = value
-        var result: [UInt8] = []
-        result.append(UInt8(v & 0x7F))
+    private static func base128(_ n: Int) -> [UInt8] {
+        var v = n, r = [UInt8(v & 0x7F)]
         v >>= 7
-        while v > 0 {
-            result.append(UInt8((v & 0x7F) | 0x80))
-            v >>= 7
-        }
-        return result.reversed()
-    }
-
-    // MARK: - X.509 structures
-
-    /// AlgorithmIdentifier for ecdsa-with-SHA256 (1.2.840.10045.4.3.2)
-    private static func ecdsaSHA256AlgorithmIdentifier() -> Data {
-        // ecdsa-with-SHA256 has no parameters field (RFC 5758 §3.2)
-        derSequence(derOID("1.2.840.10045.4.3.2"))
-    }
-
-    /// SubjectPublicKeyInfo for EC P-256 (id-ecPublicKey + namedCurve prime256v1)
-    private static func buildSPKI(publicKeyBytes: Data) -> Data {
-        // id-ecPublicKey OID: 1.2.840.10045.2.1
-        // prime256v1 OID:     1.2.840.10045.3.1.7
-        let algID = derSequence(
-            derOID("1.2.840.10045.2.1") +
-            derOID("1.2.840.10045.3.1.7")
-        )
-        let pubKeyBitStr = derBitString(publicKeyBytes)
-        return derSequence(algID + pubKeyBitStr)
-    }
-
-    /// Distinguished Name: SEQUENCE { SET { SEQUENCE { OID(CN), UTF8String } } }
-    private static func buildDN(cn: String) -> Data {
-        // commonName OID: 2.5.4.3
-        let atv = derSequence(derOID("2.5.4.3") + derUTF8String(cn))
-        let rdn = derTLV(tag: 0x31, value: atv)   // SET
-        return derSequence(rdn)
-    }
-
-    /// BasicConstraints extension: cA = FALSE, critical = FALSE
-    private static func buildBasicConstraintsExtension() -> Data {
-        // extnID: id-ce-basicConstraints 2.5.29.19
-        let oid = derOID("2.5.29.19")
-        // extnValue: OCTET STRING wrapping SEQUENCE { BOOLEAN FALSE }
-        // cA defaults to FALSE, so an empty SEQUENCE {} is spec-correct and smaller
-        let extValue = derOctetString(derSequence(Data()))
-        return derSequence(oid + extValue)
+        while v > 0 { r.insert(UInt8((v & 0x7F) | 0x80), at: 0); v >>= 7 }
+        return r
     }
 }

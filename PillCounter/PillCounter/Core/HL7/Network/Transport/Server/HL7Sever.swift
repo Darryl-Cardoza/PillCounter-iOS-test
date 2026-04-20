@@ -2,83 +2,69 @@ import Foundation
 import Network
 import Security
 
+
 /// TLS-enabled HL7 server with Bonjour advertisement and MLLP framing.
 final class HL7TLSServer {
 
-    /// Port on which server listens for incoming HL7 connections.
     private let port: NWEndpoint.Port
-
-    /// NWListener for accepting incoming TLS connections.
     private var listener: NWListener?
+    private let queue = DispatchQueue(label: "hl7.tls.server", qos: .userInitiated)
 
-    /// Background queue for network operations.
-    private let queue = DispatchQueue(label: "hl7.tls.server")
+    // Track every active connection so we can cancel them all on stop().
+    // Keyed by ObjectIdentifier so removal is O(1).
+    private var activeConnections: [ObjectIdentifier: NWConnection] = [:]
 
-    /// Callback for incoming HL7 message.
     private var onMessage: ((String, String) -> Void)?
-
-    /// Callback after ACK is sent.
     private var onAckSent: ((String) -> Void)?
 
     init(port: UInt16) {
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
-            fatalError("Invalid port")
+            fatalError("Invalid port \(port)")
         }
         self.port = nwPort
     }
 
-    // MARK: - Start Server + Bonjour
+    // MARK: - Start
 
-    /// Starts TLS server and advertises via Bonjour.
     func start(
         serviceName: String,
         serviceType: String,
         onMessage: @escaping (String, String) -> Void,
         onAckSent: @escaping (String) -> Void
     ) throws {
-
         self.onMessage = onMessage
         self.onAckSent = onAckSent
 
-        // Configure TLS options with local identity
         let tlsOptions = NWProtocolTLS.Options()
-
         let secIdentity = try TLSIdentityManager.loadOrCreateIdentity()
+
         guard let osIdentity = sec_identity_create(secIdentity) else {
-            throw NSError(domain: "TLS", code: -1, userInfo: nil)
+            throw NSError(domain: "TLS", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "sec_identity_create returned nil"])
         }
 
-        sec_protocol_options_set_local_identity(
-            tlsOptions.securityProtocolOptions,
-            osIdentity
-        )
+        sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, osIdentity)
+        sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
 
-        sec_protocol_options_set_min_tls_protocol_version(
-            tlsOptions.securityProtocolOptions,
-            .TLSv12
-        )
-
-        // Create parameters with TLS
         let parameters = NWParameters(tls: tlsOptions)
         parameters.allowLocalEndpointReuse = true
 
-        // Create listener on port
         let listener = try NWListener(using: parameters, on: port)
 
-        // Advertise service via Bonjour
         listener.service = NWListener.Service(
             name: serviceName,
             type: serviceType,
             domain: "local"
         )
 
-        // Observe server state changes
-        listener.stateUpdateHandler = { state in
+        listener.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
-                Log("HL7 TLS Server ready on port \(self.port)")
+                Log("HL7 TLS Server ready on port \(self?.port.rawValue ?? 0)")
             case .failed(let error):
                 Log("HL7 TLS Server failed: \(error.localizedDescription)")
+                // Attempt recovery — recreate listener after a short delay
+                self?.scheduleRestart(serviceName: serviceName, serviceType: serviceType)
             case .cancelled:
                 Log("HL7 TLS Server stopped")
             default:
@@ -86,94 +72,165 @@ final class HL7TLSServer {
             }
         }
 
-        // Handle incoming client connections
-        listener.newConnectionHandler = { connection in
+        listener.newConnectionHandler = { [weak self] connection in
+            guard let self else { return }
             Log("PMS connected from \(connection.endpoint)")
+            self.track(connection)
             self.handle(connection)
         }
 
-        // Start listener
         listener.start(queue: queue)
         self.listener = listener
     }
 
     // MARK: - Stop
 
-    /// Stops server and releases resources.
     func stop() {
+        // Cancel all active client connections before stopping the listener
+        activeConnections.values.forEach { $0.cancel() }
+        activeConnections.removeAll()
         listener?.cancel()
         listener = nil
         Log("HL7 TLS Server stopped")
     }
 
-    // MARK: - Connection Handling
+    // MARK: - Connection Tracking
 
-    /// Starts handling a new client connection.
-    private func handle(_ connection: NWConnection) {
-        connection.start(queue: queue)
-        receive(on: connection)
+    private func track(_ connection: NWConnection) {
+        let key = ObjectIdentifier(connection)
+        activeConnections[key] = connection
+        Log("HL7 active connections: \(activeConnections.count)")
     }
 
-    /// Continuously receives data from connection.
+    private func untrack(_ connection: NWConnection) {
+        activeConnections.removeValue(forKey: ObjectIdentifier(connection))
+        Log("HL7 active connections: \(activeConnections.count)")
+    }
+
+    // MARK: - Connection Handling
+
+    private func handle(_ connection: NWConnection) {
+        connection.stateUpdateHandler = { [weak self, weak connection] state in
+            guard let self, let connection else { return }
+            switch state {
+            case .ready:
+                Log("HL7 connection ready: \(connection.endpoint)")
+                self.receive(on: connection)
+            case .failed(let error):
+                Log("HL7 connection failed: \(error.localizedDescription)")
+                self.untrack(connection)
+                connection.cancel()
+            case .cancelled:
+                self.untrack(connection)
+            default:
+                break
+            }
+        }
+        connection.start(queue: queue)
+    }
+
+    // MARK: - Receive Loop
+
+    /// Recursive receive — keeps reading until the connection closes or errors.
+    /// Each call reads one chunk; MLLP framing is handled by the buffer.
     private func receive(on connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) {
-            data, _, _, error in
+        connection.receive(
+            minimumIncompleteLength: 1,
+            maximumLength: 65_536
+        ) { [weak self, weak connection] data, _, isComplete, error in
+            guard let self, let connection else { return }
 
-            // Process received data
-            if let data = data, !data.isEmpty {
-
-                // Extract HL7 message from MLLP frame
-                if let hl7 = MLLP.unwrap(data) {
-
-                    let messageId = UUID().uuidString
-
-                    let validation = HL7Validator.validate(hl7)
-
-                    switch validation {
-
-                    case .invalid(let reason):
-                        Log("Invalid Hl7 message \(reason)")
-                        let ack = HL7ACKBuilder.buildResponse(
-                            from: hl7,
-                            code: .AR,
-                            errorMessage: reason
-                        )
-                        connection.send(content: MLLP.frame(ack), completion: .contentProcessed { _ in })
-                        self.onMessage?(hl7, messageId)
-
-                    case .unsupported(let reason):
-                        Log("Unsupported Hl7 message \(reason)")
-                        let ack = HL7ACKBuilder.buildResponse(
-                            from: hl7,
-                            code: .AR,
-                            errorMessage: reason
-                        )
-                        connection.send(content: MLLP.frame(ack), completion: .contentProcessed { _ in })
-                        self.onMessage?(hl7, messageId)
-
-                    case .valid:
-                        Log("valid Hl7 message")
-                        self.onMessage?(hl7, messageId)
-                        let ackMessage = HL7ACKBuilder.buildResponse(
-                            from: hl7,
-                            code: .AA,
-                            errorMessage: nil
-                        )
-                        connection.send(
-                            content: MLLP.frame(ackMessage),
-                            completion: .contentProcessed { _ in
-                                self.onAckSent?(messageId)
-                            }
-                        )
-                    }
-                }
+            if let data, !data.isEmpty {
+                self.processData(data, on: connection)
             }
 
-            // Continue receiving if no error
-            if error == nil {
-                self.receive(on: connection)
-            } else {
-                Log("Connection error: \(error!.localizedDescription)")
+            if let error {
+                Log("HL7 receive error: \(error.localizedDescription)")
+                self.untrack(connection)
+                connection.cancel()
+                return
+            }
+
+            if isComplete {
+                Log("HL7 connection closed by remote")
+                self.untrack(connection)
+                connection.cancel()
+                return
+            }
+
+            // Connection still open — keep receiving
+            self.receive(on: connection)
+        }
+    }
+
+    // MARK: - MLLP Processing
+
+    private func processData(_ data: Data, on connection: NWConnection) {
+        guard let hl7 = MLLP.unwrap(data) else {
+            Log("HL7 received data that is not a valid MLLP frame — ignoring")
+            return
+        }
+
+        let messageId = UUID().uuidString
+        let validation = HL7Validator.validate(hl7)
+
+        switch validation {
+
+        case .invalid(let reason):
+            Log("HL7 invalid message: \(reason)")
+            let ack = HL7ACKBuilder.buildResponse(from: hl7, code: .AR, errorMessage: reason)
+            send(MLLP.frame(ack), on: connection)
+            onMessage?(hl7, messageId)
+
+        case .unsupported(let reason):
+            Log("HL7 unsupported message: \(reason)")
+            let ack = HL7ACKBuilder.buildResponse(from: hl7, code: .AR, errorMessage: reason)
+            send(MLLP.frame(ack), on: connection)
+            onMessage?(hl7, messageId)
+
+        case .valid:
+            Log("HL7 valid message received")
+            onMessage?(hl7, messageId)
+            let ack = HL7ACKBuilder.buildResponse(from: hl7, code: .AA, errorMessage: nil)
+            send(MLLP.frame(ack), on: connection) { [weak self] in
+                self?.onAckSent?(messageId)
+            }
+        }
+    }
+
+    // MARK: - Send Helper
+
+    private func send(_ data: Data, on connection: NWConnection, completion: (() -> Void)? = nil) {
+        connection.send(
+            content: data,
+            completion: .contentProcessed { error in
+                if let error {
+                    Log("HL7 send error: \(error.localizedDescription)")
+                } else {
+                    completion?()
+                }
+            }
+        )
+    }
+
+    // MARK: - Listener Recovery
+
+    private func scheduleRestart(serviceName: String, serviceType: String) {
+        guard let onMessage, let onAckSent else { return }
+        listener?.cancel()
+        listener = nil
+        queue.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self else { return }
+            do {
+                try self.start(
+                    serviceName: serviceName,
+                    serviceType: serviceType,
+                    onMessage: onMessage,
+                    onAckSent: onAckSent
+                )
+                Log("HL7 TLS Server restarted")
+            } catch {
+                Log("HL7 TLS Server restart failed: \(error.localizedDescription)")
             }
         }
     }

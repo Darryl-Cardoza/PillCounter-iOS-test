@@ -186,14 +186,14 @@ private enum ImageTLSError: Error, LocalizedError {
     case publicKeyExportFailed
     case keychainError(OSStatus)
 
-    var errorDescription: String? {
-        switch self {
-        case .publicKeyExportFailed:
-            return "[ImageTLS] Failed to export public key from Secure Enclave"
-        case .keychainError(let s):
-            return "[ImageTLS] Keychain error: \(s.keychainDescription)"
-        }
-    }
+//    var errorDescription: String? {
+//        switch self {
+//        case .publicKeyExportFailed:
+//            return "[ImageTLS] Failed to export public key from Secure Enclave"
+//        case .keychainError(let s):
+//            return "[ImageTLS] Keychain error: \(s.keychainDescription)"
+//        }
+//    }
 }
 
 

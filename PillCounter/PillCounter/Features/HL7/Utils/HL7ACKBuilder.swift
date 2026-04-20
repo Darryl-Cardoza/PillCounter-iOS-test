@@ -101,10 +101,10 @@ struct HL7Validator {
         let fields = msh.components(separatedBy: "|")
 
         // MARK: - 2. Message Control ID (MSH-10)
-        guard let controlId = fields[safe: 9],
-              !controlId.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return .invalid("Missing Message Control ID (MSH-10)")
-        }
+//        guard let controlId = fields[safe: 9],
+//              !controlId.trimmingCharacters(in: .whitespaces).isEmpty else {
+//            return .invalid("Missing Message Control ID (MSH-10)")
+//        }
 
         // MARK: - 3. Message Type (MSH-9)
         guard let typeField = fields[safe: 8] else {

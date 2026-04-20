@@ -205,8 +205,8 @@ extension OSStatus {
 }
 
 
-
-
+//
+//
 //
 //import Foundation
 //import Security
@@ -216,10 +216,10 @@ extension OSStatus {
 //
 //    static func loadIdentity() throws -> SecIdentity {
 //
-//        guard let url = Bundle.main.url(forResource: "android-server", withExtension: "p12"),
+//        guard let url = Bundle.main.url(forResource: "ios-server", withExtension: "p12"),
 //              let data = try? Data(contentsOf: url) else {
 //            throw NSError(domain: "TLS", code: -1, userInfo: [
-//                NSLocalizedDescriptionKey: "android-server not found"
+//                NSLocalizedDescriptionKey: "ios-server not found"
 //            ])
 //        }
 //
@@ -246,14 +246,4 @@ extension OSStatus {
 //        return identity
 //    }
 //}
-//
-
-//
-//  TLSIdentityManager.swift
-//  PillCounter
-//
-
-//
-//  TLSIdentityManager.swift
-//  PillCounter
 //

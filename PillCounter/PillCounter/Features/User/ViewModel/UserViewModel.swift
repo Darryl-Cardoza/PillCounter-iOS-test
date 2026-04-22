@@ -851,7 +851,7 @@ class UserViewModel: ObservableObject {
         pillScanViewModel: PillScanViewModel
     ) {
 
-        // 🔹 Transactions
+        // Transactions
         var txns = filteredTransactionsOfUserByDate
 
         switch status {
@@ -871,7 +871,6 @@ class UserViewModel: ObservableObject {
                 || ($0.status?.lowercased() ?? "").contains(q)
                 || ($0.drug?.ndc ?? "").contains(q)
             }
-            
         }
 
         self.transactionRows = txns.map { txn in

@@ -202,22 +202,6 @@ enum PmsFilter: Hashable {
     case nonPms
 }
 
-public enum HistoryFilterType: String, Codable, Hashable {
-//    case all
-    case fixed
-    case regular
-    
-    var title: String {
-          switch self {
-//          case .all:
-//              return NSLocalizedString("HISTORY", comment: "")
-          case .fixed:
-              return "Fixed Count History"
-          case .regular:
-              return "Quick Count History"
-          }
-      }
-}
 
 
 enum ControlledStep: String, CaseIterable {
@@ -315,5 +299,13 @@ enum DrugSchedule: String, CaseIterable, Identifiable {
 enum SettingsSubScreen {
     case saveHistory
     case schedule
+}
+
+
+
+// MARK: History
+public enum HistoryFilterType: String, Codable, Hashable {
+    case fixed
+    case regular
 }
 

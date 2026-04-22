@@ -86,8 +86,6 @@ final class UserLocalDataSource {
     
     // get user by user id.
     func getUserByUserId(by userId: String) -> UserEntity? {
-
-
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user_id == %@", userId)
         request.fetchLimit = 1

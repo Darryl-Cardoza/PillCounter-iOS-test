@@ -363,10 +363,13 @@ extension QRBarcodeScannerView {
                          case .barcode:
                              pillScanViewModel.showScannedDrugInfoPopoup = true
                          case .stockCount:
+                             print("Stock Count Flow")
+                             await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                              return
                          }
                          
                      } else {
+                         print("Regular Stock Count Flow")
                          await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                      }
                 }

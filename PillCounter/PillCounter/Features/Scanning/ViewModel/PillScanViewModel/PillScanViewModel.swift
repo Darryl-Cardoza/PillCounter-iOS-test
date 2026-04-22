@@ -52,8 +52,6 @@ class PillScanViewModel: ObservableObject {
 
     // get the user id
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
-    let doubleCountRequired = AppStorageManager.shared.isDoubleCountRequired
-    let backCountRequired = AppStorageManager.shared.isBackCountRequired
         
 
     private var cancellables = Set<AnyCancellable>()

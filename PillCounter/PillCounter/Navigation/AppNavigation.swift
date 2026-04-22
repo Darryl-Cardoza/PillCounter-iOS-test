@@ -47,7 +47,7 @@ struct AppNavigation: View {
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(.login(.dashboard(.fixedCountPartial))):
-                        CountHistoryView(title: "pending dispense counts")
+                        DispenseCountPartialTxnList(title: "pending dispense counts")
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(

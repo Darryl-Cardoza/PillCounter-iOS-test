@@ -62,7 +62,7 @@ extension PillScanViewModel {
                 showRxFlowPopup = true
             }
         } catch {
-            print("❌ [RxScan] Error parsing scan data: \(error.localizedDescription)")
+            print("[RxScan] Error parsing scan data: \(error.localizedDescription)")
             scannedRxData = ParsedScanData()
             showRxFlowPopup = false
         }
@@ -73,7 +73,7 @@ extension PillScanViewModel {
     /// then creates a FIXED transaction with rx number and target count.
     func createTransactionFromRxScan(countType: CountType = .FIXED) async {
         guard let rxData = scannedRxData else {
-            print("❌ [RxScan] No scanned Rx data available")
+            print("[RxScan] No scanned Rx data available")
             return
         }
         let ndc       = rxData.ndcNo ?? ""
@@ -84,7 +84,7 @@ extension PillScanViewModel {
         // MARK: 1️⃣ Get or create drug (SAME AS handleDrugFlow)
         var drugIdToUse = generateUniqueDrugId()
         if let existing = pillDataLocalStorage.getPillByNdc(by: ndc) {
-            print("✅ [RxScan] Drug found in local DB → id: \(existing.drug_id)")
+            print("[RxScan] Drug found in local DB → id: \(existing.drug_id)")
             drugIdToUse = existing.drug_id
         } else {
             pillDataLocalStorage.saveManualPill(
@@ -153,7 +153,7 @@ extension PillScanViewModel {
             let valueRange = NSRange(value.startIndex..., in: value)
             return valueRegex.firstMatch(in: value, range: valueRange) != nil
         } catch {
-            print("❌ [RxScan] matchesBarcodeFormat error: \(error)")
+            print("[RxScan] matchesBarcodeFormat error: \(error)")
             return false
         }
     }
@@ -165,15 +165,15 @@ extension PillScanViewModel {
         
         guard !ndc.isEmpty else { return nil }
 
-        // ✅ STEP 1 — LOCAL DB
+        // STEP 1 — LOCAL DB
         if let localDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
-            print("✅ [RxScan] Drug found in local DB → \(localDrug.drug_name ?? "")")
+            print("[RxScan] Drug found in local DB → \(localDrug.drug_name ?? "")")
             return localDrug.drug_name
         }
 
-        print("🌐 [RxScan] Not in local DB → calling CONTROLLED API")
+        print("[RxScan] Not in local DB → calling CONTROLLED API")
 
-        // ✅ STEP 2 — CALL CONTROLLED API
+        // STEP 2 — CALL CONTROLLED API
         let request = NdcValidationRequest(
             targetNdc: ndc,
             scannedNdc: ndc
@@ -204,7 +204,7 @@ extension PillScanViewModel {
             return data.scannedNdc?.lookupName ?? ""
 
         } catch {
-            print("❌ [RxScan] Controlled API error:", error.localizedDescription)
+            print("[RxScan] Controlled API error:", error.localizedDescription)
             return nil
         }
     }

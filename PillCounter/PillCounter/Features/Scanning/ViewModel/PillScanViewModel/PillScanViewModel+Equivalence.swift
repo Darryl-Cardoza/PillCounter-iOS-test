@@ -13,6 +13,7 @@ extension PillScanViewModel {
             return true
         }
 
+
         print("✅ [NDC] Expected:", expectedNdc)
         print("✅ [NDC] Scanned:", scannedNdc)
 

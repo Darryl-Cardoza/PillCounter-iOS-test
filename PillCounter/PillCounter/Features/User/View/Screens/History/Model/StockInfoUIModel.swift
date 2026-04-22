@@ -11,7 +11,6 @@ struct StockData: Identifiable {
     let batchId: Int64
     let createdAt: Int64
     let ndcCount: Int64
-    let targetCount: Int
     let status: String
     let bucketId: String
     let isFromPms: Bool

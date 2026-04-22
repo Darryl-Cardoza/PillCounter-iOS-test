@@ -33,7 +33,6 @@ final class AppStorageManager {
         static let bucketList = "bucket_list"
     
        static let isPillCountingEnabled = "isPillCountingEnabled"
-       static let isDoubleCountRequired = "isDoubleCountRequired"
        static let isBackCountRequired = "isBackCountRequired"
        static let isHapticEnabled = "isHapticEnabled"
        static let isSoundEnabled = "isSoundEnabled"
@@ -113,17 +112,6 @@ final class AppStorageManager {
         }
     }
     
-    var isDoubleCountRequired: Bool {
-        get {
-            if defaults.object(forKey: AppStorageKeys.isDoubleCountRequired) == nil {
-                return true
-            }
-            return defaults.bool(forKey: AppStorageKeys.isDoubleCountRequired)
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isDoubleCountRequired)
-        }
-    }
     
     var isBackCountRequired: Bool {
         get {

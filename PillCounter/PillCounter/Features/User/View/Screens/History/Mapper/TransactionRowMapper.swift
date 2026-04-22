@@ -5,31 +5,32 @@
 //  Created by Bhushan Patil on 20/04/26.
 //
 
-struct TransactionRowMapper {
-    
-    static func map(
-        txn: PillCountTransactionEntity
+
+extension PillCountTransactionEntity {
+
+    func toRowData(
+        pillCount: Int? = nil
     ) -> TransactionRowData {
-        
+
         let details =
-        (txn.pillCountTransactionDetails?.allObjects as? [PillCountTransactionDetailsEntity] ?? [])
+        (self.pillCountTransactionDetails?.allObjects as? [PillCountTransactionDetailsEntity] ?? [])
             .filter { !$0.is_deleted }
-        
-        let totalCount = details.reduce(0) { $0 + Int($1.pill_count) }
-        
+
+        let totalCount = pillCount ?? details.reduce(0) { $0 + Int($1.pill_count) }
+
         return TransactionRowData(
-            id: txn.txn_id,
-            ndc: txn.drug?.ndc ?? "",
-            drugName: txn.drug?.drug_name ?? "Unknown Pill",
-            createdAt: txn.created_at,
-            barcodeImagePath: txn.barcode_image,
+            id: self.txn_id,
+            ndc: self.drug?.ndc ?? "",
+            drugName: self.drug?.drug_name ?? "Unknown Pill",
+            createdAt: self.created_at,
+            barcodeImagePath: self.barcode_image,
             pillCount: totalCount,
-            targetCount: Int(txn.target_count),
-            countType: txn.count_type ?? "",
-            status: txn.status ?? "",
-            note: txn.note,
-            bucketId: txn.bucket_id ?? "",
-            drugType: txn.drug?.drug_type ?? ""
+            targetCount: Int(self.target_count),
+            countType: self.count_type ?? "",
+            status: self.status ?? "",
+            note: self.note,
+            bucketId: self.bucket_id ?? "",
+            drugType: self.drug?.drug_type ?? ""
         )
     }
 }

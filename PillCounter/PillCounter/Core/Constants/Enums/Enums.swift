@@ -90,10 +90,10 @@ public enum HamburgerMenuFLow: Hashable, Codable {
 public enum HamburgerMenuItem: CaseIterable, Identifiable {
     case FixedCount
     case RegularCount
-    case Profile
     case History
     case UnsyncedTransaction
     case Settings
+    case Profile
     case Logout
 
     public var id: String { title }
@@ -106,7 +106,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
                 return NSLocalizedString("REGULAR_COUNT_TITLE", comment: "")
             case .Profile: return NSLocalizedString("PROFILE", comment: "")
             case .History: return NSLocalizedString("HISTORY", comment: "")
-            case .UnsyncedTransaction:return NSLocalizedString("Unsynced Transactions", comment: "")
+            case .UnsyncedTransaction: return NSLocalizedString("Unsynced Transactions", comment: "")
             case .Settings: return NSLocalizedString("SETTINGS", comment: "")
             case .Logout: return NSLocalizedString("LOGOUT", comment: "")
         }
@@ -114,11 +114,10 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
     }
 
     var iconName: String {
-
         switch self {
-        case .FixedCount: return "fixed_count_icon"
-        case .RegularCount: return "regular_count_icon"
-        case .Profile: return "profile_icon"
+        case .FixedCount: return "target_count_step3"
+        case .RegularCount: return "placeholder_history"
+        case .Profile: return "profile_icon_new"
         case .History: return "history_icon"
         case .UnsyncedTransaction: return "unsync_icon"
         case .Settings: return "settings_icon"
@@ -197,6 +196,11 @@ public enum InputValidation {
     case npi
 }
     
+enum PmsFilter: Hashable {
+    case all
+    case pms
+    case nonPms
+}
 
 public enum HistoryFilterType: String, Codable, Hashable {
 //    case all
@@ -294,3 +298,22 @@ enum MLLP {
         return String(data: payload, encoding: .utf8)
     }
 }
+
+
+//Settings
+
+enum DrugSchedule: String, CaseIterable, Identifiable {
+    case cii = "CII"
+    case ciii = "CIII"
+    case civ = "CIV"
+    case cv = "CV"
+    case cvi = "CVI"
+
+    var id: String { rawValue }
+}
+
+enum SettingsSubScreen {
+    case saveHistory
+    case schedule
+}
+

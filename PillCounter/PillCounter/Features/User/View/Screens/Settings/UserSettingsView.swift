@@ -8,43 +8,42 @@
 import SwiftUI
 
 struct UserSettingsView: View {
-
-
+    
+    
     @State private var isPillCountingEnabled =
-        AppStorageManager.shared.isPillCountingEnabled
-
-    @State private var isDoubleCountRequired =
-        AppStorageManager.shared.isDoubleCountRequired
-
+    AppStorageManager.shared.isPillCountingEnabled
+    
     @State private var isBackCountRequired =
-        AppStorageManager.shared.isBackCountRequired
-
+    AppStorageManager.shared.isBackCountRequired
+    
     @State private var isHapticEnabled =
-        AppStorageManager.shared.isHapticEnabled
-
+    AppStorageManager.shared.isHapticEnabled
+    
     @State private var isSoundEnabled =
-        AppStorageManager.shared.isSoundEnabled
+    AppStorageManager.shared.isSoundEnabled
     
     @State private var isSpeechEnabled =
-        AppStorageManager.shared.isSpeechEnabled
+    AppStorageManager.shared.isSpeechEnabled
     
     @State private var selectedSchedules =
-        AppStorageManager.shared.selectedSchedules
+    AppStorageManager.shared.selectedSchedules
     
-
+    
     // 1. Source of Truth (The actual saved setting)
     @State private var selectedSaveHistoryOption: SaveHistoryOption =
-        AppStorageManager.shared.saveHistoryOption
-
+    AppStorageManager.shared.saveHistoryOption
+    
     // 2. Temporary State (The option the user *wants* to switch to)
     @State private var pendingOption: SaveHistoryOption? = nil
-
+    
     // 3. UI State for Popup
     @State private var showConfirmationPopup: Bool = false
     @State private var showClearDataConfirmationPopup: Bool = false
-
+    @State private var activeSubScreen: SettingsSubScreen? = nil
+    
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userviewmodel: UserViewModel
+    @EnvironmentObject private var router: Router
 
     var body: some View {
         GeometryReader { geometry in
@@ -64,6 +63,14 @@ struct UserSettingsView: View {
                 )
             }
         }
+        .overlay {
+            if let screen = activeSubScreen {
+                subScreenView(screen)
+                    .transition(.move(edge: .trailing))
+                    .zIndex(1000)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: activeSubScreen)
         .customPopup(isPresented: $showConfirmationPopup) {
             confirmationPopUp
         }
@@ -80,7 +87,6 @@ struct UserSettingsView: View {
             cancelButtonText: "NO",
             confirmButtonText: "YES"
         ) {
-            // Cancel Action: Reset pending and hide popup
             pendingOption = nil
             showConfirmationPopup = false
         } onConfirm: {
@@ -88,7 +94,10 @@ struct UserSettingsView: View {
             if let newOption = pendingOption {
                 selectedSaveHistoryOption = newOption
                 AppStorageManager.shared.saveHistoryOption =
-                    newOption
+                newOption
+            }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                activeSubScreen = nil
             }
             showConfirmationPopup = false
         }
@@ -107,222 +116,132 @@ struct UserSettingsView: View {
             userviewmodel.clearLocalData()
         }
     }
-
+    
     private func userSettingsContent(geometry: GeometryProxy) -> some View {
         let isLandscape = geometry.size.width > geometry.size.height
         
-        // 5. Custom Binding to Intercept Taps
-        // This acts as a proxy. When the radio button tries to set the value,
-        // we stop it, check if it's different, and show the popup instead.
-        let radioBinding = Binding<SaveHistoryOption>(
-            get: { self.selectedSaveHistoryOption },
-            set: { newValue in
-                if newValue != self.selectedSaveHistoryOption {
-                    self.pendingOption = newValue
-                    self.showConfirmationPopup = true
-                }
-            }
-        )
         
         return ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 30) {
-
+                
                 // MARK: Pill Counting
                 ToggleRowView(
                     title: NSLocalizedString("TOGGLE_BUTTON_TEXT", comment: ""),
                     isOn: $isPillCountingEnabled,
-                    onColor: Color(hex: "#FF699B")
+                    onColor: appColors.primary
                 ) { newValue in
                     AppStorageManager.shared.isPillCountingEnabled = newValue
                 }
-
-                Divider().background(appColors.text)
-
-                VStack{
-                    // MARK: Double Count
-                    ToggleRowView(
-                        title: NSLocalizedString("REQUIRED_DOUBLE_COUNT", comment: ""),
-                        isOn: $isDoubleCountRequired,
-                        onColor: Color(hex: "#FF699B")
-                    ) { newValue in
-                        AppStorageManager.shared.isDoubleCountRequired = newValue
-                    }
+                
+                Divider().background(appColors.primaryBackground)
+                
+                VStack (spacing: 15){
+                    Text(NSLocalizedString("REQUIRED_DOUBLE_COUNT", comment: ""))
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    
-                    if isDoubleCountRequired {
-                        VStack(alignment: .leading, spacing: 30) {
-                            // MARK: Schedule Title
-                            Spacer()
-
-                            Text("Select Schedule Codes")
-                                .foregroundStyle(appColors.text)
-                                .font(.subheadline)
-                                .padding(.horizontal)
-                            
-                            // MARK: Drug Schedule Row
-                            VStack(spacing: 30) {
-
-                                let schedules = DrugSchedule.allCases
-                                let rows = stride(from: 0, to: schedules.count, by: 3).map {
-                                    Array(schedules[$0..<min($0 + 3, schedules.count)])
-                                }
-
-                                ForEach(rows.indices, id: \.self) { rowIndex in
-                                    HStack {
-                                        ForEach(0..<3) { columnIndex in
-                                            if columnIndex < rows[rowIndex].count {
-                                                let schedule = rows[rowIndex][columnIndex]
-
-                                                HStack {
-                                                    PillCounterCheckbox(
-                                                        isChecked: Binding(
-                                                            get: {
-                                                                selectedSchedules.contains(schedule)
-                                                            },
-                                                            set: { newValue in
-                                                                if newValue {
-                                                                    selectedSchedules.insert(schedule)
-                                                                } else {
-                                                                    selectedSchedules.remove(schedule)
-                                                                }
-                                                                AppStorageManager.shared.selectedSchedules = selectedSchedules
-                                                            }
-                                                        ),
-                                                        size: 18,
-                                                        tintColor: appColors.text,
-                                                        selectedCheckmarkColor: appColors.secondary
-                                                    )
-                                                    .padding(.trailing, 5)
-
-                                                    Text(schedule.rawValue)
-                                                        .foregroundStyle(appColors.text)
-                                                        .frame(width: 50, alignment: .leading)
-                                                }
-                                                .frame(maxWidth: .infinity, alignment: alignmentFor(columnIndex))
-                                            } else {
-                                                Spacer()
-                                                    .frame(maxWidth: .infinity)
-                                            }
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                        .transition(
-                            .move(edge: .top)
-                            .combined(with: .opacity)
+                    if !selectedSchedules.isEmpty{
+                        Text(
+                            selectedSchedules
+                                .map { $0.rawValue }
+                                .sorted()
+                                .joined(separator: ", ")
                         )
+                        .foregroundColor(appColors.secondary)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-
+                }
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        activeSubScreen = .schedule
+                    }
                 }
 
-                Divider().background(appColors.text)
-
+                
+                Divider().background(appColors.primaryBackground)
+                
                 // MARK: Back Count
                 ToggleRowView(
                     title: NSLocalizedString("REQUIRED_BACK_COUNT", comment: ""),
                     isOn: $isBackCountRequired,
-                    onColor: Color(hex: "#FF699B")
+                    onColor: appColors.primary
                 ) { newValue in
                     AppStorageManager.shared.isBackCountRequired = newValue
                 }
-
-                Divider().background(appColors.text)
-
-                // MARK: Adjust Reason
-//                ToggleRowView(
-//                    title: NSLocalizedString("REQUIRED_ADJUST_REASON", comment: ""),
-//                    isOn: $isAdjustReasonRequired,
-//                    onColor: Color(hex: "#FF699B")
-//                ) { newValue in
-//                    AppStorageManager.shared.isAdjustReasonRequired = newValue
-//                }
-//
-//                Divider().background(appColors.text)
-
+                
+                Divider().background(appColors.primaryBackground)
+                
+                
+                
                 // MARK: Save History Title
-                Text(NSLocalizedString("SAVE_HISTORY", comment: ""))
-                    .foregroundStyle(appColors.text)
-                    .padding(.horizontal)
+                VStack (spacing: 15){
+                    Text(NSLocalizedString("SAVE_HISTORY", comment: ""))
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                if isLandscape {
-                    HStack(spacing: 20) {
-                        ForEach(SaveHistoryOption.allCases) { option in
-                            PillCountingRadioButton(
-                                option: option,
-                                selectedOption: radioBinding,
-                                label: option.displayText,
-                                selectedColor: Color(hex: "#FF699B"),
-                                unselectedColor: .gray.opacity(0.5),
-                                size: 20,
-                                lineWidth: 2,
-                                textColor: appColors.text
-                            )
-                        }
+                    
+                    Text(selectedSaveHistoryOption.displayText)
+                        .foregroundColor(appColors.secondary)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                }
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        activeSubScreen = .saveHistory
                     }
-                    .padding(.horizontal)
-                } else {
-                    VStack(alignment: .leading, spacing: 45) {
-                        ForEach(SaveHistoryOption.allCases) { option in
-                            PillCountingRadioButton(
-                                option: option,
-                                selectedOption: radioBinding,
-                                label: option.displayText,
-                                selectedColor: appColors.secondary,
-                                unselectedColor: appColors.text,
-                                size: 20,
-                                lineWidth: 2,
-                                textColor: Color.white                            )
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.leading, 5)
                 }
 
-                Divider().background(appColors.text)
-
+                
+                Divider().background(appColors.primaryBackground)
+                
                 // MARK: Sound
                 ToggleRowView(
                     title: NSLocalizedString("SOUND_FEEDBACK", comment: ""),
                     isOn: $isSoundEnabled,
-                    onColor: appColors.secondary
+                    onColor: appColors.primary
                 ) { newValue in
                     AppStorageManager.shared.isSoundEnabled = newValue
                 }
-
-
-                Divider().background(appColors.text)
-
+                
+                
+                Divider().background(appColors.primaryBackground)
+                
                 // MARK: Haptic
                 ToggleRowView(
                     title: NSLocalizedString("HAPTIC_FEEDBACK", comment: ""),
                     isOn: $isHapticEnabled,
-                    onColor: appColors.secondary
+                    onColor: appColors.primary
                 ) { newValue in
                     AppStorageManager.shared.isHapticEnabled = newValue
                 }
                 
-                Divider().background(appColors.text)
+                Divider().background(appColors.primaryBackground)
                 
                 // MARK: Speech Instruction
                 ToggleRowView(
                     title: NSLocalizedString("VOICE_INSTRUCTIONS", comment: ""),
                     isOn: $isSpeechEnabled,
-                    onColor: appColors.secondary
+                    onColor: appColors.primary
                 ) { newValue in
                     AppStorageManager.shared.isSpeechEnabled = newValue
                 }
-
-                Divider().background(appColors.text)
+                
+                Divider().background(appColors.primaryBackground)
                 
                 HStack{
                     Text(NSLocalizedString("CLEAR_ALL_LOCAL_DATA", comment: ""))
                         .foregroundStyle(appColors.text)
                         .padding(.horizontal)
                         .fontWeight(Font.Weight.semibold)
-                       
+                    
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -330,10 +249,10 @@ struct UserSettingsView: View {
                     showClearDataConfirmationPopup = true
                 }
                 
-                Divider().background(appColors.text)
+                Divider().background(appColors.primaryBackground)
                 
                 Spacer(minLength: 40)
-
+                
             }
         }
         .frame(maxWidth: .infinity)
@@ -344,12 +263,133 @@ struct UserSettingsView: View {
         .padding(.horizontal, isLandscape ? SafeAreaInsets.leading : 10)
         .background(appColors.secondaryBackground)
     }
-}
+    
+    @ViewBuilder
+    private func subScreenView(_ screen: SettingsSubScreen) -> some View {
+        BaseView(
+            topRatio: 1.0,
+            topContent: {
+                switch screen {
+                case .saveHistory:
+                    saveHistoryContent
+                case .schedule:
+                    scheduleContent
+                }
+            },
+            bottomContent: { EmptyView() },
+            headerActions: { EmptyView() },
+            showBackButton: true,
+            showHamburgerMenu: false,
+            title: screenTitle(screen),
+            onBack: {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    activeSubScreen = nil
+                }
+            }
+        )
+    }
+    
+    private func screenTitle(_ screen: SettingsSubScreen) -> String {
+        switch screen {
+        case .saveHistory: return "SAVE HISTORY FOR"
+        case .schedule: return "SELECT SCHEDULE"
+        }
+    }
+    
+    private var saveHistoryContent: some View {
+        VStack(alignment: .leading, spacing: 25) {
+            VStack(alignment: .leading, spacing: 30) {
+                ForEach(SaveHistoryOption.allCases) { option in
+                    Button {
+                        pendingOption = option
+                        showConfirmationPopup = true
+                    } label: {
+                        HStack (spacing:8){
+                            Circle()
+                                .stroke(
+                                      option == selectedSaveHistoryOption
+                                      ? appColors.primary
+                                      : appColors.text,
+                                      lineWidth: 2
+                                  )
+                                .frame(width: 20, height: 20)
+                                .overlay {
+                                    if option == selectedSaveHistoryOption {
+                                        Circle()
+                                            .fill(appColors.primary)
+                                            .frame(width: 10, height: 10)
+                                    }
+                                }
 
-#Preview {
-    UserSettingsView()
-        .preferredColorScheme(.dark)
-}
+                            Text(option.displayText)
+                                .foregroundColor(appColors.text)
+
+                            Spacer()
+                        }
+                    }
+                }
+            }
+            .padding(.leading, 30)
+
+            Spacer()
+        }
+        .padding(.top, SafeAreaInsets.top + 60)
+        .background(appColors.primaryBackground)
+    }
+    
+    private var scheduleContent: some View {
+        VStack(alignment: .leading, spacing: 25) {
+
+            VStack(alignment: .leading, spacing: 30) {
+                ForEach(DrugSchedule.allCases) { schedule in
+
+                    Button {
+                        // toggle selection
+                        if selectedSchedules.contains(schedule) {
+                            selectedSchedules.remove(schedule)
+                        } else {
+                            selectedSchedules.insert(schedule)
+                        }
+
+                        AppStorageManager.shared.selectedSchedules = selectedSchedules
+
+                        activeSubScreen = nil
+
+                    } label: {
+                        HStack(spacing: 8) {
+
+                            Circle()
+                                .stroke(
+                                    selectedSchedules.contains(schedule)
+                                    ? appColors.primary
+                                    : appColors.text,
+                                    lineWidth: 2
+                                )
+                                .frame(width: 20, height: 20)
+                                .overlay {
+                                    if selectedSchedules.contains(schedule) {
+                                        Circle()
+                                            .fill(appColors.primary)
+                                            .frame(width: 10, height: 10)
+                                    }
+                                }
+
+                            Text(schedule.rawValue)
+                                .foregroundColor(appColors.text)
+
+                            Spacer()
+                        }
+                    }
+                }
+            }
+            .padding(.leading, 30)
+
+            Spacer()
+        }
+        .padding(.top, SafeAreaInsets.top + 60)
+        .background(appColors.primaryBackground)
+    }}
+
 
 private func alignmentFor(_ index: Int) -> Alignment {
     switch index {
@@ -391,12 +431,3 @@ struct ToggleRowView: View {
 }
 
 
-enum DrugSchedule: String, CaseIterable, Identifiable {
-    case cii = "CII"
-    case ciii = "CIII"
-    case civ = "CIV"
-    case cv = "CV"
-    case cvi = "CVI"
-
-    var id: String { rawValue }
-}

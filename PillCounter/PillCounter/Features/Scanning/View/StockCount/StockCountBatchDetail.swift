@@ -299,3 +299,4 @@ extension StockCountBatchDetail{
         )
     }
 }
+

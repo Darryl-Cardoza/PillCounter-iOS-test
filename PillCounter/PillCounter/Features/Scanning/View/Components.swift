@@ -44,10 +44,14 @@ struct CameraContentView: View {
                         }
                     }
                     .onDisappear { cameraService.stop() }
-                    DetectionOverlay(cameraService: cameraService, currentStep: pillScanViewModel.currentControlledStep)
-                        .ignoresSafeArea()
-                    TrayOverlay(cameraService: cameraService)
-                        .ignoresSafeArea()
+                    .padding(.top, isLandscape ? 0 : 30)
+
+                    if pillScanViewModel.currentControlledStep != .vial{
+                        DetectionOverlay(cameraService: cameraService)
+                            .ignoresSafeArea()
+                        TrayOverlay(cameraService: cameraService)
+                            .ignoresSafeArea()
+                    }
                     //Toggle
                     //                    VStack {
                     //                        HStack {
@@ -64,7 +68,6 @@ struct CameraContentView: View {
                     //
                     //                        Spacer()
                     //                    }
-                        .padding(.top, isLandscape ? 0 : 30)
                     if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue
                     {
                         VStack {
@@ -74,14 +77,14 @@ struct CameraContentView: View {
                             )
                         }
                     }
-                    
-                    VStack {
-                        Spacer()
-                        ZoomControlViewVertical(
-                            cameraService: cameraService
-                        )
-                        Spacer()
-                    }
+                    //Zoom 
+//                    VStack {
+//                        Spacer()
+//                        ZoomControlViewVertical(
+//                            cameraService: cameraService
+//                        )
+//                        Spacer()
+//                    }
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

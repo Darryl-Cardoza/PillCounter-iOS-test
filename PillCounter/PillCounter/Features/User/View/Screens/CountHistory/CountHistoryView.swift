@@ -289,9 +289,6 @@ struct CountHistoryView: View {
                     }
                 }
             }
-            .customPopup(isPresented: $showMenuOptions) {
-                menuOptions
-            }
             .customPopup(
                 isPresented: Binding(
                     get: { pendingAction != nil },
@@ -341,27 +338,46 @@ struct CountHistoryView: View {
                                 step: .targetVerification
                             )
 
-                        listItem(
-                            txnId: txn.txn_id,
-                            name: txn.drug?.drug_name ?? "N/A",
-                            date:
-                                "\(Formatter.getDateString(from: txn.created_at)) • "
-                                + "\(Formatter.getTimeString(from: txn.created_at))",
-                            trailingText: "\(counted)"
-                                + (router.selectedPillScanningType == .FIXED
-                                    ? " / \(txn.target_count)" : ""),
-                            icon: "ellipsis",
-                            barcodeImagePath: txn.barcode_image,
-                            isFromPms: txn.is_from_pms,
-                            onIconTap: {
-                                if !isEditing {
-                                    showMenuOptions = true
-                                    selectedTransasctionId = txn.txn_id
-                                    userViewModel.currentTransactionTxnId =
-                                        txn.txn_id
-                                }
-                            }
+//                        listItem(
+//                            txnId: txn.txn_id,
+//                            name: txn.drug?.drug_name ?? "N/A",
+//                            date:
+//                                "\(Formatter.getDateString(from: txn.created_at)) • "
+//                                + "\(Formatter.getTimeString(from: txn.created_at))",
+//                            trailingText: "\(counted)"
+//                                + (router.selectedPillScanningType == .FIXED
+//                                    ? " / \(txn.target_count)" : ""),
+//                            icon: "ellipsis",
+//                            barcodeImagePath: txn.barcode_image,
+//                            isFromPms: txn.is_from_pms,
+//                            onIconTap: {
+//                                if !isEditing {
+//                                    showMenuOptions = true
+//                                    selectedTransasctionId = txn.txn_id
+//                                    userViewModel.currentTransactionTxnId =
+//                                        txn.txn_id
+//                                }
+//                            }
+//                        )
+                
+                        
+                        DispenseItemRowView(
+                            data: txn.toRowData(pillCount: Int(counted)),
+                            appColors: appColors
                         )
+                        .selectableEffect(
+                            isSelected: selectedTxnIds.contains(txn.txn_id),
+                            highlightColor: appColors.secondary
+                        )
+                        .onTapGesture {
+                            if isEditing {
+                                toggleSelection(for: txn.txn_id)
+                            } else {
+                                showMenuOptions = true
+                                selectedTransasctionId = txn.txn_id
+                                userViewModel.currentTransactionTxnId = txn.txn_id
+                            }
+                        }
                     }
 
                     if filteredTransactions.isEmpty {
@@ -576,32 +592,6 @@ struct CountHistoryView: View {
         }
     }
 
-    // MARK: - MENU OPTIONS
-    private var menuOptions: some View {
-        MenuOption(
-            options: TransactionDetailOption.allCases,
-            selectedOption: $selectedTransactionDetailOption,
-            isPresented: $showMenuOptions,
-            label: { $0.rawValue },
-            onSelect: { option in
-
-                switch option {
-                case .resume:
-                    handleResume()
-
-                case .delete:
-                    if let txnId = selectedTransasctionId {
-                        pendingAction = .delete(txnId)
-                    }
-
-                case .forceComplete:
-                    if let txnId = selectedTransasctionId {
-                        pendingAction = .forceComplete(txnId)
-                    }
-                }
-            }
-        )
-    }
 
     private func handleResume() {
         guard let txnId = selectedTransasctionId,
@@ -651,8 +641,6 @@ struct CountHistoryView: View {
         switch pendingAction {
         case .delete:
             return "Confirm Delete"
-        case .forceComplete:
-            return "Force Complete"
         case .multiDelete:
             return "Delete Selected"
         case .none:
@@ -664,8 +652,6 @@ struct CountHistoryView: View {
         switch pendingAction {
         case .delete:
             return "Are you sure you want to delete this transaction?"
-        case .forceComplete:
-            return "Are you sure you want to force complete this transaction?"
         case .multiDelete:
             return "Are you sure you want to delete selected transactions?"
         case .none:
@@ -677,8 +663,6 @@ struct CountHistoryView: View {
         switch pendingAction {
         case .delete, .multiDelete:
             return "DELETE"
-        case .forceComplete:
-            return "CONFIRM"
         case .none:
             return ""
         }
@@ -700,13 +684,6 @@ struct CountHistoryView: View {
                 )
             }
 
-        case .forceComplete(let id):
-            Task {
-                await userViewModel.forceCompleteTheSelectedTransaction(
-                    txnId: id,
-                    countType: router.selectedPillScanningType ?? .FIXED
-                )
-            }
 
         case .multiDelete(let ids):
             Task {
@@ -726,6 +703,5 @@ struct CountHistoryView: View {
 
 enum TransactionAction {
     case delete(Int64)
-    case forceComplete(Int64)
     case multiDelete(Set<Int64>)
 }

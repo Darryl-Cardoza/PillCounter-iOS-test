@@ -869,7 +869,9 @@ class UserViewModel: ObservableObject {
                 ($0.drug?.drug_name?.lowercased() ?? "").contains(q)
                 || ($0.note?.lowercased() ?? "").contains(q)
                 || ($0.status?.lowercased() ?? "").contains(q)
+                || ($0.drug?.ndc ?? "").contains(q)
             }
+            
         }
 
         self.transactionRows = txns.map { txn in
@@ -893,14 +895,26 @@ class UserViewModel: ObservableObject {
         case .all:
             break
         }
+        
+        if !search.isEmpty {
+            let q = search.lowercased()
+
+            batches = batches.filter {
+                ($0.bucket_id?.lowercased().contains(q) ?? false)
+                || ($0.status?.lowercased().contains(q) ?? false)
+                || String($0.batch_id).contains(q)
+            }
+        }
+
+        
         print("Batches \(filteredBatchesOfUserByDate)")
         self.batchRows = batches.map {
-            StockData(
+        let count = pillDataLocalStorage.getTransactionCount(for: $0.batch_id)
+        return StockData(
                 id: $0.batch_id,
                 batchId: $0.batch_id,
                 createdAt: $0.start_date_time,
-                ndcCount: 5,
-                targetCount: 5,
+                ndcCount: Int64(count),
                 status: $0.status ?? "",
                 bucketId: $0.bucket_id ?? "",
                 isFromPms: false

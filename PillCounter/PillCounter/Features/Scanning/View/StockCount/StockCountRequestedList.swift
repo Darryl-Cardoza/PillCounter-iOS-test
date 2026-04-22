@@ -90,7 +90,8 @@ struct StockCountRequestedList: View {
             },
             
             menuOptions: TransactionDetailOption.allCases,
-            optionLabel: { $0.rawValue }
+            optionLabel: { $0.rawValue },
+            filterView: nil
         )
         .onAppear {
             Task{
@@ -264,10 +265,6 @@ extension StockCountRequestedList {
             // TODO: Delete single batch API
             print("Delete batch \(id)")
             
-        case .forceComplete(let id):
-            // TODO: Force complete batch API
-            print("Force complete \(id)")
-            
         case .multiDelete(let ids):
             // TODO: Delete multiple batches API
             print("Multi Delete \(ids)")
@@ -278,8 +275,6 @@ extension StockCountRequestedList {
         switch pendingAction {
         case .delete:
             return "Confirm Delete"
-        case .forceComplete:
-            return "Force Complete"
         case .multiDelete:
             return "Delete Selected"
         case .none:
@@ -291,8 +286,6 @@ extension StockCountRequestedList {
         switch pendingAction {
         case .delete:
             return "Are you sure you want to delete this batch?"
-        case .forceComplete:
-            return "Are you sure you want to force complete this batch?"
         case .multiDelete:
             return "Are you sure you want to delete selected batches?"
         case .none:
@@ -304,8 +297,6 @@ extension StockCountRequestedList {
         switch pendingAction {
         case .delete, .multiDelete:
             return "DELETE"
-        case .forceComplete:
-            return "CONFIRM"
         case .none:
             return ""
         }

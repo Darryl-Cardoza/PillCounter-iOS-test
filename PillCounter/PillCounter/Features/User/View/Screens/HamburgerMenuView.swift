@@ -40,7 +40,8 @@ struct HamburgerMenuView: View {
                 },
                 headerActions: { EmptyView() },
                 showBackButton: true,
-                showHamburgerMenu: false
+                showHamburgerMenu: false,
+                title: NSLocalizedString("PROFILE", comment: "")
             )
         }
         .customPopup(isPresented: $showLogoutPopup) {
@@ -92,12 +93,10 @@ struct HamburgerMenuView: View {
                         menuRow(for: item, index: index)
 
                         // 2. Custom Divider
-                        // We add the divider for all except the last item
-                        if index < menuItems.count - 1 {
-                            Divider()
-                                .overlay(appColors.text.opacity(0.2))
-                                .padding(.horizontal, 20)
-                        }
+                        Divider()
+                            .overlay(appColors.primaryBackground)
+                            .padding(.horizontal, 20)
+                        
                     }
                 }
             }
@@ -118,7 +117,7 @@ struct HamburgerMenuView: View {
     @ViewBuilder
     private func menuRow(for item: HamburgerMenuItem, index: Int) -> some View {
         let color: Color =
-            index.isMultiple(of: 2) ? appColors.secondary : appColors.primary
+            index.isMultiple(of: 2) ? appColors.primary : appColors.primary
         let monthDuration: Int = 3
 
         // Logic: Is this a "complex" row with buttons?
@@ -152,6 +151,7 @@ struct HamburgerMenuView: View {
                     Text(item.title)
                         .foregroundColor(appColors.text)
                         .font(.headline)
+                        .fontWeight(.regular)
 
                     Spacer()
 
@@ -190,14 +190,15 @@ struct HamburgerMenuView: View {
         for item: HamburgerMenuItem, isLandscape: Bool, monthDuration: Int
     ) -> some View {
         switch item {
+            
         case .History:
             Text("\(storedHistoryOption)")
-                .foregroundStyle(appColors.text)
+                .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
 
         case .UnsyncedTransaction:
             Text("\(userViewModel.unsyncedTransactions.count)")
-                .foregroundStyle(appColors.text)
+                .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
               
         case .FixedCount:
@@ -205,11 +206,11 @@ struct HamburgerMenuView: View {
                 completedCount: userViewModel
                     .fixedCountTransactionCompletedCount,
                 partialCount: userViewModel.fixedCountTransactionPartialCount,
-                completedColor: appColors.secondary,
-                partialColor: appColors.secondary,
-                completedBg: appColors.secondaryBackground,
+                completedColor: appColors.primary,
+                partialColor: appColors.primary,
+                completedBg: appColors.primaryBackground,
                 partialBg: appColors.primaryBackground,
-                primaryIconColor: appColors.secondary,
+                primaryIconColor: appColors.primary,
                 isLandscape: isLandscape,
                 isFixed: true,
                 onPartialTap: {
@@ -225,9 +226,9 @@ struct HamburgerMenuView: View {
                 completedCount: userViewModel
                     .regularCountTransactionCompletedCount,
                 partialCount: userViewModel.regularCountTransactionPartialCount,
-                completedColor: appColors.text,
-                partialColor: appColors.text,
-                completedBg: appColors.secondaryBackground,
+                completedColor: appColors.primary,
+                partialColor: appColors.primary,
+                completedBg: appColors.primaryBackground,
                 partialBg: appColors.primaryBackground,
                 primaryIconColor: appColors.primary,
                 isLandscape: isLandscape,
@@ -265,7 +266,7 @@ struct HamburgerMenuView: View {
             if isLandscape { Spacer(minLength: 0) }
 
             PillCountingButton(
-                iconName: "tick_icon_pink",
+                iconName: "check_with_circle",
                 title:
                     "\(completedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
                 textColor: completedColor,
@@ -273,24 +274,21 @@ struct HamburgerMenuView: View {
                 font: .system(size: 14, weight: .semibold),
                 cornerRadius: 32,
                 horizontalPadding: 0,
-                verticalPadding: 0,
+                verticalPadding: 8,
                 iconSize: 16,
                 action: {
                     router.navigate(to: .authentication(.user(.userSettings(.History(historyType)))))
                 },
                 iconColor: primaryIconColor
             )
-            .fixedSize()
-            .frame(minWidth: isLandscape ? 150 : nil)
+            .frame(maxWidth:150)
 
-            
             if !isLandscape {Spacer()}
-            
             
             PillCountingButton(
                 iconName: "partial",
                 title:
-                    "\(partialCount) \(NSLocalizedString("PARTIAL", comment: ""))",
+                    "\(partialCount) \(NSLocalizedString("PENDING", comment: ""))",
                 textColor: partialColor,
                 backgroundColor: partialBg,
                 font: .system(size: 14, weight: .semibold),

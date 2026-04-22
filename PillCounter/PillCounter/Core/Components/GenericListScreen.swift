@@ -11,8 +11,7 @@ protocol ListItemIdentifiable {
     var id: Int64 { get }
 }
 
-struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
-
+struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.ID == Int64 {
     // data
     let items: [Item]
     let title: String
@@ -31,7 +30,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
 
     let menuOptions: [Option]
     let optionLabel: (Option) -> String
-
+    let filterView: (() -> AnyView)?
     // environment variables
     @EnvironmentObject private var appColors: AppColors
 
@@ -61,9 +60,11 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
                 headerActions: {
                     header
                 },
-                showBackButton: !isSearching && !isEditing,
+                showBackButton: !isSearching,
                 showHamburgerMenu: false,
-                title: (isSearching || isEditing) ? "" : title,
+                title: isSearching
+                    ? ""
+                    : (isEditing ? "DELETE BATCHES" : title),
                 headerActionsBackground: appColors.primaryBackground
             )
             .customPopup(isPresented: $showMenu) {
@@ -75,6 +76,52 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
                 ) { option in
                     onSelectOption(option, selectedItem)
                 }
+            }
+            if isEditing {
+                VStack {
+                    Spacer()
+
+                    HStack(spacing: 12) {
+
+                        // CANCEL
+                        Button {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                isEditing = false
+                                selectedIds.removeAll()
+                            }
+                        } label: {
+                            Text("CANCEL")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(appColors.primary)
+                                .frame(maxWidth: 140)
+                                .padding(.vertical, 10)
+                        }
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(appColors.primary, lineWidth: 1)
+                        )
+
+                        // DELETE
+                        Button {
+                            onDelete(selectedIds)
+                        } label: {
+                            Text("DELETE")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: 140)
+                                .padding(.vertical, 10)
+                        }
+                        .background(appColors.primary)
+                        .cornerRadius(20)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(appColors.primaryBackground)
+                    .padding(.bottom, 20)
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeOut(duration: 0.3), value: isEditing)
             }
         }
         .onChange(of: searchText) { _, new in
@@ -92,16 +139,11 @@ extension GenericListScreen {
 
     fileprivate var contentView: some View {
         VStack {
-            if isEditing {
-                HStack {
-                    Text("\(selectedIds.count) Selected")
-                    Spacer()
-                    Text("Tap item(s) to delete.")
-                        .foregroundStyle(appColors.secondary)
-                }
-                .padding(.horizontal)
+            if let filterView = filterView {
+                filterView()
+                    .padding(.horizontal)
+                    .padding(.top, 8)
             }
-
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(filteredItems) { item in
@@ -130,6 +172,7 @@ extension GenericListScreen {
                     }
                 }
                 .padding(.horizontal)
+                .padding(.bottom, isEditing ? 100 : 20)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -155,7 +198,7 @@ extension GenericListScreen {
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isEditing)
             .onTapGesture {
                 if isEditing {
-                    toggle(item.id as! Int64)
+                    toggle(item.id)
                 } else {
                     onRowTap(item)
                 }
@@ -168,32 +211,62 @@ extension GenericListScreen {
 }
 
 extension GenericListScreen {
-
+    private var isAllSelected: Bool {
+        let allIds = Set(items.map { $0.id })
+        return !allIds.isEmpty && selectedIds == allIds
+    }
+    
     fileprivate var header: some View {
         Group {
             if isEditing {
-                HStack {
-                    Button("Select All") {
-                        toggleAll()
-                    }
-                    .foregroundColor(appColors.primary)
+//                HStack {
+//                    Button("Select All") {
+//                        toggleAll()
+//                    }
+//                    .foregroundColor(appColors.primary)
+//
+//                    Spacer()
+//
+//                    Button("Delete") {
+//                        onDelete(selectedIds)
+//                    }
+//                    .foregroundColor(appColors.primary)
+//
+//                    Button("Cancel") {
+//                        withAnimation(.spring()) {
+//                            isEditing = false
+//                            selectedIds.removeAll()
+//                        }
+//                    }
+//                    .foregroundColor(appColors.primary)
+//                }
+//                .padding(.horizontal, 10)
+//                .transition(.opacity)
+                
+                HStack(spacing: 10) {
 
-                    Spacer()
+                    // CHECKBOX
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(appColors.primary, lineWidth: 1)
+                            .frame(width: 18, height: 18)
 
-                    Button("Delete") {
-                        onDelete(selectedIds)
-                    }
-                    .foregroundColor(appColors.primary)
-
-                    Button("Cancel") {
-                        withAnimation(.spring()) {
-                            isEditing = false
-                            selectedIds.removeAll()
+                        if isAllSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(appColors.primary)
                         }
                     }
-                    .foregroundColor(appColors.primary)
+
+                    Text("Select All")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(appColors.primary)
+
                 }
-                .padding(.horizontal, 10)
+                .onTapGesture {
+                    toggleAll()
+                }
+                .padding(.trailing, 16)
                 .transition(.opacity)
 
             } else if isSearching {
@@ -269,7 +342,7 @@ extension GenericListScreen {
     }
 
     fileprivate func toggleAll() {
-        let allIds = Set(items.map { $0.id as! Int64 })
+        let allIds = Set(items.map { $0.id })
 
         if selectedIds == allIds {
             selectedIds.removeAll()

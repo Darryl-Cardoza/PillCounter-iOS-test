@@ -85,8 +85,8 @@
 "REQUIRED_DOUBLE_COUNT" = "Require Double Counts";
 "REQUIRED_BACK_COUNT" = "Require Back Counts";
 "REQUIRED_ADJUST_REASON" = "Require Adjust Reasons";
-"HAPTIC_FEEDBACK" = "Haptic Feedback";
-"SOUND_FEEDBACK" = "Sound Feedback";
+"HAPTIC_FEEDBACK" = "Pill Count Haptic Feedback";
+"SOUND_FEEDBACK" = "Pill Count Sound Feedback";
 "VOICE_INSTRUCTIONS" = "Voice Feedback";
 "CLEAR_ALL_LOCAL_DATA" = "Clear All Local Data";
 

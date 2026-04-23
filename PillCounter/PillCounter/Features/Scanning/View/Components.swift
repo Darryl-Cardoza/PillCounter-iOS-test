@@ -13,7 +13,7 @@ struct CameraContentView: View {
     @ObservedObject var cameraService: CameraService
     @EnvironmentObject var appColors: AppColors
     @EnvironmentObject var pillScanViewModel: PillScanViewModel
-    @State private var isAutoOrManual: Bool = false // this variable is to handle the auto detection capture.
+    @State private var isAutoOrManual: Bool = false
     @Environment(\.isLandscape) private var isLandscape
     
     var isCameraEnabled: Bool
@@ -52,22 +52,6 @@ struct CameraContentView: View {
                         TrayOverlay(cameraService: cameraService)
                             .ignoresSafeArea()
                     }
-                    //Toggle
-                    //                    VStack {
-                    //                        HStack {
-                    //                            Spacer()
-                    //
-                    //                            PillCountingToggleButton(
-                    //                                isOn: $isAutoOrManual,
-                    //                                onColor: appColors.secondary,
-                    //                                offColor: Color.black.opacity(0.5)
-                    //                            )
-                    //                            .padding(.trailing, 16)
-                    //                            .padding(.top, 16)
-                    //                        }
-                    //
-                    //                        Spacer()
-                    //                    }
                     if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue
                     {
                         VStack {
@@ -77,14 +61,6 @@ struct CameraContentView: View {
                             )
                         }
                     }
-                    //Zoom 
-//                    VStack {
-//                        Spacer()
-//                        ZoomControlViewVertical(
-//                            cameraService: cameraService
-//                        )
-//                        Spacer()
-//                    }
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -294,7 +270,6 @@ struct BottomControlsView: View {
 
     @EnvironmentObject private var router: Router
     
-    
     var targetCount: Int32 {
         if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
@@ -317,7 +292,6 @@ struct BottomControlsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-
             BottomControlsViewHeader(
                 drugName: pillScanViewModel.currentTransaction?.drug?.drug_name
                     ?? "",
@@ -400,7 +374,7 @@ struct CountAddButtonView: View {
                     )
                     .rotationEffect(.degrees(90))  // Start at 6 o'clock
                     .frame(width: size, height: size)
-                    .id(animationID)  // ⬅️ Critical for resetting animation cleanly
+                    .id(animationID)  // Critical for resetting animation cleanly
                     .onAppear {
                         updateAnimationState()
                     }
@@ -474,6 +448,7 @@ struct BottomControlsViewBodyForPillScan: View {
 
     @State private var isAnimating: Bool = true
     @State private var stabilityWorkItem: DispatchWorkItem?
+    @EnvironmentObject private var router: Router
 
     var body: some View {
         Group {
@@ -483,9 +458,7 @@ struct BottomControlsViewBodyForPillScan: View {
                 // 1. Center: Add Button
                 // 2. Below: Row with Total Count (Left) and All Done (Right)
                 VStack(spacing: 5) {
-                    
                     addButton
-
                     HStack(alignment: .bottom) {
                         totalCountView
                         Spacer()
@@ -498,6 +471,9 @@ struct BottomControlsViewBodyForPillScan: View {
                 HStack(alignment: .bottom) {
                     totalCountView
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .onTapGesture {
+                            router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+                        }
 
                     addButton
                         .frame(maxWidth: .infinity)
@@ -558,9 +534,7 @@ struct BottomControlsViewBodyForPillScan: View {
             onCompleteScan()
         } label: {
             VStack(spacing: 6) {
-
                 Spacer()
-
                 Image("all_done")
                     .resizable()
                     .scaledToFit()
@@ -569,7 +543,6 @@ struct BottomControlsViewBodyForPillScan: View {
                     .mask(Image("all_done").resizable().scaledToFit())
 
                 Spacer().frame(height: 10)
-
                 Text("All Done")
                     .foregroundStyle(appColors.text)
                     .font(.system(size: 16))
@@ -753,11 +726,11 @@ struct BottomControlsViewHeader: View {
         Group {
             if isLandScape {
                 VStack(spacing: 2) {
-                    HStack {
-                        resetButton
-                        Spacer()
-                        historyScanButton
-                    }
+//                    HStack {
+//                        resetButton
+//                        Spacer()
+//                        historyScanButton
+//                    }
 
                     Text(drugName)
                         .foregroundStyle(appColors.text)
@@ -767,7 +740,6 @@ struct BottomControlsViewHeader: View {
                         .minimumScaleFactor(0.8)
                         .padding(.top, 30)
                 }
-
             } else {
                 ZStack {
                     // Layer 1: The Text (Centered)
@@ -779,11 +751,11 @@ struct BottomControlsViewHeader: View {
                         .frame(maxWidth: .infinity, alignment: .center)
 
                     // Layer 2: The Buttons (Left & Right edges)
-                    HStack {
-                        resetButton
-                        Spacer()
-                        historyScanButton
-                    }
+//                    HStack {
+//                        resetButton
+//                        Spacer()
+//                        historyScanButton
+//                    }
                 }
             }
         }
@@ -980,7 +952,7 @@ struct ConfettiParticle: Identifiable {
     var opacity: Double
 }
 
-
+// MARK: Vial
 struct VialBottomContentView: View {
     
     let appColors: AppColors
@@ -1077,6 +1049,7 @@ struct KeyValueInfoCard: View {
         .cornerRadius(12)
     }
 }
+
 
 struct MenuOption<Option: Hashable>: View {
     

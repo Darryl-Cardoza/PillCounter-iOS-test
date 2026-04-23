@@ -40,6 +40,7 @@
 		47793CE82EF940640023EAD4 /* Exceptions for "PillCounter" folder in "PillCounter" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Core/Components/Untitled.swift,
 				Info.plist,
 			);
 			target = 473A48F42EB4F11200EEA905 /* PillCounter */;

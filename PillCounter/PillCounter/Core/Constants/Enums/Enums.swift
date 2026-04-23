@@ -35,12 +35,12 @@ public enum DashboardFlow: Hashable, Codable {
     case fixedCountPartial
     case regularCountPartial
     case pillCount(ScanningFlow)
-
 }
 
 public enum ScanningFlow: Codable, Hashable {
     case barcodeScanning(ScanType)
     case pillCountView
+    case pillCountHistoryView
     case controlledDrug(ControlFlow)
     case stockCount(StockCountFlow)
 }

@@ -54,10 +54,14 @@ struct DispenseItemRowView: View {
                     Text("NDC \(data.ndc)")
                         .foregroundColor(appColors.primary)
                         .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     
                     Text(data.drugType)
                         .foregroundColor(appColors.text)
                         .font(.system(size: 12, weight: .regular))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 
                 // Drug name

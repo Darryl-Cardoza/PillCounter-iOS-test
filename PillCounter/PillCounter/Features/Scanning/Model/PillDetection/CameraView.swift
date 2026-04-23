@@ -39,10 +39,13 @@ struct CameraView: UIViewRepresentable {
 
         // 3️⃣ Re-assert preview configuration (can reset on trait changes)
         uiView.previewLayer.videoGravity = .resizeAspectFill
-
+        
+        uiView.attachSessionIfNeeded()
         // 4️⃣ Ensure correct sizing after SwiftUI invalidation
         uiView.setNeedsLayout()
     }
+    
+    
 }
 
 // MARK: - Preview View

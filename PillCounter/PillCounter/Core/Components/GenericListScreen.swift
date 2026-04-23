@@ -30,7 +30,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
 
     let menuOptions: [Option]
     let optionLabel: (Option) -> String
-    let filterView: (() -> AnyView)?
+    let filterView: (() -> any View)?
     // environment variables
     @EnvironmentObject private var appColors: AppColors
 
@@ -46,9 +46,8 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
     @State private var isEditing: Bool = false
     @State private var selectedIds: Set<Int64> = []
 
-    // other
     @State private var selectedItem: Item?
-    @State private var showMenu: Bool = false
+
 
     // MARK: BODY
     var body: some View {
@@ -57,9 +56,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
                 topRatio: 1.0,
                 topContent: { contentView },
                 bottomContent: { EmptyView() },
-                headerActions: {
-                    header
-                },
+                headerActions: { header },
                 showBackButton: !isSearching,
                 showHamburgerMenu: false,
                 title: isSearching
@@ -67,16 +64,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
                     : (isEditing ? "DELETE BATCHES" : title),
                 headerActionsBackground: appColors.primaryBackground
             )
-            .customPopup(isPresented: $showMenu) {
-                MenuOption(
-                    options: menuOptions,
-                    selectedOption: .constant(menuOptions.first!),
-                    isPresented: $showMenu,
-                    label: optionLabel
-                ) { option in
-                    onSelectOption(option, selectedItem)
-                }
-            }
+            
             if isEditing {
                 VStack {
                     Spacer()
@@ -140,7 +128,7 @@ extension GenericListScreen {
     fileprivate var contentView: some View {
         VStack {
             if let filterView = filterView {
-                filterView()
+                AnyView(filterView())
                     .padding(.horizontal)
                     .padding(.top, 8)
             }
@@ -202,11 +190,7 @@ extension GenericListScreen {
                 } else {
                     onRowTap(item)
                 }
-            }
-            .onLongPressGesture {
-                selectedItem = item
-                showMenu = true
-            }
+         }
     }
 }
 

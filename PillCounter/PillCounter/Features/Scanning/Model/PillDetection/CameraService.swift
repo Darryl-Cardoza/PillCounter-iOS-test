@@ -11,7 +11,7 @@ import SwiftUI
 final class CameraService: NSObject, ObservableObject {
 
     // MARK: - CONSTANTS
-    private let inactivityTimeout: TimeInterval = 25
+    private let inactivityTimeout: TimeInterval = 100
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
 
     // MARK: - CAMERA CORE
@@ -34,6 +34,8 @@ final class CameraService: NSObject, ObservableObject {
 
     // MARK: - PREVIEW
     var previewLayer: AVCaptureVideoPreviewLayer?
+    
+    @Published private(set) var isSessionPaused = false
 
     // MARK: - STATE
     @Published var stableCount: Int = 0
@@ -43,12 +45,19 @@ final class CameraService: NSObject, ObservableObject {
     @Published var isAuthorized = false
     @Published var error: String?
     @Published private(set) var isPausedDueToInactivity = false
-    @Published private(set) var currentCameraOrientation: UIDeviceOrientation =
-        .portrait
+    @Published private(set) var currentCameraOrientation: UIDeviceOrientation = .portrait
     @Published var zoomFactor: CGFloat = 1.0
 
     private let minZoom: CGFloat = 1.0
     private var maxzoom: CGFloat = 1.0
+    
+
+
+    @objc private func handleSessionInterruptionEnded() {
+        DispatchQueue.main.async {
+            self.start() // or resumeIfPaused()
+        }
+    }
 
     // MARK: - INIT
     /// INITIALIZES CAMERA SERVICE AND CHECKS PERMISSIONS
@@ -158,8 +167,16 @@ final class CameraService: NSObject, ObservableObject {
         }
 
         DispatchQueue.main.async {
-            self.previewLayer?.session = nil   // ✅ IMPORTANT
+            self.previewLayer?.session = nil
         }
+    }
+
+    
+    func rebindPreviewLayer() {
+        guard let previewLayer = previewLayer else { return }
+
+        previewLayer.session = nil
+        previewLayer.session = session
     }
 
     /// RETURNS ACTIVE CAPTURE SESSION
@@ -459,4 +476,6 @@ extension CameraService {
         text.draw(in: textRect, withAttributes: attributes)
     }
 
+    
+   
 }

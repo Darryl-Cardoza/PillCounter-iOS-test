@@ -68,8 +68,7 @@ struct DispenseCountPartialTxnList: View {
 
             // MARK: - MENU LONG PRESS
             onMenuTap: { txn in
-                selectedTransasctionId = txn.txn_id
-                userViewModel.currentTransactionTxnId = txn.txn_id
+                
             },
 
             // MARK: - DELETE

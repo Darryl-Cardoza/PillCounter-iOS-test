@@ -64,6 +64,12 @@ struct AppNavigation: View {
                         OPillCountView()
                             .navigationBarBackButtonHidden(true)
                         
+                    case .authentication(
+                        .login(.dashboard(.pillCount(.pillCountHistoryView)))):
+                        
+                        PillScanDetailGridScreen()
+                            .navigationBarBackButtonHidden(true)
+
                     case .authentication(.user(.hamburgerMenu)):
                         HamburgerMenuView()
                             .navigationBarBackButtonHidden(true)

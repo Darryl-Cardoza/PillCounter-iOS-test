@@ -244,7 +244,7 @@ struct QRBarcodeScannerView: View {
         ) {
             stockCountScannedDetailsPopUp
         }
-        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup){
+        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup, dismissOnBackgroundTap: false){
             rxScanSuccessPopup
         }
         .customPopup(isPresented: $pillScanViewModel.showScannedDrugInfoPopoup,  dismissOnBackgroundTap: false){

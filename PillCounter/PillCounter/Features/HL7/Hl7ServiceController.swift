@@ -31,11 +31,11 @@ final class Hl7ServiceController: ObservableObject {
     private var pillCounterHostName: String = ""
 
     // MARK: - Dependencies
-    private let pillDataLocalStorage = PillsDataLocalStorage.shared
-    private var cancellables = Set<AnyCancellable>()
+    let pillDataLocalStorage = PillsDataLocalStorage.shared
+    var cancellables = Set<AnyCancellable>()
 
     // MARK: - HL7 Layer
-    private var hl7Manager: Hl7ServiceManager?
+    var hl7Manager: Hl7ServiceManager?
     private var hl7Handler: Hl7EventHandler?
 
     // MARK: - Send Queue
@@ -48,7 +48,6 @@ final class Hl7ServiceController: ObservableObject {
 
     private var retryCount = 0
     private let maxRetries = 3
-
 
 
     // MARK: - Bind (called once from SwiftUI root)
@@ -74,7 +73,10 @@ final class Hl7ServiceController: ObservableObject {
         }
 
         startHl7Services()
+        setupBatchSyncQueue()
+
         observePendingTransactions()
+        observeBatchCompletion()
     }
 
     private var shouldStartService: Bool {
@@ -123,42 +125,45 @@ final class Hl7ServiceController: ObservableObject {
     // MARK: - Events from Hl7EventHandler
 
     /// PMS client connection is ready — load and start sending pending transactions.
-    func onClientConnected() {
-        resendPendingHl7Transactions()
-    }
+//    func onClientConnected() {
+////        resendPendingBatches()
+////        resendPendingHl7Transactions()
+//    }
 
     /// ACK received from PMS.
-    func onAckReceived(messageId: String?, ackCode: String) {
-        let ackMsgId = messageId?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard let txn = currentTxn else {
-            return
-        }
-
-        // NACK → retry / move to end
-        guard ackCode == "AA" else {
-            handleSendFailure()
-            return
-        }
-
-        // If PMS sent a messageId, it must match what we sent
-        if let ackId = ackMsgId, !ackId.isEmpty {
-            guard let inflightId = currentMessageId, ackId == inflightId else {
-                return
-            }
-        } else {
-        }
-
-        // Mark synced in persistence
-        pillDataLocalStorage.updateTransactionSynced(txnId: txn.txn_id)
-
-        // Advance queue
-        sendingQueue.removeFirst()
-        currentTxn = nil
-        currentMessageId = nil
-        retryCount = 0
-
-        sendNextIfPossible()
+    func onAckReceived(messageId: String?, ackCode: String, hl7: String) {
+//        let ackMsgId = messageId?.trimmingCharacters(in: .whitespacesAndNewlines)
+//
+//        guard let txn = currentTxn else {
+//            return
+//        }
+//
+//        // NACK → retry / move to end
+//        guard ackCode == "AA" else {
+//            handleSendFailure()
+//            return
+//        }
+//
+//        // If PMS sent a messageId, it must match what we sent
+//        if let ackId = ackMsgId, !ackId.isEmpty {
+//            guard let inflightId = currentMessageId, ackId == inflightId else {
+//                return
+//            }
+//        } else {
+//        }
+//
+//        // Mark synced in persistence
+//        pillDataLocalStorage.updateTransactionSynced(txnId: txn.txn_id)
+//
+//        // Advance queue
+//        sendingQueue.removeFirst()
+//        currentTxn = nil
+//        currentMessageId = nil
+//        retryCount = 0
+//
+//        sendNextIfPossible()
+        batchSyncQueue?.handleAck(hl7)
+        
     }
 
     /// ACK timeout — treat same as send failure.
@@ -265,6 +270,7 @@ final class Hl7ServiceController: ObservableObject {
 
         sendNextIfPossible()
     }
+    
     private func resetQueueState() {
         sendingQueue.removeAll()
         currentTxn = nil
@@ -286,54 +292,6 @@ final class Hl7ServiceController: ObservableObject {
         return HL7CompletionBuilder().buildCompletionMessage(txn: txn, user: user )
     }
 
-    func sendBatchInventory(batchId: Int64) {
-
-        print("📦 [HL7] Sending batch inventory for batch:", batchId)
-
-        guard let batch = pillDataLocalStorage.fetchBatchById(batchId) else {
-            print("❌ [HL7] Batch not found:", batchId)
-            return
-        }
-
-        // ✅ GET TXNS FROM BATCH
-        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
-
-        guard !txns.isEmpty else {
-            print("❌ No transactions in batch")
-            return
-        }
-
-        // ✅ GET USER FROM FIRST TXN
-        guard let user = txns.first?.user else {
-            print("❌ Missing user from transactions")
-            return
-        }
-
-        // ✅ ONLY PMS BATCH
-        guard batch.req_id_from_pms == nil else {
-            print("ℹ️ Not PMS batch → skip HL7")
-            return
-        }
-
-        // ✅ MUST HAVE REQUEST ID
-        guard let requestId = batch.req_id_from_pms else {
-            print("❌ Missing requestId → cannot respond")
-            return
-        }
-
-        let builder = HL7CompletionBuilder()
-
-        let hl7 = builder.buildInventoryMessage(
-            batch: batch,
-            user: user
-        )
-
-        print("📡 [HL7] Batch HL7 Payload:\n\(hl7)")
-
-        hl7Manager?.sendClientHL7(hl7)
-
-        print("✅ [HL7] Batch inventory sent")
-    }
     
     private func hl7Timestamp() -> String {
         let formatter = DateFormatter()

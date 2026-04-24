@@ -321,7 +321,6 @@ extension PillScanViewModel {
         // MARK: Create Batch
         guard let batch = pillDataLocalStorage.createBatch(
             bucketId: bucketId ?? "",
-            isFromPms: true,
             requestId: requestId
         ) else { return }
 

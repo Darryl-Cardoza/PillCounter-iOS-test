@@ -752,14 +752,15 @@ final class PillsDataLocalStorage {
         print("[DB][SYNC] After update → isSynced =", txn.is_synced)
     }
     
-    func updateBatchStatus(batchId: Int64, status: String) {
+    func updateBatchStatus(batchId: Int64, status: CountStatus) {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
 
         request.predicate = NSPredicate(format: "batch_id == %lld", batchId)
 
         if let batch = try? mainThreadContext.fetch(request).first {
-            batch.status = status
+            batch.status = status.rawValue
             CoreDataManager.shared.save(context: mainThreadContext)
+            transactionsDidChange.send()
 
             print("Batch status updated to \(status)")
         } else {

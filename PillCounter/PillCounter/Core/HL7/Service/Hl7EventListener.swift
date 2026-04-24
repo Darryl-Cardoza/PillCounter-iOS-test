@@ -24,7 +24,7 @@ protocol Hl7EventListener: AnyObject {
     func onAckSent(messageId: String)
 
     /// Called when an ACK is received from PMS for a sent message.
-    func onAckReceived(messageId: String?, ackCode: String)
+    func onAckReceived(messageId: String?, ackCode: String, hl7:String)
 
     /// Called when any HL7-related error occurs.
     func onError(source: String, error: Error)

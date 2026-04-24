@@ -49,13 +49,14 @@ final class Hl7EventHandler: Hl7EventListener {
     }
 
     /// Called when ACK is received from PMS.
-    func onAckReceived(messageId: String?, ackCode: String) {
+    func onAckReceived(messageId: String?, ackCode: String, hl7:String) {
         Log("ACK received | id=\(messageId ?? "nil") code=\(ackCode)")
 
         Task { @MainActor in
             Hl7ServiceController.shared.onAckReceived(
                 messageId: messageId,
-                ackCode: ackCode
+                ackCode: ackCode,
+                hl7: hl7
             )
         }
     }

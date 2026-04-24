@@ -80,7 +80,7 @@ class StockCountViewModel: ObservableObject {
     // MARK: - Batch
 
     func createNewBatch(bucketId: String) {
-        if let batch = pillDataLocalStorage.createBatch(bucketId: bucketId, isFromPms: false) {
+        if let batch = pillDataLocalStorage.createBatch(bucketId: bucketId) {
             currentBatch = batch
             // reloadAllState() fires automatically via publisher
         }
@@ -97,15 +97,29 @@ class StockCountViewModel: ObservableObject {
         pillDataLocalStorage.fetchAllBatches()
     }
 
+//    func completeBatch(batchId: Int64) {
+//        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
+//        txns.forEach {
+//            pillDataLocalStorage.updateTransactionStatus(txnId: $0.txn_id, newStatus: .COMPLETED)
+//        }
+//        pillDataLocalStorage.updateBatchStatus(batchId: batchId, status: .COMPLETED)
+//        Hl7ServiceController.shared.sendBatchInventory(batchId: batchId)
+//        // reloadAllState() fires automatically via publisher
+//        print("Batch \(batchId) marked as COMPLETED")
+//    }
+    
     func completeBatch(batchId: Int64) {
         let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
         txns.forEach {
             pillDataLocalStorage.updateTransactionStatus(txnId: $0.txn_id, newStatus: .COMPLETED)
         }
-        pillDataLocalStorage.updateBatchStatus(batchId: batchId, status: "completed")
-        Hl7ServiceController.shared.sendBatchInventory(batchId: batchId)
-        // reloadAllState() fires automatically via publisher
-        print("Batch \(batchId) marked as COMPLETED")
+
+        // Save batch status THEN fire publisher — no race condition
+        pillDataLocalStorage.updateBatchStatus(batchId: batchId, status: .COMPLETED) { [weak self] in
+            // This runs on main thread, after Core Data save is confirmed
+            self?.pillDataLocalStorage.transactionsDidChange.send()
+            print("✅ Batch \(batchId) marked COMPLETED — publisher fired after save")
+        }
     }
 
     // MARK: - Transactions
@@ -118,6 +132,8 @@ class StockCountViewModel: ObservableObject {
         )
         // reloadAllState() fires automatically via publisher
     }
+    
+    
 
     // MARK: - NDC Requests (unaffected by publisher — different data set)
 

@@ -316,29 +316,6 @@ final class CameraService: NSObject, ObservableObject {
 
 // MARK: - SAMPLE BUFFER DELEGATE
 extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
-
-    /// RECEIVES CAMERA FRAMES AND RUNS DETECTION
-//    func captureOutput(
-//        _ output: AVCaptureOutput,
-//        didOutput sampleBuffer: CMSampleBuffer,
-//        from connection: AVCaptureConnection
-//    ) {
-//
-//        guard !isPausedDueToInactivity,
-//            let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
-//        else { return }
-//
-//        lastPixelBuffer = pixelBuffer
-//
-//        detector.detect(pixelBuffer: pixelBuffer) {
-//            [weak self] detections, count in
-//            DispatchQueue.main.async {
-//                self?.detections = detections
-//                self?.stableCount = count
-//            }
-//        }
-//    }
-    
     
     func captureOutput(
         _ output: AVCaptureOutput,
@@ -385,35 +362,122 @@ extension CameraService {
     func captureSnapshotWithOverlays() -> UIImage? {
         guard let pixelBuffer = lastPixelBuffer else { return nil }
 
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        guard
-            let cgImage = ciContext.createCGImage(
-                ciImage,
-                from: ciImage.extent)
+        // 1. Build the oriented CIImage
+        let rawCI = CIImage(cvPixelBuffer: pixelBuffer)
+        let orientedCI = ciImageOriented(rawCI, orientation: currentCameraOrientation)
+
+        guard let cgImage = ciContext.createCGImage(orientedCI, from: orientedCI.extent)
         else { return nil }
 
-        let size = CGSize(
-            width: ciImage.extent.width,
-            height: ciImage.extent.height)
+        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
 
-        let renderer = UIGraphicsImageRenderer(size: size)
+        // 2. Transform detection rects from raw-buffer space → oriented image space
+        let rawSize = CGSize(
+            width: CVPixelBufferGetWidth(pixelBuffer),
+            height: CVPixelBufferGetHeight(pixelBuffer)
+        )
+        let transformedDetections = detections.map { detection -> DetectionResult in
+            let transformed = transformRect(
+                detection.rect,
+                from: rawSize,
+                to: imageSize,
+                orientation: currentCameraOrientation
+            )
+            return DetectionResult(
+                rect: transformed,
+                confidence: detection.confidence,
+                originalFrameSize: detection.originalFrameSize
+            )
+        }
 
+        // 3. Render
+        let renderer = UIGraphicsImageRenderer(size: imageSize)
         return renderer.image { ctx in
             let context = ctx.cgContext
 
-            context.saveGState()
-            context.translateBy(x: 0, y: size.height)
-            context.scaleBy(x: 1, y: -1)
-            context.draw(cgImage, in: CGRect(origin: .zero, size: size))
-            context.restoreGState()
+            // Draw oriented image (no flip needed — CIImage already handled it)
+            UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: imageSize))
 
-            detections.enumerated().forEach { index, detection in
-                drawBadge(
-                    context: context,
-                    index: index,
-                    rect: detection.rect
-                )
+            // Draw badges at transformed positions
+            transformedDetections.enumerated().forEach { index, detection in
+                drawBadge(context: context, index: index, rect: detection.rect)
             }
+        }
+    }
+    
+    private func transformRect(
+        _ rect: CGRect,
+        from rawSize: CGSize,
+        to orientedSize: CGSize,
+        orientation: UIDeviceOrientation
+    ) -> CGRect {
+
+        // Normalise to [0,1] in raw space
+        let nx = rect.minX / rawSize.width
+        let ny = rect.minY / rawSize.height
+        let nw = rect.width  / rawSize.width
+        let nh = rect.height / rawSize.height
+
+        // Apply the same logical rotation that ciImageOriented applies,
+        // but in normalised coordinates, then scale to orientedSize.
+        switch orientation {
+
+        case .portrait:
+            // CIImage.oriented(.right): (x,y) → (1-y, x)
+            let tx = 1.0 - ny - nh
+            let ty = nx
+            let tw = nh
+            let th = nw
+            return CGRect(
+                x: tx * orientedSize.width,
+                y: ty * orientedSize.height,
+                width: tw * orientedSize.width,
+                height: th * orientedSize.height
+            )
+
+        case .landscapeLeft:
+            // No rotation applied (.landscapeLeft)
+            return CGRect(
+                x: nx * orientedSize.width,
+                y: ny * orientedSize.height,
+                width: nw * orientedSize.width,
+                height: nh * orientedSize.height
+            )
+
+        case .landscapeRight:
+            // CIImage.oriented(.down): (x,y) → (1-x, 1-y)
+            let tx = 1.0 - nx - nw
+            let ty = 1.0 - ny - nh
+            return CGRect(
+                x: tx * orientedSize.width,
+                y: ty * orientedSize.height,
+                width: nw * orientedSize.width,
+                height: nh * orientedSize.height
+            )
+
+        case .portraitUpsideDown:
+            // CIImage.oriented(.left): (x,y) → (y, 1-x)
+            let tx = ny
+            let ty = 1.0 - nx - nw
+            let tw = nh
+            let th = nw
+            return CGRect(
+                x: tx * orientedSize.width,
+                y: ty * orientedSize.height,
+                width: tw * orientedSize.width,
+                height: th * orientedSize.height
+            )
+
+        default:
+            // Default to portrait
+            let tx = 1.0 - ny - nh
+            let ty = nx
+            return CGRect(
+                x: tx * orientedSize.width,
+                y: ty * orientedSize.height,
+                width: nh * orientedSize.width,
+                height: nw * orientedSize.height
+            )
         }
     }
     

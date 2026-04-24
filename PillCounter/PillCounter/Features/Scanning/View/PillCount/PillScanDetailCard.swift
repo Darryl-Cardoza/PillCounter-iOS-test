@@ -83,22 +83,31 @@ struct PillScanDetailCard: View {
     // MARK: - Image
     @ViewBuilder
     private func imageView(path: String?) -> some View {
-        if let path,
-           let image = PhotoFileManager.shared.loadImage(from: path)
-        {
-            image
-                .resizable()
-                .scaledToFit()
-                .clipShape(RoundedCorner(radius: 10))
-        } else {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(appColors.text.opacity(0.5), lineWidth: 1)
-                .frame(width: 140, height: 120)
-                .overlay(
-                    Image(systemName: "photo")
-                        .foregroundColor(.gray.opacity(0.4))
-                )
+        GeometryReader { geo in
+            let size = geo.size  // adapts to parent — works on iPhone & iPad
+
+            if let path,
+               let image = PhotoFileManager.shared.loadImage(from: path)
+            {
+                image
+                    .resizable()
+                    .scaledToFill()          // fill the box — crops instead of shrinking
+                    .frame(width: size.width, height: size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .contentShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(appColors.text.opacity(0.5), lineWidth: 1)
+                    .frame(width: size.width, height: size.height)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .font(.system(size: size.width * 0.25))  // scales with container
+                            .foregroundColor(.gray.opacity(0.4))
+                    )
+            }
         }
+        .aspectRatio(4/3, contentMode: .fit)   // ← controls the card shape universally
+        .frame(maxWidth: 300)                  // ← cap size on iPad so it doesn't go huge
     }
  
     // MARK: - Selection circle

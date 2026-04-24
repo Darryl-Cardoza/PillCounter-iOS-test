@@ -6,41 +6,45 @@
 //
 import SwiftUI
 
+
 extension UIImage {
 
-    func compressedGrayscale(maxWidth: CGFloat = 1080, quality: CGFloat = 0.5) -> UIImage? {
+    // MARK: - Grayscale + Compress
+    /// Converts to grayscale, scales to maxWidth, and compresses to JPEG quality.
+    /// This is the function you asked for — call it before addingMetadataOverlay.
+    func compressedGrayscale(maxWidth: CGFloat, quality: CGFloat) -> UIImage? {
 
-        // 1. Resize
-        let aspectRatio = size.height / size.width
-        let newSize = CGSize(width: maxWidth, height: maxWidth * aspectRatio)
+        // 1. Scale down first (cheaper to process smaller image)
+        let scale = min(1.0, maxWidth / max(size.width, size.height))
+        let targetSize = CGSize(
+            width: (size.width * scale).rounded(),
+            height: (size.height * scale).rounded()
+        )
 
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        let resized = renderer.image { _ in
-            self.draw(in: CGRect(origin: .zero, size: newSize))
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let scaled = renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
         }
 
-        // 2. Convert to grayscale
-        guard let ciImage = CIImage(image: resized) else { return resized }
+        // 2. Apply grayscale via CIFilter
+        guard let cgImage = scaled.cgImage else { return nil }
+        let ciImage = CIImage(cgImage: cgImage)
 
-        let filter = CIFilter(name: "CIPhotoEffectMono")
-        filter?.setValue(ciImage, forKey: kCIInputImageKey)
+        guard let filter = CIFilter(name: "CIColorControls") else { return nil }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(0.0, forKey: kCIInputSaturationKey)  // 0 = full grayscale
 
         let context = CIContext()
-        if let output = filter?.outputImage,
-           let cgImage = context.createCGImage(output, from: output.extent) {
-            return UIImage(cgImage: cgImage)
-        }
+        guard
+            let outputCI = filter.outputImage,
+            let outputCG = context.createCGImage(outputCI, from: outputCI.extent)
+        else { return nil }
 
-        return resized
+        return UIImage(cgImage: outputCG)
     }
 
-    func jpegDataCompressed(_ quality: CGFloat = 0.5) -> Data? {
-        return self.jpegData(compressionQuality: quality)
-    }
-}
-
-extension UIImage {
-
+    // MARK: - Metadata Overlay
+    /// Burns NDC, user, count, timestamp etc. into the image as text.
     func addingMetadataOverlay(
         ndc: String,
         user: String,
@@ -51,59 +55,86 @@ extension UIImage {
         fileSizeKB: Double
     ) -> UIImage {
 
-        let formattedTime = DateUtils.formatToDayMonthYearTime(timestamp)
+        let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let dateString = formatter.string(from: date)
 
-        let text = """
-        NDC: \(ndc)   RX: \(rx)
-        User: \(user)   Count: \(count)
-        Location: \(location)
-        Time: \(formattedTime)
-        Size: \(String(format: "%.1f KB", fileSizeKB))
-        """
+        let lines = [
+            "NDC: \(ndc.isEmpty ? "N/A" : ndc)",
+            "User: \(user.isEmpty ? "N/A" : user)",
+            "Count: \(count)",
+            !rx.isEmpty ? "Rx: \(rx)" : nil,
+            !location.isEmpty ? "Loc: \(location)" : nil,
+            "Time: \(dateString)",
+            String(format: "Size: %.1f KB", fileSizeKB)
+        ].compactMap { $0 }
 
-        let padding: CGFloat = 16
-        let font = UIFont.systemFont(ofSize: 22, weight: .medium) // 👈 reduced
+        let fontSize: CGFloat = max(size.width * 0.02, 12)
+        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold)
 
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .left
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: UIColor.white,
-            .paragraphStyle: paragraph
-        ]
-
-        let maxTextWidth = size.width - (padding * 2)
-        let boundingRect = NSString(string: text).boundingRect(
-            with: CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attributes,
-            context: nil
-        )
-
-        let textHeight = boundingRect.height + (padding * 2)
+        let padding: CGFloat = 10
+        let lineSpacing: CGFloat = 4
 
         let renderer = UIGraphicsImageRenderer(size: size)
 
         return renderer.image { ctx in
+
+            // Draw original image
             draw(at: .zero)
 
-            let rect = CGRect(
-                x: 0,
-                y: size.height - textHeight,
-                width: size.width,
-                height: textHeight
-            )
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byWordWrapping
 
-            // Background
-            ctx.cgContext.setFillColor(UIColor.black.withAlphaComponent(0.7).cgColor)
-            ctx.cgContext.fill(rect)
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: UIColor.white,
+                .paragraphStyle: paragraph,
+                .strokeColor: UIColor.black,
+                .strokeWidth: -2 // 🔥 OUTLINE TEXT (key for visibility)
+            ]
 
-            // Draw text
-            text.draw(
-                in: rect.insetBy(dx: padding, dy: padding),
-                withAttributes: attributes
-            )
+            // Start from bottom but NO background
+            var y = size.height - padding
+
+            for line in lines.reversed() {
+                let textSize = (line as NSString).size(withAttributes: attributes)
+
+                y -= textSize.height
+
+                let rect = CGRect(
+                    x: padding,
+                    y: y,
+                    width: size.width - padding * 2,
+                    height: textSize.height
+                )
+
+                (line as NSString).draw(in: rect, withAttributes: attributes)
+
+                y -= lineSpacing
+            }
         }
     }
 }
+
+
+
+extension UIImage {
+
+    func normalized() -> UIImage {
+
+        if imageOrientation == .up {
+            return self
+        }
+
+        UIGraphicsBeginImageContextWithOptions(size, false, scale)
+        draw(in: CGRect(origin: .zero, size: size))
+
+        let normalizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        return normalizedImage ?? self
+    }
+}
+
+

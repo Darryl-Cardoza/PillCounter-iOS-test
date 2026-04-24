@@ -477,7 +477,8 @@ final class Hl7ServiceManager {
 
         listener?.onAckReceived(
             messageId: messageId?.isEmpty == true ? nil : messageId,
-            ackCode: ackCode
+            ackCode: ackCode,
+            hl7: hl7
         )
     }
 }

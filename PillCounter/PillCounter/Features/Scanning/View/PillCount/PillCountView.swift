@@ -157,8 +157,8 @@ struct OPillCountView: View {
         .ignoresSafeArea(.keyboard)
         .onDisappear {
             // Clean up transaction reference when leaving
-//            pillScanViewModel.currentTransaction = nil
-//            pillScanViewModel.currentTransactionTransactionDetails = nil //here
+            pillScanViewModel.currentTransaction = nil
+            pillScanViewModel.currentTransactionTransactionDetails = nil //here
             pillScanViewModel.note = ""
             pillScanViewModel.currentControlledStep = .scan
             pillScanViewModel.currentControlledTargetCount = nil
@@ -799,10 +799,6 @@ extension OPillCountView {
             showSuccessAnimation = false
         }
         
-//        var savedPath: String? = nil
-//        if let compositeImage = cameraService.captureSnapshotWithOverlays() {
-//            savedPath = PhotoFileManager.shared.saveImage(compositeImage)
-//        }
         
         var savedPath: String? = nil
 
@@ -816,16 +812,16 @@ extension OPillCountView {
 
             let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
 
-            // Step 1: Process image
+            // Step 1: Compress + grayscale (snapshot already oriented & has overlays)
             guard let processed = rawImage
-                .compressedGrayscale(maxWidth: 1080, quality: 0.5)
+                .compressedGrayscale(maxWidth: 1080, quality: 1.0)
             else { return }
 
-            // Step 2: Get file size FIRST
+            // Step 2: Get file size AFTER compression
             guard let data = processed.jpegData(compressionQuality: 0.5) else { return }
             let fileSizeKB = Double(data.count) / 1024.0
 
-            // Step 3: Add overlay
+            // Step 3: Burn metadata overlay onto the already-oriented+overlaid image
             let finalImage = processed.addingMetadataOverlay(
                 ndc: pillScanViewModel.currentTransaction?.drug?.ndc ?? "",
                 user: user,

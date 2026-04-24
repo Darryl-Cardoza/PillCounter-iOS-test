@@ -38,10 +38,11 @@ extension PillsDataLocalStorage {
         )
         return subject
     }
+    
+    
     // MARK: - Create batch
     func createBatch(
         bucketId: String,
-        isFromPms: Bool,
         requestId: String? = nil
     ) -> BatchCountEntity? {
         let context = mainThreadContext
@@ -50,11 +51,12 @@ extension PillsDataLocalStorage {
         let batch = BatchCountEntity(context: context)
         batch.batch_id        = batchId
         batch.start_date_time = batchId
-        batch.status          = "partial"
+        batch.status          = CountStatus.PARTIAL.rawValue
         batch.is_deleted      = false
         batch.bucket_id       = bucketId
         batch.req_id_from_pms = requestId
-
+        batch.is_synced = false
+        
         do {
             try context.save()
             debugPrintFullDatabase()
@@ -114,7 +116,7 @@ extension PillsDataLocalStorage {
     func fetchAllBatches() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND status == %@", "partial"
+            format: "is_deleted == false AND status == %@", CountStatus.PARTIAL.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
         return (try? mainThreadContext.fetch(request)) ?? []
@@ -123,7 +125,7 @@ extension PillsDataLocalStorage {
     func fetchCompletedBatches() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND status == %@", "completed"
+            format: "is_deleted == false AND status == %@", CountStatus.COMPLETED.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
         return (try? mainThreadContext.fetch(request)) ?? []
@@ -172,5 +174,42 @@ extension PillsDataLocalStorage {
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
         return (try? mainThreadContext.fetch(request)) ?? []
+    }
+    
+    
+    // Fetch No Send to pms batches
+    func fetchCompletedUnsyncedBatches() -> [BatchCountEntity] {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "is_deleted == false AND status == %@ AND is_synced == false",
+            CountStatus.COMPLETED.rawValue
+        )
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "start_date_time", ascending: true)
+        ]
+
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
+    
+    func updateBatchStatus(batchId: Int64, status: CountStatus, completion: (() -> Void)? = nil) {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "batch_id == %lld", batchId)
+
+        if let batch = try? mainThreadContext.fetch(request).first {
+            batch.status = status.rawValue
+            batch.is_synced = false  // ensure it's picked up as unsynced
+
+            do {
+                try mainThreadContext.save()         // ← explicit save, not CoreDataManager.shared.save
+                print("✅ Batch status updated to \(status)")
+                completion?()                        // ← fires AFTER confirmed save
+            } catch {
+                print("❌ updateBatchStatus save failed:", error)
+            }
+        } else {
+            print("Batch not found")
+        }
     }
 }

@@ -319,7 +319,7 @@ extension HistoryTransactionDetailView {
         detail: PillCountTransactionDetailsEntity,
         step: ControlledStep
     ) -> some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             Group {
                 if let path = detail.image_path,
                    let image = PhotoFileManager.shared.loadImage(from: path)
@@ -334,7 +334,8 @@ extension HistoryTransactionDetailView {
                         .fill(Color.gray.opacity(0.2))
                         .frame(width: 120, height: 80)
                         .overlay(
-                            Image(systemName: "photo").foregroundStyle(Color.gray)
+                            Image(systemName: "photo")
+                                .foregroundStyle(Color.gray)
                         )
                 }
             }
@@ -344,17 +345,14 @@ extension HistoryTransactionDetailView {
                     fullScreenImage = loaded
                 }
             }
-
-            // Count badge — hidden for vial step
             if step != .vial {
                 Text("\(detail.pill_count)")
-                    .font(.subheadline)
+                    .font(.headline)
                     .fontWeight(.bold)
                     .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .background(appColors.primary)
+                    .frame(width: 40, height: 40)
+                    .background(appColors.secondary)
                     .clipShape(Circle())
-                    .padding(6)
             }
         }
         .frame(width: 120, height: 80)

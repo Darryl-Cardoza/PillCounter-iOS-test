@@ -81,7 +81,6 @@ final class HL7CompletionBuilder {
         let order = OrderData(
             orderControl: "RE",
             placerOrderId: txn.rx_no ?? "\(txn.txn_id)",
-//            placerOrderId: "RX100002",
             placerOrderNamespace: nil,
             fillerOrderId: nil,
             fillerOrderNamespace: nil,

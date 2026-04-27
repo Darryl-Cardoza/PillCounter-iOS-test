@@ -95,6 +95,11 @@ struct AppNavigation: View {
                         .user(.userSettings(.HistoryTransactionDetail))):
                         HistoryTransactionDetailView()
                             .navigationBarBackButtonHidden(true)
+
+                    case .authentication(
+                        .user(.userSettings(.HistoryBatchDetail))):
+                        HistoryBatchDetailView()
+                            .navigationBarBackButtonHidden(true)
                         
                     case .authentication(
                         .login(.dashboard(.pillCount(.controlledDrug(.vialCount))))):
@@ -112,12 +117,6 @@ struct AppNavigation: View {
                         .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))
                     ):
                         StockCountPartialBatchListScreen()
-                            .navigationBarBackButtonHidden(true)
-                        
-                    case .authentication(
-                        .login(.dashboard(.pillCount(.stockCount(.stockCountPendingBatchListScreen))))
-                    ):
-                        StockCountRequestedList()
                             .navigationBarBackButtonHidden(true)
                     }
                 }

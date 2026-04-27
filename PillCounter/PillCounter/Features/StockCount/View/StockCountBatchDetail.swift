@@ -28,6 +28,18 @@ struct StockCountBatchDetail: View {
     private var allIds: Set<String> {
         Set(stockCountVieModel.groupedTransactions.map { $0.ndc })
     }
+    
+    private var isBatchEmpty: Bool {
+        stockCountVieModel.groupedTransactions.isEmpty
+    }
+
+    private var totalPillCount: Int {
+        stockCountVieModel.groupedTransactions.reduce(0) { $0 + Int($1.total) }
+    }
+
+    private var hasNoCount: Bool {
+        isBatchEmpty || totalPillCount == 0
+    }
 
 
     var body: some View {
@@ -41,102 +53,7 @@ struct StockCountBatchDetail: View {
                     EmptyView()
                 },
                 headerActions: {
-                    if isEditing {
-                        // EDIT MODE
-                        HStack {
-
-                            // Select All
-                            Button {
-                                toggleSelectAll()
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(
-                                        systemName: areAllSelected
-                                            ? "checkmark.square.fill" : "square"
-                                    )
-                                    .foregroundColor(
-                                        areAllSelected
-                                            ? appColors.secondary : .gray
-                                    )
-
-                                    Text(
-                                        areAllSelected
-                                            ? "Deselect All" : "Select All"
-                                    )
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(appColors.text)
-                                }
-                            }
-
-                            Spacer()
-
-                            // Delete + Cancel
-                            HStack(spacing: 16) {
-
-                                // DELETE
-                                Button {
-                                    deleteSelectedTransactions()
-                                } label: {
-                                    Text("Delete")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(
-                                            selectedTxnIds.isEmpty
-                                                ? .gray : appColors.secondary
-                                        )
-                                }
-                                .disabled(selectedTxnIds.isEmpty)
-
-                                // CANCEL
-                                Button {
-                                    withAnimation {
-                                        isEditing = false
-                                        selectedTxnIds.removeAll()
-                                    }
-                                } label: {
-                                    Text("Cancel")
-                                        .foregroundColor(appColors.text)
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                        .background(appColors.primaryBackground)
-
-                    } else {
-
-                        // NORMAL MODE
-
-                        HStack(spacing: 16) {
-
-                            // PDF BUTTON (your existing one)
-                            Button {
-                                showExportPopUp.toggle()
-                            } label: {
-                                Image("pdf")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 26, height: 26)
-                                    .overlay { appColors.primary }
-                                    .mask(
-                                        Image("pdf")
-                                            .resizable()
-                                            .scaledToFit()
-                                    )
-                            }
-
-                            // TRASH → Enter edit mode
-                            Button {
-                                withAnimation {
-                                    isEditing = true
-                                    selectedTxnIds.removeAll()
-                                }
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(appColors.primary)
-                            }
-                        }
-                        .padding(.trailing)
-                    }
+                    headerContent
                 },
                 showBackButton: !isEditing,
                 showHamburgerMenu: false,
@@ -157,6 +74,108 @@ struct StockCountBatchDetail: View {
             }
 
         }
+    }
+    
+    // MARK: HEADER
+    @ViewBuilder
+    private var headerContent: some View{
+        if isEditing {
+            // EDIT MODE
+            HStack {
+
+                // Select All
+                Button {
+                    toggleSelectAll()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(
+                            systemName: areAllSelected
+                                ? "checkmark.square.fill" : "square"
+                        )
+                        .foregroundColor(
+                            areAllSelected
+                                ? appColors.secondary : .gray
+                        )
+
+                        Text(
+                            areAllSelected
+                                ? "Deselect All" : "Select All"
+                        )
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(appColors.text)
+                    }
+                }
+
+                Spacer()
+
+                // Delete + Cancel
+                HStack(spacing: 16) {
+
+                    // DELETE
+                    Button {
+                        deleteSelectedTransactions()
+                    } label: {
+                        Text("Delete")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(
+                                selectedTxnIds.isEmpty
+                                    ? .gray : appColors.secondary
+                            )
+                    }
+                    .disabled(selectedTxnIds.isEmpty)
+
+                    // CANCEL
+                    Button {
+                        withAnimation {
+                            isEditing = false
+                            selectedTxnIds.removeAll()
+                        }
+                    } label: {
+                        Text("Cancel")
+                            .foregroundColor(appColors.text)
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .background(appColors.primaryBackground)
+
+        } else {
+
+            // NORMAL MODE
+
+            HStack(spacing: 16) {
+
+                // PDF BUTTON (your existing one)
+                Button {
+                    showExportPopUp.toggle()
+                } label: {
+                    Image("pdf")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 26, height: 26)
+                        .overlay { appColors.primary }
+                        .mask(
+                            Image("pdf")
+                                .resizable()
+                                .scaledToFit()
+                        )
+                }
+
+                // TRASH → Enter edit mode
+                Button {
+//                    withAnimation {
+//                        isEditing = true
+//                        selectedTxnIds.removeAll()
+//                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 20))
+                        .foregroundStyle(appColors.primary)
+                }
+            }
+            .padding(.trailing)
+        }
+
     }
 
     // MARK: VIEWS
@@ -268,7 +287,9 @@ extension StockCountBatchDetail{
     private var showEndBatchPopup: some View {
         ConfirmationDialogue(
             title: NSLocalizedString("CONFIRM_END_BATCH", comment: ""),
-            message: nil,
+            message: hasNoCount
+                ? "No transactions or counts added. Do you want to end the batch?"
+                : nil,
             cancelButtonText: "NO",
             confirmButtonText: "YES",
             onCancel: {
@@ -276,10 +297,14 @@ extension StockCountBatchDetail{
             },
             onConfirm: {
                 showEndBatchPopUp = false
+
                 if let batchId = stockCountVieModel.currentBatch?.batch_id {
                     stockCountVieModel.completeBatch(batchId: batchId)
                 }
-                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+
+                router.setRoot(
+                    to: .authentication(.login(.dashboard(.dashboardHome)))
+                )
             }
         )
     }

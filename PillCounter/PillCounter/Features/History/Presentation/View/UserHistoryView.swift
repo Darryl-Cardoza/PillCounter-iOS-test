@@ -263,7 +263,8 @@ struct UserHistoryView: View {
             ForEach(historyViewModel.batchRows) { row in
                 StockItemRowView(data: row, appColors: appColors)
                     .onTapGesture {
-                        router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
+                        historyViewModel.selectedBatchId = row.batchId
+                        router.navigate(to: .authentication(.user(.userSettings(.HistoryBatchDetail))))
                     }
             }
         }

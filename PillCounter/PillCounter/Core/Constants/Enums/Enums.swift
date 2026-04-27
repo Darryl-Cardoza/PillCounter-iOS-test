@@ -48,7 +48,6 @@ public enum ScanningFlow: Codable, Hashable {
 public enum StockCountFlow: Codable, Hashable {
     case stockCountBatchDetail
     case stockCountPartialBatchListScreen
-    case stockCountPendingBatchListScreen
 }
 
 public enum ControlFlow: Hashable, Codable {
@@ -85,6 +84,7 @@ public enum HamburgerMenuFLow: Hashable, Codable {
     case settings
     case unsyncedTransaction
     case HistoryTransactionDetail
+    case HistoryBatchDetail
 }
 
 public enum HamburgerMenuItem: CaseIterable, Identifiable {

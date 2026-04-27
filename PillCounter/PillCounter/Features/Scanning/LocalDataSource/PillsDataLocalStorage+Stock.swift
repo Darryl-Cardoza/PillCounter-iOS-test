@@ -200,7 +200,9 @@ extension PillsDataLocalStorage {
         if let batch = try? mainThreadContext.fetch(request).first {
             batch.status = status.rawValue
             batch.is_synced = false  // ensure it's picked up as unsynced
-
+            if status == .COMPLETED {
+                batch.end_date_time = Int64(Date().timeIntervalSince1970 * 1000)
+            }
             do {
                 try mainThreadContext.save()         // ← explicit save, not CoreDataManager.shared.save
                 print("✅ Batch status updated to \(status)")

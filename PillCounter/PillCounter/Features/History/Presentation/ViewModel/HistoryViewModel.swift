@@ -34,6 +34,11 @@ class HistoryViewModel: ObservableObject {
     @Published var selectedTransactionId: Int64? = nil
     @Published var detailsByStep: [ControlledStep: [PillCountTransactionDetailsEntity]] = [:]
 
+    // MARK: - Published: Batch detail state
+    @Published var selectedBatchId: Int64? = nil
+    @Published var selectedBatch: BatchCountEntity? = nil
+    @Published var groupedTransactionsForBatch: [GroupedTransaction] = []
+
 
 
     // MARK: - Fetch Transactions by Date
@@ -127,8 +132,8 @@ class HistoryViewModel: ObservableObject {
         var batches = filteredBatchesOfUserByDate
 
         switch status {
-        case .completed: batches = batches.filter { $0.status == "completed" }
-        case .pending:   batches = batches.filter { $0.status == "partial" }
+        case .completed: batches = batches.filter { $0.status == CountStatus.COMPLETED.rawValue }
+        case .pending:   batches = batches.filter { $0.status == CountStatus.PARTIAL.rawValue}
         case .all:       break
         }
 
@@ -179,8 +184,8 @@ class HistoryViewModel: ObservableObject {
             let batches = filteredBatchesOfUserByDate
             return (
                 all: batches.count,
-                completed: batches.filter { $0.status == "completed" }.count,
-                pending:   batches.filter { $0.status == "partial" }.count
+                completed: batches.filter { $0.status == CountStatus.COMPLETED.rawValue }.count,
+                pending:   batches.filter { $0.status == CountStatus.PARTIAL.rawValue }.count
             )
         }
     }
@@ -222,6 +227,60 @@ class HistoryViewModel: ObservableObject {
         detailsByStep = [:]
     }
 
+    // MARK: - Batch Detail: Prepare grouped transactions
+    func prepareBatchDetails(for batchId: Int64) {
+        selectedBatch = pillLocalDB.fetchBatchById(batchId)
+        let txns = pillLocalDB.fetchTransactionsByBatch(batchId: batchId)
+        groupedTransactionsForBatch = mapGroupedTransactions(txns: txns)
+    }
+
+    private func mapGroupedTransactions(txns: [PillCountTransactionEntity]) -> [GroupedTransaction] {
+        let groupedByNdc = Dictionary(grouping: txns) { $0.drug?.ndc ?? "" }
+        return groupedByNdc.map { ndc, txnList in
+            let drugName = txnList.first?.drug?.drug_name ?? "Unknown"
+            let lotGrouped = Dictionary(grouping: txnList) { "\($0.lot_no ?? "")|\($0.expiry ?? "")" }
+            var lotDetails: [LotDetail] = []
+            var totalSealed: Int32 = 0
+            var totalOpen: Int32 = 0
+            for (_, lotTxns) in lotGrouped {
+                let sealed = lotTxns.reduce(0) { $0 + ($1.bottle_qty * ($1.drug?.package_qty ?? 0)) }
+                let open = lotTxns.reduce(0) { $0 + $1.loose_qty }
+                totalSealed += sealed
+                totalOpen += open
+                lotDetails.append(LotDetail(
+                    lot: lotTxns.first?.lot_no ?? "",
+                    expiry: lotTxns.first?.expiry ?? "",
+                    sealedQty: sealed,
+                    openQty: open
+                ))
+            }
+            return GroupedTransaction(
+                ndc: ndc,
+                drugName: drugName,
+                total: totalSealed + totalOpen,
+                sealedBottles: totalSealed,
+                openPills: totalOpen,
+                lotDetails: lotDetails
+            )
+        }
+    }
+
+    // MARK: - Batch Detail: Soft delete selected NDCs
+    func softDeleteNdcsFromBatch(ndcs: Set<String>, batchId: Int64) {
+        let txns = pillLocalDB.fetchTransactionsByBatch(batchId: batchId)
+        for txn in txns where ndcs.contains(txn.drug?.ndc ?? "") {
+            pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
+        }
+        prepareBatchDetails(for: batchId)
+    }
+
+    // MARK: - Batch Detail: Clear on disappear
+    func clearBatchDetail() {
+        selectedBatchId = nil
+        selectedBatch = nil
+        groupedTransactionsForBatch = []
+    }
+
     // MARK: - Helper: Parse CountType from raw string
     func countType(from rawValue: String?) -> CountType {
         guard let rawValue, let type = CountType(rawValue: rawValue) else { return .REGULAR }
@@ -237,5 +296,8 @@ class HistoryViewModel: ObservableObject {
         historyTotalTransactionsCount = 0
         selectedTransactionId = nil
         detailsByStep = [:]
+        selectedBatchId = nil
+        selectedBatch = nil
+        groupedTransactionsForBatch = []
     }
 }

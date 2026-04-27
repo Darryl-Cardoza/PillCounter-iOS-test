@@ -13,7 +13,6 @@ final class PillsDataLocalStorage {
     static let shared = PillsDataLocalStorage()
 
      var pendingTxnController: NSFetchedResultsController<PillCountTransactionEntity>?
-     var pendingTxnDelegate: PendingTxnFetchedResultsDelegate?
     
     // init function.
     private init() {}
@@ -198,7 +197,6 @@ final class PillsDataLocalStorage {
 
         transaction.status = newStatus.rawValue
         transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-        
 
         CoreDataManager.shared.save(context: mainThreadContext)
     }
@@ -221,6 +219,16 @@ final class PillsDataLocalStorage {
 
     }
 
+    func fetchTransactionById(txnId: String) -> PillCountTransactionEntity? {
+         let request: NSFetchRequest<PillCountTransactionEntity> =
+             PillCountTransactionEntity.fetchRequest()
+         request.predicate = NSPredicate(
+             format: "txn_id == %@ AND is_deleted == false", txnId
+         )
+         request.fetchLimit = 1
+         return try? mainThreadContext.fetch(request).first
+     }
+    
     // function to update the target count.
     func updateTargetCount(txnId: Int64, targetCount: Int32) {
 

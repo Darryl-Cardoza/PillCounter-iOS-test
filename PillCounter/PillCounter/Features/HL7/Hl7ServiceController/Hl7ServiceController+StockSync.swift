@@ -31,18 +31,7 @@ extension Hl7ServiceController {
         observeStorageChanges()
         print("🔧 [HL7] BatchSyncQueue setup complete, queue:", queue)  // temp
     }
-    // MARK: - Called by the socket layer when client connects / reconnects
-
-    func onClientConnected() {
-        print("OnClient Connected send batches")
-        batchSyncQueue?.enqueueUnsynced()
-    }
-
-    // MARK: - Called by the socket layer when any HL7 message arrives
-
-//    func onHL7MessageReceived(_ message: String) {
-//        batchSyncQueue?.handleAck(message)
-//    }
+ 
 
     // MARK: - Called from completeBatch() after confirmed Core Data save
 

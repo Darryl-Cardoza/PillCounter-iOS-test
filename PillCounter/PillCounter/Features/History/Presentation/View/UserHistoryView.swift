@@ -235,7 +235,7 @@ struct UserHistoryView: View {
             ForEach(historyViewModel.transactionRows) { row in
                 DispenseItemRowView(data: row, appColors: appColors)
                     .onTapGesture {
-                        historyViewModel.selectedTransactionId = row.id
+                        historyViewModel.selectedTransactionId = Int64(row.id)
                         router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
                     }
             }

@@ -805,10 +805,6 @@ class UserViewModel: ObservableObject {
         return pillDataLocalStorage.fetchPillCountTransactionByTransactionId(txnId: txnId)
     }
     
-    @MainActor
-    func getUnsyncedTransactions() async {
-        self.unsyncedTransactions = pillDataLocalStorage.getPendingHl7Txn()
-    }
 
     //For showing pms connection status
     func setPmsConnected(_ isConnected: Bool) {
@@ -928,7 +924,7 @@ class UserViewModel: ObservableObject {
     ) -> TransactionRowData {
         
         return TransactionRowData(
-            id: txn.txn_id,
+            id: String(txn.txn_id),
             ndc: txn.drug?.ndc ?? "",
             drugName: txn.drug?.drug_name ?? "Unknown Pill",
             createdAt: txn.created_at,
@@ -964,6 +960,7 @@ class UserViewModel: ObservableObject {
             )
         }
     }
+    
     // MARK: - HARD RESET (called on logout)
     @MainActor
     func resetState() {

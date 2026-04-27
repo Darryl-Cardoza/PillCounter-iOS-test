@@ -253,7 +253,7 @@ extension PillScanViewModel {
 
             let ndc = med.drugCode 
             let lot = ""          // RXE usually doesn't send lot
-            let expiry = ""       // RXE usually doesn't send expiry
+            let expiry = ""       // RXE usually doesn't s expiry
             let targetCount: Int32 = 0 // request → no quantity
 
             guard !ndc.isEmpty else { continue }

@@ -36,7 +36,7 @@ extension Hl7ServiceController {
     }
     
     
-    // MARK: - Observer For completion of batch
+//    // MARK: - Observer For completion of batch
     func observeBatchCompletion() {
         pillDataLocalStorage.transactionsDidChange
             .receive(on: DispatchQueue.main)

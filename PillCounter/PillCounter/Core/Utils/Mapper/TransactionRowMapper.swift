@@ -4,13 +4,12 @@
 //
 //  Created by Bhushan Patil on 20/04/26.
 //
+import Foundation
 
 
 extension PillCountTransactionEntity {
 
-    func toRowData(
-        pillCount: Int? = nil
-    ) -> TransactionRowData {
+    func toRowData(pillCount: Int? = nil) -> TransactionRowData {
 
         let details =
         (self.pillCountTransactionDetails?.allObjects as? [PillCountTransactionDetailsEntity] ?? [])
@@ -19,7 +18,7 @@ extension PillCountTransactionEntity {
         let totalCount = pillCount ?? details.reduce(0) { $0 + Int($1.pill_count) }
 
         return TransactionRowData(
-            id: self.txn_id,
+            id: String(self.txn_id),
             ndc: self.drug?.ndc ?? "",
             drugName: self.drug?.drug_name ?? "Unknown Pill",
             createdAt: self.created_at,

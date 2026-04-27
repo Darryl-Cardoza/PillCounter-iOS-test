@@ -5,8 +5,7 @@
 //  Created by Bhushan Patil on 20/04/26.
 //
 struct TransactionRowData: Identifiable {
-    let id: Int64
-    
+    let id: String 
     let ndc: String
     let drugName: String
     let createdAt: Int64

@@ -212,4 +212,22 @@ extension PillsDataLocalStorage {
             print("Batch not found")
         }
     }
+    
+    func fetchCompletedUnsyncedTransactions() -> [PillCountTransactionEntity] {
+
+        let request: NSFetchRequest<PillCountTransactionEntity> =
+            PillCountTransactionEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "is_deleted == false AND is_synced == false AND status == %@ AND count_type == %@",
+            CountStatus.COMPLETED.rawValue,
+            CountType.FIXED.rawValue
+        )
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "created_at", ascending: true)
+        ]
+
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
 }

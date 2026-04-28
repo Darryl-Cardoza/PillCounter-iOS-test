@@ -19,8 +19,10 @@ struct ThumbnailImageView: View {
     let borderColor: Color
     let borderWidth: CGFloat
     let placeholderImageName: String
+    let placeholderBackgroundColor: Color?
     let placeholderSize: CGSize
     let isFromPms: Bool
+    let showImageBackground: Color?
 
     // MARK: - ENVIRONMENT
     @EnvironmentObject private var appColors: AppColors
@@ -34,8 +36,10 @@ struct ThumbnailImageView: View {
         borderColor: Color? = nil,
         borderWidth: CGFloat = 1,
         placeholderImageName: String = "placeholder_history",
+        placeholderBackgroundColor: Color? = nil,
         placeholderSize: CGSize = CGSize(width: 25, height: 25),
-        isFromPms: Bool = false
+        isFromPms: Bool = false,
+        showImageBackground: Color? = nil
     ) {
         self.imagePath = imagePath
         self.width = width
@@ -44,8 +48,10 @@ struct ThumbnailImageView: View {
         self.borderColor = borderColor ?? Color.primary.opacity(0.1)
         self.borderWidth = borderWidth
         self.placeholderImageName = placeholderImageName
+        self.placeholderBackgroundColor = placeholderBackgroundColor
         self.placeholderSize = placeholderSize
         self.isFromPms = isFromPms
+        self.showImageBackground = showImageBackground
     }
 
     // MARK: - BODY
@@ -66,7 +72,6 @@ struct ThumbnailImageView: View {
                     )
 
             } else {
-                
                 if isFromPms {
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(appColors.text.opacity(0.8), lineWidth: borderWidth)
@@ -76,19 +81,21 @@ struct ThumbnailImageView: View {
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(appColors.secondary)
                         )
-                }else{
-                    
+                }else {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(appColors.text.opacity(0.8), lineWidth: borderWidth)
+                        .fill(showImageBackground ?? appColors.secondaryBackground)
+                        .stroke(showImageBackground ?? appColors.text.opacity(0.8), lineWidth: borderWidth)
                         .frame(width: width, height: height)
                         .overlay(
                             Image(placeholderImageName)
+                                .renderingMode(.template)
                                 .resizable()
                                 .scaledToFit()
                                 .frame(
                                     width: placeholderSize.width,
                                     height: placeholderSize.height
                                 )
+                                .foregroundStyle(placeholderBackgroundColor ?? appColors.secondary)
                         )
                 }
             }

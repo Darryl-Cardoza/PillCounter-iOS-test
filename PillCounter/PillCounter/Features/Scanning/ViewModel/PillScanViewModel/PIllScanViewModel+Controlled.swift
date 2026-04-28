@@ -21,36 +21,13 @@ extension PillScanViewModel{
         return nil
     }
     
-    func getCurrentControlledTransaction(txnId: Int64) async {
-
-        // Fetch transaction
-        currentTransaction =
-        pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
-            txnId: txnId
-        )
-
-        // Drug name
-        drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
-
-        // Load details
-        getAllTransactionDetailsOfTheCurrentTransaction()
-
-        // Restore correct step
-        getControlledStep()
-
-        // Calculate target for step
-        updateControlledTargetCount()
-    }
-    
     
     // MARK: - Update Target Count
     func updateControlledTargetCount() {
 
         guard let txn = currentTransaction else { return }
-        log("❌ updateControlledTargetCount: transaction missing")
 
         let target = Int(txn.target_count)
-        log("Updating target for step \(currentControlledStep.rawValue) target \(target)")
 
         let txnId = txn.txn_id
 
@@ -68,7 +45,6 @@ extension PillScanViewModel{
             currentControlledTargetCount = target
 
         case .containerPending:
-
             let containerCount =
             pillDataLocalStorage.getTotalCountForStep(
                 txnId: txnId,
@@ -90,13 +66,13 @@ extension PillScanViewModel{
         switch currentControlledStep {
 
         case .containerInitiate:
-            return stepTotal > 0
+            return stepTotal > target
             
         case .targetVerification:
             if currentTransaction?.count_type == CountType.FIXED.rawValue {
                 return stepTotal == target
             } else {
-                return stepTotal > 0
+                return true
             }
             
         case .targetReverification:
@@ -121,7 +97,6 @@ extension PillScanViewModel{
     
     
     func getTotalCuntForCurrentStep() -> Int32 {
-
         guard let txnId = currentTransaction?.txn_id else {
             return 0
         }
@@ -144,23 +119,21 @@ extension PillScanViewModel{
     
     // Get which Controlled step is now
     func getControlledStep(pillCountTxn: PillCountTransactionEntity? = nil) {
-
         guard let txn = pillCountTxn else {
             return
         }
 
         // Fetch last saved step
         guard let lastStep = pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id) else {
-            if txn.is_from_pms == true {
+            if let type = txn.drug?.drug_type, !type.trimmingCharacters(in: .whitespaces).isEmpty {
                 currentControlledStep = .containerInitiate
             } else {
                 currentControlledStep = .targetVerification
             }
-
             updateControlledTargetCount()
             return
         }
-
+        print("Last controlled step \(lastStep)")
         currentControlledStep = lastStep
         updateControlledTargetCount()
     }
@@ -188,7 +161,7 @@ extension PillScanViewModel{
         countType: CountType,
         image: UIImage?
     ) async {
-
+        
         let decoded = decoder.decode(rawValue)
         let gtin = decoded.gtin ?? ""
 
@@ -198,10 +171,10 @@ extension PillScanViewModel{
         let drugId = generateUniqueDrugId()
 
         pillDataLocalStorage.saveManualPill(
-            ndc: ndcComparisonResponse?.data?.scannedNdc.packageNdc ?? "",
+            ndc: ndcComparisonResponse?.data?.scannedNdc?.packageNdc ?? "",
             drugId: drugId,
-            drugName: ndcComparisonResponse?.data?.scannedNdc.lookupName ?? "",
-            drugType: ndcComparisonResponse?.data?.scannedNdc.deaSchedule ?? "",
+            drugName: ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
+            drugType: ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? "",
         )
 
         var savedPath = ""

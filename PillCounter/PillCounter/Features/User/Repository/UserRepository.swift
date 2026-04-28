@@ -8,7 +8,7 @@
 import Foundation
 
 protocol UserRepositoryProtocol {
-
+    
     func getUser(accessToken: String, currentAppVersion: String, fcmToken: String) async throws -> UserResponse
 
     func updateUserProfile(
@@ -20,6 +20,7 @@ protocol UserRepositoryProtocol {
     
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse
 }
+
 
 final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
     
@@ -41,9 +42,9 @@ final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
     }
 
     func updateUserProfile(
-        request: UpdateUserProfileRequest, accessToken: String
+        request: UpdateUserProfileRequest,
+        accessToken: String
     ) async throws -> UserResponse {
-
         // convert the request model to [String: Any] model
         let body =
             try JSONSerialization.jsonObject(
@@ -62,7 +63,6 @@ final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
     func deleteUserProfile(accessToken: String) async throws
         -> DeleteUserResponse
     {
-
         return try await Self.performRequest(
             url: APIConstants.deleteProfile,
             method: .delete,

@@ -13,12 +13,11 @@ protocol SettingsRepositoryProtocol {
 
 final class SettingsRepository: SettingsRepositoryProtocol, BaseRepositoryProtocol {
     
-    static let shared = SettingsRepository() // singleton instance.
+    static let shared = SettingsRepository()
     
     private init () {}
     
     func getMobileSettings(currentVersion: String) async throws -> MobileSettingsResponse {
-        
         return try await Self.performRequest(
             url: "\(APIConstants.getMobileSettings)=ios",
             method: .get,

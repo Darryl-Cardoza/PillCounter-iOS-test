@@ -10,9 +10,11 @@
 "APP_NAME" = "Pill Counter";
 "COMPANY_NAME" = "RITE TECHNOLOGIES";
 "VERSION" = "Version";
+"CANCEL" = "CANCEL";
+"OK" = "OK";
+"ADD" = "ADD";
 
 // MARK: - LOGIN
-
 "REMEMBER_ME" = "Remember me";
 "LOGIN_BUTTON" = "LOGIN";
 "EMAIL_INPUT_FIELD_PLACEHOLDER" = "Email";
@@ -29,17 +31,25 @@
 // MARK: - DASHBOARD
 
 "COMPLETED" = "completed";
-"PARTIAL" = "pending";
+"PENDING" = "pending";
+"PARTIAL" = "Partials";
+"NEWRX"  = "New Rx";
+"NDCREQ" = "NDC Req.";
 
+// MARK: - DASHBOARD POPUP
+"CONTINUE_LAST_BATCH" = "Continue last Batch";
+"CREATE_NEW_BATCH" = "Create a new Batch";
+"WHAT_WOULD_YOU_DO"= "What would you like to do?";
+"SELECT_BUCKET" = "Select Bucket";
 // MARK: - FIXED COUNT
 
-"FIXED_COUNT_TITLE" = "Dispense Count";
-"FIXED_COUNT_SUBTITLE" = "For counting prescribed quantities";
+"FIXED_COUNT_TITLE" = "Dispense";
+"FIXED_COUNT_SUBTITLE" = "Tap to scan Rx Labels";
 
 // MARK: - REGULAR COUNT
 
-"REGULAR_COUNT_TITLE" = "Quick Count";
-"REGULAR_COUNT_SUBTITLE" = "For day to day counts";
+"REGULAR_COUNT_TITLE" = "Stock Count";
+"REGULAR_COUNT_SUBTITLE" = "Start a new inventory count";
 
 // MARK: - HAMBURGER MENU
 "HISTORY" = "History" ;
@@ -103,4 +113,24 @@
 "DATE" = "Date";
 "TIME" = "Time";
 
+//MARK: STOCK
+"CONFIRM_END_BATCH" = "Are you sure you want to end this Batch Count?";
+"CONFIRM_EXPORT" = "Do you want to export this batch inventory details?";
+"END_BATCH" = "END BATCH";
+
+
+//MARK: CONTROLLED STEP
+"CONTROLLED_SCAN" = "Scan Container QR Code";
+"CONTROLLED_CONTAINER_INITIATE" = "Count all pills from container";
+"CONTROLLED_TARGET_VERIFICATION" = "Count Prescribed quantity";
+"CONTROLLED_TARGET_REVERIFICATION" = "Recount Prescribed Quantity.";
+"CONTROLLED_VIAL" = "Take picture of the counted Pills Vial";
+"CONTROLLED_CONTAINER_PENDING" = "Count all remaining Pills from Container";
+"SCAN_BARCODE" = "Scan container QR code";
+"SCAN_STOCK_COUNT_BARCODE" = "Scan Stock Bottle";
+"SCAN_RX_LABEL_BARCODE" = "Scan Rx Label";
+
 // MARK: ERROR
+
+
+

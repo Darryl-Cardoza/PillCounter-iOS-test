@@ -15,6 +15,7 @@ extension PillScanViewModel {
     ){
         print("Received message parsed message \(message)")
         guard let inboundType = classifyInboundMessage(message) else {
+            print("Inbount Type not found")
             return
         }
         
@@ -24,7 +25,6 @@ extension PillScanViewModel {
             switch inboundType {
             case .FIXED:
                  await createFixedHl7Transaction(message:message, inboundType: .FIXED, callback: callback)
-
             case .REGULAR:
                  await createRegularHl7Transaction(message:message, inboundType: .REGULAR, callback: callback)
             }
@@ -44,7 +44,6 @@ extension PillScanViewModel {
             return
         }
 
-        let orderId = order.placerOrderId
 
         guard !message.medications.isEmpty else {
             callback?(false)
@@ -62,44 +61,69 @@ extension PillScanViewModel {
             // RXE-3
             let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
 
-    
-
+            let orderId = order.placerOrderId
+            
             await processHl7DrugAndCreateTransaction(
                 ndc: ndc,
                 drugName: drugName,
                 countType: inboundType,
-                targetCount: targetCount
+                targetCount: targetCount,
+                rxNo: orderId
             )
         }
 
         callback?(true)
     }
     
+    
+//    @MainActor
+//    private func createRegularHl7Transaction(
+//        message: CompleteHL7Message,
+//        inboundType: CountType,
+//        callback: HL7SimpleCallback? = nil
+//    ) async {
+//
+//        guard let inventory = message.inventoryItems.first else {
+//            print("Regular Count: No inventory found")
+//            callback?(false)
+//            return
+//        }
+//
+//        // FIXED MAPPING (based on your HL7 format)
+//        let ndc = inventory.substanceStatusCode ?? ""
+//        let drugName = inventory.substanceStatusDescription ?? "Unknown Drug"
+//        let lotNo = inventory.lotNumber ?? ""
+//        let expiryRaw = inventory.expirationDateTime ?? ""
+
+//        print("Parsed INV → NDC: \(ndc), Name: \(drugName), Count: \(targetCount)")
+//
+////        await processHl7DrugAndCreateTransaction(
+////            ndc: ndc,
+////            drugName: drugName,
+////            countType: inboundType,
+////            targetCount: targetCount,
+////            rxNo: message.order?.placerOrderId
+////        )
+////
+//        
+//        
+//        callback?(true)
+//    }
+
     @MainActor
     private func createRegularHl7Transaction(
         message: CompleteHL7Message,
         inboundType: CountType,
         callback: HL7SimpleCallback? = nil
     ) async {
-    
-        guard let inventory = message.inventoryItems.first else {
-            print("Regular Count: No RXE medication found")
-            return
-        }
-
-        let ndc = inventory.substanceCode ?? ""
-        let drugName = inventory.description
-          
-        print("Regular Count Drug Info: \(ndc), \(drugName)")
-
-        await processHl7DrugAndCreateTransaction(
-            ndc: ndc,
-            drugName: drugName,
-            countType: inboundType
+        await createBatchAndTxnsFromHL7Request(
+            medications: message.medications,
+            requestId: message.header.messageControlId,
+            bucketId: ""
         )
+        
         callback?(true)
     }
-
 
     
     private func classifyInboundMessage(
@@ -112,8 +136,8 @@ extension PillScanViewModel {
         }
 
         if message.messageType == "INR",
-           message.triggerEvent == "U06",
-           !message.inventoryItems.isEmpty {
+           message.triggerEvent == "U04",
+           !message.medications.isEmpty {
             return .REGULAR
         }
         return nil
@@ -125,37 +149,28 @@ extension PillScanViewModel {
         ndc: String,
         drugName: String,
         countType: CountType,
-        targetCount: Int32? = nil
+        targetCount: Int32? = nil,
+        rxNo: String? = nil
     ) async {
 
         print("🧾 HL7 Drug Processing → NDC: \(ndc), Name: \(drugName)")
 
         var drugIdToUse: Int64
 
-        // 1️⃣ Check if drug exists
-        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+        // Create new drug synchronously
+        drugIdToUse = generateUniqueDrugId()
 
-            print("Drug found in DrugMaster (id: \(existingDrug.drug_id))")
+        print("Drug not found — creating new DrugMaster entry")
 
-            drugIdToUse = existingDrug.drug_id
-            self.drugName = existingDrug.drug_name
+        pillDataLocalStorage.saveManualPill(
+            ndc: ndc,
+            drugId: drugIdToUse,
+            drugName: drugName,
+        
+        )
 
-        } else {
-
-            // 2️⃣ Create new drug synchronously
-            drugIdToUse = generateUniqueDrugId()
-
-            print("Drug not found — creating new DrugMaster entry")
-
-            pillDataLocalStorage.saveManualPill(
-                ndc: ndc,
-                drugId: drugIdToUse,
-                drugName: drugName,
-            
-            )
-
-            self.drugName = drugName
-        }
+        self.drugName = drugName
+    
 
         // 3️⃣ Create transaction
         await createTransaction(
@@ -163,9 +178,9 @@ extension PillScanViewModel {
             countType: countType,
             isComingFromPms: true,
             isControlled: true,
-
             targetCount: targetCount,
-            drugName: drugName
+            drugName: drugName,
+            rxNo: rxNo
         )
 
         // 4️⃣ Refresh transaction details

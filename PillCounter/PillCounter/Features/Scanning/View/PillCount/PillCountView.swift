@@ -17,10 +17,12 @@ struct OPillCountView: View {
     @EnvironmentObject var userViewModel: UserViewModel
     @EnvironmentObject var router: Router
     @EnvironmentObject var pillScanViewModel: PillScanViewModel
+    @EnvironmentObject var stockCountViewModel: StockCountViewModel
 
     // MARK: - STATE MANAGEMENT
     // @StateObject ensures the camera session survives view updates and rotations.
     @StateObject var cameraService = CameraService()
+    @StateObject private var locationService = LocationService.shared
     @State private var showZeroCountPopup: Bool = false
     @State private var showNoteOption: Bool = false
     @State private var showConfirmCompletionPopup: Bool = false
@@ -34,9 +36,6 @@ struct OPillCountView: View {
 
 
     @State private var showTransactionHistory: Bool = true
-
-
-
     @State private var isPaused: Bool = false
 
     @State private var showFullScreenImage = false
@@ -115,6 +114,7 @@ struct OPillCountView: View {
                 onBack: {
                     router.setRoot(
                         to: .authentication(.login(.dashboard(.dashboardHome))))
+                    cameraService.stop()
                 }
             )
 
@@ -172,9 +172,11 @@ struct OPillCountView: View {
             }
         }
         .onAppear {
-            initializeTransaction()
             cameraService.configureInitialOrientation()
             cameraService.startObservingOrientation()
+            initializeTransaction()
+            pillScanViewModel.addCurrentOpenPillCount = 0
+
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -316,7 +318,7 @@ extension OPillCountView {
         )
     }
 
-    // Async task to fetch transaction data on load.
+//    // Async task to fetch transaction data on load.
     private func initializeTransaction() {
         Task {
             if pillScanViewModel.currentTransaction == nil {
@@ -576,7 +578,32 @@ extension OPillCountView {
                 showConfirmCompletionPopup = false
                 capturedVialImage = nil
                 vialCapturedImagePath = nil
-                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+                if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
+                    router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+                    
+                    guard let txn = pillScanViewModel.currentTransaction else {
+                        print("❌ No current transaction")
+                        return
+                    }
+
+                    Hl7ServiceController.shared.sendTransaction(txn)
+                
+                }else{
+                    stockCountViewModel.updateCounts(
+                        txnId: pillScanViewModel.currentTransaction?.txn_id ,
+                        bottleQty: nil,
+                        looseQty: pillScanViewModel.addCurrentOpenPillCount
+                    )
+                    router.setRoot(
+                        to: .authentication(
+                            .login(
+                                .dashboard(
+                                    .pillCount(.stockCount(.stockCountBatchDetail))
+                                )
+                            )
+                        )
+                    )
+                }
                 if isTransactionCompleted
                     || router.selectedPillScanningType == .REGULAR
                 {
@@ -929,21 +956,60 @@ extension OPillCountView {
             showSuccessAnimation = false
         }
         
-        var savedPath: String? = nil
+//        var savedPath: String? = nil
+//        if let compositeImage = cameraService.captureSnapshotWithOverlays() {
+//            savedPath = PhotoFileManager.shared.saveImage(compositeImage)
+//        }
         
-        if let compositeImage = cameraService.captureSnapshotWithOverlays() {
-            savedPath = PhotoFileManager.shared.saveImage(compositeImage)
+        var savedPath: String? = nil
+
+        if let rawImage = cameraService.captureSnapshotWithOverlays() {
+            let user = [
+                pillScanViewModel.currentTransaction?.user?.fname,
+                pillScanViewModel.currentTransaction?.user?.lname
+            ]
+            .compactMap { $0 }
+            .joined(separator: " ")
+
+            let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+
+            // Step 1: Process image
+            guard let processed = rawImage
+                .compressedGrayscale(maxWidth: 1080, quality: 0.5)
+            else { return }
+
+            // Step 2: Get file size FIRST
+            guard let data = processed.jpegData(compressionQuality: 0.5) else { return }
+            let fileSizeKB = Double(data.count) / 1024.0
+
+            // Step 3: Add overlay
+            let finalImage = processed.addingMetadataOverlay(
+                ndc: pillScanViewModel.currentTransaction?.drug?.ndc ?? "",
+                user: user,
+                count: cameraService.stableCount,
+                rx: pillScanViewModel.currentTransaction?.rx_no ?? "",
+                location: locationService.locationString,
+                timestamp: timestamp,
+                fileSizeKB: fileSizeKB
+            )
+
+            // Step 4: Save
+            savedPath = PhotoFileManager.shared.saveImage(finalImage)
         }
         
-        pillScanViewModel.addTransactionDetailToCurrentTransaction(
-            pillCount: Int32(cameraService.stableCount),
-            imagePath: savedPath,
-            type: pillScanViewModel.currentControlledStep.rawValue
-        )
+        
+        if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue{
+            pillScanViewModel.addCurrentOpenPillCount += cameraService.stableCount
+        }else {
+            pillScanViewModel.addTransactionDetailToCurrentTransaction(
+                pillCount: Int32(cameraService.stableCount),
+                imagePath: savedPath,
+                type: pillScanViewModel.currentControlledStep.rawValue
+            )
+        }
     }
     
     private func handleComplete() {
-        
         let stepTotal = Int(pillScanViewModel.getTotalCuntForCurrentStep())
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
@@ -959,9 +1025,9 @@ extension OPillCountView {
         
         // Last step for normal flowz
         if nextStep == nil {
-            if pillScanViewModel.currentTransaction?.is_from_pms != true {
+            if pillScanViewModel.currentTransaction?.is_from_pms != true && pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                 showNoteOption = true
-            } else {
+            } else  {
                 showConfirmCompletionPopup = true
             }
             return

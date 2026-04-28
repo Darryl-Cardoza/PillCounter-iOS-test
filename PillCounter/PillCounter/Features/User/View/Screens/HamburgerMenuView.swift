@@ -313,7 +313,7 @@ struct HamburgerMenuView: View {
             router.selectedPillScanningType = .FIXED
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.barcodeScanning)))))
+                    .login(.dashboard(.pillCount(.barcodeScanning(.barcode))))))
             
         case .UnsyncedTransaction:
             router.navigate(
@@ -327,7 +327,7 @@ struct HamburgerMenuView: View {
             router.selectedPillScanningType = .REGULAR
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.barcodeScanning)))))
+                    .login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
 
         case .Logout:
             Task {

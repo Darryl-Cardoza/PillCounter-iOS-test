@@ -1,10 +1,22 @@
 //
 //  HL7CompletionBuilder.swift
+//  PillCounter
 //
 
 import ComposeApp
+import UIKit
+import Darwin
 
-// MARK: - CONFIG
+// MARK: - Constants
+
+private enum HL7BuilderConstants {
+    static let imagePort = 8443
+    static let encodingCharacters = "^~\\&"
+    static let processingId = "P"
+    static let versionId = "2.5"
+}
+
+// MARK: - Config
 
 struct HL7Config {
     let sendingApplication: String
@@ -15,73 +27,107 @@ struct HL7Config {
 }
 
 final class HL7ConfigProvider {
-    
+
     static func getConfig(user: UserEntity?) -> HL7Config {
         return HL7Config(
-            sendingApplication: Bundle.main.bundleIdentifier ?? "UNKNOWN_APP",
-            sendingFacility: user?.pharmacy_name ?? "UNKNOWN_FACILITY",
+            sendingApplication: "PillCounter",
+            sendingFacility: "PillCounter-\(UIDevice.current.model)",
             receivingApplication: "PMS",
-            receivingFacility: user?.pharmacy_name ?? "UNKNOWN_FACILITY",
-            versionId: "2.5"
+            receivingFacility: "PHARMACY",
+            versionId: HL7BuilderConstants.versionId
         )
     }
 }
 
-// MARK: - BUILDER
+// MARK: - Native Network Utils
+// iOS equivalent of Android's NetworkUtils.getLocalIpAddress()
+
+enum iOSNetworkUtils {
+
+    /// Returns the device's current Wi-Fi / LAN IPv4 address, or nil if unavailable.
+    /// Prefers en0 (Wi-Fi), falls back to en1. Skips loopback (127.x.x.x).
+    static func getLocalIPAddress() -> String? {
+        var address: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else { return nil }
+        defer { freeifaddrs(ifaddr) }
+
+        var ptr = firstAddr
+        while true {
+            let interface = ptr.pointee
+            let addrFamily = interface.ifa_addr.pointee.sa_family
+
+            if addrFamily == UInt8(AF_INET) {
+                let name = String(cString: interface.ifa_name)
+                // en0 = Wi-Fi, en1 = Ethernet adapter (iPad etc.)
+                if name == "en0" || (address == nil && name == "en1") {
+                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    if getnameinfo(
+                        interface.ifa_addr,
+                        socklen_t(interface.ifa_addr.pointee.sa_len),
+                        &hostname,
+                        socklen_t(hostname.count),
+                        nil,
+                        0,
+                        NI_NUMERICHOST
+                    ) == 0 {
+                        address = String(cString: hostname)
+                    }
+                    // Stop as soon as we find en0
+                    if name == "en0" { break }
+                }
+            }
+
+            guard let next = ptr.pointee.ifa_next else { break }
+            ptr = next
+        }
+
+        return address
+    }
+}
+
+// MARK: - Builder
 
 final class HL7CompletionBuilder {
     
+
+    // MARK: - Dispense Message (RDS O13)
+
     func buildCompletionMessage(
         txn: PillCountTransactionEntity,
         user: UserEntity?
     ) -> String {
-        
-        let timestamp = currentHL7Timestamp()
-        let messageId = UUID().uuidString
-        let config = HL7ConfigProvider.getConfig(user: user)
-        
-        // MARK: Header
-        let header = MessageHeaderData(
-            fieldSeparator: "|",
-            encodingCharacters: HL7Constants.shared.ENCODING_CHARACTERS,
-            sendingApplication: config.sendingApplication,
-            sendingFacility: config.sendingFacility,
-            receivingApplication: config.receivingApplication,
-            receivingFacility: config.receivingFacility,
-            messageDateTime: timestamp,
-            messageType: "RDS",
-            triggerEvent: "O13",
-            messageControlId: messageId,
-            processingId: "P",
-            versionId: config.versionId,
-            countryCode: nil
-        )
-        
-        // MARK: Drug
+
+        let now = currentHL7Timestamp()
+        let messageId = "\(Int64(Date().timeIntervalSince1970 * 1000))"
+
+        let details = pillCountDetails(from: txn)
+        let totalCount = details
+            .filter { !$0.is_deleted }
+            .map { Int($0.pill_count) }
+            .reduce(0, +)
+
         guard let drug = txn.drug else {
-            fatalError("Drug mapping missing for txn_id: \(txn.txn_id)")
+            fatalError("Drug missing")
         }
-        
-        let dispensedQty = calculateDispensed(from: txn)
-        let requestedQty = Int(txn.target_count)
-        
-        // MARK: DISPENSE
+
         let dispense = DispenseData(
-            dispenseSubId: nil,
+            dispenseSubId: "1",
             drugCode: drug.ndc ?? "",
             drugName: drug.drug_name ?? "",
             drugCodeSystem: "NDC",
-            dateTimeDispensed: timestamp,
-            quantityDispensed: "\(dispensedQty)",
-            unitCode: resolveUnitCode(from: txn),
-            unitText: resolveUnitText(from: txn),
+            dateTimeDispensed: now,
+            quantityDispensed: "\(totalCount)",
+            unitCode: "TAB",
+            unitText: "Tablets",
             dosageFormCode: nil,
-            dosageFormText: drug.drug_type,
-            prescriptionNumber: txn.rx_no,
+            dosageFormText: nil,
+            prescriptionNumber: txn.rx_no ?? "\(txn.txn_id)",
             pharmacistId: user?.user_id,
             pharmacistFamilyName: nil,
-            pharmacistGivenName: user?.name,
-            substituteCode: txn.is_substitute ? "1" : "0",
+            pharmacistGivenName: user?.fname,
+            substituteCode: nil,
             deliverToLocation: user?.pharmacy_name,
             needsHumanReview: nil,
             dispensingNotes: txn.note,
@@ -91,49 +137,53 @@ final class HL7CompletionBuilder {
             cellId: nil,
             cellLocation: nil
         )
-        
-        // MARK: ORDER
+
         let order = OrderData(
             orderControl: "RE",
-            placerOrderId: txn.rx_no ?? "",
-            placerOrderNamespace: config.sendingFacility,
+            placerOrderId: txn.rx_no ?? "\(txn.txn_id)",
+//            placerOrderId: "RX100002",
+            placerOrderNamespace: nil,
             fillerOrderId: nil,
             fillerOrderNamespace: nil,
-            orderStatus: txn.status,
-            orderDateTime: timestamp,
-            orderingProviderId: user?.user_id,
+            orderStatus: "CM",
+            orderDateTime: nil,
+            orderingProviderId: nil,
             orderingProviderFamilyName: nil,
-            orderingProviderGivenName: user?.name,
-            orderingFacility: config.sendingFacility
+            orderingProviderGivenName: nil,
+            orderingFacility: nil
         )
-        
-        // MARK: NOTE (Partial / Full / I OWE YOU)
-        let note = NoteData(
-            setId: "1",
-            sourceOfComment: "L",
-            comment: buildCompletionNote(
-                requested: requestedQty,
-                dispensed: dispensedQty
-            ),
-            commentType: "INFO"
-        )
-        
-        // MARK: OBX
-        let auditOBX = buildAuditOBX(user: user)
-        let imageOBX = buildImageOBX(txn: txn)
 
-        
-        let allOBX = auditOBX + imageOBX
-        
-        // MARK: MESSAGE
+        let patient = PatientData(
+            patientId: txn.rx_no ?? "\(txn.txn_id)",
+            patientIdAssigningAuthority: nil,
+            patientIdType: nil,
+            familyName: nil,
+            givenName: nil,
+            middleName: nil,
+            dateOfBirth: nil,
+            sex: nil,
+            streetAddress: nil,
+            city: nil,
+            state: nil,
+            zipCode: nil,
+            country: nil
+        )
+
         let message = CompleteHL7Message(
             messageId: messageId,
             messageType: "RDS",
             triggerEvent: "O13",
-            timestamp: timestamp,
-            sendingFacility: config.sendingFacility,
-            header: header,
-            patient: buildPatient(txn: txn),
+            timestamp: now,
+            sendingFacility: "ROBOT",
+
+            header: buildHeaderStyle(
+                type: "RDS",
+                trigger: "O13",
+                time: now,
+                messageId: messageId
+            ),
+
+            patient: patient,
             visit: nil,
             order: order,
             medications: [],
@@ -144,172 +194,362 @@ final class HL7CompletionBuilder {
             inventoryItems: [],
             inventory: nil,
             acknowledgment: nil,
-            notes: [note],
+            notes: buildCommonNotes(txn: txn, totalCount: totalCount),
             customSegments: [],
-            obxSegments: allOBX,
+            obxSegments: buildImageOBX(
+                txn: txn,
+                details: details,
+                observationId: "DISP_IMG",
+                label: "Dispense Image"
+            ),
             errors: []
         )
-        
+
         return message.toHL7String()
     }
-}
+    
+    func buildHeaderStyle(
+        type: String,
+        trigger: String,
+        time: String,
+        messageId: String
+    ) -> MessageHeaderData {
 
-// MARK: - OBX BUILDERS
-private func buildAuditOBX(user: UserEntity?) -> [ObservationData] {
-    
-    let timestamp = currentHL7Timestamp()
-    
-    return [
-        ObservationData(
-            setId: "1",
-            valueType: "ST",
-            observationId: "USER_ID",
-            observationText: nil,
-            codingSystem: nil,
-            observationValue: user?.user_id ?? "",
-            resultStatus: "F"
-        ),
-        ObservationData(
-            setId: "2",
-            valueType: "TS",
-            observationId: "TIMESTAMP",
-            observationText: nil,
-            codingSystem: nil,
-            observationValue: timestamp,
-            resultStatus: "F"
+        return MessageHeaderData(
+            fieldSeparator: "|",
+            encodingCharacters: "^~\\&",
+            sendingApplication: "PillCounter",
+            sendingFacility: "ROBOT",             
+            receivingApplication: "PMS",
+            receivingFacility: "PHARMACY",
+            messageDateTime: time,
+            messageType: type,
+            triggerEvent: trigger,
+            messageControlId: messageId,
+            processingId: "P",
+            versionId: "2.5",
+            countryCode: nil
         )
-    ]
+    }
+
+  
+    func buildInventoryMessage(
+        batch: BatchCountEntity,
+        user: UserEntity?
+    ) -> String {
+
+        let now = currentHL7Timestamp()
+        let messageId = "RES\(Int(Date().timeIntervalSince1970))"
+
+        let requestId = batch.req_id_from_pms ?? ""
+        let orderId = batch.bucket_id ?? ""
+
+        let txns = PillsDataLocalStorage.shared
+            .fetchTransactionsByBatch(batchId: batch.batch_id)
+
+        // MARK: GROUPING
+        struct Key: Hashable {
+            let ndc: String
+            let name: String
+            let lot: String
+            let expiry: String
+        }
+
+        var grouped: [Key: (opened: Int32, sealed: Int32)] = [:]
+
+        for txn in txns {
+
+            guard let drug = txn.drug else { continue }
+
+            let ndc = drug.ndc ?? ""
+            let name = drug.drug_name ?? ""
+            let lot = txn.lot_no ?? ""
+            let expiry = txn.expiry ?? ""
+            let packageQty = drug.package_qty
+
+            let opened = txn.loose_qty
+            let sealed = txn.bottle_qty * packageQty
+
+            let key = Key(ndc: ndc, name: name, lot: lot, expiry: expiry)
+
+            var existing = grouped[key] ?? (0, 0)
+            existing.opened += opened
+            existing.sealed += sealed
+            grouped[key] = existing
+        }
+
+        // MARK: BUILD HL7 STRING
+
+        var hl7 = ""
+
+        //  HEADER
+        hl7 += "MSH|^~\\&|PILLCOUNTER|STORE|PMS|PHARMACY|\(now)||INR^U05|\(messageId)|P|2.5\n"
+        hl7 += "MSA|AA|\(requestId)\n"
+        hl7 += "ORC|RE|\(orderId)\n\n"
+
+        var index = 1
+
+        for (key, value) in grouped {
+
+            let total = value.opened + value.sealed
+
+            // INV
+            hl7 += "INV|\(index)|\(key.ndc)^\(key.name)||||||||||\(total)|||||\n"
+
+            //  ZIN
+            if value.opened == 0 && value.sealed == 0 {
+                hl7 += "ZIN|\(index)|NA|0||\n"
+            } else {
+                if value.opened > 0 {
+                    hl7 += "ZIN|\(index)|OPENED|\(value.opened)|\(key.lot)|\(key.expiry)\n"
+                }
+                if value.sealed > 0 {
+                    hl7 += "ZIN|\(index)|SEALED|\(value.sealed)|\(key.lot)|\(key.expiry)\n"
+                }
+            }
+
+            hl7 += "\n"
+            index += 1
+        }
+
+        return hl7
+    }
 }
 
-private func buildImageOBX(txn: PillCountTransactionEntity) -> [ObservationData] {
-    
-    guard let details = txn.pillCountTransactionDetails as? Set<PillCountTransactionDetailsEntity> else {
-        return []
+// MARK: - Shared Private Helpers
+
+private extension HL7CompletionBuilder {
+
+    // MARK: Header Builder
+
+    func buildHeader(
+        type: String,
+        trigger: String,
+        time: String,
+        config: HL7Config,
+        messageId: String
+    ) -> MessageHeaderData {
+        return MessageHeaderData(
+            fieldSeparator: "|",
+            encodingCharacters: HL7BuilderConstants.encodingCharacters,
+            sendingApplication: config.sendingApplication,
+            sendingFacility: config.sendingFacility,
+            receivingApplication: config.receivingApplication,
+            receivingFacility: config.receivingFacility,
+            messageDateTime: time,
+            messageType: type,
+            triggerEvent: trigger,
+            messageControlId: messageId,
+            processingId: HL7BuilderConstants.processingId,
+            versionId: config.versionId,
+            countryCode: nil
+        )
     }
-    
-    var obxList: [ObservationData] = []
-    var index = 10
-    
-    for detail in details where !detail.is_deleted {
+
+    // MARK: Image OBX Builder
+    func buildImageOBX(
+        txn: PillCountTransactionEntity,
+        details: [PillCountTransactionDetailsEntity],
+        observationId: String,
+        label: String
+    ) -> [ObservationData] {
         
-        guard let imagePath = detail.image_path else { continue }
+        var obxList: [ObservationData] = []
         
-        let type = mapType(detail.type ?? "UNKNOWN")
-        
-        obxList.append(
-            ObservationData(
-                setId: "\(index)",
+        for (index, detail) in details.enumerated() {
+            
+            let count = detail.pill_count
+            let type = detail.type ?? "UNKNOWN"
+            
+            let fileName: String
+            if let path = detail.image_path {
+                fileName = (path as NSString).lastPathComponent
+            } else {
+                fileName = ""
+            }
+            
+            let observationValue = "count=\(count)|type=\(type)|image=\(fileName)"
+            
+            let obx = ObservationData(
+                setId: "\(index + 1)",
                 valueType: "ST",
-                observationId: "IMAGE_\(type)",
-                observationText: type,
+                observationId: observationId,
+                observationText: "\(label) \(index + 1)",
                 codingSystem: "",
-                observationValue: imagePath,
+                observationValue: observationValue,
                 resultStatus: "F"
             )
-        )
+            
+            obxList.append(obx)
+        }
         
+        // Barcode Image (same as Android)
+        if let barcodePath = txn.barcode_image,
+           !barcodePath.isEmpty {
+            
+            let fileName = (barcodePath as NSString).lastPathComponent
+            
+            let barcodeObx = ObservationData(
+                setId: "\(obxList.count + 1)",
+                valueType: "ST",
+                observationId: observationId,
+                observationText: "Barcode Image",
+                codingSystem: "",
+                observationValue: "count=0|type=SCAN|image=\(fileName)",
+                resultStatus: "F"
+            )
+            
+            obxList.append(barcodeObx)
+        }
+        
+        return obxList
+    }
+
+    // MARK: Notes Builder
+    func buildCommonNotes(
+        txn: PillCountTransactionEntity,
+        totalCount: Int
+    ) -> [NoteData] {
+        
+        var notes: [NoteData] = []
+        var index = 1
+
+        notes.append(
+            NoteData(
+                setId: "\(index)",
+                sourceOfComment: "L",
+                comment: "Transaction completed",
+                commentType: "INFO"
+            )
+        )
         index += 1
+
+        notes.append(
+            NoteData(
+                setId: "\(index)",
+                sourceOfComment: "L",
+                comment: "Total Count: \(totalCount)",
+                commentType: "INFO"
+            )
+        )
+        index += 1
+
+        notes.append(
+            NoteData(
+                setId: "\(index)",
+                sourceOfComment: "L",
+                comment: "Transaction Id: \(txn.txn_id)",
+                commentType: "INFO"
+            )
+        )
+        index += 1
+
+        if let note = txn.note,
+           !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+
+            notes.append(
+                NoteData(
+                    setId: "\(index)",
+                    sourceOfComment: "L",
+                    comment: note,
+                    commentType: "INFO"
+                )
+            )
+        }
+
+        return notes
     }
     
-    // txn level image
-    if let txnImage = txn.barcode_image {
-        obxList.append(
-            ObservationData(
-                setId: "\(index)",
-                valueType: "ST",
-                observationId: "IMAGE_FINAL",
-                observationText: "FINAL",
-                codingSystem: "",
-                observationValue: txnImage,
-                resultStatus: "F"
-            )
+    // MARK: Patient Builder
+
+    func buildPatient(txn: PillCountTransactionEntity) -> PatientData? {
+        guard let name = txn.patient_name else { return nil }
+
+        let parts = name.split(separator: " ")
+
+        return PatientData(
+            patientId: txn.rx_no ?? UUID().uuidString,
+            patientIdAssigningAuthority: nil,
+            patientIdType: "MR",
+            familyName: parts.last.map(String.init),
+            givenName: parts.first.map(String.init),
+            middleName: nil,
+            dateOfBirth: nil,
+            sex: nil,
+            streetAddress: nil,
+            city: nil,
+            state: nil,
+            zipCode: nil,
+            country: nil
         )
     }
     
-    return obxList
-}
+    func buildZINSegments(
+        invIndex: Int,
+        opened: Int32,
+        sealed: Int32,
+        lot: String?,
+        expiry: String?
+    ) -> [CustomSegmentData] {
 
+        func makeZIN(_ type: String, _ qty: Int32) -> CustomSegmentData {
+            CustomSegmentData(
+                segmentType: "ZIN",
+                field1: "\(invIndex)",
+                field2: type,
+                field3: "\(qty)",
+                field4: lot ?? "",
+                field5: expiry ?? "",
+                field6: nil,
+                allFields: [
+                    1: "\(invIndex)",
+                    2: type,
+                    3: "\(qty)",
+                    4: lot ?? "",
+                    5: expiry ?? ""
+                ]
+            )
+        }
 
+        if opened == 0 && sealed == 0 {
+            return [makeZIN("NA", 0)]
+        }
 
+        var segments: [CustomSegmentData] = []
 
-// MARK: - HELPERS
+        if opened > 0 {
+            segments.append(makeZIN("OPENED", opened))
+        }
 
-private func buildCompletionNote(
-    requested: Int,
-    dispensed: Int
-) -> String {
-    
-    let remaining = requested - dispensed
-    
-    if dispensed == 0 {
-        return "NO FILL - I OWE YOU \(requested)"
+        if sealed > 0 {
+            segments.append(makeZIN("SEALED", sealed))
+        }
+
+        return segments
     }
-    
-    if dispensed < requested {
-        return "PARTIAL FILL - DISPENSED: \(dispensed) | REMAINING: \(remaining)"
-    }
-    
-    return "FULL FILL - DISPENSED: \(dispensed)"
-}
 
-private func calculateDispensed(from txn: PillCountTransactionEntity) -> Int {
-    
-    guard let details = txn.pillCountTransactionDetails as? Set<PillCountTransactionDetailsEntity> else {
-        return Int(txn.target_count)
-    }
-    
-    let total = details
-        .filter { !$0.is_deleted }
-        .map { Int($0.pill_count) }
-        .reduce(0, +)
-    
-    return total > 0 ? total : Int(txn.target_count)
-}
+    // MARK: Detail Extractor
 
-private func mapType(_ type: String) -> String {
-    switch type {
-    case "CONTAINER_INITIATE": return "CONTAINER_INIT"
-    case "TARGET_VERIFICATION": return "TARGET"
-    case "TARGET_REVERIFICATION": return "TARGET_RECHECK"
-    case "VIAL": return "VIAL"
-    case "CONTAINER_PENDING": return "PENDING"
-    default: return type
+    func pillCountDetails(
+        from txn: PillCountTransactionEntity
+    ) -> [PillCountTransactionDetailsEntity] {
+        return (txn.pillCountTransactionDetails as? Set<PillCountTransactionDetailsEntity>)
+            .map { Array($0) } ?? []
+    }
+
+    // MARK: Image URL Builder
+    // Mirrors Android: "https://deviceIp:port/images/fileName"
+
+    func buildImageUrl(deviceIp: String, fileName: String, port: Int) -> String {
+//        return "https://\(deviceIp):\(port)/images/\(fileName)"
+        return "\(fileName)"
     }
 }
 
-private func resolveUnitCode(from txn: PillCountTransactionEntity) -> String {
-    return "TAB"
-}
-
-private func resolveUnitText(from txn: PillCountTransactionEntity) -> String {
-    return "Tablet"
-}
+// MARK: - Timestamp
 
 private func currentHL7Timestamp() -> String {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyyMMddHHmmss"
     return formatter.string(from: Date())
-}
-
-private func buildPatient(txn: PillCountTransactionEntity) -> PatientData? {
-    
-    guard let name = txn.patient_name else { return nil }
-    
-    let parts = name.split(separator: " ")
-    
-    return PatientData(
-        patientId: txn.rx_no ?? UUID().uuidString,
-        patientIdAssigningAuthority: nil,
-        patientIdType: "MR",
-        familyName: parts.last.map(String.init),
-        givenName: parts.first.map(String.init),
-        middleName: nil,
-        dateOfBirth: nil,
-        sex: nil,
-        streetAddress: nil,
-        city: nil,
-        state: nil,
-        zipCode: nil,
-        country: nil
-    )
 }

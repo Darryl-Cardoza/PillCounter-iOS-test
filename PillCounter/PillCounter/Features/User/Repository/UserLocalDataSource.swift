@@ -10,7 +10,8 @@ import CoreData
 final class UserLocalDataSource {
     
     enum UserField: String {
-        case name = "name"
+        case fname = "fname"
+        case lname = "lname"
         case email = "email"
         case phoneNumber = "phone_number"
         case avatarUrl = "avatar_url"
@@ -56,7 +57,8 @@ final class UserLocalDataSource {
         if let profile = userDetails.profile {
             
             // save the profile details of the user.
-            entity.name = profile.fullName ?? ""
+            entity.fname = profile.fname
+            entity.lname = profile.lname
             entity.email  = profile.email ?? ""
             entity.phone_number = profile.phoneNumber ?? ""
             entity.avatar_url = profile.avatarURL ?? ""

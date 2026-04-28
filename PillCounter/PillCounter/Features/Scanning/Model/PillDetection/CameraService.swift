@@ -151,9 +151,14 @@ final class CameraService: NSObject, ObservableObject {
     /// STOPS CAMERA SESSION
     func stop() {
         cancelInactivityTimer()
+
         sessionQueue.async {
             guard self.session.isRunning else { return }
             self.session.stopRunning()
+        }
+
+        DispatchQueue.main.async {
+            self.previewLayer?.session = nil   // ✅ IMPORTANT
         }
     }
 

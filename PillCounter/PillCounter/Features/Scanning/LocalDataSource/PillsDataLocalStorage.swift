@@ -44,7 +44,6 @@ final class PillsDataLocalStorage {
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
         entity.drug_name = pillData.genericName
         entity.ndc = ndc  // this is the values stored that we are sending to the backend for calling the api.
-        entity.equivalence = ""
         entity.drug_type = ""
 
         CoreDataManager.shared.save(context: mainThreadContext)
@@ -53,9 +52,11 @@ final class PillsDataLocalStorage {
     // save mannual pill
     func saveManualPill(
         ndc: String,
+        gtin: String = "",
         drugId: Int64,
         drugName: String,
-        drugType: String = "",
+        drugType: String? = nil,
+        packageQty: Int32 = 0
     ) {
         let entity = DrugMasterEntity(context: mainThreadContext)
 
@@ -63,8 +64,9 @@ final class PillsDataLocalStorage {
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
         entity.drug_name = drugName
         entity.ndc = ndc
-        entity.equivalence = ""
+        entity.gtin = gtin
         entity.drug_type = drugType
+        entity.package_qty = packageQty
 
         CoreDataManager.shared.save(context: mainThreadContext)
     }
@@ -75,6 +77,16 @@ final class PillsDataLocalStorage {
         let request: NSFetchRequest<DrugMasterEntity> =
             DrugMasterEntity.fetchRequest()
         request.predicate = NSPredicate(format: "ndc == %@", ndc)
+        request.fetchLimit = 1
+
+        return try? mainThreadContext.fetch(request).first
+    }
+    
+    func getPillByGtin(by gtin: String) -> DrugMasterEntity? {
+
+        let request: NSFetchRequest<DrugMasterEntity> =
+            DrugMasterEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "gtin == %@", gtin)
         request.fetchLimit = 1
 
         return try? mainThreadContext.fetch(request).first
@@ -102,11 +114,16 @@ final class PillsDataLocalStorage {
         for user: UserEntity,
         drugId: Int64?,
         countType: CountType,
+        batchId: Int64? = nil,
         barcodeImagePath: String,
         isComingFromPms: Bool? = nil,
         drugName:String? = nil,
         targetCount: Int32? = nil,
-        isControlled: Bool? = nil
+        isControlled: Bool? = nil,
+        expirationDate: String? = nil,
+        lotNumber: String? = nil,
+        rxNo: String? = nil,
+        bucketId: String? = nil
     ) {
         let entity = PillCountTransactionEntity(context: mainThreadContext)
 
@@ -116,6 +133,8 @@ final class PillsDataLocalStorage {
         // drug_id -> this is for which drug we are creating the transaction for.
         entity.drug_id = drugId ?? 0
 
+        entity.batch_id = batchId ?? 0
+        entity.rx_no = rxNo
         // relation ship.
         // ONE DRUG --> MULTIPLE TRANSACTION --> THIS LINKS THE CREATED TRANSACTION TO THAT DRUG.
         if let drugId = drugId, let drugEntity = fetchDrugById(drugId) {
@@ -143,13 +162,14 @@ final class PillsDataLocalStorage {
         entity.target_count = targetCount ?? 0
         entity.is_ndc_verfied = false
         entity.user = user
-        print(
-            "User → id: \(user.user_id ?? ""), name: \(user.name ?? "-"), email: \(user.email ?? "-")"
-        )
-
+      
+        entity.expiry = expirationDate
+        entity.lot_no = lotNumber
+        entity.bucket_id = bucketId
         // finally save the transaction in core data.
         CoreDataManager.shared.save(context: mainThreadContext)
         debugPrintAllTransactions()
+        debugPrintFullDatabase()
     }
 
     // fetch pill count transaction.
@@ -333,6 +353,29 @@ final class PillsDataLocalStorage {
 
         request.predicate = NSPredicate(
             format: "user == %@ AND is_deleted == false AND count_type == %@ AND status == %@",
+            user,
+            countType.rawValue,
+            CountStatus.PARTIAL.rawValue
+        )
+
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "is_from_pms", ascending: false),
+            NSSortDescriptor(key: "created_at", ascending: false)
+        ]
+
+        return (try? mainThreadContext.fetch(request)) ?? []
+    }
+    
+    func fetchAllTransactionFixedOrRegularPartialFromPms(
+        for user: UserEntity,
+        countType: CountType
+    ) -> [PillCountTransactionEntity] {
+
+        let request: NSFetchRequest<PillCountTransactionEntity> =
+            PillCountTransactionEntity.fetchRequest()
+
+        request.predicate = NSPredicate(
+            format: "user == %@ AND is_deleted == false AND count_type == %@ AND status == %@ AND is_from_pms == true",
             user,
             countType.rawValue,
             CountStatus.PARTIAL.rawValue
@@ -708,14 +751,62 @@ final class PillsDataLocalStorage {
 
         print("[DB][SYNC] After update → isSynced =", txn.is_synced)
     }
+    
+    func updateBatchStatus(batchId: Int64, status: String) {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
 
+        request.predicate = NSPredicate(format: "batch_id == %lld", batchId)
+
+        if let batch = try? mainThreadContext.fetch(request).first {
+            batch.status = status
+            CoreDataManager.shared.save(context: mainThreadContext)
+
+            print("Batch status updated to \(status)")
+        } else {
+            print("Batch not found")
+        }
+    }
+    
+    // Update Txn count for stock counts
+    func updateCounts(
+        txnId: Int64?,
+        bottleQty: Int32? = nil,
+        looseQty: Int32? = nil
+    ) {
+        guard let txnId = txnId else {
+            print("txnId is nil")
+            return
+        }
+        
+        guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+            print("No transaction found for txnId \(txnId)")
+            return
+        }
+
+        //  Add to existing values instead of replacing
+        if let bottleQty {
+            txn.bottle_qty += bottleQty
+        }
+
+        if let looseQty {
+            txn.loose_qty += looseQty
+        }
+
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+
+        print("Counts updated → bottle: \(txn.bottle_qty), loose: \(txn.loose_qty)")
+    }
+    
+    
     func clearAllLocalData() {
         
         let context = mainThreadContext
         let fileManager = FileManager.default
         
         do {
-            print("🧹 Clearing ALL local data...")
+            print("Clearing ALL local data...")
             
             // MARK: 1️⃣ Delete All Transaction Details
             let detailFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
@@ -740,7 +831,7 @@ final class PillsDataLocalStorage {
                     try? fileManager.removeItem(at: fileURL)
                 }
                 
-                print("🗂 All local image files removed.")
+                print("All local image files removed.")
             }
             
             // MARK: 5️⃣ Reset Transaction ID Counters
@@ -749,10 +840,10 @@ final class PillsDataLocalStorage {
             
             try context.save()
             
-            print("✅ All local data cleared successfully.")
+            print("All local data cleared successfully.")
             
         } catch {
-            print("❌ Failed to clear local data:", error)
+            print("Failed to clear local data:", error)
         }
     }
     
@@ -841,7 +932,7 @@ final class PillsDataLocalStorage {
     func updateNdcVerified(txnId: Int64, verified: Bool) {
 
         guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId) else {
-            print("❌ No transaction found for txnId \(txnId)")
+            print("No transaction found for txnId \(txnId)")
             return
         }
 
@@ -850,7 +941,7 @@ final class PillsDataLocalStorage {
 
         CoreDataManager.shared.save(context: mainThreadContext)
 
-        print("✅ NDC verification updated for txnId \(txnId) → \(verified)")
+        print("NDC verification updated for txnId \(txnId) → \(verified)")
     }
     
     // Update drugMaster data
@@ -858,7 +949,6 @@ final class PillsDataLocalStorage {
         drugId: Int64,
         drugName: String? = nil,
         ndc: String? = nil,
-        equivalence: String? = nil,
         drugType: String? = nil
     ) {
 
@@ -875,17 +965,13 @@ final class PillsDataLocalStorage {
             drug.ndc = ndc
         }
 
-        if let equivalence {
-            drug.equivalence = equivalence
-        }
-
         if let drugType {
             drug.drug_type = drugType
         }
 
         CoreDataManager.shared.save(context: mainThreadContext)
 
-        print("✅ Drug updated for id \(drugId)")
+        print("Drug updated for id \(drugId)")
     }
     
     
@@ -896,7 +982,7 @@ final class PillsDataLocalStorage {
 
         guard let txn = fetchPillCountTransactionByTransactionId(txnId: txnId),
               let drug = fetchDrugById(drugId) else {
-            print("❌ Failed to update txn drug")
+            print("Failed to update txn drug")
             return
         }
 
@@ -906,7 +992,7 @@ final class PillsDataLocalStorage {
 
         CoreDataManager.shared.save(context: mainThreadContext)
 
-        print("✅ Transaction \(txnId) updated with new drug \(drugId)")
+        print("Transaction \(txnId) updated with new drug \(drugId)")
     }
     
     //For Vial txn detail 
@@ -918,7 +1004,6 @@ final class PillsDataLocalStorage {
         let context = mainThreadContext
 
         context.performAndWait {
-
             // Delete existing vial
             softDeleteTransactionDetailsForStep(
                 txnId: txnId,
@@ -936,6 +1021,97 @@ final class PillsDataLocalStorage {
                 type: ControlledStep.vial.rawValue
             )
         }
+    }
+    
+    func debugPrintFullDatabase() {
+
+        print("\n================= 🧠 FULL DB DUMP =================")
+
+        // MARK: 🟦 BATCHES
+        let batchRequest: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        let batches = (try? mainThreadContext.fetch(batchRequest)) ?? []
+
+        print("\n📦 BATCHES: \(batches.count)")
+        for batch in batches {
+            print("""
+            ---------------- BATCH ----------------
+            🆔 Batch ID: \(batch.batch_id)
+            📅 Start: \(batch.start_date_time)
+            📦 Bucket: \(batch.bucket_id ?? "")
+            📊 Status: \(batch.status ?? "")
+            🗑️ Deleted: \(batch.is_deleted)
+            📡 From PMS: \(batch.is_from_pms)
+               requstId:\(batch.req_id_from_pms)
+            ---------------------------------------
+            """)
+        }
+
+        // MARK: 🟩 DRUG MASTER
+        let drugRequest: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
+        let drugs = (try? mainThreadContext.fetch(drugRequest)) ?? []
+
+        print("\n💊 DRUG MASTER: \(drugs.count)")
+        for drug in drugs {
+            print("""
+            ---------------- DRUG ----------------
+            🆔 Drug ID: \(drug.drug_id)
+            💊 Name: \(drug.drug_name ?? "")
+            🔢 NDC: \(drug.ndc ?? "")
+            📦 GTIN: \(drug.gtin ?? "")
+            📊 Package Qty: \(drug.package_qty)
+            -------------------------------------
+            """)
+        }
+
+        // MARK: 🟥 TRANSACTIONS
+        let txnRequest: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        let txns = (try? mainThreadContext.fetch(txnRequest)) ?? []
+
+        print("\n🧾 TRANSACTIONS: \(txns.count)")
+        for txn in txns {
+            print("""
+            ---------------- TXN ----------------
+            🆔 Txn ID: \(txn.txn_id)
+            📦 Batch ID: \(txn.batch_id)
+            💊 Drug: \(txn.drug?.drug_name ?? "")
+            🔢 NDC: \(txn.drug?.ndc ?? "")
+            📦 Bucket: \(txn.bucket_id ?? "")
+            📅 Created: \(txn.created_at)
+
+            🧴 Bottle Qty: \(txn.bottle_qty)
+            💊 Loose Qty: \(txn.loose_qty)
+            🎯 Target: \(txn.target_count)
+
+            📆 Expiry: \(txn.expiry ?? "")
+            🏷 Lot: \(txn.lot_no ?? "")
+
+            📡 From PMS: \(txn.is_from_pms)
+            🔄 Synced: \(txn.is_synced)
+            🗑️ Deleted: \(txn.is_deleted)
+            ------------------------------------
+            """)
+        }
+
+        // MARK: 🟨 TRANSACTION DETAILS
+        let detailRequest: NSFetchRequest<PillCountTransactionDetailsEntity> =
+            PillCountTransactionDetailsEntity.fetchRequest()
+        let details = (try? mainThreadContext.fetch(detailRequest)) ?? []
+
+        print("\n📑 TXN DETAILS: \(details.count)")
+        for d in details {
+            print("""
+            ------------- DETAIL -------------
+            🆔 Detail ID: \(d.txn_details_id)
+            🔗 Txn ID: \(d.txn_id)
+            💊 Count: \(d.pill_count)
+            🖼 Image: \(d.image_path ?? "")
+            🧭 Type: \(d.type ?? "")
+            🗑️ Deleted: \(d.is_deleted)
+            ----------------------------------
+            """)
+        }
+
+        print("\n================= END DB DUMP =================\n")
     }
 
     // MARK: DEBUGGING
@@ -957,6 +1133,12 @@ final class PillsDataLocalStorage {
                     🗑️ Deleted: \(txn.is_deleted)
                        isComingFromPms \(txn.is_from_pms)
                        isSynced \(txn.is_synced)
+                       package quantity \(txn.drug?.package_qty ?? 0)
+                       expirary \(txn.expiry)
+                       lotno \(txn.lot_no)
+                       bucket \(txn.bucket_id ?? "")
+                       drugTyp \(txn.drug?.drug_type ?? "")
+                       ndc\(txn.drug?.ndc)
                     ---------------------------------
                     ------------------
                     """)

@@ -8,7 +8,9 @@
 import Foundation
 
 struct UpdateUserProfileRequest: Codable {
-    let fullName: String?
+//    let fullName: String?
+    let fname: String?
+    let lname: String?
     let pharmacyName: String?
     let phoneNumber: String?
     let npiID: String?
@@ -19,7 +21,8 @@ struct UpdateUserProfileRequest: Codable {
     let timezone: String?
 
     enum CodingKeys: String, CodingKey {
-        case fullName = "full_name"
+        case fname = "fname"
+        case lname = "lname"
         case pharmacyName = "pharmacy_name"
         case phoneNumber = "phone_number"
         case npiID = "npi_id"

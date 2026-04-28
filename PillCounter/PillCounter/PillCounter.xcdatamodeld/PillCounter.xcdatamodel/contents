@@ -1,12 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24512" systemVersion="25D2128" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24837" systemVersion="25D2128" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="BatchCountEntity" representedClassName="BatchCountEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="bucket_id" optional="YES" attributeType="String"/>
+        <attribute name="end_date_time" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="is_deleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="is_from_pms" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="req_id_from_pms" optional="YES" attributeType="String"/>
+        <attribute name="start_date_time" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+    </entity>
     <entity name="DrugMasterEntity" representedClassName="DrugMasterEntity" syncable="YES" codeGenerationType="class">
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_name" optional="YES" attributeType="String"/>
         <attribute name="drug_type" optional="YES" attributeType="String"/>
-        <attribute name="equivalence" optional="YES" attributeType="String"/>
+        <attribute name="gtin" optional="YES" attributeType="String"/>
         <attribute name="ndc" attributeType="String"/>
+        <attribute name="package_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PillCountTransactionEntity" inverseName="drug" inverseEntity="PillCountTransactionEntity"/>
     </entity>
     <entity name="PillCountTransactionDetailsEntity" representedClassName="PillCountTransactionDetailsEntity" syncable="YES" codeGenerationType="class">
@@ -23,6 +35,9 @@
     </entity>
     <entity name="PillCountTransactionEntity" representedClassName="PillCountTransactionEntity" syncable="YES" codeGenerationType="class">
         <attribute name="barcode_image" optional="YES" attributeType="String"/>
+        <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="bucket_id" optional="YES" attributeType="String"/>
         <attribute name="count_type" optional="YES" attributeType="String"/>
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -33,6 +48,7 @@
         <attribute name="is_substitute" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_synced" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="local_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="loose_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="lot_no" optional="YES" attributeType="String"/>
         <attribute name="note" optional="YES" attributeType="String"/>
         <attribute name="patient_name" optional="YES" attributeType="String"/>
@@ -50,11 +66,12 @@
         <attribute name="avatar_url" optional="YES" attributeType="String"/>
         <attribute name="created_at" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="email" optional="YES" attributeType="String"/>
+        <attribute name="fname" optional="YES" attributeType="String"/>
         <attribute name="is_profile_completed" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_verified" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="language" optional="YES" attributeType="String"/>
+        <attribute name="lname" optional="YES" attributeType="String"/>
         <attribute name="local_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="notifications" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="npi_id" optional="YES" attributeType="String"/>
         <attribute name="pharmacy_name" optional="YES" attributeType="String"/>

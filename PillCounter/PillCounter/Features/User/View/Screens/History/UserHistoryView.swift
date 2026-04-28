@@ -377,7 +377,7 @@ struct TransactionRow: View {
             
 
             HStack(spacing: 15) {
-                if targetCount != count && txn.status ==  "partial" {
+                if txn.status ==  CountStatus.PARTIAL.rawValue && targetCount != count {
                     Image("partial")
                         .resizable()
                         .scaledToFit()
@@ -430,11 +430,9 @@ struct TransactionRow: View {
 
     func convertInt64ToDate(_ timestamp: Int64) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
-
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "dd-MM-yyyy hh:mm a"
-
         return formatter.string(from: date)
     }
     

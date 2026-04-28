@@ -35,12 +35,20 @@ public enum DashboardFlow: Hashable, Codable {
     case fixedCountPartial
     case regularCountPartial
     case pillCount(ScanningFlow)
+
 }
 
 public enum ScanningFlow: Codable, Hashable {
-    case barcodeScanning
+    case barcodeScanning(ScanType)
     case pillCountView
     case controlledDrug(ControlFlow)
+    case stockCount(StockCountFlow)
+}
+
+public enum StockCountFlow: Codable, Hashable {
+    case stockCountBatchDetail
+    case stockCountPartialBatchListScreen
+    case stockCountPendingBatchListScreen
 }
 
 public enum ControlFlow: Hashable, Codable {
@@ -52,6 +60,23 @@ public enum UserFlow: Hashable, Codable {
     case userSettings(HamburgerMenuFLow)
 }
 
+
+public enum ScanType: Codable, Hashable {
+    case barcode
+    case stockCount
+    case rx_label
+
+    var instructionText: String {
+        switch self {
+        case .barcode:
+            return NSLocalizedString("SCAN_BARCODE", comment: "")
+        case .stockCount:
+            return NSLocalizedString("SCAN_STOCK_COUNT_BARCODE", comment: "")
+        case .rx_label:
+            return NSLocalizedString("SCAN_RX_LABEL_BARCODE", comment: "")
+        }
+    }
+}
 
 
 public enum HamburgerMenuFLow: Hashable, Codable {
@@ -186,7 +211,6 @@ public enum HistoryFilterType: String, Codable, Hashable {
 
 
 enum ControlledStep: String, CaseIterable {
-    
     case scan = "SCAN"
     case containerInitiate = "CONTAINER_INITIATE"
     case targetVerification = "TARGET_VERIFICATION"
@@ -197,17 +221,27 @@ enum ControlledStep: String, CaseIterable {
     var displayText: String {
         switch self {
         case .scan:
-            return "Scan Container QR Code"
+            return NSLocalizedString("CONTROLLED_SCAN", comment: "")
         case .containerInitiate:
-            return "Count all pills from container"
+            return NSLocalizedString("CONTROLLED_CONTAINER_INITIATE", comment: "")
         case .targetVerification:
-            return "Count Prescribed quantity"
+            return NSLocalizedString("CONTROLLED_TARGET_VERIFICATION", comment: "")
         case .targetReverification:
-            return "Recount Prescribed Quantity."
+            return NSLocalizedString("CONTROLLED_TARGET_REVERIFICATION", comment: "")
         case .vial:
-            return "Take picture of the counted Pills Vial"
+            return NSLocalizedString("CONTROLLED_VIAL", comment: "")
         case .containerPending:
-            return "Count all remaining Pills from Container"
+            return NSLocalizedString("CONTROLLED_CONTAINER_PENDING", comment: "")
         }
     }
+}
+
+public enum StockCountOption: Hashable {
+    case newBatch
+    case existingBatch
+}
+
+public enum StockCountOptionContainerStatus: Hashable {
+    case sealed
+    case opened
 }

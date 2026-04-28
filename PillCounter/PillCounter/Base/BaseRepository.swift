@@ -108,7 +108,7 @@ extension BaseRepositoryProtocol {
                     throw APIError.serverError(
                         statusCode: httpResponse.statusCode)
                 }
-
+                
             } catch {
                 if attempt < maxRetries {
                     attempt += 1
@@ -139,7 +139,7 @@ extension BaseRepositoryProtocol {
     }
     
     private static func logRequest(_ request: URLRequest, body: [String: Any]?) {
-        #if DEBUG
+//        #if DEBUG
         print("\n========================= 🌐 API REQUEST =========================")
         print("➡️ URL: \(request.url?.absoluteString ?? "nil")")
         print("➡️ Method: \(request.httpMethod ?? "nil")")
@@ -162,7 +162,7 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
-        #endif
+//        #endif
     }
     
     private static func logResponse(_ data: Data, _ response: URLResponse?) {

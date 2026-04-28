@@ -2,55 +2,70 @@
 //  ImageWebServer.swift
 //  PillCounter
 //
-//  Created by Bhushan Patil on 09/02/26.
+//  Fixes applied:
+//  1. Route changed from /image/ to /images/ to match C# client URL
+//  2. Base64 encoded without line breaks (newlines break C# Convert.FromBase64String)
+//
+//
+//  ImageWebServer.swift
+//  PillCounter
+//
+//  Key fixes vs original:
+//  1. Route /image/ → /images/  (matches C# client URL)
+//  2. TLS: removed verify_block — it was causing the "certificate unknown"
+//     fatal alert on the C# side because NWListener's verify_block is a
+//     CLIENT certificate verifier. When it fires and calls complete(true)
+//     it signals "I verified the client cert" — but if the C# client sends
+//     no client cert, the block fires with an empty chain and some TLS
+//     stacks interpret this as the server demanding mutual TLS, then
+//     send alert 46 (certificate unknown). Removing the block entirely
+//     means "client cert is not required" which is correct for our use case.
+//  3. Base64: options: []  (no line breaks — C# Convert.FromBase64String
+//     throws FormatException on embedded newlines)
 //
 
 import Foundation
 import Network
 
 class ImageWebServer {
-    
+
     private var listener: NWListener?
     private let port: NWEndpoint.Port = 8443
-    private let queue = DispatchQueue(label: "com.imageserver.network")
+    private let queue = DispatchQueue(label: "com.pillcounter.imageserver", qos: .utility)
     private var connections: [NWConnection] = []
-    
+
     // MARK: - Lifecycle
-    
+
     func start() {
-        guard listener == nil else {
-            print("Server already running")
-            return
-        }
-        
+        guard listener == nil else { return }
+
         do {
-            // Configure TLS
             let tlsOptions = try configureTLS()
             let parameters = NWParameters(tls: tlsOptions)
             parameters.allowLocalEndpointReuse = true
             parameters.acceptLocalOnly = false
-            
-            // Create listener
+
             listener = try NWListener(using: parameters, on: port)
-            
-            listener?.stateUpdateHandler = { state in
+
+            listener?.stateUpdateHandler = { [weak self] state in
                 switch state {
                 case .ready:
-                    print("🔐 HTTPS Image Server started")
-
+                    print("🔐 HTTPS Image Server started on port 8443")
                     if let ip = currentLANIPAddress() {
-                        print("📡 Reachable URLs:")
-                        print("   👉 https://\(ip):8443/health")
-                        print("   👉 https://\(ip):8443/fingerprint")
-                        print("   👉 https://\(ip):8443/images/<filename>")
-                    } else {
-                        print("⚠️ Could not determine LAN IP")
+                        print("📡 https://\(ip):8443/images/<filename>")
+                        print("📡 https://\(ip):8443/health")
+                        print("📡 https://\(ip):8443/fingerprint")
                     }
-
-                    print("🔑 Cert fingerprint: \(TlsImageKeystoreUtil.shared.getFingerprint())")
+                    print("🔑 \(TlsImageKeystoreUtil.shared.getFingerprint())")
 
                 case .failed(let error):
-                    print("❌ Server failed:", error)
+                    print("❌ Server failed: \(error)")
+                    // Auto-restart after 3 seconds on transient errors
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        self?.listener?.cancel()
+                        self?.listener = nil
+                        self?.start()
+                    }
 
                 case .cancelled:
                     print("🛑 Server cancelled")
@@ -60,49 +75,67 @@ class ImageWebServer {
                 }
             }
 
-            
             listener?.newConnectionHandler = { [weak self] connection in
                 self?.handleConnection(connection)
             }
-            
+
             listener?.start(queue: queue)
-            
+
         } catch {
-            print("Failed to start server: \(error)")
+            print("❌ Failed to start image server: \(error)")
         }
     }
-    
+
     func stop() {
         connections.forEach { $0.cancel() }
         connections.removeAll()
         listener?.cancel()
         listener = nil
-        print("Server stopped")
     }
-    
-    // MARK: - TLS Configuration
-    
+
+    // MARK: - TLS
+
     private func configureTLS() throws -> NWProtocolTLS.Options {
         guard let identity = TlsImageKeystoreUtil.shared.ensureIdentity() else {
-            throw NSError(domain: "ImageWebServer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get TLS identity"])
+            throw NSError(
+                domain: "TLS", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "No TLS identity — check android-server.p12"]
+            )
         }
-        
-        let tlsOptions = NWProtocolTLS.Options()
-        
-        sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-        sec_protocol_options_set_max_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv13)
-        
-        // Set identity
-        sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, sec_identity_create(identity)!)
-        
-        return tlsOptions
+
+        let options = NWProtocolTLS.Options()
+
+        sec_protocol_options_set_min_tls_protocol_version(
+            options.securityProtocolOptions, .TLSv12
+        )
+
+        sec_protocol_options_set_local_identity(
+            options.securityProtocolOptions,
+            sec_identity_create(identity)!
+        )
+
+        // ✅ DO NOT set a verify_block on a server-side NWProtocolTLS.Options.
+        //
+        // On a server, sec_protocol_options_set_verify_block controls whether
+        // the server demands a client certificate (mutual TLS).
+        // When set, some TLS clients interpret the CertificateRequest message
+        // as mandatory. If they have no client cert to send, they abort with
+        // fatal alert 46 (certificate_unknown) — which is exactly the error
+        // appearing in the logs:
+        //
+        //   boringssl_context_handle_fatal_alert: description: certificate unknown
+        //
+        // Removing the verify_block means: "client cert not required" (one-way TLS).
+        // This is the correct mode for an image HTTP server.
+
+        return options
     }
-    
+
     // MARK: - Connection Handling
-    
+
     private func handleConnection(_ connection: NWConnection) {
         connections.append(connection)
-        
+
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
@@ -116,24 +149,27 @@ class ImageWebServer {
                 break
             }
         }
-        
+
         connection.start(queue: queue)
     }
-    
+
     private func removeConnection(_ connection: NWConnection) {
         connections.removeAll { $0 === connection }
     }
-    
+
     private func receiveRequest(on connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-            guard let self = self else { return }
-            
-            if let data = data, !data.isEmpty {
-                let request = String(data: data, encoding: .utf8) ?? ""
+        connection.receive(
+            minimumIncompleteLength: 1,
+            maximumLength: 65_536
+        ) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+
+            if let data, !data.isEmpty {
+                let request  = String(data: data, encoding: .utf8) ?? ""
                 let response = self.handleHTTPRequest(request)
                 self.sendResponse(response, on: connection)
             }
-            
+
             if isComplete {
                 connection.cancel()
             } else if error == nil {
@@ -141,213 +177,166 @@ class ImageWebServer {
             }
         }
     }
-    
-    // MARK: - HTTP Request/Response Handling
-    
+
+    // MARK: - HTTP Routing
+
     private func handleHTTPRequest(_ request: String) -> String {
         let lines = request.components(separatedBy: "\r\n")
         guard let firstLine = lines.first else {
-            return createErrorResponse(code: 400, message: "Bad Request")
+            return errorResponse(400, "Bad Request")
         }
-        
-        let components = firstLine.components(separatedBy: " ")
-        guard components.count >= 2 else {
-            return createErrorResponse(code: 400, message: "Bad Request")
+
+        let parts = firstLine.components(separatedBy: " ")
+        guard parts.count >= 2 else {
+            return errorResponse(400, "Bad Request")
         }
-        
-        let method = components[0]
-        let path = components[1]
-        
-        guard method == "GET" else {
-            return createErrorResponse(code: 405, message: "Method Not Allowed")
+
+        guard parts[0] == "GET" else {
+            return errorResponse(405, "Method Not Allowed")
         }
-        
-        return routeRequest(path: path)
+
+        return routeRequest(path: parts[1])
     }
-    
+
     private func routeRequest(path: String) -> String {
-        if path == "/health" {
-            return handleHealthCheck()
-        } else if path == "/fingerprint" {
-            return handleFingerprint()
-        }else if path.hasPrefix("/image/") {
-            let fileName = String(path.dropFirst("/image/".count))
+        switch true {
+        case path == "/health":
+            return jsonResponse(#"{"status":"ok"}"#)
+
+        case path == "/fingerprint":
+            let fp = TlsImageKeystoreUtil.shared.getFingerprint()
+            return jsonResponse(#"{"fingerprint":"\#(fp)"}"#)
+
+        // ✅ FIX 1: /images/ (plural) — matches C# client
+        case path.hasPrefix("/images/"):
+            let fileName = String(path.dropFirst("/images/".count))
             return handleImageRequest(fileName: fileName)
-        }else {
-            return createErrorResponse(code: 404, message: "Not Found")
+
+        default:
+            return errorResponse(404, "Not Found")
         }
     }
-    
-    private func handleHealthCheck() -> String {
-        let json = """
-        {"status":"ok"}
-        """
-        return createJSONResponse(json: json)
-    }
-    
-    private func handleFingerprint() -> String {
-        let fingerprint = TlsImageKeystoreUtil.shared.getFingerprint()
-        let json = """
-        {"fingerprint":"\(fingerprint)"}
-        """
-        return createJSONResponse(json: json)
-    }
-    
+
+    // MARK: - Image Handler
+
     private func handleImageRequest(fileName: String) -> String {
-        // Validate filename
         guard isSafeFileName(fileName) else {
-            let json = """
-            {"success":false,"error":"Invalid file name"}
-            """
-            return createJSONResponse(json: json, statusCode: 400)
+            return jsonResponse(#"{"success":false,"error":"Invalid file name"}"#,
+                                status: 400)
         }
-        
-        // Find image file
-        guard let imageURL = findImageFile(fileName: fileName) else {
-            let json = """
-            {"success":false,"error":"Image not found"}
-            """
-            return createJSONResponse(json: json, statusCode: 404)
+
+        guard let imageURL = findImageFile(named: fileName) else {
+            return jsonResponse(#"{"success":false,"error":"Image not found: \#(fileName)"}"#,
+                                status: 404)
         }
-        
-        // Read and encode image
+
         do {
-            let imageData = try Data(contentsOf: imageURL)
-            let base64String = imageData.base64EncodedString(options: [.lineLength64Characters])
-            // Escape JSON strings properly
-            let escapedFileName = fileName.replacingOccurrences(of: "\"", with: "\\\"")
-            let json = """
-            {"success":true,"file":"\(escapedFileName)","base64":"\(base64String)"}
-            """
-            return createJSONResponse(json: json)
+            let data = try Data(contentsOf: imageURL)
+
+            // ✅ FIX 2: NO line-length option.
+            // C#'s Convert.FromBase64String() throws FormatException on \n inside base64.
+            let base64 = data.base64EncodedString(options: [])
+
+            let safe = fileName.replacingOccurrences(of: "\"", with: "\\\"")
+            return jsonResponse(#"{"success":true,"file":"\#(safe)","base64":"\#(base64)"}"#)
+
         } catch {
-            let json = """
-            {"success":false,"error":"Failed to read image"}
-            """
-            return createJSONResponse(json: json, statusCode: 500)
+            return jsonResponse(#"{"success":false,"error":"Failed to read image"}"#,
+                                status: 500)
         }
     }
-    
-    // MARK: - Helper Methods
-    
-    private func findImageFile(fileName: String) -> URL? {
-        let fileManager = FileManager.default
-        
-        let searchRoots = [
-            fileManager.urls(for: .documentDirectory, in: .userDomainMask).first,
-            fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first,
-            fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+
+    // MARK: - File Search
+
+    private func findImageFile(named fileName: String) -> URL? {
+        let fm = FileManager.default
+        let roots: [URL] = [
+            fm.urls(for: .documentDirectory,         in: .userDomainMask).first,
+            fm.urls(for: .cachesDirectory,           in: .userDomainMask).first,
+            fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         ].compactMap { $0 }
-        
-        for root in searchRoots {
-            if let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) {
-                for case let fileURL as URL in enumerator {
-                    if fileURL.lastPathComponent == fileName {
-                        return fileURL
-                    }
-                }
+
+        for root in roots {
+            guard let enumerator = fm.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for case let url as URL in enumerator
+            where url.lastPathComponent == fileName {
+                return url
             }
         }
-        
         return nil
     }
-    
+
     private func isSafeFileName(_ name: String) -> Bool {
-        return !name.isEmpty &&
-               !name.contains("..") &&
-               !name.contains("/") &&
-               !name.contains("\\")
+        !name.isEmpty && !name.contains("..") &&
+        !name.contains("/") && !name.contains("\\")
     }
-    
-    private func createJSONResponse(json: String, statusCode: Int = 200) -> String {
-        let statusText = HTTPStatusText(code: statusCode)
-        let contentLength = json.utf8.count
-        
-        return """
-        HTTP/1.1 \(statusCode) \(statusText)\r
-        Content-Type: application/json\r
-        Content-Length: \(contentLength)\r
-        Connection: close\r
-        \r
-        \(json)
-        """
+
+    // MARK: - Response Helpers
+
+    private func jsonResponse(_ json: String, status: Int = 200) -> String {
+        let statusText = httpStatusText(status)
+        let length     = json.utf8.count
+        // Single string — no trailing newline after body to keep Content-Length accurate
+        return "HTTP/1.1 \(status) \(statusText)\r\n" +
+               "Content-Type: application/json\r\n" +
+               "Content-Length: \(length)\r\n" +
+               "Connection: close\r\n" +
+               "\r\n" +
+               json
     }
-    
-    private func createErrorResponse(code: Int, message: String) -> String {
-        let json = """
-        {"success":false,"error":"\(message)"}
-        """
-        return createJSONResponse(json: json, statusCode: code)
+
+    private func errorResponse(_ code: Int, _ message: String) -> String {
+        jsonResponse(#"{"success":false,"error":"\#(message)"}"#, status: code)
     }
-    
-    private func HTTPStatusText(code: Int) -> String {
+
+    private func httpStatusText(_ code: Int) -> String {
         switch code {
-        case 200: return "OK"
-        case 400: return "Bad Request"
-        case 404: return "Not Found"
-        case 405: return "Method Not Allowed"
-        case 500: return "Internal Server Error"
-        default: return "Unknown"
+        case 200: "OK"
+        case 400: "Bad Request"
+        case 404: "Not Found"
+        case 405: "Method Not Allowed"
+        case 500: "Internal Server Error"
+        default:  "Unknown"
         }
     }
-    
+
     private func sendResponse(_ response: String, on connection: NWConnection) {
-        let data = response.data(using: .utf8)!
+        guard let data = response.data(using: .utf8) else { return }
         connection.send(content: data, completion: .contentProcessed { error in
-            if let error = error {
-                print("Send error: \(error)")
-            }
+            if let error { print("Send error: \(error)") }
             connection.cancel()
         })
     }
-    
-    private func getImageURL(fileName: String) -> URL? {
-        let baseDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let imageDir = baseDir.appendingPathComponent("images") // your folder
-        
-        let fileURL = imageDir.appendingPathComponent(fileName)
-        
-        return FileManager.default.fileExists(atPath: fileURL.path) ? fileURL : nil
-    }
 }
 
+// MARK: - LAN IP
 
 func currentLANIPAddress() -> String? {
     var address: String?
-
     var ifaddr: UnsafeMutablePointer<ifaddrs>?
     guard getifaddrs(&ifaddr) == 0 else { return nil }
     defer { freeifaddrs(ifaddr) }
-
     var ptr = ifaddr
     while ptr != nil {
-        let interface = ptr!.pointee
-        let addrFamily = interface.ifa_addr.pointee.sa_family
-
-        if addrFamily == UInt8(AF_INET) {
-            let name = String(cString: interface.ifa_name)
-
-            // Wi-Fi + Ethernet (most important)
+        let iface = ptr!.pointee
+        if iface.ifa_addr.pointee.sa_family == UInt8(AF_INET) {
+            let name = String(cString: iface.ifa_name)
             if name == "en0" || name == "en1" {
-                var addr = interface.ifa_addr.pointee
+                var addr     = iface.ifa_addr.pointee
                 var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-
-                getnameinfo(
-                    &addr,
-                    socklen_t(interface.ifa_addr.pointee.sa_len),
-                    &hostname,
-                    socklen_t(hostname.count),
-                    nil,
-                    0,
-                    NI_NUMERICHOST
-                )
-
+                getnameinfo(&addr, socklen_t(iface.ifa_addr.pointee.sa_len),
+                            &hostname, socklen_t(hostname.count),
+                            nil, 0, NI_NUMERICHOST)
                 address = String(cString: hostname)
                 break
             }
         }
-        ptr = interface.ifa_next
+        ptr = iface.ifa_next
     }
-
     return address
 }

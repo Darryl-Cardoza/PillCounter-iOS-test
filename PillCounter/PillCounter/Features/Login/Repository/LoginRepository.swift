@@ -13,7 +13,7 @@ protocol LoginRepositoryProtocol {
     
     func resendOTP(email: String) async throws -> SendOTPResponse
     
-    func verifyOTP(email: String, otp: String) async throws -> VerifyOTPResponse
+    func verifyOTP(email: String, otp: String, fcmToken:String) async throws -> VerifyOTPResponse
     
     func logout(refreshToken: String) async throws -> LogoutResponse
     
@@ -48,12 +48,12 @@ final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
         )
     }
     
-    func verifyOTP(email: String, otp: String,) async throws -> VerifyOTPResponse {
-
+    func verifyOTP(email: String, otp: String, fcmToken: String) async throws -> VerifyOTPResponse {
+        print("FcmToken is: \(fcmToken)")
         let body: [String: Any] = [
             "email": email,
             "otp": otp,
-            "fcm_token": ""
+            "fcm_token": fcmToken
         ]
         return try await Self.performRequest(
             url: APIConstants.verifyOTP,

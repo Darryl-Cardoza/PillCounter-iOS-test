@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import Firebase
 
 @main
 struct PillCounterApp: App {
 
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     // MARK: - ENVIRONMENT
     @Environment(\.scenePhase) private var scenePhase
 
@@ -22,6 +24,7 @@ struct PillCounterApp: App {
     @ObservedObject private var confirmationDialogueManager = ConfirmationDialogueManager()
     @StateObject private var pillScanViewModel = PillScanViewModel()
     @StateObject private var userViewModel = UserViewModel()
+    @StateObject private var stockCountViewModel = StockCountViewModel()
     @StateObject private var toastManager = ToastManager()
 
     private let isCompromised: Bool
@@ -30,7 +33,8 @@ struct PillCounterApp: App {
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised
 
-
+//        FirebaseApp.configure()
+        UIApplication.shared.registerForRemoteNotifications()
         // Only bootstrap when secure
         if !compromised {
             RuntimeUnit.activateIfNeeded()
@@ -74,6 +78,7 @@ struct PillCounterApp: App {
                             .environmentObject(appColors)
                             .environmentObject(confirmationDialogueManager)
                             .environmentObject(pillScanViewModel)
+                            .environmentObject(stockCountViewModel)
                             .environmentObject(toastManager)
                             .onAppear {
                                 startSecurityMonitoring()

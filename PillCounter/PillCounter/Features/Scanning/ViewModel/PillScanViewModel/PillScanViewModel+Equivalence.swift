@@ -1,23 +1,20 @@
-//
-//  PillScanViewModel+Equivalence.swift
-//  PillCounter
-//
-//  Created by Bhushan Patil on 09/03/26.
-//
 import SwiftUI
 
 extension PillScanViewModel {
     
     func checkIsNdcMatch(rawValueFromBarcodeOrQr: String) -> Bool {
-        
+
+
         let decoded = decoder.decode(rawValueFromBarcodeOrQr)
         let scannedNdc = decoded.gtin ?? ""
 
-        guard  let expectedNdc = getExpectedPmsNdc() else {
+
+        guard let expectedNdc = getExpectedPmsNdc() else {
             return true
         }
-        print("Expected NDC: \(expectedNdc)")
-        print("Scanned NDC: \(scannedNdc)")
+
+        print("✅ [NDC] Expected:", expectedNdc)
+        print("✅ [NDC] Scanned:", scannedNdc)
 
         getControlledDrugInfo(
             targetNdc: expectedNdc,
@@ -29,11 +26,6 @@ extension PillScanViewModel {
     
     func manualEnterdControlledDrug(scannedNdc: String){
         let expectedNdc = getExpectedPmsNdc() ?? ""
-        
-
-        print("Expected NDC: \(expectedNdc)")
-        print("Scanned NDC: \(scannedNdc)")
-
         getControlledDrugInfo(
             targetNdc: expectedNdc,
             scannedNdc: scannedNdc
@@ -52,21 +44,35 @@ extension PillScanViewModel {
             do {
                 let response = try await controlledRepo
                     .getControlledDrugInfo(ndcValidationRequest: request)
+
                 ndcComparisonResponse = response
-                isNdcEquivalent = response.data?.isNdcEquivalent ?? false
-                let isNdcSame = response.data?.isNdcSame ?? false
-                if isNdcEquivalent && isNdcSame {
+
+                let isEquivalent = response.data?.isNdcEquivalent ?? false
+                let isSame = response.data?.isNdcSame ?? false
+
+                isNdcEquivalent = isEquivalent
+                updateScannedDrugData(drugName: response.data?.scannedNdc?.lookupName ?? "", ndcNo: response.data?.scannedNdc?.packageNdc ?? "")
+                
+                if isEquivalent && !isSame {
                     showNdcEquivalencePopup = true
-                }else{
-                    shouldAutoProceedToCount = true
+                } else if !isEquivalent && isSame{
+                    self.showScannedDrugInfoPopoup = true
+                } else {
+                    showNdcEquivalencePopup = true
+                    isNdcEquivalent = false
                 }
+
             } catch {
-                print("Failed to get equivat")
                 showNdcEquivalencePopup = true
                 isNdcEquivalent = false
             }
+
             isCheckingNdc = false
         }
+    }
+    
+    func updateScannedDrugData(drugName:String, ndcNo: String){
+        self.scannedRxData = ParsedScanData(ndcNo: ndcNo,drugName: drugName)
     }
     
     func markNdcVerified() {
@@ -75,19 +81,26 @@ extension PillScanViewModel {
                 txnId: txnId,
                 verified: true
             )
-        } else {
         }
     }
     
-    // Get Only Pms transaction
+    // Get Only PMS transaction
     func getExpectedPmsNdc() -> String? {
-        guard let txn = selectedTransaction,
-              txn.is_from_pms,
-              let ndc = txn.drug?.ndc,
-              !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
+        guard let txn = selectedTransaction else {
+            print("❌ [NDC] No selected transaction")
             return nil
         }
+
+        guard 
+              let ndc = txn.drug?.ndc,
+              !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              txn.count_type == CountType.FIXED.rawValue
+        else {
+            print("⚠️ [NDC] Conditions not met → skipping PMS NDC")
+            return nil
+        }
+
+        print("✅ [NDC] Using PMS NDC:", ndc)
         return ndc
     }
 }

@@ -27,7 +27,7 @@ final class PillDetector {
             let config = MLModelConfiguration()
             
             // Use .all instead of .cpuAndGPU to allow CoreML to automatically choose the most stable and optimal compute unit (CPU, GPU, or Neural Engine).
-            config.computeUnits = .all
+            config.computeUnits = .cpuOnly
             
             let mlModel = try best(configuration: config)
             self.model = mlModel

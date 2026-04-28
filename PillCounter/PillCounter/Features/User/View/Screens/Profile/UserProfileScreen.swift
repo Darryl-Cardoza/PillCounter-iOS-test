@@ -340,7 +340,7 @@ struct UserProfileScreen: View {
                 isNewUser = false
                 userViewModel.isProfileUpdated = false
                 router.navigateBack()
-            }else{
+            }else {
                 toastManager.show(message: "Failed to update profile. Please try again.")
             }
         }

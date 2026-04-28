@@ -35,7 +35,7 @@ struct CustomPopup<PopupContent: View>: ViewModifier {
                     .frame(maxWidth: 300)
                     .padding()
                     .background(appColors.primaryBackground)
-                    .cornerRadius(16)
+                    .cornerRadius(18)
                     .shadow(radius: 10)
                     .transition(.scale)
                     .zIndex(2)

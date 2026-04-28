@@ -16,7 +16,7 @@ final class Hl7ServiceController: ObservableObject {
 
     static let shared = Hl7ServiceController()
 
-    // MARK: - App Storage
+    // MARK: - App Storaget
 
     @AppStorage(AppStorageManager.AppStorageKeys.isLoggedIn)
     private var isLoggedIn: Bool = false
@@ -31,7 +31,6 @@ final class Hl7ServiceController: ObservableObject {
     private var pillCounterHostName: String = ""
 
     // MARK: - Dependencies
-
     private let pillDataLocalStorage = PillsDataLocalStorage.shared
     private var cancellables = Set<AnyCancellable>()
 
@@ -92,11 +91,9 @@ final class Hl7ServiceController: ObservableObject {
     private func startHl7Services() {
         guard hl7Manager == nil, let handler = hl7Handler else { return }
 
-        print("[HL7CTRL] Starting HL7 services")
-
         hl7Manager = Hl7ServiceManager(
             port: 2575,
-            serviceName: "PillCounterHL7",
+            serviceName: "PillCounter",
             serviceType: pillCounterHostName,
             pmsServiceType: pmsHostName,
             listener: handler
@@ -105,7 +102,6 @@ final class Hl7ServiceController: ObservableObject {
     }
 
     private func stopService() {
-        print("[HL7CTRL] Stopping HL7 services")
         hl7Manager?.stop()
         hl7Manager = nil
         resetQueueState()
@@ -134,7 +130,6 @@ final class Hl7ServiceController: ObservableObject {
 
     /// PMS client connection is ready — load and start sending pending transactions.
     func onClientConnected() {
-        print("[HL7CTRL] Client connected — loading pending transactions")
         resendPendingHl7Transactions()
     }
 
@@ -142,16 +137,12 @@ final class Hl7ServiceController: ObservableObject {
     func onAckReceived(messageId: String?, ackCode: String) {
         let ackMsgId = messageId?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        print("[HL7][ACK] messageId=\(ackMsgId ?? "nil") code=\(ackCode)")
-
         guard let txn = currentTxn else {
-            print("[HL7][ACK] No in-flight txn — ignoring ACK")
             return
         }
 
         // NACK → retry / move to end
         guard ackCode == "AA" else {
-            print("[HL7][ACK] NACK received")
             handleSendFailure()
             return
         }
@@ -159,16 +150,13 @@ final class Hl7ServiceController: ObservableObject {
         // If PMS sent a messageId, it must match what we sent
         if let ackId = ackMsgId, !ackId.isEmpty {
             guard let inflightId = currentMessageId, ackId == inflightId else {
-                print("[HL7][ACK] MessageId mismatch — ignoring ACK")
                 return
             }
         } else {
-            print("[HL7][ACK] No messageId in ACK — accepting (single in-flight rule)")
         }
 
         // Mark synced in persistence
         pillDataLocalStorage.updateTransactionSynced(txnId: txn.txn_id)
-        print("[HL7][ACK] Txn \(txn.txn_id) marked synced")
 
         // Advance queue
         sendingQueue.removeFirst()
@@ -181,90 +169,108 @@ final class Hl7ServiceController: ObservableObject {
 
     /// ACK timeout — treat same as send failure.
     func onAckTimeout() {
-        print("[HL7CTRL] ACK timeout")
         handleSendFailure()
     }
 
     // MARK: - Send Queue Logic
-
     private func resendPendingHl7Transactions() {
+        print("🔄 [HL7] Resend Pending Transactions START")
+
         let pending = pillDataLocalStorage.getPendingHl7Txn()
+        print("📦 [HL7] Pending Count:", pending.count)
+        print("📦 [HL7] Pending Txns:", pending.map { $0.txn_id })
 
         guard !pending.isEmpty else {
-            print("[HL7CTRL] No pending transactions")
+            print("⚠️ [HL7] No pending transactions found")
             return
         }
-
-        print("[HL7CTRL] Queuing \(pending.count) pending transaction(s)")
 
         sendingQueue = pending
         currentTxn = nil
         currentMessageId = nil
         retryCount = 0
 
+        print("✅ [HL7] Queue initialized. Starting send...")
+
         sendNextIfPossible()
     }
 
     private func sendNextIfPossible() {
+        print("➡️ [HL7] Attempting to send next transaction")
+
         // Already waiting for an ACK
         guard currentTxn == nil else {
-            print("[HL7CTRL] In-flight txn exists — waiting for ACK")
+            print("⏳ [HL7] Waiting for ACK. Current txn in progress:", currentTxn?.txn_id ?? -1)
             return
         }
 
         guard !sendingQueue.isEmpty else {
-            print("[HL7CTRL] All transactions processed")
+            print("✅ [HL7] Queue empty. Nothing to send")
             return
         }
 
         let txn = sendingQueue.first!
+        print("📤 [HL7] Next txn to send:", txn.txn_id)
+
         sendTransaction(txn)
     }
 
-    private func sendTransaction(_ txn: PillCountTransactionEntity) {
+    func sendTransaction(_ txn: PillCountTransactionEntity) {
         currentTxn = txn
         retryCount += 1
 
         let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
         currentMessageId = messageId
 
-        guard let user = txn.user else {
-            print("❌ No user found for txnId=\(txn.txn_id)")
-            return
-        }
+        print("🚀 [HL7] Sending Transaction")
+        print("🆔 [HL7] txn_id:", txn.txn_id)
+        print("🔁 [HL7] Retry count:", retryCount)
+        print("🧾 [HL7] Message ID:", messageId)
+
+      
 
         let hl7 = buildHl7Message(
-            txn: txn,
-            messageId: messageId,
-            user: user
+            txn: txn
         )
 
-        print("[HL7CTRL] Sending txnId=\(txn.txn_id) attempt=\(retryCount)/\(maxRetries)")
-        print("HL7 Message \(hl7)")
+        print("📡 [HL7] HL7 Payload:", hl7)
+
         hl7Manager?.sendClientHL7(hl7)
+        print("📤 [HL7] Message sent to server")
     }
 
     private func handleSendFailure() {
-        guard let txn = currentTxn else { return }
+        guard let txn = currentTxn else {
+            print("❌ [HL7] handleSendFailure called but no currentTxn")
+            return
+        }
+
+        print("⚠️ [HL7] Send failure for txn:", txn.txn_id)
+        print("🔁 [HL7] Current retry:", retryCount, "/", maxRetries)
 
         if retryCount < maxRetries {
-            print("[HL7CTRL] Retrying txnId=\(txn.txn_id) attempt \(retryCount + 1)/\(maxRetries)")
+            print("🔄 [HL7] Retrying txn:", txn.txn_id)
             sendTransaction(txn)
             return
         }
 
-        // Max retries exhausted → move to end of queue, try others
-        print("[HL7CTRL] Max retries for txnId=\(txn.txn_id) — moving to end of queue")
+        print("❌ [HL7] Max retries reached for txn:", txn.txn_id)
+        print("🔀 [HL7] Moving txn to end of queue")
 
+        // Max retries exhausted → move to end of queue, try others
         sendingQueue.removeFirst()
         sendingQueue.append(txn)
+
+        print("📦 [HL7] Updated Queue:", sendingQueue.map { $0.txn_id })
+
         currentTxn = nil
         currentMessageId = nil
         retryCount = 0
 
+        print("➡️ [HL7] Trying next transaction")
+
         sendNextIfPossible()
     }
-
     private func resetQueueState() {
         sendingQueue.removeAll()
         currentTxn = nil
@@ -273,16 +279,67 @@ final class Hl7ServiceController: ObservableObject {
     }
 
     // MARK: - HL7 Message Builder
-
+    
     private func buildHl7Message(
         txn: PillCountTransactionEntity,
-        messageId: String,
-        user: UserEntity?
     ) -> String {
+        
+        guard let user = txn.user else {
+            print("❌ [HL7] Missing user for txn:", txn.txn_id)
+            return ""
+        }
+        
         return HL7CompletionBuilder().buildCompletionMessage(txn: txn, user: user )
     }
 
-    
+    func sendBatchInventory(batchId: Int64) {
+
+        print("📦 [HL7] Sending batch inventory for batch:", batchId)
+
+        guard let batch = pillDataLocalStorage.fetchBatchById(batchId) else {
+            print("❌ [HL7] Batch not found:", batchId)
+            return
+        }
+
+        // ✅ GET TXNS FROM BATCH
+        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
+
+        guard !txns.isEmpty else {
+            print("❌ No transactions in batch")
+            return
+        }
+
+        // ✅ GET USER FROM FIRST TXN
+        guard let user = txns.first?.user else {
+            print("❌ Missing user from transactions")
+            return
+        }
+
+        // ✅ ONLY PMS BATCH
+        guard batch.is_from_pms else {
+            print("ℹ️ Not PMS batch → skip HL7")
+            return
+        }
+
+        // ✅ MUST HAVE REQUEST ID
+        guard let requestId = batch.req_id_from_pms else {
+            print("❌ Missing requestId → cannot respond")
+            return
+        }
+
+        let builder = HL7CompletionBuilder()
+
+        let hl7 = builder.buildInventoryMessage(
+            batch: batch,
+            user: user
+        )
+
+        print("📡 [HL7] Batch HL7 Payload:\n\(hl7)")
+
+        hl7Manager?.sendClientHL7(hl7)
+
+        print("✅ [HL7] Batch inventory sent")
+    }
     
     private func hl7Timestamp() -> String {
         let formatter = DateFormatter()

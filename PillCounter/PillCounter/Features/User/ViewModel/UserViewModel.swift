@@ -14,6 +14,8 @@ import ComposeApp
 class UserViewModel: ObservableObject {
     // MARK: - APP STORAGE
     let pillDataLocalStorage = PillsDataLocalStorage.shared
+    
+     
     // get the access token from the app storage
     @AppStorage(AppStorageManager.AppStorageKeys.accessToken) var accessToken:
         String = ""
@@ -28,7 +30,14 @@ class UserViewModel: ObservableObject {
     @AppStorage(AppStorageManager.AppStorageKeys.pillCounterHostName)
     var pillCounterHostName: String = ""
 
+    @AppStorage(AppStorageManager.AppStorageKeys.barcodeFormat)
+    private var barcodeFormat: String = ""
 
+    @AppStorage(AppStorageManager.AppStorageKeys.bucketList)
+    private var bucketData: Data = Data()
+    
+    
+    
     // MARK: PUBLISHED VARIABLES
     // general loading  
     @Published var isLoading: Bool = false
@@ -81,6 +90,16 @@ class UserViewModel: ObservableObject {
     @Published var unsyncedTransactions: [PillCountTransactionEntity] = []
 
     @Published var pmsConnectionState: PmsConnectionState = .disconnected
+    
+    var bucket: [String] {
+        get {
+            (try? JSONDecoder().decode([String].self, from: bucketData)) ?? []
+        }
+        set {
+            bucketData = (try? JSONEncoder().encode(newValue)) ?? Data()
+        }
+    }
+
 
     // MARK: DATABASE
     // get the user db
@@ -96,6 +115,7 @@ class UserViewModel: ObservableObject {
     let settingsRepo = SettingsRepository.shared
  
     
+ 
 
     // MARK: MOBILE SETTINGS
     // mobile color settings.
@@ -127,6 +147,8 @@ class UserViewModel: ObservableObject {
                     
                     self.pmsHostName = response.data?.hl7Config?.pmsHostName ?? ""
                     self.pillCounterHostName = response.data?.hl7Config?.pillCounterHostName ?? ""
+                    self.barcodeFormat = response.data?.hl7Config?.barcodeFormat ?? ""
+                    print("Barcode format \(response.data?.hl7Config?.barcodeFormat ?? "")")
                 }
 
             } catch {
@@ -151,7 +173,7 @@ class UserViewModel: ObservableObject {
            let localUser = userLocalDB.getUserByUserId(by: userID) {
 
 
-            let name = Formatter.segregateName(from: localUser.name ?? "")
+            let name = Formatter.segregateName(from: localUser.fname ?? "")
 
             firstName = name.firstName
             lastName = name.lastName
@@ -161,11 +183,9 @@ class UserViewModel: ObservableObject {
             npiID = localUser.npi_id ?? ""
             phoneNumber = localUser.phone_number ?? ""
 
-
-
             getAllTransactionsAndFilterByCountType()
 
-            return
+//            return
         }
 
 
@@ -213,7 +233,7 @@ class UserViewModel: ObservableObject {
     }
     // private func for profile screen fields
     private func populateEditableFields(from user: UserProfile) {
-        let fullName = user.fullName ?? ""
+        let fullName = user.fname ?? ""
         let name = Formatter.segregateName(from: fullName)
         
         firstName = name.firstName
@@ -223,6 +243,11 @@ class UserViewModel: ObservableObject {
         phoneNumber = user.phoneNumber ?? ""
         pharmacyName = user.pharmacyName ?? ""
         npiID = user.npiID ?? ""
+        
+        if !user.bucket.isEmpty {
+            self.bucket = user.bucket
+            print("✅ Bucket saved:", user.bucket)
+        }
 
         self.fullName = fullName
     }
@@ -241,9 +266,10 @@ class UserViewModel: ObservableObject {
         }
 
         do {
-
+            
             let request = UpdateUserProfileRequest(
-                fullName: "\(firstName) \(lastName)",
+                fname: firstName,
+                lname: lastName,
                 pharmacyName: pharmacyName,
                 phoneNumber: phoneNumber,
                 npiID: npiID,
@@ -253,6 +279,7 @@ class UserViewModel: ObservableObject {
                 language: "",
                 timezone: ""
             )
+            
             let updateUserProfileResult = try await userRepo.updateUserProfile(
                 request: request,
                 accessToken: accessToken
@@ -268,15 +295,13 @@ class UserViewModel: ObservableObject {
                     ?? previousUserProfileDetails
                 
                 if !userID.isEmpty {
-                    let fullName = "\(firstName) \(lastName)"
-
-                    userLocalDB.updateUser(userId: userID, field: .name, value: fullName)
+                    userLocalDB.updateUser(userId: userID, field: .fname, value: firstName)
+                    userLocalDB.updateUser(userId: userID, field: .lname, value: lastName)
                     userLocalDB.updateUser(userId: userID, field: .email, value: email)
                     userLocalDB.updateUser(userId: userID, field: .pharmacyName, value: pharmacyName)
                     userLocalDB.updateUser(userId: userID, field: .phoneNumber, value: phoneNumber)
                     userLocalDB.updateUser(userId: userID, field: .npiId, value: npiID)
                 }
-
             } else {
             }
 
@@ -287,7 +312,7 @@ class UserViewModel: ObservableObject {
     private func hasUserProfileChanged() -> Bool {
         guard let original = userProfileDetails else { return true }  // if no original data, treat as changed
 
-        let originalName = original.fullName ?? ""
+        let originalName = original.fname ?? ""
         let fullNameChanged = "\(firstName) \(lastName)" != originalName
         let pharmacyChanged = pharmacyName != (original.pharmacyName ?? "")
         let phoneChanged = phoneNumber != (original.phoneNumber ?? "")
@@ -660,7 +685,7 @@ class UserViewModel: ObservableObject {
             let dummyUser = UserEntity(context: context)
             // Assign dummy values based on your UserEntity definition
             dummyUser.user_id = "dummy_user_123"
-            dummyUser.name = "Test User"
+            dummyUser.fname = "Test User"
             dummyUser.email = "test@example.com"
             dummyUser.pharmacy_name = "Test Pharmacy"
             dummyUser.phone_number = "555-0123"
@@ -794,6 +819,7 @@ class UserViewModel: ObservableObject {
         pillDataLocalStorage.clearAllLocalData()
     }
     
+
     // MARK: - HARD RESET (called on logout)
     @MainActor
     func resetState() {

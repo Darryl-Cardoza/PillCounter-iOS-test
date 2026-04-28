@@ -31,10 +31,11 @@ class BarcodeAndQRDecoder: ObservableObject {
             pattern: "(?:\\(01\\)|01)(\\d{8,14})"
         ),
         "LotNumber": try! NSRegularExpression(
-            pattern: "(?:\\(10\\)|10)([\\w\\d]{1,20})"),
+            pattern: "(?:\\(10\\)|10)([\\w\\d/\\-\\.]{1,20}?)(?=\\(\\d{2,4}\\)|\\x1D|$)"
+        ),
         "SerialNumber": try! NSRegularExpression(
-            pattern: "(?:\\(21\\)|21)([\\w\\d]{1,20})"),
-
+            pattern: "(?:\\(21\\)|21)([\\w\\d/\\-\\.]{1,20}?)(?=\\(\\d{2,4}\\)|\\x1D|$)"
+        ),
         "ProductionDate": try! NSRegularExpression(
             pattern: "(?:\\(11\\)|11)(\\d{6})"),
         "PackingDate": try! NSRegularExpression(

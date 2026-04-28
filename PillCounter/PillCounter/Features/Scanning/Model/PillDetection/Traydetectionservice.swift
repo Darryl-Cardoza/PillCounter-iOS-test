@@ -22,7 +22,7 @@ final class TrayDetectionService {
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     private let inputSize: Int       = 640
-    private let confThreshold: Float = 0.75
+    private let confThreshold: Float = 0.80
     private let iouThreshold: Float  = 0.45
     private let trayClassIndex: Int  = 1
 
@@ -31,11 +31,9 @@ final class TrayDetectionService {
     private func loadModel() {
         do {
             let cfg = MLModelConfiguration()
-            cfg.computeUnits = .all
+            cfg.computeUnits = .cpuOnly
             model = try trayBest(configuration: cfg)
-            print(" Tray model loaded successfully")
         } catch {
-            print(" TrayDetectionService: failed to load trayBest — \(error)")
         }
     }
 
@@ -95,7 +93,6 @@ final class TrayDetectionService {
                        originalFrameSize: frameSize)
         }
 
-//        print("🧱 Trays: \(results.count) — rects: \(results.map { "\($0.rect)" })")
         return results
     }
 

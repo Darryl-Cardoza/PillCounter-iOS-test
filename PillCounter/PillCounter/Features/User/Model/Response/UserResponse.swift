@@ -56,7 +56,8 @@ struct UserDetails: Codable {
 
 // MARK: - Profile
 struct UserProfile: Codable {
-    let fullName: String?
+    let fname: String?
+    let lname: String?
     let email: String?
     let phoneNumber: String?
     let avatarURL: String?
@@ -64,11 +65,14 @@ struct UserProfile: Codable {
     let pharmacyName: String?
     let npiID: String?
     let isVerified: Bool?
+    let isHl7Enabled: Bool?
+    let bucket: [String]
     let role: UserRole?
     let userId: String?
 
     enum CodingKeys: String, CodingKey {
-        case fullName = "full_name"
+        case fname = "fname"
+        case lname = "lname"
         case email
         case phoneNumber = "phone_number"
         case avatarURL = "avatar_url"
@@ -76,6 +80,8 @@ struct UserProfile: Codable {
         case pharmacyName = "pharmacy_name"
         case npiID = "npi_id"
         case isVerified = "is_verified"
+        case isHl7Enabled =  "is_hl7_enabled"
+        case bucket = "bucket"
         case role = "role"
         case userId = "user_id"
     }

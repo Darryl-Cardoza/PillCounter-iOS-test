@@ -81,9 +81,11 @@ struct AppColorPalette: Codable {
 struct AppHl7Config: Codable {
     let pmsHostName: String?
     let pillCounterHostName: String?
+    let barcodeFormat: String?
     
     enum CodingKeys: String, CodingKey {
         case pmsHostName = "pms_host_name"
         case pillCounterHostName = "pillcounter_host_name"
+        case barcodeFormat = "barcode_format"
     }
 }

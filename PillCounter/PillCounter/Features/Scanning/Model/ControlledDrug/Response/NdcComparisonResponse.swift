@@ -29,8 +29,8 @@ struct NdcComparisonResponse: Codable {
 struct NdcComparisonData: Codable {
     let isNdcSame: Bool
     let isNdcEquivalent: Bool
-    let targetNdc: NdcDrug
-    let scannedNdc: NdcDrug
+    let targetNdc: NdcDrug?
+    let scannedNdc: NdcDrug?
 
     enum CodingKeys: String, CodingKey {
         case isNdcSame = "is_ndc_same"
@@ -65,4 +65,28 @@ struct TherapeuticFDA: Codable {
 
 struct DrugImage: Codable {
     let link: String?
+}
+
+
+struct NdcPackage: Codable {
+    let ndc: String?
+    let description: String?
+    let levels: [PackageLevel]? 
+}
+
+struct PackageLevel: Codable {
+    let type: String?
+    let name: String?
+    let quantity: Int?
+    let modifiers: String?
+    let material: String?
+    let contains: PackageContains?
+}
+
+struct PackageContains: Codable{
+    let type: String?
+    let name: String?
+    let quantity: Int?
+    let modifiers: [String]?
+    let material: String?
 }

@@ -71,12 +71,25 @@ class PillScanViewModel: ObservableObject {
     @Published var currentControlledTargetCount: Int? = nil
     @Published var showCompletionPopup = false
 
-    // Controlled drug Equivalence
+    // MARK: Controlled drug Equivalence
     @Published var isCheckingNdc: Bool = false
     @Published var ndcComparisonResponse: NdcComparisonResponse?
     @Published var isNdcEquivalent: Bool = false
     @Published var showNdcEquivalencePopup = false
     @Published var shouldAutoProceedToCount = false
+
+
+    @Published var isNdcAdded: Bool = false
+    
+    // MARK: Stock Count State
+    @Published var addCurrentOpenPillCount: Int = 0
+
+    //MARK: RX FLow
+    @Published var showRxFlowPopup: Bool = false
+    @Published var scannedRxData: ParsedScanData? = nil
+    @Published var bucketOptions: [String] = []
+    @Published var selectedBucket: String = ""
+    @Published var showScannedDrugInfoPopoup: Bool = false
     
     // func to get the value from the barcode and check in the db
     // if there in the db get the drug from there other wise call the api.
@@ -343,7 +356,12 @@ class PillScanViewModel: ObservableObject {
         isComingFromPms:Bool = false,
         isControlled:Bool? = nil,
         targetCount: Int32? = nil,
-        drugName: String? = nil
+        drugName: String? = nil,
+        batchId: Int64? = nil,
+        expirationDate: String? = nil,
+        lotNumber: String? = nil,
+        rxNo:String? = nil,
+        bucketId: String? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.
@@ -358,19 +376,15 @@ class PillScanViewModel: ObservableObject {
         var savedPath = ""
 
         if let img = barcodeImage {
-            print("📸 Barcode image exists")
-
             if let path = PhotoFileManager.shared.saveImage(img) {
                 savedPath = path
             } else {
-                print("❌ Failed to save image")
+                print("Failed to save image")
             }
 
         } else {
-            print("⚠️ barcodeImage is nil")
+            print("barcodeImage is nil")
         }
-
-        print("🗂 Final Image Path Being Sent To DB: \(savedPath)")
 
 
         // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
@@ -379,11 +393,16 @@ class PillScanViewModel: ObservableObject {
             for: user,
             drugId: drugId,
             countType: countType,
+            batchId: batchId ?? 0,
             barcodeImagePath: savedPath,
             isComingFromPms: isComingFromPms,
             drugName: drugName,
             targetCount: targetCount,
-            isControlled: isControlled // temporary true
+            isControlled: isControlled,
+            expirationDate: expirationDate,
+            lotNumber: lotNumber,
+            rxNo: rxNo,
+            bucketId: bucketId
         )
     
 
@@ -424,7 +443,7 @@ class PillScanViewModel: ObservableObject {
             }
 
         } else {
-            print("⚠️ barcodeImage is nil")
+            print("barcodeImage is nil")
         }
 
 

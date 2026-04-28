@@ -12,8 +12,6 @@ struct UserHistoryView: View {
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
-
-    // MARK: - HistoryViewModel (owned by this view)
     @EnvironmentObject private var historyViewModel: HistoryViewModel
 
     // MARK: - Date State
@@ -34,55 +32,23 @@ struct UserHistoryView: View {
     @State private var activeTypeFilter: HistoryFilterType = .fixed
     @State private var activeStatusFilter: HistoryStatusFilter = .all
 
-
     // MARK: - Body
     var body: some View {
         ZStack {
             BaseView(
-                topRatio: isSearching ? 0.2 : 0.4,
+                topRatio: computedTopRatio,
                 topContent: {
-                    if !isSearching {
-                        userHistoryContent()
-                    }
+                    topContentView
                 },
                 bottomContent: {
-                    userHistoryTransactionsList
+                    bottomContentView
                 },
                 headerActions: {
-                    if isSearching {
-                        UnderlinedSearchBar(
-                            text: $searchText,
-                            isFocused: $isSearchFieldFocused,
-                            appColors: appColors,
-                            onExitSearch: {
-                                withAnimation(.spring()) {
-                                    isSearching = false
-                                    searchText = ""
-                                    isSearchFieldFocused = false
-                                }
-                            }
-                        )
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                    } else {
-                        HStack(spacing: 16) {
-                            Button {
-                                withAnimation(.spring()) {
-                                    isSearching = true
-                                    isSearchFieldFocused = true
-                                }
-                            } label: {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(appColors.secondary)
-                            }
-                        }
-                        .padding(.trailing, 16)
-                        .transition(.opacity)
-                    }
+                    headerActionsView
                 },
                 showBackButton: !isSearching,
                 showHamburgerMenu: false,
-                title: NSLocalizedString("HISTORY", comment: "")
+                title: isSearching ? "" : NSLocalizedString("HISTORY", comment: "")
             )
 
             if pdfService.isLoading {
@@ -114,6 +80,82 @@ struct UserHistoryView: View {
         }
     }
 
+    // MARK: - Top Ratio
+    // Portrait: 0.4 normal / 0.2 searching (top-bottom split by height)
+    // Landscape: 0.4 normal (left-right split by width) / 1.0 searching (full-width left panel)
+    private var computedTopRatio: CGFloat {
+        if isLandscape && isSearching { return 1.0 }
+        return isSearching ? 0.2 : 0.4
+    }
+
+    // MARK: - Top Content
+    @ViewBuilder
+    private var topContentView: some View {
+        if isLandscape && isSearching {
+            // Full-width panel: calendar hidden, list fills content below header
+            landscapeSearchContent
+        } else if !isSearching {
+            userHistoryContent()
+        }
+        // Portrait + searching: empty top area (list is in bottomContent)
+    }
+
+    // MARK: - Bottom Content
+    @ViewBuilder
+    private var bottomContentView: some View {
+        if isLandscape && isSearching {
+            EmptyView()
+        } else {
+            userHistoryTransactionsList
+        }
+    }
+
+    // MARK: - Header Actions (portrait + landscape)
+    @ViewBuilder
+    private var headerActionsView: some View {
+        if isSearching {
+            UnderlinedSearchBar(
+                text: $searchText,
+                isFocused: $isSearchFieldFocused,
+                appColors: appColors,
+                onExitSearch: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isSearching = false
+                        searchText = ""
+                        isSearchFieldFocused = false
+                    }
+                }
+            )
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        } else {
+            HStack {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isSearching = true
+                        isSearchFieldFocused = true
+                    }
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 20))
+                        .foregroundStyle(appColors.primary)
+                }
+            }
+            .padding(.trailing, 16)
+            .padding(.bottom, 5)
+            .transition(.opacity)
+        }
+    }
+
+    // MARK: - Landscape Search Content
+    // topRatio: 1.0 so this is the full screen; top-pad to clear the header overlay.
+    private var landscapeSearchContent: some View {
+        userHistoryTransactionsList
+            .padding(.top, SafeAreaInsets.top + 52)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(appColors.secondaryBackground)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearching)
+    }
+
     // MARK: - Fetch All
     private func fetchAll() {
         guard let start = startDate else {
@@ -131,11 +173,7 @@ struct UserHistoryView: View {
                 filter: activeTypeFilter
             )
             await historyViewModel.getBatchesByDate(startDate: start, endDate: end)
-
-            historyViewModel.applyFilters(
-                status: activeStatusFilter,
-                search: searchText
-            )
+            historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
         }
     }
 
@@ -164,13 +202,17 @@ struct UserHistoryView: View {
         .frame(width: 275)
     }
 
-    // MARK: - Transaction List
+    // MARK: - Transaction List (used as bottomContent in normal mode, and inside
+    //         landscapeSearchContent when landscape + searching)
     private var userHistoryTransactionsList: some View {
         VStack(spacing: 8) {
             VStack(spacing: 15) {
                 HStack {
                     txnTypeFilter
-                    if !historyViewModel.filteredTransactionsOfUserByDate.isEmpty && !isSearching {
+                    if activeTypeFilter == .fixed
+                        && !historyViewModel.filteredTransactionsOfUserByDate.isEmpty
+                        && !isSearching
+                    {
                         Button {
                             showDeleteConfirmation = true
                         } label: {
@@ -179,18 +221,14 @@ struct UserHistoryView: View {
                                 .scaledToFit()
                                 .frame(width: 24, height: 24)
                                 .overlay(appColors.primary)
-                                .mask(
-                                    Image("delete")
-                                        .resizable()
-                                        .scaledToFit()
-                                )
+                                .mask(Image("delete").resizable().scaledToFit())
                         }
                     }
                 }
                 statusFilterChips
             }
 
-            Spacer().frame(height: 15)
+            Spacer().frame(height: 10)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading) {
@@ -273,7 +311,7 @@ struct UserHistoryView: View {
     // MARK: - Calendar
     private func userHistoryContent() -> some View {
         PillCountingCalendar(
-            selectedColor: appColors.secondary,
+            selectedColor: appColors.primary,
             textColor: appColors.text,
             backgroundColor: .clear,
             startDate: $startDate,

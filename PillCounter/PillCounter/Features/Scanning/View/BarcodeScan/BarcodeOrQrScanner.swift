@@ -979,11 +979,3 @@ extension QRBarcodeScannerView {
         )
     }
 }
-
-
-@discardableResult
-func DLOG(_ msg: String) -> Bool {
-    print("[Scanner] \(msg)")
-    return true
-}
-

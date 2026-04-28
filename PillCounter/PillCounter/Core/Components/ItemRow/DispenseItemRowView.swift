@@ -38,7 +38,7 @@ struct DispenseItemRowView: View {
             ThumbnailImageView(
                 imagePath: data.barcodeImagePath,
                 width: 80,
-                height: 60,
+                height: 54,
                 cornerRadius: 8,
                 borderColor: appColors.primaryBackground,
                 placeholderImageName: "dispense_placeholder",
@@ -96,7 +96,6 @@ struct DispenseItemRowView: View {
                         appColors: appColors,
                         size: 30
                     )
-
                     Text(displayText)
                         .foregroundColor(appColors.text)
                         .font(.system(size: 13, weight: .bold))

@@ -50,6 +50,7 @@ struct OPillCountView: View {
     //Controlled Drug Step
     @State private var showStepCompletionPopup: Bool = false
     @State private var showCountMismatchPopup: Bool = false
+    @State private var showSkipContainerPopup: Bool = false
     
     // Vial View State
     @State private var vialCapturedImagePath: String? = nil
@@ -156,6 +157,10 @@ struct OPillCountView: View {
         }
         .ignoresSafeArea(.keyboard)
         .onDisappear {
+            if pillScanViewModel.isNavigatingToDetailGrid {
+                pillScanViewModel.isNavigatingToDetailGrid = false
+                return
+            }
             // Clean up transaction reference when leaving
             pillScanViewModel.currentTransaction = nil
             pillScanViewModel.currentTransactionTransactionDetails = nil //here
@@ -219,6 +224,9 @@ struct OPillCountView: View {
         .customPopup(isPresented: $showCountMismatchPopup) {
             countMismatchDialog
         }
+        .customPopup(isPresented: $showSkipContainerPopup, dismissOnBackgroundTap: false) {
+            skipContainerPopup
+        }
         .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
             if show {
                 showConfirmCompletionPopup = true
@@ -226,6 +234,11 @@ struct OPillCountView: View {
         }
         .onChange(of: pillScanViewModel.currentControlledStep) { _, newStep in
             handleStepVoice(newStep)
+            
+            if newStep == .containerPending &&
+                 pillScanViewModel.isContainerPendingZero() {
+                  showSkipContainerPopup = true
+            }
         }
         .fullScreenCover(isPresented: $showFullScreenImage) {
             FullScreenImageView(
@@ -578,13 +591,9 @@ extension OPillCountView {
                 vialCapturedImagePath = nil
                 if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                     router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
-                    
                     guard let txn = pillScanViewModel.currentTransaction else {
                         return
                     }
-
-                    Hl7ServiceController.shared.sendTransaction(txn)
-                
                 }else{
                     stockCountViewModel.updateCounts(
                         txnId: pillScanViewModel.currentTransaction?.txn_id ,
@@ -756,6 +765,22 @@ extension OPillCountView {
             }
         }
         .frame(width: 250)
+    }
+    
+    private var skipContainerPopup: some View {
+        ConfirmationDialogue(
+            title: "Skip Step",
+            message: "Remaining count is 0. Do you want to skip container pending step?",
+            cancelButtonText: "CANCEL",
+            confirmButtonText: "SKIP",
+            onCancel: {
+                showSkipContainerPopup = false
+            },
+            onConfirm: {
+                showSkipContainerPopup = false
+                handleComplete()
+            }
+        )
     }
 }
 

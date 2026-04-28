@@ -82,6 +82,10 @@ class PillScanViewModel: ObservableObject {
     // MARK: Stock Count State
     @Published var addCurrentOpenPillCount: Int = 0
 
+    // Set to true before pushing to PillScanDetailGridScreen so onDisappear
+    // in PillCountView knows not to clear transaction data mid-push.
+    var isNavigatingToDetailGrid: Bool = false
+
     //MARK: RX FLow
     @Published var showRxFlowPopup: Bool = false
     @Published var scannedRxData: ParsedScanData? = nil

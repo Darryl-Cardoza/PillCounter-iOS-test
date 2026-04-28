@@ -449,6 +449,7 @@ struct BottomControlsViewBodyForPillScan: View {
     @State private var isAnimating: Bool = true
     @State private var stabilityWorkItem: DispatchWorkItem?
     @EnvironmentObject private var router: Router
+    @EnvironmentObject private var pillScanViewModel: PillScanViewModel
 
     var body: some View {
         Group {
@@ -472,6 +473,7 @@ struct BottomControlsViewBodyForPillScan: View {
                     totalCountView
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .onTapGesture {
+                            pillScanViewModel.isNavigatingToDetailGrid = true
                             router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
                         }
 

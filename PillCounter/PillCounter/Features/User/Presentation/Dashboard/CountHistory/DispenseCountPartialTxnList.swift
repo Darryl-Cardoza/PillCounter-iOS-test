@@ -83,9 +83,10 @@ struct DispenseCountPartialTxnList: View {
 
             menuOptions: TransactionDetailOption.allCases,
             optionLabel: { $0.rawValue },
-            filterView: {
-                AnyView(pmsFilterChips)
-            }
+//            filterView: {
+//                AnyView(pmsFilterChips)
+//            }
+            filterView: nil
         )
         .onAppear {
             reloadTransactions()

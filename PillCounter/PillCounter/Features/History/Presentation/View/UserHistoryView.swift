@@ -126,6 +126,7 @@ struct UserHistoryView: View {
                     }
                 }
             )
+            .padding(.top, 25)
             .transition(.move(edge: .trailing).combined(with: .opacity))
         } else {
             HStack {
@@ -322,6 +323,7 @@ struct UserHistoryView: View {
             isLandscape ? SafeAreaInsets.top + 50 : SafeAreaInsets.top + 30
         )
         .padding(.leading, isLandscape ? SafeAreaInsets.leading : 0)
+        .padding(.bottom, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(appColors.secondaryBackground)
     }

@@ -83,7 +83,7 @@ private extension ControlledStepRow {
             .resizable()
             .scaledToFit()
             .frame(width: 20, height: 20)
-            .colorMultiply(iconColor(for: state))
+            .colorMultiply(appColors.text)
             .padding(8)
             .frame(width: 40, height: 40)
             .background(

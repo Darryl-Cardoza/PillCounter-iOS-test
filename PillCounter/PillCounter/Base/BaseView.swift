@@ -223,7 +223,7 @@ extension BaseView {
                 Rectangle()
                     .fill(appColors.primaryBackground)
                     .ignoresSafeArea(edges: .top)
-                    .frame(height: isLandscape ? 60 : 100)
+                    .frame(height: isLandscape ? 44 : 100)
                     .frame(maxHeight: .infinity, alignment: .top)
             }
             

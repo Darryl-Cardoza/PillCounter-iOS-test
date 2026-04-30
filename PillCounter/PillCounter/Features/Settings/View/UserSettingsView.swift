@@ -353,8 +353,6 @@ struct UserSettingsView: View {
 
                         AppStorageManager.shared.selectedSchedules = selectedSchedules
 
-                        activeSubScreen = nil
-
                     } label: {
                         HStack(spacing: 8) {
 

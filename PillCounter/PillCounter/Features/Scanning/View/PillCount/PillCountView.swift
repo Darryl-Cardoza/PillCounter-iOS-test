@@ -57,6 +57,17 @@ struct OPillCountView: View {
     @State private var showCaptureToast = false
     @State private var capturedVialImage: UIImage? = nil
     @State private var showCaptureFlash = false
+    
+    private var controlledStepInstruction: String {
+        let step = pillScanViewModel.currentControlledStep
+        let raw  = pillScanViewModel.currentTransaction?.count_type ?? ""
+
+        if raw == CountType.REGULAR.rawValue {
+            return NSLocalizedString("REGULAR_TARGET_REVERIFICATION", comment: "")
+        } else {
+            return step.displayText
+        }
+    }
 
     // MARK: - BODY
     var body: some View {
@@ -98,13 +109,33 @@ struct OPillCountView: View {
                         controlsContent
                     }
                 },
+//                headerActions: {
+//
+//                    let step = pillScanViewModel.currentControlledStep
+//                    let raw = pillScanViewModel.selectedTransaction?.count_type ?? ""
+//
+//                    var instruction = ""
+//
+//                    if step == .targetVerification && raw == CountType.REGULAR.rawValue {
+//                        instruction = NSLocalizedString("REGULAR_TARGET_REVERIFICATION", comment: "")
+//                    } else {
+//                        instruction = step.displayText(countType: CountType(rawValue: raw) ?? .FIXED)
+//                    }
+//
+//                    if !instruction.isEmpty {
+//                        HStack {
+//                            Spacer()
+//                            PillCountInstructionOverlay(text: instruction)
+//                            Spacer()
+//                        }
+//                        .padding(.vertical, 10)
+//                    }
+//                },
                 headerActions: {
-                    let instruction = pillScanViewModel.currentControlledStep.displayText
-
-                    if !instruction.isEmpty {
+                    if !controlledStepInstruction.isEmpty {
                         HStack {
                             Spacer()
-                            PillCountInstructionOverlay(text: instruction)
+                            PillCountInstructionOverlay(text: controlledStepInstruction)
                             Spacer()
                         }
                         .padding(.vertical, 10)
@@ -233,7 +264,7 @@ struct OPillCountView: View {
             }
         }
         .onChange(of: pillScanViewModel.currentControlledStep) { _, newStep in
-            handleStepVoice(newStep)
+            handleStepVoice(step:newStep)
             
             if newStep == .containerPending &&
                  pillScanViewModel.isContainerPendingZero() {
@@ -250,8 +281,21 @@ struct OPillCountView: View {
         }
     }
     
-    private func handleStepVoice(_ step: ControlledStep) {
-        SpeechManager.shared.speak(step.displayText)
+//    private func handleStepVoice(_ step: ControlledStep) {
+//        SpeechManager.shared.speak(step.displayText)
+//        pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
+//    }
+    
+    private func handleStepVoice(step: ControlledStep) {
+        let text: String
+
+        if  pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
+            text = NSLocalizedString("REGULAR_TARGET_REVERIFICATION", comment: "")
+        } else {
+            text = step.displayText
+        }
+
+        SpeechManager.shared.speak(text)
         pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
     }
 }
@@ -272,7 +316,7 @@ extension OPillCountView {
                     Button {
                         cameraService.resumeIfPaused()
                         cameraService.resetInactivityTimer()
-                        handleStepVoice(pillScanViewModel.currentControlledStep)
+                        handleStepVoice(step: pillScanViewModel.currentControlledStep)
                     } label: {
                         Text("Resume")
                             .font(.headline)
@@ -544,10 +588,6 @@ extension OPillCountView {
         .frame(width: 300)
     }
 
-//    private var isTransactionCompleted: Bool {
-//        pillScanViewModel.getTotalPillCountOfCurrentTransaction()
-//            == (pillScanViewModel.currentTransaction?.target_count ?? 0)
-//    }
     
     private var isTransactionCompleted: Bool {
         if  pillScanViewModel.currentTransaction?.is_from_pms == true {
@@ -667,106 +707,44 @@ extension OPillCountView {
 
     // Popup for adding a note before saving.
     private var showNoteOptionPopup: some View {
-        VStack(alignment: .leading, spacing: 25) {
-            HStack {
-                Text("ADD NOTE").foregroundStyle(appColors.text)
-                Spacer()
-                Button {
-                    showNoteOption = false
-                    showConfirmCompletionPopup = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .resizable().scaledToFit().frame(width: 16, height: 16)
-                        .foregroundStyle(appColors.text)
+        NotePopupView(
+            title: "ADD NOTE",
+            showClose: true,
+            text: $pillScanViewModel.note,
+            errorMessage: errorMessageOfNote,
+            primaryTitle: "SAVE",
+            primaryAction: {
+                if pillScanViewModel.note.isEmpty {
+                    errorMessageOfNote = "Please add a note"
+                    return
                 }
-            }
-
-            PillCounterTextEditor(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
-                text: $pillScanViewModel.note
-            )
-
-            if let errorMessageOfNote = errorMessageOfNote {
-                Text(errorMessageOfNote).foregroundStyle(Color.red).padding(
-                    .top,
-                    -20
-                )
-            }
-
-            HStack {
-                if pillScanViewModel.currentTransaction?.is_from_pms == false{
-                    PillCountingButton(
-                        iconName: nil,
-                        title: "SKIP",
-                        textColor: appColors.text,
-                        backgroundColor: appColors.primaryBackground,
-                        borderColor: appColors.primary,
-                        font: .system(size: 12, weight: .semibold),
-                        cornerRadius: 30,
-                        horizontalPadding: 32,
-                        verticalPadding: 14,
-                        iconSize: 0,
-                        action : {
-                            showNoteOption = false
-                            Task(priority: .background) {
-                                await MainActor.run {
-                                    // Controlled drug → move to next step
-                                    if pillScanViewModel.currentTransaction?.is_from_pms == true {
-                                        pillScanViewModel.handleStepCompletion()
-                                    } else {
-                                        // Normal drug → completion popup
-                                        showConfirmCompletionPopup = true
-                                    }
-                                }
-                            }
-                        }
-                     )
-                }
-                PillCountingButton(
-                    iconName: nil,
-                    title: "SAVE",
-                    textColor: appColors.text,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 12, weight: .regular),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 14,
-                    iconSize: 0,
-                    action: {
-                        if pillScanViewModel.note.isEmpty {
-                            errorMessageOfNote = "Please add a note"
-                            return
-                        }
-
-                        showNoteOption = false
-
-                        Task(priority: .background) {
-                            pillScanViewModel.updateNoteForCurrentTransaction(
-                                txn_id: pillScanViewModel.currentTransaction?.txn_id ?? 0,
-                                note: pillScanViewModel.note
-                            )
-
-                            await MainActor.run {
-                                // Controlled drug → move to next step
-//                                if pillScanViewModel.currentTransaction?.is_from_pms == true {
-//                                    pillScanViewModel.handleStepCompletion()
-//                                      
-//                                } else {
-                                    // Normal drug → completion popup
-                                    showConfirmCompletionPopup = true
-//                                }z
-                            }
-                        }
+                showNoteOption = false
+                Task(priority: .background) {
+                    pillScanViewModel.updateNoteForCurrentTransaction(
+                        txn_id: pillScanViewModel.currentTransaction?.txn_id ?? 0,
+                        note: pillScanViewModel.note
+                    )
+                    await MainActor.run {
+                        showConfirmCompletionPopup = true
                     }
-                )
+                }
+            },
+            secondaryTitle: pillScanViewModel.currentTransaction?.is_from_pms == false ? "SKIP" : nil,
+            secondaryAction: pillScanViewModel.currentTransaction?.is_from_pms == false ? {
+                showNoteOption = false
+                Task(priority: .background) {
+                    await MainActor.run {
+                        showConfirmCompletionPopup = true
+                    }
+                }
+                pillScanViewModel.note = ""
+            } : {},
+            onClose: {
+                showNoteOption = false
+                showConfirmCompletionPopup = false
             }
-        }
-        .frame(width: 250)
+        )
     }
-    
     private var skipContainerPopup: some View {
         ConfirmationDialogue(
             title: "Skip Step",

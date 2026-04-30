@@ -215,6 +215,21 @@ extension PillsDataLocalStorage {
         }
     }
     
+    func updateBatchNote(batchId: Int64, note: String) {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "batch_id == %lld", batchId)
+
+        if let batch = try? mainThreadContext.fetch(request).first {
+            batch.note = note
+
+            do {
+                try mainThreadContext.save()
+            } catch {
+                print("❌ Failed to save batch note:", error)
+            }
+        }
+    }
+    
     func fetchCompletedUnsyncedTransactions() -> [PillCountTransactionEntity] {
 
         let request: NSFetchRequest<PillCountTransactionEntity> =
@@ -231,5 +246,23 @@ extension PillsDataLocalStorage {
         ]
 
         return (try? mainThreadContext.fetch(request)) ?? []
+    }
+    
+    
+    // update the status of the particular transaction // temp
+    func updateTransactionStatus(txnId: Int64, newStatus: CountStatus) {
+        // fetch from the db that particular transaction.
+        guard
+            let transaction = fetchPillCountTransactionByTransactionId(
+                txnId: txnId)
+        else {
+            print("❌ no transaction found.")
+            return
+        }
+
+        transaction.status = newStatus.rawValue
+        transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: mainThreadContext)
+        transactionsDidChange.send()
     }
 }

@@ -47,6 +47,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
     @State private var selectedIds: Set<Int64> = []
 
     @State private var selectedItem: Item?
+    
 
 
     // MARK: BODY
@@ -99,8 +100,9 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
                                 .frame(maxWidth: 140)
                                 .padding(.vertical, 10)
                         }
-                        .background(appColors.primary)
+                        .background(selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary)
                         .cornerRadius(20)
+                        .disabled(selectedIds.isEmpty)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -203,30 +205,6 @@ extension GenericListScreen {
     fileprivate var header: some View {
         Group {
             if isEditing {
-//                HStack {
-//                    Button("Select All") {
-//                        toggleAll()
-//                    }
-//                    .foregroundColor(appColors.primary)
-//
-//                    Spacer()
-//
-//                    Button("Delete") {
-//                        onDelete(selectedIds)
-//                    }
-//                    .foregroundColor(appColors.primary)
-//
-//                    Button("Cancel") {
-//                        withAnimation(.spring()) {
-//                            isEditing = false
-//                            selectedIds.removeAll()
-//                        }
-//                    }
-//                    .foregroundColor(appColors.primary)
-//                }
-//                .padding(.horizontal, 10)
-//                .transition(.opacity)
-                
                 HStack(spacing: 10) {
 
                     // CHECKBOX
@@ -282,14 +260,16 @@ extension GenericListScreen {
                             .foregroundColor(appColors.primary)
                     }
 
-                    Button {
-                        withAnimation(.spring()) {
-                            isEditing = true
+                    if !items.isEmpty {
+                        Button {
+                            withAnimation(.spring()) {
+                                isEditing = true
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 20))
+                                .foregroundColor(appColors.primary)
                         }
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 20))
-                            .foregroundColor(appColors.primary)
                     }
                 }
                 .padding(.trailing, 16)

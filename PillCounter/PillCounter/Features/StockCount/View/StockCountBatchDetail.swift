@@ -24,6 +24,7 @@ struct StockCountBatchDetail: View {
     
     @State private var exportedPDFURL: URL? = nil
     @State private var showShareSheet:  Bool = false
+    @State private var showNoteOptions: Bool = false
 
     private var allIds: Set<String> {
         Set(stockCountVieModel.groupedTransactions.map { $0.ndc })
@@ -72,7 +73,9 @@ struct StockCountBatchDetail: View {
             .customPopup(isPresented: $showExportPopUp) {
                 showConfirmExportPopup
             }
-
+            .customPopup(isPresented: $showNoteOptions){
+                showNoteOptionPopup
+            }
         }
     }
     
@@ -211,7 +214,7 @@ struct StockCountBatchDetail: View {
             EqualWidthHStackButtons(spacing: 16) {
 
                 PillCountingButton(
-                    title: "END BATCH",
+                    title: "END COUNT",
                     textColor: appColors.primary,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
@@ -288,23 +291,26 @@ extension StockCountBatchDetail{
         ConfirmationDialogue(
             title: NSLocalizedString("CONFIRM_END_BATCH", comment: ""),
             message: hasNoCount
-                ? "No transactions or counts added. Do you want to end the batch?"
-                : nil,
+            ? "No transactions or counts added. Do you want to end the batch?"
+            : nil,
             cancelButtonText: "NO",
             confirmButtonText: "YES",
             onCancel: {
                 showEndBatchPopUp = false
             },
             onConfirm: {
-                showEndBatchPopUp = false
-
-                if let batchId = stockCountVieModel.currentBatch?.batch_id {
-                    stockCountVieModel.completeBatch(batchId: batchId)
+                if !stockCountVieModel.isNoteEnable {
+                    if let batchId = stockCountVieModel.currentBatch?.batch_id {
+                        stockCountVieModel.completeBatch(batchId: batchId)
+                    }
+                    
+                    router.setRoot(
+                        to: .authentication(.login(.dashboard(.dashboardHome)))
+                    )
+                }else{
+                    showNoteOptions = true
                 }
-
-                router.setRoot(
-                    to: .authentication(.login(.dashboard(.dashboardHome)))
-                )
+                showEndBatchPopUp = false
             }
         )
     }
@@ -320,6 +326,44 @@ extension StockCountBatchDetail{
             },
             onConfirm: {
                 showExportPopUp = false
+            }
+        )
+    }
+    
+    private var showNoteOptionPopup: some View {
+        NotePopupView(
+            title: "Would you like to add a note?",
+            showClose: true,
+            text: $stockCountVieModel.note,
+            errorMessage: nil,
+            primaryTitle: "YES",
+            primaryAction: {
+                showNoteOptions = false
+                if let batchId = stockCountVieModel.currentBatch?.batch_id {
+                    stockCountVieModel.completeBatch(batchId: batchId)
+                }
+                stockCountVieModel.note = ""
+                router.setRoot(
+                    to: .authentication(.login(.dashboard(.dashboardHome)))
+                )
+            },
+            secondaryTitle: "SKIP",
+            secondaryAction: {
+                showNoteOptions = false
+                if let batchId = stockCountVieModel.currentBatch?.batch_id {
+                    stockCountVieModel.completeBatch(batchId: batchId)
+                }
+                stockCountVieModel.note = ""
+                router.setRoot(
+                    to: .authentication(.login(.dashboard(.dashboardHome)))
+                )
+            },
+            onClose: {
+                showNoteOptions = false
+                stockCountVieModel.note = ""
+                router.setRoot(
+                    to: .authentication(.login(.dashboard(.dashboardHome)))
+                )
             }
         )
     }

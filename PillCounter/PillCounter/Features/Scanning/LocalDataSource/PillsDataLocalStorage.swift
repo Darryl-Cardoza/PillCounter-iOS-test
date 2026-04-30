@@ -14,6 +14,8 @@ final class PillsDataLocalStorage {
 
      var pendingTxnController: NSFetchedResultsController<PillCountTransactionEntity>?
     
+    
+    
     // init function.
     private init() {}
 
@@ -184,22 +186,21 @@ final class PillsDataLocalStorage {
         return try? mainThreadContext.fetch(request).first
     }
 
-    // update the status of the particular transaction
-    func updateTransactionStatus(txnId: Int64, newStatus: CountStatus) {
-        // fetch from the db that particular transaction.
-        guard
-            let transaction = fetchPillCountTransactionByTransactionId(
-                txnId: txnId)
-        else {
-            print("❌ no transaction found.")
-            return
-        }
-
-        transaction.status = newStatus.rawValue
-        transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-
-        CoreDataManager.shared.save(context: mainThreadContext)
-    }
+//    // update the status of the particular transaction
+//    func updateTransactionStatus(txnId: Int64, newStatus: CountStatus) {
+//        // fetch from the db that particular transaction.
+//        guard
+//            let transaction = fetchPillCountTransactionByTransactionId(
+//                txnId: txnId)
+//        else {
+//            print("❌ no transaction found.")
+//            return
+//        }
+//
+//        transaction.status = newStatus.rawValue
+//        transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+//        CoreDataManager.shared.save(context: mainThreadContext)
+//    }
 
     // function to update or insert note.
     func updateNote(txnId: Int64, note: String) {

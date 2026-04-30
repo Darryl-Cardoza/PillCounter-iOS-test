@@ -105,7 +105,7 @@ final class HL7TxnSyncQueue {
         }
 
         let hl7 = hl7Builder.buildCompletionMessage(txn: txn, user: user)
-
+        print("hl7\(hl7)")
         guard let manager = hl7Manager, !hl7.isEmpty else {
             print("❌ [TxnQueue] HL7 invalid or manager nil")
             return

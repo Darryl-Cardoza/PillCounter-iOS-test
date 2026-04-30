@@ -16,6 +16,7 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
+    @EnvironmentObject private var stockCountViewModel: StockCountViewModel
 
     @State private var showLogoutPopup: Bool = false
     
@@ -41,7 +42,7 @@ struct HamburgerMenuView: View {
                 headerActions: { EmptyView() },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: NSLocalizedString("PROFILE", comment: "")
+                title: ""
             )
         }
         .customPopup(isPresented: $showLogoutPopup) {
@@ -202,8 +203,7 @@ struct HamburgerMenuView: View {
               
         case .FixedCount:
             countButtonsRow(
-                completedCount: userViewModel
-                    .fixedCountTransactionCompletedCount,
+                completedCount: userViewModel.fixedCountTransactionCompletedCount,
                 partialCount: userViewModel.fixedCountTransactionPartialCount,
                 completedColor: appColors.primary,
                 partialColor: appColors.primary,
@@ -222,9 +222,8 @@ struct HamburgerMenuView: View {
 
         case .RegularCount:
             countButtonsRow(
-                completedCount: userViewModel
-                    .regularCountTransactionCompletedCount,
-                partialCount: userViewModel.regularCountTransactionPartialCount,
+                completedCount: stockCountViewModel.totalCompletedBatchCount,
+                partialCount:stockCountViewModel.totalBatchCount,
                 completedColor: appColors.primary,
                 partialColor: appColors.primary,
                 completedBg: appColors.primaryBackground,
@@ -236,7 +235,7 @@ struct HamburgerMenuView: View {
                         router.selectedPillScanningType = .REGULAR
                         router.navigate(
                             to: .authentication(
-                                .login(.dashboard(.regularCountPartial))))
+                                .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
                 }
             )
 

@@ -15,6 +15,8 @@ struct DashboardView: View {
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @StateObject private var locationService = LocationService.shared
+    
+    @StateObject private var dashboardViewModel =  DashboardViewModel()
 
     @State private var someParialValue: Int = 1
     @State private var someParialValue2: Int = 2

@@ -34,6 +34,9 @@ class StockCountViewModel: ObservableObject {
     @Published var showScannedNdcDoesNotMatch: Bool = false
     @Published var batchNdcSet: Set<String> = []
     @Published var selectedTransaction: PillCountTransactionEntity? = nil
+    @Published var note: String = ""
+    
+    @AppStorage(AppStorageManager.AppStorageKeys.isPillCountingEnabled) var isNoteEnable: Bool = false
 
     // MARK: - Combine
 
@@ -113,13 +116,20 @@ class StockCountViewModel: ObservableObject {
         txns.forEach {
             pillDataLocalStorage.updateTransactionStatus(txnId: $0.txn_id, newStatus: .COMPLETED)
         }
-
+        
         // Save batch status THEN fire publisher — no race condition
         pillDataLocalStorage.updateBatchStatus(batchId: batchId, status: .COMPLETED) { [weak self] in
             // This runs on main thread, after Core Data save is confirmed
             self?.pillDataLocalStorage.transactionsDidChange.send()
-            print("✅ Batch \(batchId) marked COMPLETED — publisher fired after save")
         }
+        
+        if !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+               pillDataLocalStorage.updateBatchNote(
+                   batchId: batchId,
+                   note: note
+               )
+            note = ""
+         }
     }
 
     // MARK: - Transactions

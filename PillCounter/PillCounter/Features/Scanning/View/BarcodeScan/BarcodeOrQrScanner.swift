@@ -211,24 +211,9 @@ struct QRBarcodeScannerView: View {
                 scanTimeoutTask?.cancel()
             }
         }
-//        .onChange(of: showPillTargetCountPopup) { _, newValue in
-//            if newValue == false {
-//                restartFullScannerFlow()
-//            }
-//        }
         .onChange(of: scanType){_, newValue in
             handleStepVoice()
         }
-//        .onChange(of: pillScanViewModel.shouldAutoProceedToCount) {
-//            _,
-//            shouldProceed in
-//            guard shouldProceed else { return }
-//            handleSubstitute()
-//            pillScanViewModel.shouldAutoProceedToCount = false
-//        }
-//        .customPopup(isPresented: $showPillTargetCountPopup) {
-//            mannulaEntryTargetCount
-//        }
         .customPopup(
             isPresented: $pillScanViewModel.showNdcEquivalencePopup,
             dismissOnBackgroundTap: false
@@ -353,7 +338,7 @@ extension QRBarcodeScannerView {
                      {
                          switch currentScanType {
                          case .rx_label:
-                             if pillScanViewModel.matchesBarcodeFormat(newValue) && currentScanType == .rx_label {
+                             if pillScanViewModel.matchesBarcodeFormat(newValue) {
                                  pillScanViewModel.parseScanData(actualValue: newValue)
                              } else {
                                  pillScanViewModel.isNdcEquivalent = false
@@ -804,37 +789,6 @@ extension QRBarcodeScannerView {
                        title: "Bucket",
                        value: pillScanViewModel.selectedBucket 
                    )
-//                   VStack(alignment: .leading, spacing: 8) {
-//                       Text("Select Bucket")
-//                           .font(.system(size: 14))
-//                           .foregroundColor(appColors.text)
-//
-//                       Menu {
-//                           ForEach(pillScanViewModel.bucketOptions, id: \.self) { bucket in
-//                               Button(bucket) {
-//                                   pillScanViewModel.selectedBucket = bucket
-//                               }
-//                           }
-//                       } label: {
-//                           HStack {
-//                               Text(pillScanViewModel.selectedBucket.isEmpty ? "Select Bucket" : pillScanViewModel.selectedBucket)
-//                                   .foregroundColor(appColors.text)
-//
-//                               Spacer()
-//
-//                               Image(systemName: "chevron.down")
-//                                   .foregroundColor(appColors.text.opacity(0.7))
-//                           }
-//                           .padding()
-//                           .frame(maxWidth: .infinity)
-//                           .background(appColors.secondaryBackground)
-//                           .cornerRadius(10)
-//                           .overlay(
-//                               RoundedRectangle(cornerRadius: 10)
-//                                   .stroke(appColors.primary, lineWidth: 1.5)
-//                           )
-//                       }
-//                   }
                }
            }
            .scrollIndicators(.hidden)

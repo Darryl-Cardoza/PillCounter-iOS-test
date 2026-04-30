@@ -13,7 +13,7 @@ struct HistoryBatchDetailView: View {
     @EnvironmentObject private var router: Router
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var historyViewModel: HistoryViewModel
-
+    
     @State private var isEditing: Bool = false
     @State private var selectedNdcs: Set<String> = []
     @State private var showDeleteConfirmation: Bool = false
@@ -169,14 +169,12 @@ struct HistoryBatchDetailView: View {
 
             // MARK: Top Row
             HStack {
-                // Left title
                 Text("TOTAL NDC COUNT")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(appColors.text.opacity(0.6))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(appColors.text)
 
                 Spacer()
 
-                // Right value (BIG)
                 let ndcCount = historyViewModel.groupedTransactionsForBatch.count
 
                 Text("\(ndcCount)")
@@ -189,21 +187,22 @@ struct HistoryBatchDetailView: View {
                 HStack {
                     Text("Completed on")
                         .font(.system(size: 13))
-                        .foregroundColor(appColors.text.opacity(0.6))
+                        .foregroundColor(appColors.text)
 
                     Spacer()
 
-                    Text(
-                        "\(DateUtils.formatToUSDateTime(batch.end_date_time))"
-                    )
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(appColors.text)
+                    Text(DateUtils.formatToUSDateTime(batch.end_date_time))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(appColors.text)
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(appColors.primaryBackground)
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(appColors.secondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, isLandscape ? 32 : 16)
+        .padding(.bottom, isLandscape ? 8 : 16)
     }
 
 

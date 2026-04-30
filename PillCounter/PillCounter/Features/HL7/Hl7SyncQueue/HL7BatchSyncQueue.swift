@@ -143,7 +143,7 @@ final class HL7BatchSyncQueue {
         }
 
         let hl7 = hl7Builder.buildInventoryMessage(batch: batch, user: user)
-
+        print("hl7\(hl7)")
         print("📡 [HL7] Sending batch:", item.batchId,
               "| requestId:", item.requestId)
 

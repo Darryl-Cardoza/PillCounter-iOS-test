@@ -25,7 +25,7 @@
         var body: some View {
             GenericListScreen<BatchCountEntity, TransactionDetailOption>(
                 items: batches,
-                title: "PARTIAL COUNTS",
+                title: "PENDING BATCHES",
                 resetTrigger: resetList,
               
                 
@@ -195,8 +195,7 @@
                     pendingAction = .delete(id)
                 }
             case .forceComplete:
-                if let id = selectedBatchId {
-                }
+               return
             }
         }
     }
@@ -232,9 +231,7 @@
                             pendingAction = .delete(id)
                         }
                     case .forceComplete:
-                        if let id = selectedBatchId {
-                            showMenuOptions = false
-                        }
+                       return
                     }
                 }
             )
@@ -254,7 +251,7 @@
                 }
             )
         }
-
+    
         private func handleConfirmedAction() {
             guard let action = pendingAction else { return }
             pendingAction = nil

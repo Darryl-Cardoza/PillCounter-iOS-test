@@ -34,6 +34,7 @@ struct AppNavigation: View {
                 .navigationDestination(for: PillCounterFlow.self) {
                     destination in
                     switch destination {
+                    //MARK: LOGIN
                     case .authentication(.login(.LoginEmail)):
                         LoginEmailView()
                             .navigationBarBackButtonHidden(true)
@@ -41,7 +42,7 @@ struct AppNavigation: View {
                     case .authentication(.login(.otpVerificationLogin)):
                         LoginOtpVerificationView()
                             .navigationBarBackButtonHidden(true)
-                        
+                    //MARK: DASHBORD
                     case .authentication(.login(.dashboard(.dashboardHome))):
                         DashboardView()
                             .navigationBarBackButtonHidden(true)
@@ -50,10 +51,6 @@ struct AppNavigation: View {
                         DispenseCountPartialTxnList(title: "pending dispense counts")
                             .navigationBarBackButtonHidden(true)
                         
-                    case .authentication(
-                        .login(.dashboard(.regularCountPartial))):
-                        CountHistoryView(title: "pending quick counts")
-                            .navigationBarBackButtonHidden(true)
                         
                     case .authentication(.login(.dashboard(.pillCount(.barcodeScanning(let scanType))))):
                         QRBarcodeScannerView(currentScanType: scanType)
@@ -66,7 +63,6 @@ struct AppNavigation: View {
                         
                     case .authentication(
                         .login(.dashboard(.pillCount(.pillCountHistoryView)))):
-                        
                         PillScanDetailGridScreen()
                             .navigationBarBackButtonHidden(true)
 
@@ -85,12 +81,12 @@ struct AppNavigation: View {
                     case .authentication(.user(.userSettings(.settings))):
                         UserSettingsView()
                             .navigationBarBackButtonHidden(true)
-                        
+                     
+                    //MARK: HISTORY
                     case .authentication(.user(.userSettings(.History(let filterType)))):
                         UserHistoryView(filterType: filterType)
                             .navigationBarBackButtonHidden(true)
                         
-                        // before navigating to this screen make sure to set the current transaction of the pill scan view model to the selected transaction.
                     case .authentication(
                         .user(.userSettings(.HistoryTransactionDetail))):
                         HistoryTransactionDetailView()
@@ -101,10 +97,10 @@ struct AppNavigation: View {
                         HistoryBatchDetailView()
                             .navigationBarBackButtonHidden(true)
                         
-                    case .authentication(
-                        .login(.dashboard(.pillCount(.controlledDrug(.vialCount))))):
-                        VialCaptureView()
-                            .navigationBarBackButtonHidden(true)
+//                    case .authentication(
+//                        .login(.dashboard(.pillCount(.controlledDrug(.vialCount))))):
+//                        VialCaptureView()
+//                            .navigationBarBackButtonHidden(true)
                         
                     // MARK: STOCK COUNT
                     case .authentication(

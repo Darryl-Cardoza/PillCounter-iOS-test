@@ -98,7 +98,7 @@ struct ZoomControlView: View {
                 GeometryReader { geo in
                     let width = geo.size.width
 
-                    let horizontalPadding: CGFloat = 16   // slider internal padding
+                    let horizontalPadding: CGFloat = 16
                     let usableWidth = width - (horizontalPadding * 2)
 
                     let percentage = (cameraService.zoomFactor - minZoom) / (maxZoom - minZoom)
@@ -299,9 +299,8 @@ struct BottomControlsView: View {
                 isScanPill: $showHistoryOrScanPillIcon,
                 onResetPills: onReset
             )
-            .padding()
-            .padding(.top, isLandscape ? 0 : 10)
-
+            .padding(.top, isLandscape ? 0 : 50)
+          
             VStack {
                 if showHistoryOrScanPillIcon {
                     BottonControlsViewForTransactionList(
@@ -309,8 +308,6 @@ struct BottomControlsView: View {
                             .currentTransactionTransactionDetails ?? [],
                         appColors: appColors,
                         countType: router.selectedPillScanningType ?? .FIXED,
-//                        targetCount: pillScanViewModel.currentTransaction?
-//                            .target_count ?? 0,
                         targetCount: targetCount ,
                         onTap: onTransactionDetailTapped,
                         isLandscape: isLandscape
@@ -320,8 +317,6 @@ struct BottomControlsView: View {
                     BottomControlsViewBodyForPillScan(
                         appColors: appColors,
                         countType: router.selectedPillScanningType ?? .FIXED,
-//                        targetCount: pillScanViewModel.currentTransaction?
-//                            .target_count ?? 0,
                         targetCount: targetCount,
                         currentTotalCount: completeCount,
                         currentScanningCount: cameraService.stableCount,
@@ -332,7 +327,8 @@ struct BottomControlsView: View {
                             .isPausedDueToInactivity,
                         isAddButtonDisabled: isAddButtonDisabled
                     )
-                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, UIDevice.current.userInterfaceIdiom == .pad ? 40 : 0)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -454,10 +450,7 @@ struct BottomControlsViewBodyForPillScan: View {
     var body: some View {
         Group {
             if isLandscape {
-//                Spacer().frame(height: 200)
-                // MARK: - LANDSCAPE LAYOUT
-                // 1. Center: Add Button
-                // 2. Below: Row with Total Count (Left) and All Done (Right)
+                Spacer().frame(height: 3)
                 VStack(spacing: 5) {
                     addButton
                     HStack(alignment: .bottom) {
@@ -484,6 +477,7 @@ struct BottomControlsViewBodyForPillScan: View {
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(.horizontal)
+                .padding(.bottom, isLandscape ? 0 : 50)
             }
         }
         .onAppear {

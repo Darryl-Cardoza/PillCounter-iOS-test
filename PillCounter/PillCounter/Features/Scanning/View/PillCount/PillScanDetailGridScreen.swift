@@ -226,35 +226,44 @@ struct PillScanDetailGridScreen: View {
                 emptyState
             } else {
                 LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10)
-                    ],
+                    columns: gridColumns,
                     spacing: 10
                 ) {
                     ForEach(details, id: \.txn_details_id) { detail in
                         PillScanDetailCard(
-                              detail: detail,
-                              isEditing: isEditing,
-                              isSelected: selectedIds.contains(detail.txn_details_id)
+                            detail: detail,
+                            isEditing: isEditing,
+                            isSelected: selectedIds.contains(detail.txn_details_id)
                         )
                         .onTapGesture {
-                                if isEditing {
-                                    toggleSelection(detail.txn_details_id)
-                                }else {
-                                    if let path = detail.image_path,
-                                        let uiImage = PhotoFileManager.shared.loadUIImage(from: path)
-                                     {
-                                         selectedUIImage = uiImage
-                                     }
+                            if isEditing {
+                                toggleSelection(detail.txn_details_id)
+                            } else {
+                                if let path = detail.image_path,
+                                   let uiImage = PhotoFileManager.shared.loadUIImage(from: path) {
+                                    selectedUIImage = uiImage
                                 }
-                         }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, isEditing ? 100 : 20)
             }
         }
+    }
+    
+    private var gridColumns: [GridItem] {
+        let columnCount: Int
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            columnCount = isLandscape ? 4 : 3
+        } else {
+            columnCount = 2
+        }
+        return Array(
+            repeating: GridItem(.flexible(), spacing: 10),
+            count: columnCount
+        )
     }
 
     // MARK: - Landscape: horizontal scroll

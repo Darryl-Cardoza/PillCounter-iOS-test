@@ -68,6 +68,11 @@ final class HL7TxnSyncQueue {
         print("📦 [TxnQueue] Found pending txns:", txns.count)
 
         for txn in txns {
+            if txn.is_deleted {
+                  print("⛔️ [TxnQueue] Skipping deleted txn:", txn.txn_id)
+                  continue
+            }
+            
             let txnId = txn.txn_id
             let requestId = resolvedRequestId(for: txn)
 

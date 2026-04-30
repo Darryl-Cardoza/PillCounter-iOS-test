@@ -291,6 +291,8 @@ struct BottomControlsView: View {
     }
     
     var body: some View {
+        let isIpad = UIDevice.current.userInterfaceIdiom == .pad
+
         VStack(spacing: 0) {
             BottomControlsViewHeader(
                 drugName: pillScanViewModel.currentTransaction?.drug?.drug_name
@@ -299,7 +301,7 @@ struct BottomControlsView: View {
                 isScanPill: $showHistoryOrScanPillIcon,
                 onResetPills: onReset
             )
-            .padding(.top, isLandscape ? 0 : 50)
+            .padding(.top, isIpad ? 50 : 0)
           
             VStack {
                 if showHistoryOrScanPillIcon {
@@ -328,7 +330,6 @@ struct BottomControlsView: View {
                         isAddButtonDisabled: isAddButtonDisabled
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, UIDevice.current.userInterfaceIdiom == .pad ? 40 : 0)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -448,17 +449,37 @@ struct BottomControlsViewBodyForPillScan: View {
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
 
     var body: some View {
+        let isIpad = UIDevice.current.userInterfaceIdiom == .pad
+
         Group {
             if isLandscape {
-                Spacer().frame(height: 3)
-                VStack(spacing: 5) {
+                VStack(spacing: 0) {
+                    // addButton centered — constrain its size so it doesn't grow huge
                     addButton
-                    HStack(alignment: .bottom) {
+                        .frame(width: isIpad ? 160 : 120, height: isIpad ? 600 : 120)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 12)
+                    
+                    Spacer()
+                    
+                    // Bottom row: Total Count + All Done
+                    HStack(alignment: .center, spacing: 16) {
                         totalCountView
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onTapGesture {
+                                if pillScanViewModel.currentTransaction?.count_type ==  CountType.FIXED.rawValue {
+                                    pillScanViewModel.isNavigatingToDetailGrid = true
+                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+                                }
+                            }
                         Spacer()
                         allDoneButton
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
+                    .padding(.horizontal, isIpad ? 40 : 16)
+                    .padding(.bottom, 16)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 // MARK: - PORTRAIT LAYOUT
                 // All three in one bottom-aligned row
@@ -466,8 +487,10 @@ struct BottomControlsViewBodyForPillScan: View {
                     totalCountView
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .onTapGesture {
-                            pillScanViewModel.isNavigatingToDetailGrid = true
-                            router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+                            if pillScanViewModel.currentTransaction?.count_type ==  CountType.FIXED.rawValue {
+                                pillScanViewModel.isNavigatingToDetailGrid = true
+                                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+                            }
                         }
 
                     addButton
@@ -477,7 +500,7 @@ struct BottomControlsViewBodyForPillScan: View {
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(.horizontal)
-                .padding(.bottom, isLandscape ? 0 : 50)
+                .padding(.bottom, isIpad ? 50 : 0)
             }
         }
         .onAppear {

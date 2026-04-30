@@ -255,7 +255,7 @@ final class HL7BatchSyncQueue {
     private func persistGeneratedRequestId(_ requestId: String, for batch: BatchCountEntity) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            batch.req_id_from_pms = requestId
+            batch.req_id_from_pms = "REQ\(String(batch.batch_id))"
             try? self.storage.mainThreadContext.save()
         }
     }

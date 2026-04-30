@@ -180,7 +180,7 @@ final class HL7CompletionBuilder {
         let now = DateUtils.currentTimestamp()
         let messageId = "RES\(Int(Date().timeIntervalSince1970))"
 
-        let requestId = batch.req_id_from_pms ?? ""
+        let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
         let orderId = batch.bucket_id ?? ""
 
         let txns = PillsDataLocalStorage.shared

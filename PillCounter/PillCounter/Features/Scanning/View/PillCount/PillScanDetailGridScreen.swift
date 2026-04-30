@@ -45,11 +45,14 @@ struct PillScanDetailGridScreen: View {
         CountType(rawValue: pillScanViewModel.currentTransaction?.count_type ?? "") ?? .FIXED
     }
 
-    private var isFixed: Bool { details.first?.type != ControlledStep.containerInitiate.rawValue || countType == .FIXED}
+    private var isFixed: Bool {
+        details.first?.type == ControlledStep.containerInitiate.rawValue || countType == .FIXED
+    }
 
 
     // MARK: - Body
     var body: some View {
+        
         ZStack {
             BaseView(
                 topRatio: 1.0,
@@ -61,6 +64,9 @@ struct PillScanDetailGridScreen: View {
                 title: isEditing ? "DELETE TRANSACTION" : "TOTAL COUNT",
                 headerActionsBackground: appColors.primaryBackground
             )
+            .onAppear(){
+                print("Result: \(details.first?.type ?? "N/A")")
+            }
 
             // MARK: - Edit mode bottom bar
             if isEditing {

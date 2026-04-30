@@ -212,7 +212,6 @@ struct OPillCountView: View {
             cameraService.startObservingOrientation()
             initializeTransaction()
             pillScanViewModel.addCurrentOpenPillCount = 0
-
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
@@ -281,10 +280,6 @@ struct OPillCountView: View {
         }
     }
     
-//    private func handleStepVoice(_ step: ControlledStep) {
-//        SpeechManager.shared.speak(step.displayText)
-//        pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
-//    }
     
     private func handleStepVoice(step: ControlledStep) {
         let text: String

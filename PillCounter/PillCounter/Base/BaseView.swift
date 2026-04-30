@@ -129,6 +129,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
             .all,
             edges: allowKeyboardResize ? [.top, .leading, .trailing] : .all
         )
+        .ignoresSafeArea(edges: .bottom)
         .environment(\.dynamicTypeSize, .medium)
     }
 }
@@ -237,7 +238,7 @@ extension BaseView {
                     .padding(
                         .top,
                         isLandscape
-                        ? 0
+                        ? geometry.safeAreaInsets.top + 10
                         : max(geometry.safeAreaInsets.top + 10, 40)
                     )
                     .frame(
@@ -274,7 +275,7 @@ extension BaseView {
                     
                     // Inject the custom actions here
                     headerActions()
-                    
+                        .padding(.top, isLandscape ? 20 : 0)
                     
                     if showHamburgerMenu {
                         hamburgerMenuButton
@@ -439,3 +440,5 @@ extension BaseView {
         hamburgerMenuButton
     }
 }
+
+

@@ -331,15 +331,21 @@ struct DashboardView: View {
                             //Load Buckets
                             switch selectedStockCountOption {
                             case .newBatch:
+                                print("New batch")
                                 let buckets = userViewModel.bucket
                                 pillScanViewModel.bucketOptions = buckets
                                 pillScanViewModel.selectedBucket = buckets.first ?? ""
                                 showSelectBucketIdPopup = true
                                 showStockCountPopup = false
                             case .existingBatch:
+                                print("Existing batch")
                                 if stockCountViewModel.continueLastBatch() {
-                                    handleStockCountSelectedOption()
+                                    print("Fetch data")
+                                    router.selectedPillScanningType = .REGULAR
+                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
+                                    resetStockCountSelection()
                                 }else{
+                                    print("show toast")
                                     pillScanViewModel.showToastMessage(text: "No last batch found")
                                 }
                                 showStockCountPopup = false
@@ -433,11 +439,11 @@ struct DashboardView: View {
         resetStockCountSelection()
     }
     
+  
+    
     private func resetStockCountSelection() {
         selectedStockCountOption = .newBatch
     }
 }
 
-#Preview {
-    DashboardView()
-}
+

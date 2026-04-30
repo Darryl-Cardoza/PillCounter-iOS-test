@@ -149,32 +149,32 @@ struct StockCountBatchDetail: View {
             HStack(spacing: 16) {
 
                 // PDF BUTTON (your existing one)
-                Button {
-                    showExportPopUp.toggle()
-                } label: {
-                    Image("pdf")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 26, height: 26)
-                        .overlay { appColors.primary }
-                        .mask(
-                            Image("pdf")
-                                .resizable()
-                                .scaledToFit()
-                        )
-                }
+//                Button {
+//                    showExportPopUp.toggle()
+//                } label: {
+//                    Image("pdf")
+//                        .resizable()
+//                        .scaledToFit()
+//                        .frame(width: 26, height: 26)
+//                        .overlay { appColors.primary }
+//                        .mask(
+//                            Image("pdf")
+//                                .resizable()
+//                                .scaledToFit()
+//                        )
+//                }
 
                 // TRASH → Enter edit mode
-                Button {
+//                Button {
 //                    withAnimation {
 //                        isEditing = true
 //                        selectedTxnIds.removeAll()
 //                    }
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 20))
-                        .foregroundStyle(appColors.primary)
-                }
+//                } label: {
+//                    Image(systemName: "trash")
+//                        .font(.system(size: 20))
+//                        .foregroundStyle(appColors.primary)
+//                }
             }
             .padding(.trailing)
         }

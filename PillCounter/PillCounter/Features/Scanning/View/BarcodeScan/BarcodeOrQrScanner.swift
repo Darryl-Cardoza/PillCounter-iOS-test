@@ -174,6 +174,9 @@ struct QRBarcodeScannerView: View {
             isFromScanning = false
             scannedData = nil
             scanType = currentScanType
+            if scanType == .barcode {
+                handleStepVoice()
+            }
         }
         // MARK: - LIFECYCLE
         .task {
@@ -623,8 +626,6 @@ extension QRBarcodeScannerView {
         }
     }
 
-
-    
     private func restartFullScannerFlow() {
         showScannedData = false
         showMannualEntryPopup = false
@@ -792,7 +793,7 @@ extension QRBarcodeScannerView {
                }
            }
            .scrollIndicators(.hidden)
-           .fixedSize(horizontal: false, vertical: !isLandscape)
+           .fixedSize(horizontal: false, vertical: true)
            // MARK: Buttons
            EqualWidthHStackButtons(spacing: 30) {
                PillCountingButton(
@@ -857,7 +858,7 @@ extension QRBarcodeScannerView {
                }
            }
            .scrollIndicators(.hidden)
-           .fixedSize(horizontal: false, vertical: !isLandscape)
+           .fixedSize(horizontal: false, vertical: true)
            //  BUTTONS
            EqualWidthHStackButtons(spacing: 30) {
                PillCountingButton(

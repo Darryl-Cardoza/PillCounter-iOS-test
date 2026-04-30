@@ -97,11 +97,6 @@ struct AppNavigation: View {
                         HistoryBatchDetailView()
                             .navigationBarBackButtonHidden(true)
                         
-//                    case .authentication(
-//                        .login(.dashboard(.pillCount(.controlledDrug(.vialCount))))):
-//                        VialCaptureView()
-//                            .navigationBarBackButtonHidden(true)
-                        
                     // MARK: STOCK COUNT
                     case .authentication(
                         .login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail))))
@@ -128,3 +123,5 @@ struct AppNavigation: View {
         
     }
 }
+
+

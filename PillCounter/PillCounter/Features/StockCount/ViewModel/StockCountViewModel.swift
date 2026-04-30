@@ -90,9 +90,11 @@ class StockCountViewModel: ObservableObject {
     }
 
     func continueLastBatch() -> Bool {
-        guard let lastBatch = pillDataLocalStorage.fetchLastCreatedBatch() else { return false }
+        guard let lastBatch = pillDataLocalStorage.fetchLastCreatedBatch() else {
+            return false
+        }
         currentBatch = lastBatch
-        reloadAllState()   // currentBatch just changed — force immediate refresh
+        reloadAllState()
         return true
     }
 

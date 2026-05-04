@@ -272,7 +272,6 @@ extension BaseView {
                 
                 // 2. RIGHT SIDE: Header Actions + Hamburger
                 HStack(spacing: 16) {
-                    
                     // Inject the custom actions here
                     headerActions()
                         .padding(.top, isLandscape ? 20 : 0)

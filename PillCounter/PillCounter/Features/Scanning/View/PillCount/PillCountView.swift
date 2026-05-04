@@ -819,14 +819,21 @@ extension OPillCountView {
             guard let data = processed.jpegData(compressionQuality: 0.5) else { return }
             let fileSizeKB = Double(data.count) / 1024.0
 
-            // Step 3: Burn metadata overlay onto the already-oriented+overlaid image
+            
+            let txn = pillScanViewModel.currentTransaction
+
             let finalImage = processed.addingMetadataOverlay(
-                ndc: pillScanViewModel.currentTransaction?.drug?.ndc ?? "",
-                user: user,
+                ndc: txn?.drug?.ndc ?? "",
+                substituteNdc: txn?.substitueDrug?.ndc ?? "",
+                workflowStep: pillScanViewModel.currentControlledStep.rawValue,
                 count: cameraService.stableCount,
-                rx: pillScanViewModel.currentTransaction?.rx_no ?? "",
-                location: locationService.locationString,
+                targetCount: txn?.target_count,
+                lotNo: txn?.lot_no ?? "",
+                expiry: txn?.expiry ?? "",
                 timestamp: timestamp,
+                userInitials: user,
+                geolocation: locationService.locationString,
+                rx: txn?.rx_no ?? "",
                 fileSizeKB: fileSizeKB
             )
 

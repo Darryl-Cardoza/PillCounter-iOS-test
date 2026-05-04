@@ -203,6 +203,7 @@ extension PillScanViewModel{
 
         pillDataLocalStorage.updateTransaction(
             txnId: txnId,
+            substituedDrugId: drugId,
             drugId: drugId,
             countType: countType,
             targetCount: nil,

@@ -29,7 +29,7 @@ struct HistoryTransactionDetailView: View {
 
     /// Resolved once in .onAppear, kept locally so the view doesn't re-resolve on every render.
     @State private var transaction: PillCountTransactionEntity? = nil
-
+    
     // MARK: - Body
     var body: some View {
         ZStack {
@@ -100,9 +100,9 @@ struct HistoryTransactionDetailView: View {
         VStack(spacing: 0) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
-
                     VStack(spacing: 24) {
                         collapsibleSections
+                        Spacer()
                     }
                     .padding(.top, 80)
                     .padding(.bottom, 80)
@@ -127,9 +127,10 @@ struct HistoryTransactionDetailView: View {
                         )
                         Spacer()
                     }
-                    .padding(.top, -60)
+                    .padding(.top, 70)
+
                 }
-                .padding(.top, 30)
+                .padding(.top,30)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(appColors.secondaryBackground)
             }
@@ -162,19 +163,24 @@ extension HistoryTransactionDetailView {
     // MARK: - Collapsible Sections
     private var collapsibleSections: some View {
         VStack(spacing: 10) {
+            var drugDetailsTitle: String {
+                if let ndc = transaction?.substitueDrug?.ndc,
+                   !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return NSLocalizedString("SUBSTITUTED DRUG DETAILS", comment: "")
+                } else {
+                    return NSLocalizedString("DISPENSED DRUG DETAILS", comment: "")
+                }
+            }
 
-//            if let details = historyViewModel.detailsByStep[.targetVerification],
-//               !details.isEmpty,
-//               transaction?.is_from_pms == false
-//            {
-//                CollapsibleBox(
-//                    title: NSLocalizedString("PILL COUNT", comment: ""),
-//                    allowCollapse: false,
-//                    defaultExpanded: true
-//                ) {
-//                    collapsableBoxContent(step: .targetVerification)
-//                }
-//            }
+            if let type = transaction?.drug?.drug_type, type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                CollapsibleBox(
+                    title: NSLocalizedString("PILL COUNT", comment: ""),
+                    allowCollapse: false,
+                    defaultExpanded: true
+                ) {
+                    collapsableBoxContent(step: .targetVerification)
+                }
+            }
 
             if let details = historyViewModel.detailsByStep[.containerInitiate],
                !details.isEmpty
@@ -187,14 +193,19 @@ extension HistoryTransactionDetailView {
                     collapsableBoxContent(step: .containerInitiate, showTargetCount: false)
                 }
             }
-
-            CollapsibleBox(title: NSLocalizedString("SUBSTITUTED DRUG DETAILS", comment: "")) {
+            
+            if let ndc = transaction?.substitueDrug?.ndc,
+               !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty  {
+                CollapsibleBox(title: NSLocalizedString("REQUESTED_DRUG_DETAILS", comment: "")) {
+                    substituedInfoList
+                }
+            }
+            
+            CollapsibleBox(title: drugDetailsTitle) {
                 detailsInfoList
             }
 
-            if let details = historyViewModel.detailsByStep[.targetVerification],
-               !details.isEmpty
-            {
+            if let type = transaction?.drug?.drug_type, !type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 CollapsibleBox(title: NSLocalizedString("PILL COUNT", comment: "")) {
                     collapsableBoxContent(step: .targetVerification)
                 }
@@ -399,6 +410,21 @@ extension HistoryTransactionDetailView {
             detailRow(
                 label: NSLocalizedString("TIME", comment: ""),
                 value: Formatter.getTimeString(from: transaction?.created_at ?? 0)
+            )
+        }
+    }
+    
+    private var substituedInfoList: some View {
+        VStack(spacing: 0) {
+            detailRow(
+                label: NSLocalizedString("DRUG_NAME", comment: ""),
+                value: transaction?.substitueDrug?.drug_name ?? "N/A"
+            )
+            Divider().background(appColors.text.opacity(0.1))
+
+            detailRow(
+                label: NSLocalizedString("NDC", comment: ""),
+                value: transaction?.substitueDrug?.ndc ?? "N/A"
             )
         }
     }

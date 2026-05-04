@@ -14,8 +14,6 @@ struct HistoryBatchDetailView: View {
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var historyViewModel: HistoryViewModel
     
-    @State private var isEditing: Bool = false
-    @State private var selectedNdcs: Set<String> = []
     @State private var showDeleteConfirmation: Bool = false
     @State private var expandedNdc: String? = nil
 
@@ -34,54 +32,6 @@ struct HistoryBatchDetailView: View {
                     EmptyView()
                 },
                 headerActions: {
-                    if isEditing {
-                        HStack {
-                            Button { toggleSelectAll() } label: {
-                                HStack(spacing: 8) {
-                                    Image(
-                                        systemName: areAllSelected
-                                            ? "checkmark.square.fill" : "square"
-                                    )
-                                    .foregroundColor(
-                                        areAllSelected ? appColors.secondary : .gray
-                                    )
-                                    Text(areAllSelected ? "Deselect All" : "Select All")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(appColors.text)
-                                }
-                            }
-
-                            Spacer()
-
-                            HStack(spacing: 16) {
-                                Button {
-                                    if !selectedNdcs.isEmpty {
-                                        showDeleteConfirmation = true
-                                    }
-                                } label: {
-                                    Text("Delete")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(
-                                            selectedNdcs.isEmpty ? .gray : appColors.secondary
-                                        )
-                                }
-                                .disabled(selectedNdcs.isEmpty)
-
-                                Button {
-                                    withAnimation {
-                                        isEditing = false
-                                        selectedNdcs.removeAll()
-                                    }
-                                } label: {
-                                    Text("Cancel")
-                                        .foregroundColor(appColors.text)
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                        .background(appColors.primaryBackground)
-
-                    } else {
                         HStack(spacing: 16) {
                             Button {
                                 // PDF export placeholder
@@ -97,24 +47,13 @@ struct HistoryBatchDetailView: View {
                                             .scaledToFit()
                                     )
                             }
-
-                            Button {
-                                withAnimation {
-                                    isEditing = true
-                                    selectedNdcs.removeAll()
-                                }
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(appColors.primary)
-                            }
                         }
                         .padding(.trailing)
-                    }
+                    
                 },
-                showBackButton: !isEditing,
+                showBackButton: true,
                 showHamburgerMenu: false,
-                title: isEditing ? "" : "BATCH ID \(historyViewModel.selectedBatch?.batch_id ?? 0)",
+                title: "BATCH ID \(historyViewModel.selectedBatch?.batch_id ?? 0)",
                 headerActionsBackground: appColors.primaryBackground,
                 onBack: {
                     router.navigateBack()
@@ -137,8 +76,9 @@ struct HistoryBatchDetailView: View {
     // MARK: - Main Content
     @ViewBuilder
     private var mainContent: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             batchSummaryHeader
+            notesSection
 
             if historyViewModel.groupedTransactionsForBatch.isEmpty {
                 EmptyStateView(
@@ -151,14 +91,14 @@ struct HistoryBatchDetailView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 16) {
                         ndcTransactionList
-                        notesSection
                     }
-                    .padding(isLandscape ? 20 : 0)
+                    .padding(.horizontal,0)
                     .padding(.bottom, 20)
                 }
             }
         }
         .padding(.top, isLandscape ? SafeAreaInsets.top + 40 : 90)
+        .padding(.horizontal,16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
@@ -190,19 +130,15 @@ struct HistoryBatchDetailView: View {
                         .foregroundColor(appColors.text)
 
                     Spacer()
-
                     Text(DateUtils.formatToUSDateTime(batch.end_date_time))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(appColors.text)
                 }
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity)
-        .background(appColors.secondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .padding(.horizontal, isLandscape ? 32 : 16)
-        .padding(.bottom, isLandscape ? 8 : 16)
+        .background(appColors.primaryBackground)
+        .padding(8)
     }
 
 
@@ -212,19 +148,7 @@ struct HistoryBatchDetailView: View {
         VStack(spacing: 12) {
             ForEach(historyViewModel.groupedTransactionsForBatch, id: \.ndc) { txn in
                 HStack(spacing: 12) {
-                    if isEditing {
-                        Image(
-                            systemName: selectedNdcs.contains(txn.ndc)
-                                ? "checkmark.square.fill" : "square"
-                        )
-                        .foregroundColor(
-                            selectedNdcs.contains(txn.ndc) ? appColors.secondary : .gray
-                        )
-                        .onTapGesture {
-                            toggleNdcSelection(txn.ndc)
-                        }
-                    }
-
+            
                     ControlledCollapsibleBox(
                         isExpanded: Binding(
                             get: { expandedNdc == txn.ndc },
@@ -292,13 +216,12 @@ struct HistoryBatchDetailView: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, 8)
                         .padding(.bottom, 8)
                     }
                 }
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 0)
     }
 
     // MARK: - Notes Section
@@ -306,40 +229,16 @@ struct HistoryBatchDetailView: View {
     private var notesSection: some View {
         if let notes = historyViewModel.selectedBatch?.note,
            !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-
-            CollapsibleBox(title: "NOTES") {
+            CollapsibleBox(title: NSLocalizedString("NOTE", comment: ""),bgColor: appColors.secondaryBackground) {
                 Text(notes)
                     .font(.system(size: 14))
                     .foregroundStyle(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(appColors.secondaryBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(appColors.primaryBackground, lineWidth: 1)
-                    )
-                    .cornerRadius(12)
             }
-            .padding(.horizontal)
         }
     }
 
-    // MARK: - Helpers
-    private var areAllSelected: Bool {
-        !allNdcs.isEmpty && selectedNdcs == allNdcs
-    }
 
-    private func toggleSelectAll() {
-        selectedNdcs = areAllSelected ? [] : allNdcs
-    }
-
-    private func toggleNdcSelection(_ ndc: String) {
-        if selectedNdcs.contains(ndc) {
-            selectedNdcs.remove(ndc)
-        } else {
-            selectedNdcs.insert(ndc)
-        }
-    }
 }
 
 // MARK: - Popups
@@ -355,17 +254,7 @@ extension HistoryBatchDetailView {
                 showDeleteConfirmation = false
             },
             onConfirm: {
-                showDeleteConfirmation = false
-                if let batchId = historyViewModel.selectedBatchId {
-                    historyViewModel.softDeleteNdcsFromBatch(
-                        ndcs: selectedNdcs,
-                        batchId: batchId
-                    )
-                }
-                withAnimation {
-                    selectedNdcs.removeAll()
-                    isEditing = false
-                }
+              
             }
         )
     }

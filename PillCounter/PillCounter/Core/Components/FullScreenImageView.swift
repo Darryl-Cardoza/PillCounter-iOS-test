@@ -7,18 +7,17 @@
 import SwiftUI
 
 struct FullScreenImageView: View {
-    
+
     let image: Image?
     let onDismiss: () -> Void
 
     @State private var scale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-
     @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
 
-    @GestureState private var gestureScale: CGFloat = 1
-    @GestureState private var gestureDrag: CGSize = .zero
+    @GestureState private var liveDrag: CGSize = .zero
+    @GestureState private var liveMagnification: CGFloat = 1
 
     var body: some View {
         GeometryReader { geo in
@@ -26,122 +25,126 @@ struct FullScreenImageView: View {
                 Color.black.ignoresSafeArea()
 
                 if let image {
+                    // ← liveMagnification and liveDrag applied here, not stored
+                    let currentScale = min(max(lastScale * liveMagnification, 1), 4)
+                    let currentOffset = clamped(
+                        CGSize(
+                            width:  offset.width,
+                            height: offset.height
+                        ),
+                        in: geo.size,
+                        scale: currentScale
+                    )
+
                     image
                         .resizable()
                         .scaledToFit()
-                        .scaleEffect(scale * gestureScale)
-                        .offset(
-                            x: boundedOffset(
-                                proposed: offset.width + gestureDrag.width,
-                                size: geo.size,
-                                scale: scale * gestureScale
-                            ).width,
-                            y: boundedOffset(
-                                proposed: offset.height + gestureDrag.height,
-                                size: geo.size,
-                                scale: scale * gestureScale
-                            ).height
-                        )
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .scaleEffect(currentScale)
+                        .offset(currentOffset)
                         .gesture(pinchGesture)
-                        .gesture(dragGesture(in: geo.size))
-                        .onTapGesture(count: 2) {
-                            handleDoubleTap()
-                        }
+                        .simultaneousGesture(lastScale > 1 ? panGesture(in: geo.size) : nil)
+                        .simultaneousGesture(scale <= 1 ? dismissDrag : nil)
+                        // ← highPriorityGesture so double-tap fires before single-tap/drag
+                        .highPriorityGesture(doubleTapGesture)
                 }
 
                 closeButton
             }
         }
+        .ignoresSafeArea()
     }
 
-    // MARK: - Gestures
+    // MARK: - Double Tap
+    // highPriorityGesture ensures this wins over simultaneousGestures
+    private var doubleTapGesture: some Gesture {
+        TapGesture(count: 2)
+            .onEnded {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    if scale > 1 {
+                        // Zoom out — reset everything
+                        scale      = 1
+                        lastScale  = 1
+                        offset     = .zero
+                        lastOffset = .zero
+                    } else {
+                        // Zoom in to 2.5×
+                        scale     = 2.5
+                        lastScale = 2.5
+                    }
+                }
+            }
+    }
 
+    // MARK: - Pinch
     private var pinchGesture: some Gesture {
         MagnificationGesture()
-            .updating($gestureScale) { value, state, _ in
+            .updating($liveMagnification) { value, state, _ in
                 state = value
             }
             .onEnded { value in
-                let newScale = scale * value
-                scale = min(max(newScale, 1), 4)
-
-                if scale == 1 {
-                    resetPosition()
+                let newScale = min(max(lastScale * value, 1), 4)
+                withAnimation(.spring(response: 0.25)) {
+                    scale     = newScale
+                    lastScale = newScale
+                    if newScale <= 1 {
+                        offset     = .zero
+                        lastOffset = .zero
+                    } else {
+                        // Clamp offset after scale settles
+                        offset     = clamped(offset, in: .init(width: 1, height: 1), scale: newScale)
+                        lastOffset = offset
+                    }
                 }
             }
     }
 
-    private func dragGesture(in size: CGSize) -> some Gesture {
-        DragGesture()
-            .updating($gestureDrag) { value, state, _ in
+    // MARK: - Pan
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .updating($liveDrag) { value, state, _ in
                 state = value.translation
             }
             .onEnded { value in
-                if scale == 1 && value.translation.height > 140 {
-                    onDismiss()
-                    return
-                }
-
-                let newOffset = CGSize(
-                    width: offset.width + value.translation.width,
-                    height: offset.height + value.translation.height
-                )
-
-                offset = boundedOffset(
-                    proposed: newOffset,
-                    size: size,
+                let newOffset = clamped(
+                    CGSize(
+                        width:  offset.width  + value.translation.width,
+                        height: offset.height + value.translation.height
+                    ),
+                    in: size,
                     scale: scale
                 )
+                offset     = newOffset
+                lastOffset = newOffset
             }
     }
 
-    // MARK: - Logic
-
-    private func handleDoubleTap() {
-        withAnimation(.easeInOut) {
-            if scale > 1 {
-                scale = 1
-                resetPosition()
-            } else {
-                scale = 2
+    // MARK: - Dismiss drag (scale == 1 only)
+    private var dismissDrag: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .updating($liveDrag) { value, state, _ in
+                if value.translation.height > 0 {
+                    state = CGSize(width: 0, height: value.translation.height)
+                }
             }
-        }
+            .onEnded { value in
+                if value.translation.height > 120 {
+                    onDismiss()
+                } else {
+                    withAnimation(.spring(response: 0.3)) {
+                        offset = .zero
+                    }
+                }
+            }
     }
 
-    private func resetPosition() {
-        withAnimation(.easeOut) {
-            offset = .zero
-            lastOffset = .zero
-        }
-    }
-
-    /// Prevents image from leaving screen bounds
-    private func boundedOffset(
-        proposed: CGSize,
-        size: CGSize,
-        scale: CGFloat
-    ) -> CGSize {
-        let imageWidth = size.width * scale
-        let imageHeight = size.height * scale
-
-        let horizontalLimit = max(0, (imageWidth - size.width) / 2)
-        let verticalLimit = max(0, (imageHeight - size.height) / 2)
-
+    // MARK: - Clamp
+    private func clamped(_ proposed: CGSize, in size: CGSize, scale: CGFloat) -> CGSize {
+        let maxX = max(0, (size.width  * (scale - 1)) / 2)
+        let maxY = max(0, (size.height * (scale - 1)) / 2)
         return CGSize(
-            width: min(max(proposed.width, -horizontalLimit), horizontalLimit),
-            height: min(max(proposed.height, -verticalLimit), verticalLimit)
-        )
-    }
-
-    private func boundedOffset(
-        proposed: CGFloat,
-        size: CGSize,
-        scale: CGFloat
-    ) -> CGSize {
-        boundedOffset(
-            proposed: CGSize(width: proposed, height: proposed),
-            size: size,
-            scale: scale
+            width:  min(max(proposed.width,  -maxX), maxX),
+            height: min(max(proposed.height, -maxY), maxY)
         )
     }
 
@@ -153,7 +156,7 @@ struct FullScreenImageView: View {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(.white)
+                        .foregroundColor(.white.opacity(0.85))
                         .padding()
                 }
             }

@@ -19,7 +19,7 @@
         <attribute name="gtin" optional="YES" attributeType="String"/>
         <attribute name="ndc" attributeType="String"/>
         <attribute name="package_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
-        <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PillCountTransactionEntity" inverseName="drug" inverseEntity="PillCountTransactionEntity"/>
+        <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PillCountTransactionEntity" inverseName="substitueDrug" inverseEntity="PillCountTransactionEntity"/>
     </entity>
     <entity name="PillCountTransactionDetailsEntity" representedClassName="PillCountTransactionDetailsEntity" syncable="YES" codeGenerationType="class">
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -60,8 +60,9 @@
         <attribute name="target_count" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="txn_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="updated_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <relationship name="drug" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DrugMasterEntity" inverseName="transactions" inverseEntity="DrugMasterEntity"/>
+        <relationship name="drug" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DrugMasterEntity"/>
         <relationship name="pillCountTransactionDetails" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PillCountTransactionDetailsEntity" inverseName="pillCountTransaction" inverseEntity="PillCountTransactionDetailsEntity"/>
+        <relationship name="substitueDrug" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DrugMasterEntity" inverseName="transactions" inverseEntity="DrugMasterEntity"/>
         <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserEntity" inverseName="transactions" inverseEntity="UserEntity"/>
     </entity>
     <entity name="UserEntity" representedClassName="UserEntity" syncable="YES" codeGenerationType="class">

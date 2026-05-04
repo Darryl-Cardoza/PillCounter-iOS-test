@@ -592,7 +592,6 @@ extension QRBarcodeScannerView {
 
             onConfirm: {
                 if pillScanViewModel.isNdcEquivalent {
-//                    handleSubstitute()
                     pillScanViewModel.showNdcEquivalencePopup = false
                     pillScanViewModel.showScannedDrugInfoPopoup = true
                 } else {

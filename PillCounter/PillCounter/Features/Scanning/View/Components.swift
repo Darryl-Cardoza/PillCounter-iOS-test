@@ -529,7 +529,7 @@ struct BottomControlsViewBodyForPillScan: View {
             ringColor: appColors.secondary,
             buttonColor: appColors.primary,
             textColor: appColors.text,
-            ringLineWidth: 5,
+            ringLineWidth: 3,
             size: 120,
             isAnimating: isAnimating,
             onAddTap: { onAddPills() },

@@ -50,13 +50,13 @@ struct DashboardView: View {
                                 .renderingMode(.template)
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 60, height: 60)
+                                .frame(width: 55, height: 55)
                                 .foregroundColor(appColors.secondary)
                                 .padding(40)
                                 .background(
                                     ZStack {
                                         Circle()
-                                            .stroke(appColors.primary.opacity(0.3), lineWidth: 7)
+                                            .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
                                             .blur(radius: 5)
                                         Circle()
                                             .stroke(appColors.primary, lineWidth: 4)
@@ -130,13 +130,13 @@ struct DashboardView: View {
                                 .renderingMode(.template)
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 75, height: 75)
+                                .frame(width: 65, height: 65)
                                 .foregroundColor(appColors.secondary)
-                                .padding(32)
+                                .padding(40)
                                 .background(
                                     ZStack {
                                         Circle()
-                                            .stroke(appColors.primary.opacity(0.3), lineWidth: 7)
+                                            .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
                                             .blur(radius: 5)
                                         Circle()
                                             .stroke(appColors.primary, lineWidth: 4)

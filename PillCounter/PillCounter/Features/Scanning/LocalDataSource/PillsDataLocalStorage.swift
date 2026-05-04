@@ -701,6 +701,7 @@ final class PillsDataLocalStorage {
     // Update an existing transaction instead of creating a new one
     func updateTransaction(
         txnId: Int64,
+        substituedDrugId: Int64? = nil,
         drugId: Int64?,
         countType: CountType,
         targetCount: Int32?,

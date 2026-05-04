@@ -8,11 +8,17 @@
 import SwiftUI
 
 struct UserHistoryView: View {
+    
+    @State private var safeTop: CGFloat = 0
+    @State private var safeBottom: CGFloat = 0
+    @State private var safeLeading: CGFloat = 0
 
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var historyViewModel: HistoryViewModel
+    
+    @EnvironmentObject private var toastManager: ToastManager
 
     // MARK: - Date State
     @State private var startDate: Date? = Date()
@@ -34,49 +40,56 @@ struct UserHistoryView: View {
 
     // MARK: - Body
     var body: some View {
-        ZStack {
-            BaseView(
-                topRatio: computedTopRatio,
-                topContent: {
-                    topContentView
-                },
-                bottomContent: {
-                    bottomContentView
-                },
-                headerActions: {
-                    headerActionsView
-                },
-                showBackButton: !isSearching,
-                showHamburgerMenu: false,
-                title: isSearching ? "" : NSLocalizedString("HISTORY", comment: "")
-            )
-
-            if pdfService.isLoading {
-                ZStack {
-                    Color.black.opacity(0.5).ignoresSafeArea()
-                    PillCountingLoader()
+        GeometryReader { geo in
+            ZStack {
+                BaseView(
+                    topRatio: computedTopRatio,
+                    topContent: {
+                        topContentView
+                    },
+                    bottomContent: {
+                        bottomContentView
+                    },
+                    headerActions: {
+                        headerActionsView
+                    },
+                    showBackButton: !isSearching,
+                    showHamburgerMenu: false,
+                    title: isSearching ? "" : NSLocalizedString("HISTORY", comment: "")
+                )
+                
+                if pdfService.isLoading {
+                    ZStack {
+                        Color.black.opacity(0.5).ignoresSafeArea()
+                        PillCountingLoader()
+                    }
                 }
             }
-        }
-        .onAppear {
-            activeTypeFilter = filterType
-            fetchAll()
-        }
-        .onChange(of: startDate)        { _, _ in fetchAll() }
-        .onChange(of: endDate)          { _, _ in fetchAll() }
-        .onChange(of: activeTypeFilter) { _, _ in
-            activeStatusFilter = .all
-            searchText = ""
-            fetchAll()
-        }
-        .onChange(of: activeStatusFilter) { _, _ in
-            historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
-        }
-        .onChange(of: searchText) { _, _ in
-            historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
-        }
-        .customPopup(isPresented: $showDeleteConfirmation) {
-            deleteConfirmationPopUp
+            .onAppear {
+                safeTop     = geo.safeAreaInsets.top
+                safeBottom  = geo.safeAreaInsets.bottom
+                safeLeading = geo.safeAreaInsets.leading
+                activeTypeFilter = filterType
+                fetchAll()
+            }
+            .onChange(of: geo.safeAreaInsets.top) { _, new in safeTop = new }
+            .onChange(of: geo.safeAreaInsets.leading) { _, new in safeLeading = new }
+            .onChange(of: startDate)        { _, _ in fetchAll() }
+            .onChange(of: endDate)          { _, _ in fetchAll() }
+            .onChange(of: activeTypeFilter) { _, _ in
+                activeStatusFilter = .all
+                searchText = ""
+                fetchAll()
+            }
+            .onChange(of: activeStatusFilter) { _, _ in
+                historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+            }
+            .onChange(of: searchText) { _, _ in
+                historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+            }
+            .customPopup(isPresented: $showDeleteConfirmation) {
+                deleteConfirmationPopUp
+            }
         }
     }
 
@@ -85,7 +98,13 @@ struct UserHistoryView: View {
     // Landscape: 0.4 normal (left-right split by width) / 1.0 searching (full-width left panel)
     private var computedTopRatio: CGFloat {
         if isLandscape && isSearching { return 1.0 }
-        return isSearching ? 0.2 : 0.4
+        if isSearching { return 0.2 }
+        // iPad needs less ratio for calendar since screen is taller/wider
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        if isLandscape {
+            return isIPad ? 0.35 : 0.4
+        }
+        return isIPad ? 0.35 : 0.4
     }
 
     // MARK: - Top Content
@@ -128,7 +147,8 @@ struct UserHistoryView: View {
             )
             .padding(.top, 25)
             .transition(.move(edge: .trailing).combined(with: .opacity))
-        } else {
+        } else if !isLandscape {
+            // Portrait only — in landscape the search icon lives in the calendar panel
             HStack {
                 Button {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -151,7 +171,7 @@ struct UserHistoryView: View {
     // topRatio: 1.0 so this is the full screen; top-pad to clear the header overlay.
     private var landscapeSearchContent: some View {
         userHistoryTransactionsList
-            .padding(.top, SafeAreaInsets.top + 52)
+            .padding(.top, safeTop + 30)           // ← dynamic
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(appColors.secondaryBackground)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearching)
@@ -178,6 +198,7 @@ struct UserHistoryView: View {
         }
     }
 
+    
     // MARK: - Delete Confirmation Popup
     private var deleteConfirmationPopUp: some View {
         ConfirmationDialogue(
@@ -194,7 +215,9 @@ struct UserHistoryView: View {
                     await historyViewModel.softDeleteTransactionsForSelectedDate(
                         startDate: start,
                         endDate: endDate ?? start,
-                        filter: activeTypeFilter
+                        filter: activeTypeFilter,
+                        status: activeStatusFilter,  // ← add this
+                        search: searchText           // ← add this
                     )
                     showDeleteConfirmation = false
                 }
@@ -210,20 +233,28 @@ struct UserHistoryView: View {
             VStack(spacing: 15) {
                 HStack {
                     txnTypeFilter
-                    if activeTypeFilter == .fixed
-                        && !historyViewModel.filteredTransactionsOfUserByDate.isEmpty
-                        && !isSearching
-                    {
-                        Button {
-                            showDeleteConfirmation = true
-                        } label: {
-                            Image("delete")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 24, height: 24)
-                                .overlay(appColors.primary)
-                                .mask(Image("delete").resizable().scaledToFit())
+                    Button {
+                        let isEmpty: Bool
+                        
+                        if activeTypeFilter == .fixed {
+                            isEmpty = historyViewModel.transactionRows.isEmpty
+                        } else {
+                            isEmpty = historyViewModel.batchRows.isEmpty
                         }
+
+                        if isEmpty {
+                            toastManager.show(message: "No items to delete")
+                        } else {
+                            showDeleteConfirmation = true
+                        }
+
+                    } label: {
+                        Image("delete")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                            .overlay(appColors.primary)
+                            .mask(Image("delete").resizable().scaledToFit())
                     }
                 }
                 statusFilterChips
@@ -311,20 +342,34 @@ struct UserHistoryView: View {
 
     // MARK: - Calendar
     private func userHistoryContent() -> some View {
-        PillCountingCalendar(
-            selectedColor: appColors.primary,
-            textColor: appColors.text,
-            backgroundColor: .clear,
-            startDate: $startDate,
-            endDate: $endDate
-        )
-        .padding(
-            .top,
-            isLandscape ? SafeAreaInsets.top + 50 : SafeAreaInsets.top + 30
-        )
-        .padding(.leading, isLandscape ? SafeAreaInsets.leading : 0)
-        .padding(.bottom, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        ZStack(alignment: .topTrailing) {
+            PillCountingCalendar(
+                selectedColor: appColors.primary,
+                textColor: appColors.text,
+                backgroundColor: .clear,
+                startDate: $startDate,
+                endDate: $endDate
+            )
+            .padding(.top, safeTop + 50)
+            .padding(.leading, isLandscape ? safeLeading : 0)
+            .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            if isLandscape {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isSearching = true
+                        isSearchFieldFocused = true
+                    }
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 20))
+                        .foregroundStyle(appColors.primary)
+                }
+                .padding(.top, safeTop)
+                .padding(.trailing, 16)
+            }
+        }
         .background(appColors.secondaryBackground)
     }
 

@@ -3,21 +3,16 @@
 //  PillCounter
 //
 //  Created by Bhushan Patil on 14/04/26.
-//
-import SwiftUI
 
+import SwiftUI
 
 extension UIImage {
 
     // MARK: - Grayscale + Compress
-    /// Converts to grayscale, scales to maxWidth, and compresses to JPEG quality.
-    /// This is the function you asked for — call it before addingMetadataOverlay.
     func compressedGrayscale(maxWidth: CGFloat, quality: CGFloat) -> UIImage? {
-
-        // 1. Scale down first (cheaper to process smaller image)
         let scale = min(1.0, maxWidth / max(size.width, size.height))
         let targetSize = CGSize(
-            width: (size.width * scale).rounded(),
+            width:  (size.width  * scale).rounded(),
             height: (size.height * scale).rounded()
         )
 
@@ -26,13 +21,12 @@ extension UIImage {
             draw(in: CGRect(origin: .zero, size: targetSize))
         }
 
-        // 2. Apply grayscale via CIFilter
         guard let cgImage = scaled.cgImage else { return nil }
         let ciImage = CIImage(cgImage: cgImage)
 
         guard let filter = CIFilter(name: "CIColorControls") else { return nil }
         filter.setValue(ciImage, forKey: kCIInputImageKey)
-        filter.setValue(0.0, forKey: kCIInputSaturationKey)  // 0 = full grayscale
+        filter.setValue(0.0,     forKey: kCIInputSaturationKey)
 
         let context = CIContext()
         guard
@@ -44,97 +38,133 @@ extension UIImage {
     }
 
     // MARK: - Metadata Overlay
-    /// Burns NDC, user, count, timestamp etc. into the image as text.
+    // Renders a compact two-column audit block in the bottom-left corner.
+    // Font is ~1.8% of image width — readable when zoomed, unobtrusive at thumbnail size.
+    // White text + thick black stroke keeps it legible over any background.
     func addingMetadataOverlay(
-        ndc: String,
-        user: String,
-        count: Int,
-        rx: String,
-        location: String,
-        timestamp: Int64,
-        fileSizeKB: Double
+        ndc:           String,
+        substituteNdc: String,   // omitted when empty
+        workflowStep:  String,   // "Target Verification", "Recount", "Vial", etc.
+        count:         Int,
+        targetCount:   Int32?,
+        lotNo:         String,
+        expiry:        String,
+        timestamp:     Int64,
+        userInitials:  String,
+        geolocation:   String,   // "37.33° N, 122.03° W — 94025"
+        rx:            String,
+        fileSizeKB:    Double
     ) -> UIImage {
 
+        // ── Timestamp ───────────────────────────────────────────────────
         let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        let dateString = formatter.string(from: date)
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd HH:mm"
+        let dateString = dateFmt.string(from: date)
 
-        let lines = [
-            "NDC: \(ndc.isEmpty ? "N/A" : ndc)",
-            "User: \(user.isEmpty ? "N/A" : user)",
-            "Count: \(count)",
-            !rx.isEmpty ? "Rx: \(rx)" : nil,
-            !location.isEmpty ? "Loc: \(location)" : nil,
-            "Time: \(dateString)",
-            String(format: "Size: %.1f KB", fileSizeKB)
-        ].compactMap { $0 }
+        // ── Build rows (label · value) ───────────────────────────────────
+        var rows: [(String, String)] = []
 
-        let fontSize: CGFloat = max(size.width * 0.02, 12)
+        func add(_ label: String, _ value: String) {
+            let v = value.trimmingCharacters(in: .whitespaces)
+            guard !v.isEmpty else { return }
+            rows.append((label, v))
+        }
+
+        add("NDC",    ndc)
+        add("SubNDC", substituteNdc)
+        add("Step",   workflowStep)
+
+        if let target = targetCount {
+            add("Count", "\(count)/\(target)")
+        } else {
+            add("Count", "\(count)")
+        }
+
+        add("Lot",    lotNo)
+        add("Exp",    expiry)
+        add("User",   userInitials)
+        add("Rx",     rx)
+        add("Loc",    geolocation)
+        add("Date",   dateString)
+        add("Size",   String(format: "%.1f KB", fileSizeKB))
+
+        // ── Typography ───────────────────────────────────────────────────
+        // ~1.8% of image width, floor at 10 pt so it stays readable on small images
+        let fontSize: CGFloat = max(size.width * 0.018, 10)
         let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold)
 
-        let padding: CGFloat = 10
-        let lineSpacing: CGFloat = 4
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byTruncatingTail
 
+        // Stroke drawn outward (negative value = outside the fill)
+        let textAttrs: [NSAttributedString.Key: Any] = [
+            .font:            font,
+            .foregroundColor: UIColor.white,
+            .strokeColor:     UIColor.black,
+            .strokeWidth:     -2.5,          // thick enough to read on any bg
+            .paragraphStyle:  para
+        ]
+
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font:            font,
+            .foregroundColor: UIColor(white: 0.88, alpha: 1),
+            .strokeColor:     UIColor.black,
+            .strokeWidth:     -2.0,
+            .paragraphStyle:  para
+        ]
+
+        // ── Layout constants ─────────────────────────────────────────────
+        let margin:    CGFloat = size.width * 0.015   // distance from image edge
+        let rowH:      CGFloat = fontSize + 3
+        let gap:       CGFloat = 4                    // space between label & value
+        let labelColW: CGFloat = fontSize * 4.2       // fixed width for labels
+        let valueColW: CGFloat = size.width * 0.38    // value gets up to 38% of width
+
+        let blockH = rowH * CGFloat(rows.count)
+        let blockY = size.height - margin - blockH    // pin to bottom-left
+
+        // ── Render ───────────────────────────────────────────────────────
         let renderer = UIGraphicsImageRenderer(size: size)
 
-        return renderer.image { ctx in
-
-            // Draw original image
+        return renderer.image { _ in
             draw(at: .zero)
 
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.lineBreakMode = .byWordWrapping
+            for (i, (label, value)) in rows.enumerated() {
+                let y = blockY + CGFloat(i) * rowH
 
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: UIColor.white,
-                .paragraphStyle: paragraph,
-                .strokeColor: UIColor.black,
-                .strokeWidth: -2 // 🔥 OUTLINE TEXT (key for visibility)
-            ]
-
-            // Start from bottom but NO background
-            var y = size.height - padding
-
-            for line in lines.reversed() {
-                let textSize = (line as NSString).size(withAttributes: attributes)
-
-                y -= textSize.height
-
-                let rect = CGRect(
-                    x: padding,
-                    y: y,
-                    width: size.width - padding * 2,
-                    height: textSize.height
+                // Label column
+                let labelRect = CGRect(
+                    x:      margin,
+                    y:      y,
+                    width:  labelColW,
+                    height: rowH
                 )
+                (label as NSString).draw(in: labelRect, withAttributes: labelAttrs)
 
-                (line as NSString).draw(in: rect, withAttributes: attributes)
-
-                y -= lineSpacing
+                // Value column
+                let valueRect = CGRect(
+                    x:      margin + labelColW + gap,
+                    y:      y,
+                    width:  valueColW,
+                    height: rowH
+                )
+                (value as NSString).draw(in: valueRect, withAttributes: textAttrs)
             }
         }
     }
 }
 
-
-
+// MARK: - Normalize orientation
 extension UIImage {
 
     func normalized() -> UIImage {
-
-        if imageOrientation == .up {
-            return self
-        }
+        guard imageOrientation != .up else { return self }
 
         UIGraphicsBeginImageContextWithOptions(size, false, scale)
         draw(in: CGRect(origin: .zero, size: size))
-
-        let normalizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        let result = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
-
-        return normalizedImage ?? self
+        return result ?? self
     }
 }
-
-

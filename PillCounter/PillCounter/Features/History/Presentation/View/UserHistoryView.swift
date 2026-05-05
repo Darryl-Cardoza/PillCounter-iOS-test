@@ -9,10 +9,6 @@ import SwiftUI
 
 struct UserHistoryView: View {
     
-    @State private var safeTop: CGFloat = 0
-    @State private var safeBottom: CGFloat = 0
-    @State private var safeLeading: CGFloat = 0
-
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
@@ -66,14 +62,9 @@ struct UserHistoryView: View {
                 }
             }
             .onAppear {
-                safeTop     = geo.safeAreaInsets.top
-                safeBottom  = geo.safeAreaInsets.bottom
-                safeLeading = geo.safeAreaInsets.leading
                 activeTypeFilter = filterType
                 fetchAll()
             }
-            .onChange(of: geo.safeAreaInsets.top) { _, new in safeTop = new }
-            .onChange(of: geo.safeAreaInsets.leading) { _, new in safeLeading = new }
             .onChange(of: startDate)        { _, _ in fetchAll() }
             .onChange(of: endDate)          { _, _ in fetchAll() }
             .onChange(of: activeTypeFilter) { _, _ in
@@ -145,7 +136,6 @@ struct UserHistoryView: View {
                     }
                 }
             )
-            .padding(.top, 25)
             .transition(.move(edge: .trailing).combined(with: .opacity))
         } else if !isLandscape {
             // Portrait only — in landscape the search icon lives in the calendar panel
@@ -171,7 +161,6 @@ struct UserHistoryView: View {
     // topRatio: 1.0 so this is the full screen; top-pad to clear the header overlay.
     private var landscapeSearchContent: some View {
         userHistoryTransactionsList
-            .padding(.top, safeTop + 30)           // ← dynamic
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(appColors.secondaryBackground)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearching)
@@ -216,8 +205,8 @@ struct UserHistoryView: View {
                         startDate: start,
                         endDate: endDate ?? start,
                         filter: activeTypeFilter,
-                        status: activeStatusFilter,  // ← add this
-                        search: searchText           // ← add this
+                        status: activeStatusFilter,
+                        search: searchText
                     )
                     showDeleteConfirmation = false
                 }
@@ -227,7 +216,6 @@ struct UserHistoryView: View {
     }
 
     // MARK: - Transaction List (used as bottomContent in normal mode, and inside
-    //         landscapeSearchContent when landscape + searching)
     private var userHistoryTransactionsList: some View {
         VStack(spacing: 8) {
             VStack(spacing: 15) {
@@ -350,8 +338,7 @@ struct UserHistoryView: View {
                 startDate: $startDate,
                 endDate: $endDate
             )
-            .padding(.top, safeTop + 50)
-            .padding(.leading, isLandscape ? safeLeading : 0)
+            .padding(.top,  50)
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -366,7 +353,7 @@ struct UserHistoryView: View {
                         .font(.system(size: 20))
                         .foregroundStyle(appColors.primary)
                 }
-                .padding(.top, safeTop)
+                .padding(.top, 10)
                 .padding(.trailing, 16)
             }
         }

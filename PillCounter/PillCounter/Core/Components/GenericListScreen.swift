@@ -63,7 +63,8 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
                 title: isSearching
                     ? ""
                     : (isEditing ? "DELETE BATCHES" : title),
-                headerActionsBackground: appColors.primaryBackground
+                headerActionsBackground: appColors.primaryBackground,
+                backgroundColor: appColors.primaryBackground
             )
             
             if isEditing {

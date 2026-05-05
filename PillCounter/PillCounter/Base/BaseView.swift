@@ -34,6 +34,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
     // MARK: - OPTIONAL BACKGROUND STYLES
     let backButtonBackground: Color?
     let headerActionsBackground: Color?
+    let backgroundColor: Color?
     
     let allowKeyboardResize: Bool
     
@@ -71,6 +72,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         confirmButtonText: String? = nil,
         backButtonBackground: Color? = nil,
         headerActionsBackground: Color? = nil,
+        backgroundColor: Color? = nil,
         allowKeyboardResize: Bool = false,  // Added for barcodescan view bottom content
         onBack: (() -> Void)? = nil
     ) {
@@ -91,6 +93,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         self.confirmButtonText = confirmButtonText
         self.backButtonBackground = backButtonBackground
         self.headerActionsBackground = headerActionsBackground
+        self.backgroundColor = backgroundColor
         self.allowKeyboardResize = allowKeyboardResize
         self.onBack = onBack
     }
@@ -122,13 +125,13 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
             
         }
         
-        .background(appColors.secondaryBackground)
-        .ignoresSafeArea(
-            allowKeyboardResize ?
-            .container :
-            .all,
-            edges: allowKeyboardResize ? [.top, .leading, .trailing] : .all
-        )
+        .background(backgroundColor ?? appColors.secondaryBackground)
+//        .ignoresSafeArea(
+//            allowKeyboardResize ?
+//            .container :
+//            .all,
+//            edges: allowKeyboardResize ? [.top, .leading, .trailing] : .all
+//        )
         .ignoresSafeArea(edges: .bottom)
         .environment(\.dynamicTypeSize, .medium)
     }
@@ -234,13 +237,7 @@ extension BaseView {
                     HStack {
                         backButton
                     }
-                    //                .padding(.leading, 8)
-                    .padding(
-                        .top,
-                        isLandscape
-                        ? geometry.safeAreaInsets.top + 10
-                        : max(geometry.safeAreaInsets.top + 10, 40)
-                    )
+                  
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
@@ -255,12 +252,6 @@ extension BaseView {
                             .scaleEffect(1)
                             .padding(8)
                     }
-                    .padding(
-                        .top,
-                        isLandscape
-                        ? 0
-                        : max(geometry.safeAreaInsets.top + 10, 40)
-                    )
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
@@ -272,24 +263,12 @@ extension BaseView {
                 
                 // 2. RIGHT SIDE: Header Actions + Hamburger
                 HStack(spacing: 16) {
-                    // Inject the custom actions here
                     headerActions()
-                        .padding(.top, isLandscape ? 20 : 0)
-                    
                     if showHamburgerMenu {
                         hamburgerMenuButton
                     }
                 }
-                //            .padding(.trailing, 8)
-                // FIX: Force height to 52 to match the Left Side Back Button (28px + 12px padding * 2)
-                // This ensures vertical centering aligns perfectly
                 .frame(height: 52)
-                .padding(
-                    .top,
-                    isLandscape
-                    ? 0
-                    : max(geometry.safeAreaInsets.top + 10, 40)
-                )
                 .frame(
                     maxWidth: .infinity,
                     maxHeight: .infinity,

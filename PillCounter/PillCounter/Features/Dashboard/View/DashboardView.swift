@@ -199,7 +199,7 @@ struct DashboardView: View {
                 showBackButton: false,
                 showHamburgerMenu: true,
                 showPmsConnectionButton: isHl7Enable,
-                pmsConnectionState : userViewModel.pmsConnectionState
+                pmsConnectionState : userViewModel.pmsConnectionState,
             )
             
             if pillScanViewModel.showToast  {

@@ -98,7 +98,7 @@ private extension UnsyncedTransactionView {
     var batchesSection: some View {
         if !viewModel.batches.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "BATCHES", count: viewModel.batches.count)
+                sectionHeader(title: "STOCK", count: viewModel.batches.count)
 
                 ForEach(viewModel.batches, id: \.batchId) { batch in
                     StockItemRowView(
@@ -119,7 +119,7 @@ private extension UnsyncedTransactionView {
     var transactionsSection: some View {
         if !viewModel.transactions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "TRANSACTIONS", count: viewModel.transactions.count)
+                sectionHeader(title: "DISPENSE", count: viewModel.transactions.count)
 
                 ForEach(viewModel.transactions) { txn in
                     DispenseItemRowView(
@@ -166,15 +166,10 @@ private extension UnsyncedTransactionView {
             if viewModel.batches.isEmpty {
                 Text("PMS not connected")
                     .font(.system(size: 12))
-                    .foregroundColor(appColors.text.opacity(0.6))
+                    .foregroundColor(appColors.text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(colorScheme == .dark
-                                  ? Color.white.opacity(0.08)
-                                  : Color.black.opacity(0.06))
-                    )
+                    .background(appColors.secondaryBackground)
             }
 
             Button {

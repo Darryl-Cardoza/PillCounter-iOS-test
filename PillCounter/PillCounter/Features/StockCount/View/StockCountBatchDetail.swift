@@ -60,6 +60,7 @@ struct StockCountBatchDetail: View {
                 showHamburgerMenu: false,
                 title: isEditing ? "" :  String( "BATCH ID \(stockCountVieModel.currentBatch?.batch_id ?? 0)"),
                 headerActionsBackground: appColors.primaryBackground,
+                backgroundColor: appColors.primaryBackground,
                 onBack: {
                     router.navigateBack()
                 }
@@ -184,7 +185,8 @@ struct StockCountBatchDetail: View {
     // MARK: VIEWS
     @ViewBuilder
     private var mainContent: some View {
-
+        
+        
         VStack(spacing: 0) {
 
             // SCROLLABLE CONTENT
@@ -203,7 +205,6 @@ struct StockCountBatchDetail: View {
                             selectedIds: $selectedTxnIds,
                             isEditing: $isEditing
                         )
-
                     }
                     .padding(isLandscape ? 20 : 0)
                     .padding(.bottom, 20)
@@ -251,9 +252,9 @@ struct StockCountBatchDetail: View {
                     }
                 )
             }
-            .padding()
+            .padding(.bottom, 20)
         }
-        .padding(.top, isLandscape ? SafeAreaInsets.top + 40 : 90)
+        .padding(.top, 65)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }

@@ -297,10 +297,12 @@ class HistoryViewModel: ObservableObject {
                 ))
             }
             return GroupedTransaction(
+                txnId: txnList.first?.txn_id ?? 0,
                 ndc: ndc,
                 drugName: drugName,
                 total: totalSealed + totalOpen,
                 sealedBottles: totalSealed,
+                sealedBottleQty: txnList.first?.bottle_qty ?? 0,
                 openPills: totalOpen,
                 lotDetails: lotDetails
             )

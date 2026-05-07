@@ -19,7 +19,7 @@ struct PillScanDetailGridScreen: View {
     @State private var isEditing: Bool = false
     @State private var selectedIds: Set<Int64> = []
     @State private var showDeleteConfirm: Bool = false
-    @State private var selectedUIImage: UIImage? = nil
+    @State private var selectedUIImage: Image? = nil
     @State private var showImageViewer = false
 
     
@@ -116,11 +116,19 @@ struct PillScanDetailGridScreen: View {
                 .animation(.easeOut(duration: 0.3), value: isEditing)
             }
         }
-        .fullScreenCover(item: $selectedUIImage) { uiImage in
-                 ZoomableImageViewer(uiImage: uiImage) {
-                     selectedUIImage = nil
-                 }
-             }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { selectedUIImage != nil },
+                set: { if !$0 { selectedUIImage = nil } }
+            )
+        ) {
+            if let image = selectedUIImage {
+                FullScreenImageView(image: image) {
+                    selectedUIImage = nil
+                }
+            }
+        }
+
         .customPopup(isPresented: $showDeleteConfirm) {
             deleteConfirmationDialog
         }
@@ -246,7 +254,7 @@ struct PillScanDetailGridScreen: View {
                                 toggleSelection(detail.txn_details_id)
                             } else {
                                 if let path = detail.image_path,
-                                   let uiImage = PhotoFileManager.shared.loadUIImage(from: path) {
+                                   let uiImage = PhotoFileManager.shared.loadImage(from: path) {
                                     selectedUIImage = uiImage
                                 }
                             }
@@ -262,7 +270,7 @@ struct PillScanDetailGridScreen: View {
     private var gridColumns: [GridItem] {
         let columnCount: Int
         if UIDevice.current.userInterfaceIdiom == .pad {
-            columnCount = isLandscape ? 4 : 3
+            columnCount = 4
         } else {
             columnCount = 2
         }
@@ -288,10 +296,10 @@ struct PillScanDetailGridScreen: View {
                                 toggleSelection(detail.txn_details_id)
                             }else{
                                 if let path = detail.image_path,
-                                              let uiImage = PhotoFileManager.shared.loadUIImage(from: path)
-                                           {
-                                               selectedUIImage = uiImage
-                                           }
+                                  let uiImage = PhotoFileManager.shared.loadImage(from: path)
+                               {
+                                   selectedUIImage = uiImage
+                               }
                             }
                         }
                     }

@@ -44,7 +44,7 @@ struct UserSettingsView: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userviewmodel: UserViewModel
     @EnvironmentObject private var router: Router
-
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -141,17 +141,18 @@ struct UserSettingsView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    if !selectedSchedules.isEmpty{
-                        Text(
-                            selectedSchedules
-                                .map { $0.rawValue }
-                                .sorted()
-                                .joined(separator: ", ")
-                        )
-                        .foregroundColor(appColors.secondary)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 4) {
+                        ForEach(Array(DrugSchedule.allCases.enumerated()), id: \.element.id) { index, schedule in
+                            Text(schedule.rawValue)
+                                .foregroundColor(
+                                    selectedSchedules.contains(schedule)
+                                    ? appColors.secondary
+                                    : appColors.text.opacity(0.35)
+                                )
+                                .fontWeight(.semibold)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal)
                 .contentShape(Rectangle())
@@ -160,7 +161,7 @@ struct UserSettingsView: View {
                         activeSubScreen = .schedule
                     }
                 }
-
+                
                 
                 Divider().background(appColors.primaryBackground)
                 
@@ -183,13 +184,13 @@ struct UserSettingsView: View {
                         .foregroundStyle(appColors.text)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity, alignment: .leading)
-
+                    
                     
                     Text(selectedSaveHistoryOption.displayText)
                         .foregroundColor(appColors.secondary)
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity, alignment: .leading)
-
+                    
                 }
                 .padding(.horizontal)
                 .contentShape(Rectangle())
@@ -198,7 +199,7 @@ struct UserSettingsView: View {
                         activeSubScreen = .saveHistory
                     }
                 }
-
+                
                 
                 Divider().background(appColors.primaryBackground)
                 
@@ -256,10 +257,7 @@ struct UserSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(
-            .top,
-            isLandscape ? SafeAreaInsets.top + 80 : SafeAreaInsets.top + 50
-        )
+        .padding( .top, 45)
         .padding(.horizontal, isLandscape ? SafeAreaInsets.leading : 10)
         .background(appColors.secondaryBackground)
     }
@@ -281,6 +279,7 @@ struct UserSettingsView: View {
             showBackButton: true,
             showHamburgerMenu: false,
             title: screenTitle(screen),
+            backgroundColor: appColors.primaryBackground,
             onBack: {
                 withAnimation(.easeInOut(duration: 0.25)) {
                     activeSubScreen = nil
@@ -307,11 +306,11 @@ struct UserSettingsView: View {
                         HStack (spacing:8){
                             Circle()
                                 .stroke(
-                                      option == selectedSaveHistoryOption
-                                      ? appColors.primary
-                                      : appColors.text,
-                                      lineWidth: 2
-                                  )
+                                    option == selectedSaveHistoryOption
+                                    ? appColors.primary
+                                    : appColors.text,
+                                    lineWidth: 2
+                                )
                                 .frame(width: 20, height: 20)
                                 .overlay {
                                     if option == selectedSaveHistoryOption {
@@ -320,17 +319,17 @@ struct UserSettingsView: View {
                                             .frame(width: 10, height: 10)
                                     }
                                 }
-
+                            
                             Text(option.displayText)
                                 .foregroundColor(appColors.text)
-
+                            
                             Spacer()
                         }
                     }
                 }
             }
             .padding(.leading, 30)
-
+            
             Spacer()
         }
         .padding(.top, SafeAreaInsets.top + 60)
@@ -339,10 +338,10 @@ struct UserSettingsView: View {
     
     private var scheduleContent: some View {
         VStack(alignment: .leading, spacing: 25) {
-
+            
             VStack(alignment: .leading, spacing: 30) {
                 ForEach(DrugSchedule.allCases) { schedule in
-
+                    
                     Button {
                         // toggle selection
                         if selectedSchedules.contains(schedule) {
@@ -350,43 +349,51 @@ struct UserSettingsView: View {
                         } else {
                             selectedSchedules.insert(schedule)
                         }
-
+                        
                         AppStorageManager.shared.selectedSchedules = selectedSchedules
-
+                        
                     } label: {
                         HStack(spacing: 8) {
-
-                            Circle()
+                            RoundedRectangle(cornerRadius: 5)
                                 .stroke(
                                     selectedSchedules.contains(schedule)
                                     ? appColors.primary
-                                    : appColors.text,
+                                    : appColors.text.opacity(0.6),
                                     lineWidth: 2
                                 )
-                                .frame(width: 20, height: 20)
+                                .frame(width: 22, height: 22)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .fill(
+                                            selectedSchedules.contains(schedule)
+                                            ? appColors.primary
+                                            : Color.clear
+                                        )
+                                )
                                 .overlay {
                                     if selectedSchedules.contains(schedule) {
-                                        Circle()
-                                            .fill(appColors.primary)
-                                            .frame(width: 10, height: 10)
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.white)
                                     }
                                 }
-
+                            
                             Text(schedule.rawValue)
                                 .foregroundColor(appColors.text)
-
+                            
                             Spacer()
                         }
                     }
                 }
             }
             .padding(.leading, 30)
-
+            
             Spacer()
         }
         .padding(.top, SafeAreaInsets.top + 60)
         .background(appColors.primaryBackground)
-    }}
+    }
+}
 
 
 private func alignmentFor(_ index: Int) -> Alignment {

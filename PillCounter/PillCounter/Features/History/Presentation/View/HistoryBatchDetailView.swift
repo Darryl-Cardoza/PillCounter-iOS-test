@@ -32,24 +32,23 @@ struct HistoryBatchDetailView: View {
                     EmptyView()
                 },
                 headerActions: {
-                        HStack(spacing: 16) {
-                            Button {
-                                // PDF export placeholder
-                            } label: {
-                                Image("pdf")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 26, height: 26)
-                                    .overlay { appColors.primary }
-                                    .mask(
-                                        Image("pdf")
-                                            .resizable()
-                                            .scaledToFit()
-                                    )
-                            }
+                    HStack(spacing: 16) {
+                        Button {
+                           
+                        } label: {
+                            Image("pdf")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 26, height: 26)
+                                .overlay { appColors.primary }
+                                .mask(
+                                    Image("pdf")
+                                        .resizable()
+                                        .scaledToFit()
+                                )
                         }
-                        .padding(.trailing)
-                    
+                    }
+                    .padding(.trailing)
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
@@ -97,7 +96,7 @@ struct HistoryBatchDetailView: View {
                 }
             }
         }
-        .padding(.top, isLandscape ? SafeAreaInsets.top + 40 : 90)
+        .padding(.top, 45)
         .padding(.horizontal,16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)

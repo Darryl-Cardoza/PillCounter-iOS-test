@@ -94,7 +94,7 @@ class UserViewModel: ObservableObject {
     
     @Published var unsyncedTransactions: [PillCountTransactionEntity] = []
 
-    @Published var pmsConnectionState: PmsConnectionState = .disconnected
+    @Published var pmsConnectionState: PmsConnectionState = .notAvailable
     
     var bucket: [String] {
         get {

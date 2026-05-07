@@ -17,7 +17,6 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
 
     // MARK: - CONFIGURATION PROPERTIES
     let showBackButton: Bool
-    let showBackBackground: Bool
     let showHamburgerMenu: Bool
     let showPmsConnectionButton : Bool
     let pmsConnectionState: PmsConnectionState
@@ -60,7 +59,6 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         @ViewBuilder bottomContent: @escaping () -> BottomContent,
         @ViewBuilder headerActions: @escaping () -> HeaderActions,
         showBackButton: Bool = false,
-        showBackBackground: Bool = false,
         showHamburgerMenu: Bool = false,
         showpmsConnectionButton: Bool = false,
         pmsConnectionState: PmsConnectionState = .disconnected,
@@ -81,7 +79,6 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         self.bottomContent = bottomContent
         self.headerActions = headerActions
         self.showBackButton = showBackButton
-        self.showBackBackground = showBackBackground
         self.showHamburgerMenu = showHamburgerMenu
         self.showPmsConnectionButton = showpmsConnectionButton
         self.pmsConnectionState = pmsConnectionState
@@ -248,19 +245,12 @@ extension BaseView {
                 
                 if showPmsConnectionButton {
                     HStack {
-                        pmsConnectionStatusButton
-                            .scaleEffect(1)
+                        PMSConnectionButtonView(pmsConnectionState: pmsConnectionState)
                             .padding(8)
                     }
-                    .frame(
-                        maxWidth: .infinity,
-                        maxHeight: .infinity,
-                        alignment: .topLeading
-                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
-                
-                
-                
+
                 // 2. RIGHT SIDE: Header Actions + Hamburger
                 HStack(spacing: 16) {
                     headerActions()
@@ -281,8 +271,6 @@ extension BaseView {
 
 // MARK: - COMPONENT BUILDERS
 extension BaseView {
-    
-
 
     private var backButton: some View {
         Button {
@@ -420,3 +408,121 @@ extension BaseView {
 }
 
 
+// PMS Connection View in DashBoard
+struct PMSConnectionButtonView: View {
+    
+    // MARK: - Input
+    let pmsConnectionState: PmsConnectionState
+    
+    // MARK: - Private State
+    @State private var animatePulse: Bool = false
+    @State private var showPmsToast: Bool = false
+    @State private var pmsToastMessage: String = ""
+    @State private var pmsToastTextColor: Color = .green
+    @State private var pmsToastDismissTask: Task<Void, Never>? = nil
+    
+    // MARK: - Computed
+    private var pmsIconColor: Color {
+        switch pmsConnectionState {
+        case .connected:    return AppColors.shared.secondary
+        case .disconnected: return .gray
+        case .connecting:   return .gray
+        case .notAvailable: return .gray
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            
+            // MARK: - PMS Button
+            Button {
+                // optional action
+            } label: {
+                Image("pms_icon")
+                    .renderingMode(.template)
+                    .foregroundColor(pmsIconColor)
+                    .frame(width: 44, height: 44)
+                    .clipShape(Circle())
+                    .scaleEffect(
+                        pmsConnectionState == .connecting
+                        ? (animatePulse ? 1.15 : 1.0)
+                        : 1.0
+                    )
+            }
+            .buttonStyle(.plain)
+            
+            // MARK: - Sliding Toast Pill
+            if showPmsToast {
+                Text(pmsToastMessage)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(pmsToastTextColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(pmsToastTextColor.opacity(0.15))
+                    .overlay(
+                        Capsule().stroke(pmsToastTextColor.opacity(0.35), lineWidth: 1)
+                    )
+                    .clipShape(Capsule())
+                    .padding(.leading, 4)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal:   .move(edge: .leading).combined(with: .opacity)
+                    ))
+            }
+        }
+        .onAppear {
+//            if pmsConnectionState == .connecting {
+//                startPulse()
+//            }
+        }
+        .onChange(of: pmsConnectionState) { _, newValue in
+            if newValue == .connecting {
+//                startPulse()
+            } else {
+                animatePulse = false
+            }
+            triggerPmsToast(for: newValue)
+        }
+    }
+    
+//    // MARK: - Helpers
+//    private func startPulse() {
+//        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+//            animatePulse = true
+//        }
+//    }
+    
+    private func triggerPmsToast(for state: PmsConnectionState) {
+        switch state {
+        case .connected:
+            pmsToastMessage = "PMS connected"
+            pmsToastTextColor = AppColors.shared.secondary
+        case .disconnected:
+            pmsToastMessage = "PMS disconnected"
+            pmsToastTextColor = .gray
+        case .connecting:
+            pmsToastMessage = "Connecting..."
+            pmsToastTextColor = .gray
+        case .notAvailable:
+            pmsToastMessage = "PMS disconnected"
+            pmsToastTextColor = .gray
+        }
+        
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) {
+            showPmsToast = true
+        }
+        
+        pmsToastDismissTask?.cancel()
+        
+        guard state != .connecting else { return }
+        pmsToastDismissTask = Task {
+            try? await Task.sleep(nanoseconds: 2_800_000_000)
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    showPmsToast = false
+                }
+            }
+        }
+    }
+}

@@ -109,39 +109,35 @@ struct OPillCountView: View {
                         controlsContent
                     }
                 },
-//                headerActions: {
-//
-//                    let step = pillScanViewModel.currentControlledStep
-//                    let raw = pillScanViewModel.selectedTransaction?.count_type ?? ""
-//
-//                    var instruction = ""
-//
-//                    if step == .targetVerification && raw == CountType.REGULAR.rawValue {
-//                        instruction = NSLocalizedString("REGULAR_TARGET_REVERIFICATION", comment: "")
-//                    } else {
-//                        instruction = step.displayText(countType: CountType(rawValue: raw) ?? .FIXED)
-//                    }
-//
-//                    if !instruction.isEmpty {
-//                        HStack {
-//                            Spacer()
-//                            PillCountInstructionOverlay(text: instruction)
-//                            Spacer()
-//                        }
-//                        .padding(.vertical, 10)
-//                    }
-//                },
                 headerActions: {
-                    if !controlledStepInstruction.isEmpty {
-                        HStack {
-                            Spacer()
-                            PillCountInstructionOverlay(text: controlledStepInstruction)
-                            Spacer()
+                    HStack {
+                        Button {
+                            router.navigateBack()
+                        } label: {
+                            Image("back_icon")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 24, height: 24)
+                                .padding(12)
+                                .clipShape(Circle())
                         }
-                        .padding(.vertical, 10)
+
+                        Spacer()
+
+                        if !controlledStepInstruction.isEmpty {
+                            PillCountInstructionOverlay(text: controlledStepInstruction)
+                        }
+
+                        Spacer()
+
+                        // Balance space for perfect center alignment
+                        Color.clear
+                            .frame(width: 48, height: 48)
                     }
+                    .padding(.top, isLandscape ? 20 : 65)
+                    .padding(.horizontal, 8)
                 },
-                showBackButton: true,
+                showBackButton: false,
                 showHamburgerMenu: false,
                 onBack: {
                     router.setRoot(
@@ -149,6 +145,7 @@ struct OPillCountView: View {
                     cameraService.stop()
                 }
             )
+            .ignoresSafeArea(.all)
 
             if pillScanViewModel.showToast  {
                 VStack {

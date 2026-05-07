@@ -13,15 +13,6 @@ struct StockItemRowView: View {
 
 
 
-//    private var displayText: String {
-//        "\(data.pillCount) / \(data.targetCount)"
-//    }
-
-//    private var fillFraction: Double {
-//        guard data.targetCount > 0 else { return 0 }
-//        return min(Double(data.pillCount) / Double(data.targetCount), 1.0)
-//    }
-
     // MARK: - Body
 
     var body: some View {

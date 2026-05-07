@@ -50,7 +50,7 @@ struct UserProfileScreen: View {
                     EmptyView()
                 },
                 headerActions: { EmptyView() },
-                showBackButton: false,
+                showBackButton: true,
                 showHamburgerMenu: false,
                 title: NSLocalizedString("PROFILE", comment: ""),
                 backgroundColor: appColors.primaryBackground,
@@ -287,7 +287,7 @@ struct UserProfileScreen: View {
     private func profileScreenLandscape() -> some View {
         VStack(spacing: 0) {
 
-            profileHeader
+//            profileHeader
 
             ScrollView {
                 VStack(spacing: 20) {
@@ -314,13 +314,14 @@ struct UserProfileScreen: View {
             }
             .padding(.bottom, 20)
         }
+        .padding(.top, )
         .background(appColors.primaryBackground)
     }
     
     private func profileScreenPotrait() -> some View {
         VStack(spacing: 0) {
 
-            profileHeader
+//            profileHeader
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -340,36 +341,29 @@ struct UserProfileScreen: View {
         }
     }
     
-    private var profileHeader: some View {
-        HStack {
-            if !isNewUser {
-                Button {
-                    router.navigateBack()
-                } label: {
-                    HStack {
-                        Image("back_icon")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-
-                        Text(NSLocalizedString("PROFILE", comment: ""))
-                            .font(.headline)
-                            .foregroundStyle(appColors.text)
-                    }
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal)
-        .padding(.vertical,10)
-        .padding(.bottom, 30)
-    }
-}
-
-#Preview {
-    let userViewModel = UserViewModel()
-    UserProfileScreen()
-        .preferredColorScheme(.dark)
-        .environmentObject(userViewModel)
+//    private var profileHeader: some View {
+//        HStack {
+//            if !isNewUser {
+//                Button {
+//                    router.navigateBack()
+//                } label: {
+//                    HStack {
+//                        Image("back_icon")
+//                            .resizable()
+//                            .scaledToFit()
+//                            .frame(width: 24, height: 24)
+//
+//                        Text(NSLocalizedString("PROFILE", comment: ""))
+//                            .font(.headline)
+//                            .foregroundStyle(appColors.text)
+//                    }
+//                }
+//            }
+//
+//            Spacer()
+//        }
+//        .padding(.horizontal)
+//        .padding(.vertical,10)
+//        .padding(.bottom, 30)
+//    }
 }

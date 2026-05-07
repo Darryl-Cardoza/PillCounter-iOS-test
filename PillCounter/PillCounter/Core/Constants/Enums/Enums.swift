@@ -240,7 +240,6 @@ public enum StockCountOptionContainerStatus: Hashable {
 
 
 //HL7 ENUMS
-
 public enum PmsConnectionState {
     case connected
     case disconnected

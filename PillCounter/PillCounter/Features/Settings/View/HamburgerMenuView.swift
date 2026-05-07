@@ -105,7 +105,7 @@ struct HamburgerMenuView: View {
             .padding(.bottom, 40)
         }
         // BaseView header offset
-        .padding(.top, 80)
+        .padding(.top, 45)
         // Safe Area handling for Landscape
         .padding(
             .horizontal,

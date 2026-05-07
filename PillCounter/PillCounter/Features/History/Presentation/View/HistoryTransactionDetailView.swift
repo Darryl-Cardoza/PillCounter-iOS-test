@@ -130,11 +130,11 @@ struct HistoryTransactionDetailView: View {
                     .padding(.top, 70)
 
                 }
-                .padding(.top,30)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(appColors.secondaryBackground)
             }
         }
+        .padding(.top,45)
     }
 
     // MARK: - PDF

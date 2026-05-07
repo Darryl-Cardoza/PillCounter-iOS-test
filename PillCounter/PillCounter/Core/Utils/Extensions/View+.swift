@@ -83,23 +83,6 @@ extension View {
                 y: shadowYOffset
             )
             .scaleEffect(isSelected ? scale : 1)
-            .overlay(
-                GeometryReader { geo in
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(isSelected ? highlightColor : .clear)
-                                .frame(
-                                    width: geo.size.width * 0.4,  // 40% of component width
-                                    height: 3
-                                )
-                            Spacer()
-                        }
-                    }
-                }
-            )
             .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
 }

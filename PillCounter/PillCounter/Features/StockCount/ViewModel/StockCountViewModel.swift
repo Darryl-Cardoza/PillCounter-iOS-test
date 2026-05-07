@@ -272,10 +272,12 @@ class StockCountViewModel: ObservableObject {
             }
 
             return GroupedTransaction(
+                txnId:       txnList.first?.txn_id ?? 0,
                 ndc:          ndc,
                 drugName:     drugName,
                 total:        totalSealed + totalOpen,
                 sealedBottles: totalSealed,
+                sealedBottleQty: txnList.first?.bottle_qty ?? 0,
                 openPills:    totalOpen,
                 lotDetails:   lotDetails
             )
@@ -303,10 +305,12 @@ struct StockTransaction: Identifiable, Hashable {
 }
 
 struct GroupedTransaction {
+    let txnId:  Int64
     let ndc:           String
     let drugName:      String
     let total:         Int32
     let sealedBottles: Int32
+    let sealedBottleQty: Int32
     let openPills:     Int32
     let lotDetails:    [LotDetail]
 }

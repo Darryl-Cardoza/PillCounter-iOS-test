@@ -36,9 +36,19 @@ struct DashboardView: View {
     // MARK: - LOCAL STATE
     // This ensures we only redirect once per session (prevents infinite loop on Skip)
     @State private var hasCheckedNewUser: Bool = false
+    
+    // For animation
+    @State private var isDispenseIconAnimating = false
+    @State private var isStockIconAnimating = false
+    
+    //PMS
+    @State private var pmsToastMessage: String = ""
+    @State private var pmsToastColor: Color = .green
+    @State private var showPmsToast: Bool = false
+    @State private var pmsToastTask: Task<Void, Never>? = nil
+    
     var body: some View {
         ZStack {
-            
             BaseView(
                 topRatio: 0.5,
                 topContent: {
@@ -62,7 +72,9 @@ struct DashboardView: View {
                                             .stroke(appColors.primary, lineWidth: 4)
                                     }
                                 )
-                            
+                                .rotationEffect(.degrees(isDispenseIconAnimating ? 360 : 0))
+                                .scaleEffect(isDispenseIconAnimating ? 1.25 : 1.0)
+                                .animation(.spring(response: 0.6, dampingFraction: 0.5), value: isDispenseIconAnimating)
                             Spacer().frame(height: 15)
                             
                             Text("FIXED_COUNT_TITLE")
@@ -87,7 +99,7 @@ struct DashboardView: View {
                                 )
                                 
                                 Spacer()
-                                    .frame(width: 40)
+                                    .frame(width: 100)
                                 
                                 PillCountingButton(
                                     iconName: "partial",
@@ -105,7 +117,7 @@ struct DashboardView: View {
                                     iconColor: appColors.primary
                                 )
                             }
-                            .padding(.horizontal, 10)
+                            .padding(.horizontal, 16)
                             .padding(.vertical, 20)
                             
                         }
@@ -142,8 +154,9 @@ struct DashboardView: View {
                                             .stroke(appColors.primary, lineWidth: 4)
                                     }
                                 )
-                            
-                            
+                                .rotationEffect(.degrees(isStockIconAnimating ? 360 : 0))
+                                .scaleEffect(isStockIconAnimating ? 1.25 : 1.0)
+                                .animation(.spring(response: 0.6, dampingFraction: 0.5), value: isStockIconAnimating)
                             Spacer().frame(height: 15)
                             
                             Text("REGULAR_COUNT_TITLE")
@@ -168,7 +181,7 @@ struct DashboardView: View {
                                 )
                                 
                                 Spacer()
-                                    .frame(width: 40)
+                                    .frame(width: 100)
                                 
                                 PillCountingButton(
                                     iconName: "partial",
@@ -181,7 +194,7 @@ struct DashboardView: View {
                                     iconColor: appColors.primary
                                 )
                             }
-                            .padding(.horizontal, 10)
+                            .padding(.horizontal, 16)
                             .padding(.vertical, 20)
                             
                         }
@@ -227,6 +240,14 @@ struct DashboardView: View {
             
         }
         .onAppear {
+            //Animation 
+//            isStockIconAnimating = true
+//            isDispenseIconAnimating = true
+//            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+//                isStockIconAnimating = false
+//                isDispenseIconAnimating = false
+//            }
+//            
             Task(priority: .background) {
                 await userViewModel.checkAndRefreshTokenIfNeeded()
             }
@@ -430,6 +451,23 @@ struct DashboardView: View {
             
             }.padding(.horizontal, 8)
         )
+    }
+    
+    private func showPmsStatusToast(message: String, color: Color) {
+        pmsToastMessage = message
+        pmsToastColor = color
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) {
+            showPmsToast = true
+        }
+        pmsToastTask?.cancel()
+        pmsToastTask = Task {
+            try? await Task.sleep(nanoseconds: 2_800_000_000)
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showPmsToast = false
+                }
+            }
+        }
     }
     
     private func handleStockCountSelectedOption() {

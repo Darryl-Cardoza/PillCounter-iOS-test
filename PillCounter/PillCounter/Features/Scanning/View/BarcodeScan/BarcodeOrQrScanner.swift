@@ -137,17 +137,37 @@ struct QRBarcodeScannerView: View {
                 },
                 headerActions: {
                     HStack {
+                        Button {
+                            router.navigateBack()
+                        } label: {
+                            Image("back_icon")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 24, height: 24)
+                                .padding(12)
+                                .clipShape(Circle())
+                        }
+
                         Spacer()
+
                         PillCountInstructionOverlay(text: scanType.instructionText)
+
                         Spacer()
+
+                        // Keeps overlay perfectly centered
+                        Color.clear
+                            .frame(width: 48, height: 48)
                     }
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
                 },
-                showBackButton: true,
+                showBackButton: false,
                 showHamburgerMenu: false,  // We have a manual entry button instead
                 title: "",  // No title for scanner, usually cleaner
-                allowKeyboardResize: true
+                allowKeyboardResize: true,
+                
             )
+            .ignoresSafeArea(.all)
             .onTapGesture {
                 UIApplication.hideKeyboard()
             }
@@ -256,6 +276,8 @@ struct QRBarcodeScannerView: View {
             .background(Color.black.opacity(0.5))
             .cornerRadius(24)
     }
+    
+  
 
     private func startScanTimeout() {
         scanTimeoutTask?.cancel()

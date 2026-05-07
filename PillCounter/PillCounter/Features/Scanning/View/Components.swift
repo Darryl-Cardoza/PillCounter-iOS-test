@@ -350,42 +350,44 @@ struct CountAddButtonView: View {
     let onAddTap: () -> Void
     var isDisabled: Bool = false
 
-    // We use a UUID to force SwiftUI to recreate the view when animation state changes.
-    // This prevents the "repeatForever" from getting stuck or not resetting correctly.
     @State private var animationID = UUID()
     @State private var trimValue: CGFloat = 1.0
+    @State private var displayedCount: Int = 0
+    @State private var popScale: CGFloat = 1.0
+    @State private var countTimer: Timer? = nil
 
     var body: some View {
         VStack(spacing: -20) {
-
-            // Circle with animated stroke
             ZStack {
                 Circle()
                     .trim(from: 0, to: trimValue)
                     .stroke(
                         ringColor,
-                        style: StrokeStyle(
-                            lineWidth: ringLineWidth,
-                            lineCap: .round
-                        )
+                        style: StrokeStyle(lineWidth: ringLineWidth, lineCap: .round)
                     )
-                    .rotationEffect(.degrees(90))  // Start at 6 o'clock
+                    .rotationEffect(.degrees(90))
                     .frame(width: size, height: size)
-                    .id(animationID)  // Critical for resetting animation cleanly
-                    .onAppear {
-                        updateAnimationState()
-                    }
-                    .onChange(of: isAnimating) { _, _ in
-                        updateAnimationState()
-                    }
+                    .id(animationID)
+                    .onAppear { updateAnimationState() }
+                    .onChange(of: isAnimating) { _, _ in updateAnimationState() }
 
-                Text("\(count)")
+                Text("\(displayedCount)")
                     .font(.system(size: size * 0.28, weight: .bold))
                     .foregroundStyle(textColor)
+                    .scaleEffect(popScale)
             }
             .opacity(isDisabled ? 0.5 : 1.0)
+            .onChange(of: count) { _, newCount in
+                if newCount == 0 {
+                    snapToZero()
+                } else {
+                    animateCount(to: newCount)
+                }
+            }
+            .onAppear {
+                displayedCount = count
+            }
 
-            // Add button
             Button(action: onAddTap) {
                 Text(isDisabled ? "Wait..." : "Add")
                     .font(.system(size: 16, weight: .semibold))
@@ -399,29 +401,68 @@ struct CountAddButtonView: View {
         }
     }
 
-    private func updateAnimationState() {
-        // Regenerate ID to kill any existing animation context
-        animationID = UUID()
+    // MARK: - Snap to zero instantly
+    private func snapToZero() {
+        countTimer?.invalidate()
+        countTimer = nil
+        displayedCount = 0
+        popScale = 1.0
+    }
 
+    // MARK: - Fast timer-based count
+    private func animateCount(to target: Int) {
+        countTimer?.invalidate()
+        countTimer = nil
+
+        let start = displayedCount
+        let delta = target - start
+        guard delta != 0 else { return }
+
+        let stepCount = abs(delta)
+        let increment = delta > 0 ? 1 : -1
+
+        // Total roll duration — 40ms per step, max 300ms total
+        // e.g. +1 = 40ms (nearly instant), +10 = 300ms (fast ticker)
+        let totalDuration: Double = min(Double(stepCount) * 0.04, 0.3)
+        let interval: Double = totalDuration / Double(stepCount)
+
+        var current = start
+
+        countTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { t in
+            current += increment
+            displayedCount = current
+
+            // Tiny pop on each tick
+            popScale = 1.15
+            withAnimation(.spring(response: 0.12, dampingFraction: 0.45)) {
+                popScale = 1.0
+            }
+
+            if current == target {
+                t.invalidate()
+                countTimer = nil
+            }
+        }
+        // Fire immediately on main run loop including scroll
+        RunLoop.main.add(countTimer!, forMode: .common)
+    }
+
+    // MARK: - Ring animation
+    private func updateAnimationState() {
+        animationID = UUID()
         if isAnimating {
-            // Start with empty circle
             trimValue = 0
-            withAnimation(
-                .linear(duration: 1.5)
-                    .repeatForever(autoreverses: false)
-            ) {
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                 trimValue = 1
             }
             DispatchQueue.main.asyncAfter(deadline: .now()) {
-                 guard isAnimating else { return }
-
-                 FeedbackManager.shared.triggerDetectionFeedback(
-                     isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
-                     isSoundEnabled: AppStorageManager.shared.isSoundEnabled
-                 )
-             }
+                guard isAnimating else { return }
+                FeedbackManager.shared.triggerDetectionFeedback(
+                    isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
+                    isSoundEnabled: AppStorageManager.shared.isSoundEnabled
+                )
+            }
         } else {
-            // Stop state: Full Circle Visible immediately
             withAnimation(.linear(duration: 0.2)) {
                 trimValue = 1
             }

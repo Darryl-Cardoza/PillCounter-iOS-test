@@ -20,6 +20,7 @@ struct UnsyncedTransactionView: View {
     @StateObject private var viewModel = UnsyncedViewModel()
     @EnvironmentObject private var userViewModel: UserViewModel
 
+
     var body: some View {
         ZStack {
             BaseView(
@@ -35,7 +36,8 @@ struct UnsyncedTransactionView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: "UNSYNCED TRANSACTIONS"
+                title: "UNSYNCED TRANSACTIONS",
+                backgroundColor: appColors.primaryBackground
             )
         }
     }
@@ -52,30 +54,28 @@ private extension UnsyncedTransactionView {
             VStack(spacing: 16) {
                 if isEmpty {
                     VStack {
-                        Spacer()
-
                         EmptyStateView(
                             imageName: "check_with_circle",
                             systemImageName: nil,
                             title: "All transactions are synced",
                             subtitle: nil
                         )
+                        .padding(.top, 120)
 
                         Spacer()
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: UIScreen.main.bounds.height * 0.7)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else {
                     VStack(spacing: 16) {
                         batchesSection
                         transactionsSection
                     }
-                    .padding(.top, 90)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 100) // leave room for sync button
+            .padding(.bottom, 100)
         }
+        .padding(.top, 45)
         .background(appColors.primaryBackground)
         .safeAreaInset(edge: .bottom) {
             VStack (spacing: 5){
@@ -98,12 +98,20 @@ private extension UnsyncedTransactionView {
     var batchesSection: some View {
         if !viewModel.batches.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "STOCK", count: viewModel.batches.count)
+                sectionHeader(title: "STOCKS", count: viewModel.batches.count)
 
-                ForEach(viewModel.batches, id: \.batchId) { batch in
+                ForEach(Array(viewModel.batches.enumerated()), id: \.offset) { index, batch in
                     StockItemRowView(
                         data: batch,
                         appColors: appColors
+                    )
+                    .listRowAnimated(
+                        id: Int64(index),
+                        index: index,
+                        isEditing: false,
+                        isSelected: false,
+                        isDeleting: false,
+                        highlightColor: appColors.secondary
                     )
                 }
             }
@@ -119,12 +127,20 @@ private extension UnsyncedTransactionView {
     var transactionsSection: some View {
         if !viewModel.transactions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "DISPENSE", count: viewModel.transactions.count)
+                sectionHeader(title: "DISPENSES", count: viewModel.transactions.count)
 
-                ForEach(viewModel.transactions) { txn in
+                ForEach(Array(viewModel.transactions.enumerated()), id: \.offset) { index, txn in
                     DispenseItemRowView(
                         data: txn,
                         appColors: appColors
+                    )
+                    .listRowAnimated(
+                        id: Int64(index),
+                        index: index,
+                        isEditing: false,
+                        isSelected: false,
+                        isDeleting: false,
+                        highlightColor: appColors.secondary
                     )
                 }
             }

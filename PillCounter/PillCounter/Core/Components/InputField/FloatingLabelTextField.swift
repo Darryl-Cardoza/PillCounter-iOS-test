@@ -25,8 +25,7 @@ struct FloatingLabelTextField: View {
             Text(placeholder)
                 .font(isActive ? .caption : .body)
                 .foregroundColor(appColors.text.opacity(0.75))
-                .offset(y: isActive ? -18 : 0)
-                
+                .offset(y: isActive ? -16 : 0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
 
             // Text input
@@ -36,13 +35,12 @@ struct FloatingLabelTextField: View {
                 } else {
                     TextField("", text: $text)
                         .keyboardType(keyboardType)
-                    
                 }
             }
             .focused($isFocused)
             .font(.body)
             .foregroundColor(disabled ? appColors.text.opacity(0.75) : appColors.text)
-            .padding(.top, isActive ? 8 : 0)
+            .padding(.top, isActive ? 10 : 0)
             .opacity(isActive ? 1 : 0)
             .animation(.easeIn(duration: 0.15).delay(0.1), value: isActive)
             .disabled(disabled)
@@ -52,9 +50,9 @@ struct FloatingLabelTextField: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 18)
-        .frame(height: 60)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 20)
+        .frame(height: 64)
         .background(
              appColors.secondaryBackground
         )

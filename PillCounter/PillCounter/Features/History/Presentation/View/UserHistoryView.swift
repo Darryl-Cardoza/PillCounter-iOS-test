@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Foundation
 
 struct UserHistoryView: View {
     
@@ -33,6 +34,9 @@ struct UserHistoryView: View {
     let filterType: HistoryFilterType
     @State private var activeTypeFilter: HistoryFilterType = .fixed
     @State private var activeStatusFilter: HistoryStatusFilter = .all
+    
+    // MARK: - Add this state variable near your other @State vars
+    @State private var listVersion: Int = 0
 
     // MARK: - Body
     var body: some View {
@@ -74,9 +78,11 @@ struct UserHistoryView: View {
             }
             .onChange(of: activeStatusFilter) { _, _ in
                 historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+                listVersion += 1
             }
             .onChange(of: searchText) { _, _ in
                 historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+                listVersion += 1
             }
             .customPopup(isPresented: $showDeleteConfirmation) {
                 deleteConfirmationPopUp
@@ -89,7 +95,7 @@ struct UserHistoryView: View {
     // Landscape: 0.4 normal (left-right split by width) / 1.0 searching (full-width left panel)
     private var computedTopRatio: CGFloat {
         if isLandscape && isSearching { return 1.0 }
-        if isSearching { return 0.2 }
+        if isSearching { return isLandscape ? 0 : 0.08 }
         // iPad needs less ratio for calendar since screen is taller/wider
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         if isLandscape {
@@ -97,6 +103,7 @@ struct UserHistoryView: View {
         }
         return isIPad ? 0.35 : 0.4
     }
+
 
     // MARK: - Top Content
     @ViewBuilder
@@ -163,6 +170,7 @@ struct UserHistoryView: View {
         userHistoryTransactionsList
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(appColors.secondaryBackground)
+            .padding(.top, 40)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearching)
     }
 
@@ -184,6 +192,7 @@ struct UserHistoryView: View {
             )
             await historyViewModel.getBatchesByDate(startDate: start, endDate: end)
             historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+            listVersion += 1
         }
     }
 
@@ -290,12 +299,21 @@ struct UserHistoryView: View {
             )
             .padding(.top, 40)
         } else {
-            ForEach(historyViewModel.transactionRows) { row in
+            ForEach(Array(historyViewModel.transactionRows.enumerated()), id: \.element.id) { index, row in
                 DispenseItemRowView(data: row, appColors: appColors)
                     .onTapGesture {
                         historyViewModel.selectedTransactionId = Int64(row.id)
                         router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
                     }
+                    .offset(y: 0)
+                    .opacity(1)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(
+                        .spring(response: 0.45, dampingFraction: 0.82)
+                            .delay(Double(index) * 0.05),
+                        value: listVersion
+                    )
+                
             }
         }
     }
@@ -318,12 +336,18 @@ struct UserHistoryView: View {
             )
             .padding(.top, 40)
         } else {
-            ForEach(historyViewModel.batchRows) { row in
+            ForEach(Array(historyViewModel.batchRows.enumerated()), id: \.element.batchId) { index, row in
                 StockItemRowView(data: row, appColors: appColors)
                     .onTapGesture {
                         historyViewModel.selectedBatchId = row.batchId
                         router.navigate(to: .authentication(.user(.userSettings(.HistoryBatchDetail))))
                     }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(
+                        .spring(response: 0.45, dampingFraction: 0.82)
+                            .delay(Double(index) * 0.05),
+                        value: listVersion 
+                    )
             }
         }
     }

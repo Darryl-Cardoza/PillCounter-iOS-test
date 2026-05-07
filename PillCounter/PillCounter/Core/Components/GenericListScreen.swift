@@ -167,7 +167,7 @@ extension GenericListScreen {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 90)
+        .padding(.top, 65)
         .background(appColors.primaryBackground)
 
     }
@@ -207,32 +207,26 @@ extension GenericListScreen {
         Group {
             if isEditing {
                 HStack(spacing: 10) {
-
-                    // CHECKBOX
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(appColors.primary, lineWidth: 1)
-                            .frame(width: 18, height: 18)
-
-                        if isAllSelected {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(appColors.primary)
-                        }
-                    }
-
-                    Text("Select All")
+                    // ICON (selected / unselected)
+                    Image(isAllSelected ? "icon_unselected" : "icon_selected")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 18, height: 18)
+                        .foregroundStyle(appColors.primary)
+                    
+                    // TEXT (dynamic)
+                    Text(isAllSelected ? "Unselect All" : "Select All")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(appColors.primary)
-
                 }
+                .contentShape(Rectangle()) // makes full row tappable
                 .onTapGesture {
                     toggleAll()
                 }
                 .padding(.trailing, 16)
                 .transition(.opacity)
-
-            } else if isSearching {
+            }else if isSearching {
                 UnderlinedSearchBar(
                     text: $searchText,
                     isFocused: $isSearchFieldFocused,

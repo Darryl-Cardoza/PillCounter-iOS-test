@@ -174,6 +174,7 @@ class StockCountViewModel: ObservableObject {
     private func fetchDrugDataOnly(gtin: String) async {
         guard !gtin.isEmpty else {
             showScanError = true
+            barcodeNotFound = true
             return
         }
 
@@ -241,6 +242,9 @@ class StockCountViewModel: ObservableObject {
         scannedDrugData = nil
         showStockCountScannedDetails = false
         showScanError = false
+        barcodeNotFound = false
+        showScannedNdcDoesNotMatch = false
+        isLoading = false
     }
 
     // MARK: - Mapper

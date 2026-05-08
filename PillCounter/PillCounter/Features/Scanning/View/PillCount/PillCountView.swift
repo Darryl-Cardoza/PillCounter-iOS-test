@@ -112,7 +112,9 @@ struct OPillCountView: View {
                 headerActions: {
                     HStack {
                         Button {
-                            router.navigateBack()
+                            router.setRoot(
+                                to: .authentication(.login(.dashboard(.dashboardHome))))
+                            cameraService.stop()
                         } label: {
                             Image("back_icon")
                                 .resizable()
@@ -134,7 +136,7 @@ struct OPillCountView: View {
                         Color.clear
                             .frame(width: 48, height: 48)
                     }
-                    .padding(.top, isLandscape ? 20 : 65)
+                    .padding(.top, 65)
                     .padding(.horizontal, 8)
                 },
                 showBackButton: false,

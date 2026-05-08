@@ -146,7 +146,7 @@ struct StockTransactionListView: View {
 }
 
 // MARK: - Lot Row
-private struct LotRow: View {
+struct LotRow: View {
     let lot: String
     let expiry: String
     let qty: Int32
@@ -193,7 +193,7 @@ private struct LotRow: View {
 
 // MARK: - Lot Column Header
 
-private struct LotColumnHeader: View {
+struct LotColumnHeader: View {
     let appColors: AppColors
 
     var body: some View {
@@ -220,7 +220,7 @@ private struct LotColumnHeader: View {
 
 // MARK: - Lot Total Row
 
-private struct LotTotalRow: View {
+struct LotTotalRow: View {
     let total: Int32
     let appColors: AppColors
 

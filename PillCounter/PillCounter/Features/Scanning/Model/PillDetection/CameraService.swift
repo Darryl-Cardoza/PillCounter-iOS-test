@@ -11,7 +11,7 @@ import SwiftUI
 final class CameraService: NSObject, ObservableObject {
 
     // MARK: - CONSTANTS
-    private let inactivityTimeout: TimeInterval = 100
+    private let inactivityTimeout: TimeInterval = 2
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
 
     // MARK: - CAMERA CORE
@@ -206,9 +206,9 @@ final class CameraService: NSObject, ObservableObject {
 
     /// PAUSES CAMERA WHEN USER IS INACTIVE
     private func pauseForInactivity() {
-        guard !isPausedDueToInactivity else { return }
-        stop()
-        isPausedDueToInactivity = true
+//        guard !isPausedDueToInactivity else { return }
+//        stop()
+//        isPausedDueToInactivity = true   JUST FOR TESTING PERFORMACE WE DISABLED THIS
     }
 
     /// RESUMES CAMERA AFTER INACTIVITY

@@ -94,10 +94,10 @@ struct UserHistoryView: View {
     // Portrait: 0.4 normal / 0.2 searching (top-bottom split by height)
     // Landscape: 0.4 normal (left-right split by width) / 1.0 searching (full-width left panel)
     private var computedTopRatio: CGFloat {
-        if isLandscape && isSearching { return 1.0 }
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        if isLandscape && isSearching { return  isIPad ? 1.0 : 2.0 }
         if isSearching { return isLandscape ? 0 : 0.08 }
         // iPad needs less ratio for calendar since screen is taller/wider
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         if isLandscape {
             return isIPad ? 0.35 : 0.4
         }

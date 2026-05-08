@@ -18,10 +18,7 @@ struct DashboardView: View {
     
     @StateObject private var dashboardViewModel =  DashboardViewModel()
 
-    @State private var someParialValue: Int = 1
-    @State private var someParialValue2: Int = 2
-    @State private var someCompletedValue: Int = 3
-    @State private var someCompletedValue2: Int = 4
+
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = true
@@ -38,175 +35,161 @@ struct DashboardView: View {
     @State private var hasCheckedNewUser: Bool = false
     
     // For animation
-    @State private var isDispenseIconAnimating = false
-    @State private var isStockIconAnimating = false
-    
+//    @State private var isDispenseIconAnimating = false
+//    @State private var isStockIconAnimating = false
+//    
     //PMS
     @State private var pmsToastMessage: String = ""
     @State private var pmsToastColor: Color = .green
     @State private var showPmsToast: Bool = false
     @State private var pmsToastTask: Task<Void, Never>? = nil
-    
+    let isIpad = UIDevice.current.userInterfaceIdiom == .pad
+
     var body: some View {
         ZStack {
             BaseView(
                 topRatio: 0.5,
                 topContent: {
-                    GeometryReader { geometry in
-                        VStack(spacing: 10) {
-                            Spacer()
-                            Spacer()
-                            Image("dispense_dashboard_icon")
-                                .renderingMode(.template)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 55, height: 55)
-                                .foregroundColor(appColors.secondary)
-                                .padding(40)
-                                .background(
-                                    ZStack {
-                                        Circle()
-                                            .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
-                                            .blur(radius: 5)
-                                        Circle()
-                                            .stroke(appColors.primary, lineWidth: 4)
-                                    }
-                                )
-                                .rotationEffect(.degrees(isDispenseIconAnimating ? 360 : 0))
-                                .scaleEffect(isDispenseIconAnimating ? 1.25 : 1.0)
-                                .animation(.spring(response: 0.6, dampingFraction: 0.5), value: isDispenseIconAnimating)
-                            Spacer().frame(height: 15)
-                            
-                            Text("FIXED_COUNT_TITLE")
-                                .font(.title)
-                                .foregroundStyle(appColors.secondary)
-                            
-                            Text("FIXED_COUNT_SUBTITLE")
-                                .foregroundStyle(appColors.text)
-                            Spacer()
-                            
-                            HStack {
-                                PillCountingButton(
-                                    iconName: "check_with_circle",
-                                    title:
-                                        "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
-                                    textColor: appColors.primary,
-                                    backgroundColor: appColors.primaryBackground,
-                                    action: {
-                                        router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
-                                    },
-                                    iconColor: appColors.primary
-                                )
-                                
-                                Spacer()
-                                    .frame(width: 100)
-                                
-                                PillCountingButton(
-                                    iconName: "partial",
-                                    title:"\(userViewModel.fixedCountTransactionPartialCount) \(NSLocalizedString("PENDING", comment: ""))",
-                                    textColor: appColors.primary,
-                                    backgroundColor: appColors.primaryBackground,
-                                    action: {
-                                        router.selectedPillScanningType = .FIXED
-                                        router.navigate(
-                                            to: .authentication(
-                                                .login(
-                                                    .dashboard(.fixedCountPartial)))
-                                        )
-                                    },
-                                    iconColor: appColors.primary
-                                )
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 20)
-                            
+                    VStack(spacing: 10) {
+                        Spacer()
+                        Spacer()
+                        Image("dispense_dashboard_icon")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 55, height: 55)
+                            .foregroundColor(appColors.secondary)
+                            .padding(40)
+                            .background(
+                                ZStack {
+                                    Circle()
+                                        .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
+                                        .blur(radius: 5)
+                                    Circle()
+                                        .stroke(appColors.primary, lineWidth: 4)
+                                }
+                            )
+                        Spacer().frame(height: 15)
+
+                        Text("FIXED_COUNT_TITLE")
+                            .font(.title)
+                            .foregroundStyle(appColors.secondary)
+
+                        Text("FIXED_COUNT_SUBTITLE")
+                            .foregroundStyle(appColors.text)
+
+                        Spacer()
+
+                        HStack(spacing: isIpad ? 24 : 42) {
+                            PillCountingButton(
+                                iconName: "check_with_circle",
+                                title: "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
+                                textColor: appColors.primary,
+                                backgroundColor: appColors.primaryBackground,
+                                action: {
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
+                                },
+                                iconColor: appColors.primary
+                            )
+                            .frame(maxWidth: .infinity)
+
+                            PillCountingButton(
+                                iconName: "partial",
+                                title: "\(userViewModel.fixedCountTransactionPartialCount) \(NSLocalizedString("PENDING", comment: ""))",
+                                textColor: appColors.primary,
+                                backgroundColor: appColors.primaryBackground,
+                                action: {
+                                    router.selectedPillScanningType = .FIXED
+                                    router.navigate(
+                                        to: .authentication(
+                                            .login(
+                                                .dashboard(.fixedCountPartial)))
+                                    )
+                                },
+                                iconColor: appColors.primary
+                            )
+                            .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(appColors.secondaryBackground)
-                        .onTapGesture {
-                            router.selectedPillScanningType = .FIXED
-                            router.navigate(
-                                to: .authentication(
-                                    .login(
-                                        .dashboard(
-                                            .pillCount(.barcodeScanning(.rx_label))))))
-                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 20)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)  // ✅ centers without GeometryReader
+                    .background(appColors.secondaryBackground)
+                    .onTapGesture {
+                        router.selectedPillScanningType = .FIXED
+                        router.navigate(
+                            to: .authentication(
+                                .login(
+                                    .dashboard(
+                                        .pillCount(.barcodeScanning(.rx_label))))))
                     }
                 },
                 bottomContent: {
-                    GeometryReader { geometry in
-                        VStack(spacing: 10) {
-                            Spacer()
-                            Spacer()
-                            Image("placeholder_history")
-                                .renderingMode(.template)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 65, height: 65)
-                                .foregroundColor(appColors.secondary)
-                                .padding(40)
-                                .background(
-                                    ZStack {
-                                        Circle()
-                                            .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
-                                            .blur(radius: 5)
-                                        Circle()
-                                            .stroke(appColors.primary, lineWidth: 4)
-                                    }
-                                )
-                                .rotationEffect(.degrees(isStockIconAnimating ? 360 : 0))
-                                .scaleEffect(isStockIconAnimating ? 1.25 : 1.0)
-                                .animation(.spring(response: 0.6, dampingFraction: 0.5), value: isStockIconAnimating)
-                            Spacer().frame(height: 15)
-                            
-                            Text("REGULAR_COUNT_TITLE")
-                                .font(.title)
-                                .foregroundStyle(appColors.secondary)
-                            
-                            Text("REGULAR_COUNT_SUBTITLE")
-                                .foregroundStyle(appColors.text)
-                            
-                            Spacer()
-                            
-                            HStack {
-                                PillCountingButton(
-                                    iconName: "check_with_circle",
-                                    title: "\(stockCountViewModel.totalCompletedBatchCount) \(NSLocalizedString("COMPLETED", comment: ""))",
-                                    textColor: appColors.primary,
-                                    backgroundColor: appColors.secondaryBackground,
-                                    action: {
-                                        router.navigate(to: .authentication(.user(.userSettings(.History(.regular)))))
-                                    },
-                                    iconColor: appColors.primary,
-                                )
-                                
-                                Spacer()
-                                    .frame(width: 100)
-                                
-                                PillCountingButton(
-                                    iconName: "partial",
-                                    title: "\(stockCountViewModel.totalBatchCount) \(NSLocalizedString("PENDING", comment: ""))",
-                                    textColor: appColors.primary,
-                                    backgroundColor: appColors.secondaryBackground,
-                                    action: {
-                                        router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
-                                    },
-                                    iconColor: appColors.primary
-                                )
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 20)
-                            
+                    VStack(spacing: 10) {
+                        Spacer()
+                        Spacer()
+                        Image("placeholder_history")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 65, height: 65)
+                            .foregroundColor(appColors.secondary)
+                            .padding(40)
+                            .background(
+                                ZStack {
+                                    Circle()
+                                        .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
+                                        .blur(radius: 5)
+                                    Circle()
+                                        .stroke(appColors.primary, lineWidth: 4)
+                                }
+                            )
+                        Spacer().frame(height: 15)
+
+                        Text("REGULAR_COUNT_TITLE")
+                            .font(.title)
+                            .foregroundStyle(appColors.secondary)
+
+                        Text("REGULAR_COUNT_SUBTITLE")
+                            .foregroundStyle(appColors.text)
+
+
+                        HStack(spacing: isIpad ? 24 : 42) {
+                            PillCountingButton(
+                                iconName: "check_with_circle",
+                                title: "\(stockCountViewModel.totalCompletedBatchCount) \(NSLocalizedString("COMPLETED", comment: ""))",
+                                textColor: appColors.primary,
+                                backgroundColor: appColors.secondaryBackground,
+                                action: {
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular)))))
+                                },
+                                iconColor: appColors.primary
+                            )
+                            .frame(maxWidth: .infinity)
+
+                         
+                            PillCountingButton(
+                                iconName: "partial",
+                                title: "\(stockCountViewModel.totalBatchCount) \(NSLocalizedString("PENDING", comment: ""))",
+                                textColor: appColors.primary,
+                                backgroundColor: appColors.secondaryBackground,
+                                action: {
+                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
+                                },
+                                iconColor: appColors.primary
+                            )
+                            .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(appColors.primaryBackground)
-                        .cornerRadius(24)
-                        .onTapGesture {
-                            router.selectedPillScanningType = .REGULAR
-                            showStockCountPopup.toggle()
-                            resetStockCountSelection()
-                        }
-                        
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 20)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(appColors.primaryBackground)
+                    .cornerRadius(24)
+                    .onTapGesture {
+                        router.selectedPillScanningType = .REGULAR
+                        showStockCountPopup.toggle()
+                        resetStockCountSelection()
                     }
                 },
                 showBackButton: false,

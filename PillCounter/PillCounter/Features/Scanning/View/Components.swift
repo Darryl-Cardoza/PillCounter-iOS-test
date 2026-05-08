@@ -301,7 +301,7 @@ struct BottomControlsView: View {
                 isScanPill: $showHistoryOrScanPillIcon,
                 onResetPills: onReset
             )
-            .padding(.top, isIpad ? 50 : 0)
+            .padding(.top, isIpad ? 50 : 20)
           
             VStack {
                 if showHistoryOrScanPillIcon {
@@ -499,7 +499,7 @@ struct BottomControlsViewBodyForPillScan: View {
                     addButton
                         .frame(width: isIpad ? 160 : 120, height: isIpad ? 600 : 120)
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 12)
+                        .padding(.top, isIpad ? 12 : 36)
                     
                     Spacer()
                     
@@ -541,7 +541,8 @@ struct BottomControlsViewBodyForPillScan: View {
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(.horizontal)
-                .padding(.bottom, isIpad ? 50 : 0)
+                .padding(.bottom, isIpad ? 50 : 40)
+                .padding(.top, isIpad ? 20 : 0)
             }
         }
         .onAppear {

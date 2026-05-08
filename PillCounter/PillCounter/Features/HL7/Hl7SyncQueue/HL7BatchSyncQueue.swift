@@ -128,7 +128,7 @@ final class HL7BatchSyncQueue {
         let txns = storage.fetchTransactionsByBatch(batchId: item.batchId)
 
         print("📊 [Queue] Transactions count:", txns.count)
-
+        
         guard !txns.isEmpty, let user = txns.first?.user else {
             print("❌ [Queue] Missing txns or user for batch:", item.batchId)
             queue.removeFirst()
@@ -136,6 +136,7 @@ final class HL7BatchSyncQueue {
             return
         }
 
+        
         // Persist the resolved requestId back to Core Data if it was generated
         if batch.req_id_from_pms == nil {
             print("💾 [Queue] Persisting generated requestId:", item.requestId)

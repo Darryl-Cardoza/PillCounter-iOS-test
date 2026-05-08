@@ -16,6 +16,9 @@ struct HistoryBatchDetailView: View {
     
     @State private var showDeleteConfirmation: Bool = false
     @State private var expandedNdc: String? = nil
+    @State private var exportedPDFURL: URL? = nil
+    @State private var showShareSheet: Bool = false
+    @State private var isGeneratingPDF: Bool = false
 
     private var allNdcs: Set<String> {
         Set(historyViewModel.groupedTransactionsForBatch.map { $0.ndc })
@@ -34,7 +37,20 @@ struct HistoryBatchDetailView: View {
                 headerActions: {
                     HStack(spacing: 16) {
                         Button {
-                           
+                            let batch = historyViewModel.selectedBatch
+                            let txns  = historyViewModel.groupedTransactionsForBatch
+                            let note  = batch?.note
+                            isGeneratingPDF = true
+                            DispatchQueue.global(qos: .userInitiated).async {
+                                let url = StockCountPDFExporter.export(batch: batch, transactions: txns, note: note)
+                                DispatchQueue.main.async {
+                                    isGeneratingPDF = false
+                                    if let url {
+                                        exportedPDFURL = url
+                                        showShareSheet = true
+                                    }
+                                }
+                            }
                         } label: {
                             Image("pdf")
                                 .resizable()
@@ -54,6 +70,7 @@ struct HistoryBatchDetailView: View {
                 showHamburgerMenu: false,
                 title: "BATCH ID \(historyViewModel.selectedBatch?.batch_id ?? 0)",
                 headerActionsBackground: appColors.primaryBackground,
+                backgroundColor: appColors.primaryBackground,
                 onBack: {
                     router.navigateBack()
                 }
@@ -66,8 +83,24 @@ struct HistoryBatchDetailView: View {
             .onDisappear {
                 historyViewModel.clearBatchDetail()
             }
+            .sheet(isPresented: $showShareSheet, onDismiss: {
+                if let url = exportedPDFURL {
+                    try? FileManager.default.removeItem(at: url)
+                    exportedPDFURL = nil
+                }
+            }) {
+                if let url = exportedPDFURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
             .customPopup(isPresented: $showDeleteConfirmation) {
                 deleteConfirmationPopup
+            }
+
+            if isGeneratingPDF {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                PillCountingLoader()
             }
         }
     }
@@ -146,77 +179,80 @@ struct HistoryBatchDetailView: View {
     private var ndcTransactionList: some View {
         VStack(spacing: 12) {
             ForEach(historyViewModel.groupedTransactionsForBatch, id: \.ndc) { txn in
-                HStack(spacing: 12) {
-            
-                    ControlledCollapsibleBox(
-                        isExpanded: Binding(
-                            get: { expandedNdc == txn.ndc },
-                            set: { expandedNdc = $0 ? txn.ndc : nil }
-                        )
-                    ) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(txn.drugName)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(appColors.text)
-                                Text(txn.ndc)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(appColors.text.opacity(0.7))
-                            }
-                            Spacer()
-                            Text("\(txn.total)")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(appColors.secondary)
-                        }
-                    } content: {
-                        VStack(spacing: 0) {
-                            // Sealed Bottles Section
-                            HStack {
-                                Text("Sealed Bottles")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(appColors.text)
-                                Spacer()
-                                Text("\(txn.sealedBottles)")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(appColors.text)
-                            }
-                            .padding(.vertical, 10)
-                            .padding(.horizontal, 4)
-
-                            ForEach(txn.lotDetails.filter { $0.sealedQty > 0 }, id: \.lot) { detail in
-                                HistoryLotRow(
-                                    lot: detail.lot,
-                                    expiry: detail.expiry,
-                                    qty: detail.sealedQty,
-                                    appColors: appColors
-                                )
-                            }
-
-                            // Opened Bottles Section
-                            HStack {
-                                Text("Opened Bottles")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(appColors.text)
-                                Spacer()
-                                Text("\(txn.openPills)")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(appColors.text)
-                            }
-                            .padding(.top, 8)
-                            .padding(.vertical, 10)
-                            .padding(.horizontal, 4)
-
-                            ForEach(txn.lotDetails.filter { $0.openQty > 0 }, id: \.lot) { detail in
-                                HistoryLotRow(
-                                    lot: detail.lot,
-                                    expiry: detail.expiry,
-                                    qty: detail.openQty,
-                                    appColors: appColors
-                                )
+                ControlledCollapsibleBox(
+                    isExpanded: Binding(
+                        get: { expandedNdc == txn.ndc },
+                        set: { newValue in
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                expandedNdc = newValue ? txn.ndc : nil
                             }
                         }
-                        .padding(.bottom, 8)
+                    )
+                ) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(txn.drugName)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(appColors.text)
+                            Text(txn.ndc)
+                                .font(.system(size: 12))
+                                .foregroundColor(appColors.text.opacity(0.7))
+                        }
+                        Spacer()
+                        Text("\(txn.total)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(appColors.secondary)
                     }
+                } content: {
+                    VStack(spacing: 0) {
+                        // Sealed Bottles Section
+                        let sealedDetails = txn.lotDetails.filter { $0.sealedQty > 0 }
+                        let sealedTotal = sealedDetails.reduce(Int32(0)) { $0 + $1.sealedQty }
+
+                        HStack {
+                            Text("Sealed Bottles")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(appColors.text)
+                            Spacer()
+                            Text("\(txn.sealedBottleQty)")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(appColors.text)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 4)
+
+                        if !sealedDetails.isEmpty {
+                            LotColumnHeader(appColors: appColors)
+                            ForEach(sealedDetails, id: \.lot) { detail in
+                                LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.sealedQty, appColors: appColors)
+                            }
+                            LotTotalRow(total: sealedTotal, appColors: appColors)
+                        }
+
+                        // Opened Bottles Section
+                        let openDetails = txn.lotDetails.filter { $0.openQty > 0 }
+                        let openTotal = openDetails.reduce(Int32(0)) { $0 + $1.openQty }
+
+                        HStack {
+                            Text("Opened Bottles")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(appColors.text)
+                            Spacer()
+                        }
+                        .padding(.top, 16)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 4)
+
+                        if !openDetails.isEmpty {
+                            LotColumnHeader(appColors: appColors)
+                            ForEach(openDetails, id: \.lot) { detail in
+                                LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.openQty, appColors: appColors)
+                            }
+                            LotTotalRow(total: openTotal, appColors: appColors)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
                 }
             }
         }
@@ -259,48 +295,3 @@ extension HistoryBatchDetailView {
     }
 }
 
-// MARK: - Lot Row
-private struct HistoryLotRow: View {
-    let lot: String
-    let expiry: String
-    let qty: Int32
-    let appColors: AppColors
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .padding(.vertical, 5)
-
-            HStack {
-                let isLotEmpty = lot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let isExpiryEmpty = expiry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-                if isLotEmpty && isExpiryEmpty {
-                    Text("-")
-                        .font(.system(size: 13))
-                        .foregroundColor(appColors.text.opacity(0.6))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Text("Lot \(lot)")
-                        .font(.system(size: 13))
-                        .foregroundColor(appColors.text.opacity(0.8))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if !isExpiryEmpty {
-                        Text(expiry)
-                            .font(.system(size: 13))
-                            .foregroundColor(appColors.text.opacity(0.6))
-                            .frame(width: 110, alignment: .leading)
-                    }
-                }
-
-                Text("\(qty)")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(appColors.text)
-                    .frame(minWidth: 50, alignment: .trailing)
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 4)
-        }
-    }
-}

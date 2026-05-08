@@ -159,7 +159,7 @@ struct QRBarcodeScannerView: View {
                             .frame(width: 48, height: 48)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 20)
+                    .padding(.top, 65)
                 },
                 showBackButton: false,
                 showHamburgerMenu: false,  // We have a manual entry button instead
@@ -664,6 +664,7 @@ extension QRBarcodeScannerView {
         pillScanViewModel.ndcNumber = ""
         pillScanViewModel.drugName = ""
         pillScanViewModel.drugNameMannuallyEntered = ""
+        stockCountVieModel.reset()
     }
 }
 
@@ -921,22 +922,20 @@ extension QRBarcodeScannerView {
     
     private var showBarcodeNotFoundPopup : some View{
         ConfirmationDialogue(
-            title: "",
+            title: "Drug Not Found",
             message: "The scanned barcode is not recognized. Please try again.",
             cancelButtonText: "Cancel",
             confirmButtonText: "Rescan",
             showSingleConfirmButton: true,
             onCancel: {
                 restartFullScannerFlow()
-                stockCountVieModel.barcodeNotFound = false
             },
             onConfirm: {
                 restartFullScannerFlow()
-                stockCountVieModel.barcodeNotFound = false
             }
         )
     }
-    
+
     private var scannedNdcDoesNotMatchPmsBatchPopoup : some View{
         ConfirmationDialogue(
             title: "Incorrect NDC",
@@ -946,11 +945,9 @@ extension QRBarcodeScannerView {
             showSingleConfirmButton: true,
             onCancel: {
                 restartFullScannerFlow()
-                stockCountVieModel.showScannedNdcDoesNotMatch = false
             },
             onConfirm: {
                 restartFullScannerFlow()
-                stockCountVieModel.showScannedNdcDoesNotMatch = false
             }
         )
     }

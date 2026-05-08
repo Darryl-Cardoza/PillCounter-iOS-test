@@ -314,7 +314,7 @@ struct UserProfileScreen: View {
             }
             .padding(.bottom, 20)
         }
-        .padding(.top, )
+        .padding(.top, 65 )
         .background(appColors.primaryBackground)
     }
     
@@ -339,6 +339,7 @@ struct UserProfileScreen: View {
             }
             .padding(.vertical)
         }
+        .padding(.top, 65)
     }
     
 //    private var profileHeader: some View {

@@ -25,6 +25,9 @@ struct StockCountBatchDetail: View {
     @State private var exportedPDFURL: URL? = nil
     @State private var showShareSheet:  Bool = false
     @State private var showNoteOptions: Bool = false
+    @State private var isGeneratingPDF: Bool = false
+    
+    @State private var noteError: String?
 
     private var allIds: Set<String> {
         Set(stockCountVieModel.groupedTransactions.map { $0.ndc })
@@ -68,6 +71,16 @@ struct StockCountBatchDetail: View {
             .onAppear {
                 stockCountVieModel.getCountData()
             }
+            .sheet(isPresented: $showShareSheet, onDismiss: {
+                if let url = exportedPDFURL {
+                    try? FileManager.default.removeItem(at: url)
+                    exportedPDFURL = nil
+                }
+            }) {
+                if let url = exportedPDFURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
             .customPopup(isPresented: $showEndBatchPopUp) {
                 showEndBatchPopup
             }
@@ -76,6 +89,12 @@ struct StockCountBatchDetail: View {
             }
             .customPopup(isPresented: $showNoteOptions){
                 showNoteOptionPopup
+            }
+
+            if isGeneratingPDF {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                PillCountingLoader()
             }
         }
     }
@@ -149,33 +168,34 @@ struct StockCountBatchDetail: View {
 
             HStack(spacing: 16) {
 
-                // PDF BUTTON (your existing one)
-//                Button {
-//                    showExportPopUp.toggle()
-//                } label: {
-//                    Image("pdf")
-//                        .resizable()
-//                        .scaledToFit()
-//                        .frame(width: 26, height: 26)
-//                        .overlay { appColors.primary }
-//                        .mask(
-//                            Image("pdf")
-//                                .resizable()
-//                                .scaledToFit()
-//                        )
-//                }
-
-                // TRASH → Enter edit mode
-//                Button {
-//                    withAnimation {
-//                        isEditing = true
-//                        selectedTxnIds.removeAll()
-//                    }
-//                } label: {
-//                    Image(systemName: "trash")
-//                        .font(.system(size: 20))
-//                        .foregroundStyle(appColors.primary)
-//                }
+                // PDF BUTTON
+                Button {
+                    let batch = stockCountVieModel.currentBatch
+                    let txns  = stockCountVieModel.groupedTransactions
+                    let note  = stockCountVieModel.note.isEmpty ? nil : stockCountVieModel.note
+                    isGeneratingPDF = true
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let url = StockCountPDFExporter.export(batch: batch, transactions: txns, note: note)
+                        DispatchQueue.main.async {
+                            isGeneratingPDF = false
+                            if let url {
+                                exportedPDFURL = url
+                                showShareSheet = true
+                            }
+                        }
+                    }
+                } label: {
+                    Image("pdf")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 26, height: 26)
+                        .overlay { appColors.primary }
+                        .mask(
+                            Image("pdf")
+                                .resizable()
+                                .scaledToFit()
+                        )
+                }
             }
             .padding(.trailing)
         }
@@ -225,7 +245,12 @@ struct StockCountBatchDetail: View {
                     verticalPadding: 20,
                     iconSize: 0,
                     action: {
-                        showEndBatchPopUp.toggle()
+                        if stockCountVieModel.isNoteEnable {
+                            showNoteOptions = true
+                            stockCountVieModel.note = ""
+                        } else {
+                            showEndBatchPopUp = true
+                        }
                     }
                 )
 
@@ -300,18 +325,14 @@ extension StockCountBatchDetail{
                 showEndBatchPopUp = false
             },
             onConfirm: {
-                if !stockCountVieModel.isNoteEnable {
-                    if let batchId = stockCountVieModel.currentBatch?.batch_id {
-                        stockCountVieModel.completeBatch(batchId: batchId)
-                    }
-                    
-                    router.setRoot(
-                        to: .authentication(.login(.dashboard(.dashboardHome)))
-                    )
-                }else{
-                    showNoteOptions = true
-                }
                 showEndBatchPopUp = false
+                if let batchId = stockCountVieModel.currentBatch?.batch_id {
+                    stockCountVieModel.completeBatch(batchId: batchId)
+                }
+                stockCountVieModel.note = ""
+                router.setRoot(
+                    to: .authentication(.login(.dashboard(.dashboardHome)))
+                )
             }
         )
     }
@@ -336,37 +357,30 @@ extension StockCountBatchDetail{
             title: "Would you like to add a note?",
             showClose: true,
             text: $stockCountVieModel.note,
-            errorMessage: nil,
+            errorMessage: noteError,
             primaryTitle: "YES",
             primaryAction: {
-                showNoteOptions = false
-                if let batchId = stockCountVieModel.currentBatch?.batch_id {
-                    stockCountVieModel.completeBatch(batchId: batchId)
+                if stockCountVieModel.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    noteError = "Please add a note"
+                    return
                 }
-                stockCountVieModel.note = ""
-                router.setRoot(
-                    to: .authentication(.login(.dashboard(.dashboardHome)))
-                )
+
+                noteError = nil
+                showNoteOptions = false
+                showEndBatchPopUp = true
             },
             secondaryTitle: "SKIP",
             secondaryAction: {
+                noteError = nil
                 showNoteOptions = false
-                if let batchId = stockCountVieModel.currentBatch?.batch_id {
-                    stockCountVieModel.completeBatch(batchId: batchId)
-                }
                 stockCountVieModel.note = ""
-                router.setRoot(
-                    to: .authentication(.login(.dashboard(.dashboardHome)))
-                )
+                showEndBatchPopUp = true
             },
             onClose: {
+                noteError = nil
                 showNoteOptions = false
                 stockCountVieModel.note = ""
-                router.setRoot(
-                    to: .authentication(.login(.dashboard(.dashboardHome)))
-                )
             }
         )
-    }
-}
+    }}
 

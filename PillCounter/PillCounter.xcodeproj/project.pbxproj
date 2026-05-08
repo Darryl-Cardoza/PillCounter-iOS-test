@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		7967E1462FA33F00009E2B99 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 7967E1452FA33F00009E2B99 /* ComposeApp */; };
-		797C51B52F92763100841E39 /* ios-server.p12 in Resources */ = {isa = PBXBuildFile; fileRef = 797C51B42F92763100841E39 /* ios-server.p12 */; };
 		79963B792F8543920053241C /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 79963B782F8543920053241C /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
@@ -33,7 +32,6 @@
 		473A48F52EB4F11200EEA905 /* PillCounter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PillCounter.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		473A490B2EB4F11300EEA905 /* PillCounterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PillCounterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		473A49152EB4F11300EEA905 /* PillCounterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PillCounterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		797C51B42F92763100841E39 /* ios-server.p12 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ios-server.p12"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -98,7 +96,6 @@
 		473A48EC2EB4F11200EEA905 = {
 			isa = PBXGroup;
 			children = (
-				797C51B42F92763100841E39 /* ios-server.p12 */,
 				473A48F72EB4F11200EEA905 /* PillCounter */,
 				473A490E2EB4F11300EEA905 /* PillCounterTests */,
 				473A49182EB4F11300EEA905 /* PillCounterUITests */,
@@ -253,7 +250,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				797C51B52F92763100841E39 /* ios-server.p12 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

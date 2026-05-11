@@ -40,6 +40,11 @@ class HistoryViewModel: ObservableObject {
     @Published var groupedTransactionsForBatch: [GroupedTransaction] = []
     @Published var isLoading: Bool = false
 
+    // MARK: - Published: Calendar selection (persists across orientation changes)
+    @Published var selectedStartDate: Date? = Date()
+    @Published var selectedEndDate: Date? = nil
+    @Published var calendarMonthsToShow: [Date] = []
+
 
 
     // MARK: - Fetch Transactions by Date

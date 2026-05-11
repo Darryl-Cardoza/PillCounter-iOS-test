@@ -18,8 +18,6 @@ struct UserHistoryView: View {
     @EnvironmentObject private var toastManager: ToastManager
 
     // MARK: - Date State
-    @State private var startDate: Date? = Date()
-    @State private var endDate: Date? = nil
     @State private var showDeleteConfirmation: Bool = false
 
     // MARK: - Search State
@@ -32,11 +30,12 @@ struct UserHistoryView: View {
 
     // MARK: - Filter State
     let filterType: HistoryFilterType
+    let stautsType: HistoryStatusFilter
     @State private var activeTypeFilter: HistoryFilterType = .fixed
     @State private var activeStatusFilter: HistoryStatusFilter = .all
     
-    // MARK: - Add this state variable near your other @State vars
     @State private var listVersion: Int = 0
+    @State private var hasAppeared: Bool = false
 
     // MARK: - Body
     var body: some View {
@@ -66,13 +65,17 @@ struct UserHistoryView: View {
                 }
             }
             .onAppear {
+                activeStatusFilter = stautsType
                 activeTypeFilter = filterType
+                hasAppeared = true
                 fetchAll()
             }
-            .onChange(of: startDate)        { _, _ in fetchAll() }
-            .onChange(of: endDate)          { _, _ in fetchAll() }
+            .onChange(of: historyViewModel.selectedStartDate) { _, _ in fetchAll() }
+            .onChange(of: historyViewModel.selectedEndDate)   { _, _ in fetchAll() }
             .onChange(of: activeTypeFilter) { _, _ in
-                activeStatusFilter = .all
+                if hasAppeared {
+                    activeStatusFilter = .all
+                }
                 searchText = ""
                 fetchAll()
             }
@@ -176,13 +179,13 @@ struct UserHistoryView: View {
 
     // MARK: - Fetch All
     private func fetchAll() {
-        guard let start = startDate else {
+        guard let start = historyViewModel.selectedStartDate else {
             historyViewModel.filteredTransactionsOfUserByDate = []
             historyViewModel.filteredBatchesOfUserByDate = []
             return
         }
 
-        let end = endDate ?? start
+        let end = historyViewModel.selectedEndDate ?? start
 
         Task {
             await historyViewModel.getTransactionsByDate(
@@ -209,10 +212,10 @@ struct UserHistoryView: View {
             },
             onConfirm: {
                 Task {
-                    guard let start = startDate else { return }
+                    guard let start = historyViewModel.selectedStartDate else { return }
                     await historyViewModel.softDeleteTransactionsForSelectedDate(
                         startDate: start,
-                        endDate: endDate ?? start,
+                        endDate: historyViewModel.selectedEndDate ?? start,
                         filter: activeTypeFilter,
                         status: activeStatusFilter,
                         search: searchText
@@ -227,37 +230,39 @@ struct UserHistoryView: View {
     // MARK: - Transaction List (used as bottomContent in normal mode, and inside
     private var userHistoryTransactionsList: some View {
         VStack(spacing: 8) {
-            VStack(spacing: 15) {
-                HStack {
-                    txnTypeFilter
-                    Button {
-                        let isEmpty: Bool
-                        
-                        if activeTypeFilter == .fixed {
-                            isEmpty = historyViewModel.transactionRows.isEmpty
-                        } else {
-                            isEmpty = historyViewModel.batchRows.isEmpty
+            if !isSearching{
+                VStack(spacing: 15) {
+                    HStack {
+                        txnTypeFilter
+                        Button {
+                            let isEmpty: Bool
+                            
+                            if activeTypeFilter == .fixed {
+                                isEmpty = historyViewModel.transactionRows.isEmpty
+                            } else {
+                                isEmpty = historyViewModel.batchRows.isEmpty
+                            }
+                            
+                            if isEmpty {
+                                toastManager.show(message: "No items to delete")
+                            } else {
+                                showDeleteConfirmation = true
+                            }
+                            
+                        } label: {
+                            Image("delete")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 24, height: 24)
+                                .overlay(appColors.primary)
+                                .mask(Image("delete").resizable().scaledToFit())
                         }
-
-                        if isEmpty {
-                            toastManager.show(message: "No items to delete")
-                        } else {
-                            showDeleteConfirmation = true
-                        }
-
-                    } label: {
-                        Image("delete")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-                            .overlay(appColors.primary)
-                            .mask(Image("delete").resizable().scaledToFit())
                     }
+                    statusFilterChips
                 }
-                statusFilterChips
+                
+                Spacer().frame(height: 10)
             }
-
-            Spacer().frame(height: 10)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading) {
@@ -359,8 +364,9 @@ struct UserHistoryView: View {
                 selectedColor: appColors.primary,
                 textColor: appColors.text,
                 backgroundColor: .clear,
-                startDate: $startDate,
-                endDate: $endDate
+                startDate: $historyViewModel.selectedStartDate,
+                endDate: $historyViewModel.selectedEndDate,
+                monthsToShow: $historyViewModel.calendarMonthsToShow
             )
             .padding(.top,  50)
             .padding(.bottom, 16)

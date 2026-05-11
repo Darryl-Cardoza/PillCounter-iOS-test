@@ -212,7 +212,7 @@ extension GenericListScreen {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 18, height: 18)
+                        .frame(width: 22, height: 22)
                         .foregroundStyle(appColors.primary)
                     
                     // TEXT (dynamic)

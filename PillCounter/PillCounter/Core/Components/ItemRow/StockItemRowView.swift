@@ -24,7 +24,7 @@ struct StockItemRowView: View {
                 height: 60,
                 cornerRadius: 8,
                 borderColor: appColors.primaryBackground,
-                placeholderImageName:  data.isFromPms ? "batch_icon" : "dispense_placeholder",
+                placeholderImageName:  data.isFromPms ? "dispense_placeholder" : "batch_icon",
                 placeholderBackgroundColor: appColors.text,
                 placeholderSize: CGSize(width: 28, height: 28),
                 showImageBackground: appColors.primaryBackground

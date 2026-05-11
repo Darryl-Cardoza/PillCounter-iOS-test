@@ -518,7 +518,7 @@ struct BottomControlsViewBodyForPillScan: View {
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     .padding(.horizontal, isIpad ? 40 : 16)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 32)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

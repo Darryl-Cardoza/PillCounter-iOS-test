@@ -81,7 +81,7 @@ struct UserSettingsView: View {
     
     private var confirmationPopUp: some View {
         ConfirmationDialogue(
-            title: "Are you sure want to keep history for \(pendingOption?.displayText ?? selectedSaveHistoryOption.displayText)",
+            title: "Are you sure want to keep history for \(pendingOption?.displayText ?? selectedSaveHistoryOption.displayText)?",
             message:
                 "Note: Data older than this period will be permanently deleted.",
             cancelButtonText: "NO",
@@ -297,7 +297,7 @@ struct UserSettingsView: View {
     
     private var saveHistoryContent: some View {
         VStack(alignment: .leading, spacing: 25) {
-            VStack(alignment: .leading, spacing: 30) {
+            VStack(alignment: .leading, spacing: 45) {
                 ForEach(SaveHistoryOption.allCases) { option in
                     Button {
                         pendingOption = option
@@ -339,7 +339,7 @@ struct UserSettingsView: View {
     private var scheduleContent: some View {
         VStack(alignment: .leading, spacing: 25) {
             
-            VStack(alignment: .leading, spacing: 30) {
+            VStack(alignment: .leading, spacing: 45) {
                 ForEach(DrugSchedule.allCases) { schedule in
                     
                     Button {

@@ -87,7 +87,7 @@ struct DashboardView: View {
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.primaryBackground,
                                 action: {
-                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .completed)))))
                                 },
                                 iconColor: appColors.primary
                             )
@@ -113,7 +113,7 @@ struct DashboardView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 20)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)  // ✅ centers without GeometryReader
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.secondaryBackground)
                     .onTapGesture {
                         router.selectedPillScanningType = .FIXED
@@ -153,7 +153,8 @@ struct DashboardView: View {
                         Text("REGULAR_COUNT_SUBTITLE")
                             .foregroundStyle(appColors.text)
 
-
+                        Spacer()
+                        
                         HStack(spacing: isIpad ? 24 : 42) {
                             PillCountingButton(
                                 iconName: "check_with_circle",
@@ -161,7 +162,7 @@ struct DashboardView: View {
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.secondaryBackground,
                                 action: {
-                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular)))))
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular, .pending)))))
                                 },
                                 iconColor: appColors.primary
                             )

@@ -28,7 +28,8 @@ struct AppNavigation: View {
                 if isLoggedIn {
                     DashboardView()
                 } else {
-                    LoginEmailView()
+//                    LoginEmailView()
+                    DashboardView()
                 }
             }
             .navigationDestination(for: PillCounterFlow.self) {
@@ -83,8 +84,8 @@ struct AppNavigation: View {
                         .navigationBarBackButtonHidden(true)
                  
                 //MARK: HISTORY
-                case .authentication(.user(.userSettings(.History(let filterType)))):
-                    UserHistoryView(filterType: filterType)
+                case .authentication(.user(.userSettings(.History(let filterType, let statusFilter)))):
+                    UserHistoryView(filterType: filterType, stautsType: statusFilter)
                         .navigationBarBackButtonHidden(true)
                     
                 case .authentication(

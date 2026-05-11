@@ -83,7 +83,7 @@
 "TOGGLE_BUTTON_TEXT" = "Always ask to add Notes";
 "SAVE_HISTORY" = "Save History For";
 "REQUIRED_DOUBLE_COUNT" = "Require Double Counts";
-"REQUIRED_BACK_COUNT" = "Require Back Counts";
+"REQUIRED_BACK_COUNT" = "Require Back Counts for Controlled drug";
 "REQUIRED_ADJUST_REASON" = "Require Adjust Reasons";
 "HAPTIC_FEEDBACK" = "Pill Count Haptic Feedback";
 "SOUND_FEEDBACK" = "Pill Count Sound Feedback";

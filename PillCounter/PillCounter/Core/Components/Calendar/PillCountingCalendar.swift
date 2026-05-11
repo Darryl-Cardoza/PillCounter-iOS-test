@@ -27,9 +27,7 @@ struct PillCountingCalendar: View {
 
     @Binding var startDate: Date?
     @Binding var endDate: Date?
-
-    @State private var monthsToShow: [Date] = []
-    @State private var didInitialScroll = false
+    @Binding var monthsToShow: [Date]
     
     private let calendar = Calendar.current
     private let days = ["S", "M", "T", "W", "T", "F", "S"]
@@ -49,6 +47,7 @@ struct PillCountingCalendar: View {
                                     .foregroundColor(appColors.primary)
                                 Spacer()
                             }
+                            .id(index)
 
                             // Weekday Row
                             HStack {
@@ -86,11 +85,8 @@ struct PillCountingCalendar: View {
                 }
 
                 DispatchQueue.main.async {
-                    if !didInitialScroll,
-                       let index = currentMonthIndex() {
-                        
+                    if let index = monthIndex(for: Date()) {
                         proxy.scrollTo(index, anchor: .center)
-                        didInitialScroll = true
                     }
                 }
             }
@@ -189,9 +185,9 @@ struct PillCountingCalendar: View {
     }
 
     // MARK: - Range Helpers
-    private func currentMonthIndex() -> Int? {
+    private func monthIndex(for date: Date) -> Int? {
         monthsToShow.firstIndex {
-            calendar.isDate($0, equalTo: Date(), toGranularity: .month)
+            calendar.isDate($0, equalTo: date, toGranularity: .month)
         }
     }
     /// Returns true when `date` is strictly between startDate and endDate.

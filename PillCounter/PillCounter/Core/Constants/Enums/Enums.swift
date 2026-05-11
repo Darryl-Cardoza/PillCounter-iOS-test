@@ -75,7 +75,7 @@ public enum ScanType: Codable, Hashable {
 
 
 public enum HamburgerMenuFLow: Hashable, Codable {
-    case History(HistoryFilterType)
+    case History(HistoryFilterType, HistoryStatusFilter)
     case profile
     case settings
     case unsyncedTransaction
@@ -178,7 +178,7 @@ enum CountStatus: String, Codable {
     case FORCE_COMPLETED
 }
 
-enum HistoryStatusFilter: String, CaseIterable {
+public enum HistoryStatusFilter: String, CaseIterable, Codable {
     case all       = "All"
     case completed = "Completed"
     case pending   = "Pending"

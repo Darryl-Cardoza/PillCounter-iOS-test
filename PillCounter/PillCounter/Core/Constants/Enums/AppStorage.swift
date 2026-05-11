@@ -43,8 +43,14 @@ final class AppStorageManager {
 
     // MARK: - Access Token
     var accessToken: String? {
-        get { defaults.string(forKey: AppStorageKeys.accessToken) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.accessToken) }
+        get { Keychain.getPassword(for: AppStorageKeys.accessToken) }
+        set {
+            if let value = newValue {
+                Keychain.savePassword(value, for: AppStorageKeys.accessToken)
+            } else {
+                Keychain.deletePassword(for: AppStorageKeys.accessToken)
+            }
+        }
     }
 
     // MARK: DRUG ID COUNTER.
@@ -57,8 +63,14 @@ final class AppStorageManager {
 
     // MARK: - Refresh Token
     var refreshToken: String? {
-        get { defaults.string(forKey: AppStorageKeys.refreshToken) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.refreshToken) }
+        get { Keychain.getPassword(for: AppStorageKeys.refreshToken) }
+        set {
+            if let value = newValue {
+                Keychain.savePassword(value, for: AppStorageKeys.refreshToken)
+            } else {
+                Keychain.deletePassword(for: AppStorageKeys.refreshToken)
+            }
+        }
     }
 
     var userEmail: String? {
@@ -80,8 +92,14 @@ final class AppStorageManager {
 
     // MARK: - User ID
     var userId: String? {
-        get { defaults.string(forKey: AppStorageKeys.userId) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.userId) }
+        get { Keychain.getPassword(for: AppStorageKeys.userId) }
+        set {
+            if let value = newValue {
+                Keychain.savePassword(value, for: AppStorageKeys.userId)
+            } else {
+                Keychain.deletePassword(for: AppStorageKeys.userId)
+            }
+        }
     }
 
     // MARK: - User Saved Emails
@@ -262,21 +280,24 @@ final class AppStorageManager {
 
     // MARK: - Utility
     func clearUserSession() {
-        defaults.removeObject(forKey: AppStorageKeys.accessToken)
-        defaults.removeObject(forKey: AppStorageKeys.refreshToken)
-        defaults.removeObject(forKey: AppStorageKeys.userId)
+        Keychain.deletePassword(for: AppStorageKeys.accessToken)
+        Keychain.deletePassword(for: AppStorageKeys.refreshToken)
+        Keychain.deletePassword(for: AppStorageKeys.userId)
         defaults.removeObject(forKey: AppStorageKeys.rememberMe)
         defaults.removeObject(forKey: AppStorageKeys.userSavedEmails)
     }
 
     // MARK: Logout
     func logout() {
-        defaults.removeObject(forKey: AppStorageKeys.accessToken)
-        defaults.removeObject(forKey: AppStorageKeys.refreshToken)
-        defaults.removeObject(forKey: AppStorageKeys.rememberMe)
-        defaults.removeObject(forKey: AppStorageKeys.userEmail)
-        defaults.removeObject(forKey: AppStorageKeys.userId)
+        // Keychain — sensitive items
+        Keychain.deletePassword(for: AppStorageKeys.accessToken)
+        Keychain.deletePassword(for: AppStorageKeys.refreshToken)
+        Keychain.deletePassword(for: AppStorageKeys.userId)
+        
+        // UserDefaults — non-sensitive items only
         defaults.removeObject(forKey: AppStorageKeys.isLoggedIn)
+        defaults.removeObject(forKey: AppStorageKeys.userEmail)
+        defaults.removeObject(forKey: AppStorageKeys.rememberMe)
         defaults.removeObject(forKey: AppStorageKeys.tokenExpiryTimestamp)
         defaults.removeObject(forKey: AppStorageKeys.isHl7Enable)
         defaults.removeObject(forKey: AppStorageKeys.pmsHostName)

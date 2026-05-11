@@ -155,16 +155,38 @@ extension PillCounterApp {
     private func handleScenePhaseChange(_ phase: ScenePhase) {
         switch phase {
         case .active:
+            removePrivacyOverlay()
             if SecurityManager.isDeviceCompromised() {
                 securityState.isSecure = false
             } else {
                 startSecurityMonitoring()
             }
         case .background, .inactive:
+            showPrivacyOverlay()
             SecurityMonitor.shared.stopMonitoring()
+            UIPasteboard.general.items = []
         @unknown default:
             break
         }
+    }
+    
+    private func showPrivacyOverlay() {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows.first else { return }
+        
+        let overlay = UIView(frame: window.bounds)
+        overlay.tag = 9999
+        overlay.backgroundColor = .systemBackground
+        window.addSubview(overlay)
+    }
+
+    private func removePrivacyOverlay() {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?
+            .viewWithTag(9999)?
+            .removeFromSuperview()
     }
 
     private func initializeSecurityAndRuntime() {

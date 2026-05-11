@@ -123,23 +123,43 @@ extension BaseRepositoryProtocol {
     }
 
     // MARK: - Headers
+    var xServerKey: String {
+        Keychain.getPassword(for: "runtime_unit_payload_v3") ?? ""
+    }
+    
     static func headers(_ accessToken: String?) -> [String: String] {
         var headers: [String: String] = [
             "Content-Type": "application/json",
-//            "X-Server-Key": ConfigurationManager.shared.xServerKey,
-            "Accept": "application/json",
-            "X-Server-Key": "d1ff4797acb7147205bb249cce918f23a4f8e54a8d56488d79e83abcdf1b24f6f1ccc9af5dea3c1a1b5e2b6aa247ff55ac8e12f165974f8cfce41328f7ea447e",
+            "Accept":       "application/json",
         ]
-
+        // Read from Keychain — NEVER hardcode
+        let serverKey = ConfigurationManager.shared.xServerKey
+        if !serverKey.isEmpty {
+            headers["X-Server-Key"] = serverKey
+        }
         if let token = accessToken, !token.isEmpty {
             headers["Authorization"] = "Bearer \(token)"
         }
-
         return headers
     }
     
+//    static func headers(_ accessToken: String?) -> [String: String] {
+//        var headers: [String: String] = [
+//            "Content-Type": "application/json",
+////            "X-Server-Key": ConfigurationManager.shared.xServerKey,
+//            "Accept": "application/json",
+//            "X-Server-Key": "d1ff4797acb7147205bb249cce918f23a4f8e54a8d56488d79e83abcdf1b24f6f1ccc9af5dea3c1a1b5e2b6aa247ff55ac8e12f165974f8cfce41328f7ea447e",
+//        ]
+//
+//        if let token = accessToken, !token.isEmpty {
+//            headers["Authorization"] = "Bearer \(token)"
+//        }
+//
+//        return headers
+//    }
+    
     private static func logRequest(_ request: URLRequest, body: [String: Any]?) {
-//        #if DEBUG
+        #if DEBUG
         print("\n========================= 🌐 API REQUEST =========================")
         print("➡️ URL: \(request.url?.absoluteString ?? "nil")")
         print("➡️ Method: \(request.httpMethod ?? "nil")")
@@ -162,7 +182,7 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
-//        #endif
+        #endif
     }
     
     private static func logResponse(_ data: Data, _ response: URLResponse?) {

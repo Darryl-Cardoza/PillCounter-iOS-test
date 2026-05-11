@@ -324,6 +324,14 @@ extension BaseView {
         }
     }
 
+    private var isIpad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
+    private var scale: CGFloat {
+        isIpad ? 1.5 : 1.0
+    }
+
     private var hamburgerMenuButton: some View {
         Button {
             router.navigate(to: .authentication(.user(.hamburgerMenu)))
@@ -331,8 +339,11 @@ extension BaseView {
             Image("hamburger_menu")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 28, height: 28)
-                .padding(12)
+                .frame(
+                    width: 28 * scale,
+                    height: 28 * scale
+                )
+                .padding(12 * scale)
         }
         .transition(.opacity)
     }

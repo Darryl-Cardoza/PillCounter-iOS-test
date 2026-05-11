@@ -57,7 +57,7 @@ struct StockItemRowView: View {
 
             // Right side
             HStack(spacing: 10) {
-                VStack(spacing: 4) {
+                VStack(spacing: 8) {
                   
                     Text(String(data.ndcCount))
                         .foregroundColor(appColors.secondary)

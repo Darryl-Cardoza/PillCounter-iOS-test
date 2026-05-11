@@ -71,38 +71,39 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
                 VStack {
                     Spacer()
 
-                    HStack(spacing: 12) {
-
-                        // CANCEL
-                        Button {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                isEditing = false
-                                selectedIds.removeAll()
+                    EqualWidthHStackButtons(spacing: 16) {
+                        PillCountingButton(
+                            title: "CANCEL",
+                            textColor: appColors.primary,
+                            backgroundColor: .clear,
+                            borderColor: appColors.primary,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isEditing = false
+                                    selectedIds.removeAll()
+                                }
                             }
-                        } label: {
-                            Text("CANCEL")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(appColors.primary)
-                                .frame(maxWidth: 140)
-                                .padding(.vertical, 10)
-                        }
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(appColors.primary, lineWidth: 1)
                         )
 
-                        // DELETE
-                        Button {
-                            onDelete(selectedIds)
-                        } label: {
-                            Text("DELETE")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: 140)
-                                .padding(.vertical, 10)
-                        }
-                        .background(selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary)
-                        .cornerRadius(20)
+                        PillCountingButton(
+                            title: "DELETE",
+                            textColor: selectedIds.isEmpty ? .white.opacity(0.6) : .white,
+                            backgroundColor: selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary,
+                            borderColor: .clear,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                onDelete(selectedIds)
+                            }
+                        )
                         .disabled(selectedIds.isEmpty)
                     }
                     .frame(maxWidth: .infinity)
@@ -146,7 +147,7 @@ extension GenericListScreen {
                             EmptyStateView(
                                 imageName: nil,
                                 systemImageName: nil,
-                                title:  "No partial counts available",
+                                title:  "No pending counts available",
                                 subtitle: nil
                             )
                             .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
@@ -243,19 +244,18 @@ extension GenericListScreen {
 
             } else {
                 HStack(spacing: 16) {
-                    
-                    Button {
-                        withAnimation(.spring()) {
-                            isSearching = true
-                            isSearchFieldFocused = true
-                        }
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 20))
-                            .foregroundColor(appColors.primary)
-                    }
-
                     if !items.isEmpty {
+                        Button {
+                            withAnimation(.spring()) {
+                                isSearching = true
+                                isSearchFieldFocused = true
+                            }
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 20))
+                                .foregroundColor(appColors.primary)
+                        }
+
                         Button {
                             withAnimation(.spring()) {
                                 isEditing = true

@@ -17,7 +17,7 @@ struct CollapsibleRow: ViewModifier {
         content
             .scaleEffect(isVisible ? 1 : 0.88, anchor: .center)
             .opacity(isVisible ? 1 : 0)
-            .frame(maxHeight: isVisible ? .infinity : 0)
+            .frame(maxHeight: isVisible ? .infinity : 0, alignment: .top)
             .clipped()
     }
 }

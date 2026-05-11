@@ -28,8 +28,8 @@ struct AppNavigation: View {
                 if isLoggedIn {
                     DashboardView()
                 } else {
-//                    LoginEmailView()
-                    DashboardView()
+                    LoginEmailView()
+//                    DashboardView()
                 }
             }
             .navigationDestination(for: PillCounterFlow.self) {

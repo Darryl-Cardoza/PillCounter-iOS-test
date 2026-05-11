@@ -39,7 +39,7 @@ struct UnderlinedSearchBar: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(appColors.secondary)
+                                .foregroundColor(appColors.primary)
                         }
                     }
                 }

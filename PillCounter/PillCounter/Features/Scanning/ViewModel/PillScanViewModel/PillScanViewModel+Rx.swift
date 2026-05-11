@@ -48,7 +48,9 @@ extension PillScanViewModel {
             }
 
             let ndc    = mappedData["NDCNO"] ?? ""
-            let bucket = mappedData["BUCKET"] ?? ""
+            let bucket = mappedData["BUCKET"]?.trimmingCharacters(in: .whitespaces).isEmpty == false
+                ? mappedData["BUCKET"]!
+                : "NORMAL"
 
             self.selectedBucket = bucket
             print("[RxScan] Bucket Id: \(selectedBucket)")
@@ -145,7 +147,7 @@ extension PillScanViewModel {
 
     // MARK: - Format Match Check
     /// Builds a regex from the API barcodeFormat and tests the scanned value against it.
-    /// Returns true only if the scanned value structurally matches the format.
+    /// Required fields (RXNO, NDCNO, QTY) must be present; BUCKET is optional.
     func matchesBarcodeFormat(_ value: String) -> Bool {
         let format = AppStorageManager.shared.barcodeFormat
         guard !format.isEmpty else { return false }
@@ -159,13 +161,28 @@ extension PillScanViewModel {
             var regexParts: [String] = []
             var lastEnd = format.startIndex
 
-            for match in matches {
+            for (i, match) in matches.enumerated() {
                 guard let matchRange = Range(match.range, in: format) else { continue }
+
                 let literal = String(format[lastEnd..<matchRange.lowerBound])
-                if !literal.isEmpty {
-                    regexParts.append(NSRegularExpression.escapedPattern(for: literal))
+                let keyName = String(format[matchRange])
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "{}"))
+                    .uppercased()
+
+                let isLastPlaceholder = i == matches.count - 1
+                let isOptional = isLastPlaceholder && keyName == "BUCKET"
+
+                if isOptional {
+                    // Make the separator + BUCKET value entirely optional
+                    let escapedLiteral = NSRegularExpression.escapedPattern(for: literal)
+                    regexParts.append("(?:\(escapedLiteral)(.+?))?")
+                } else {
+                    if !literal.isEmpty {
+                        regexParts.append(NSRegularExpression.escapedPattern(for: literal))
+                    }
+                    regexParts.append("(.+?)")
                 }
-                regexParts.append("(.+?)")
+
                 lastEnd = matchRange.upperBound
             }
 

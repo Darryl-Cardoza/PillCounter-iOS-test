@@ -177,8 +177,8 @@ struct OPillCountView: View {
                     count: lastAddedCount,
                     color: appColors.secondary
                 )
-                .allowsHitTesting(false) // Let user tap through if needed
-                .zIndex(100) // Ensure it's on top
+                .allowsHitTesting(false)
+                .zIndex(100)
             }
 
             if cameraService.isPausedDueToInactivity {
@@ -317,7 +317,7 @@ extension OPillCountView {
                             .foregroundColor(Color.white)
                             .padding(.horizontal, 32)
                             .padding(.vertical, 20)
-                            .background(appColors.secondary)
+                            .background(appColors.primary)
                             .cornerRadius(30)
                     }
                 }
@@ -353,6 +353,7 @@ extension OPillCountView {
     private var vialControlBottomView: some View {
         VialBottomContentView(
             appColors: appColors,
+            isCaptured: capturedVialImage != nil,
             onRedo: {
                 handleVialRedo()
             },
@@ -919,10 +920,7 @@ extension OPillCountView {
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
 
-        guard let imagePath = vialCapturedImagePath else {
-            pillScanViewModel.showToastMessage(text:"Capture the image first." )
-            return
-        }
+        guard let imagePath = vialCapturedImagePath else { return }
     
         // Save vial image
         pillScanViewModel.addOrReplaceVialTransactionDetail(

@@ -66,11 +66,11 @@ struct DispenseCountPartialTxnList: View {
                             highlightColor: appColors.secondary
                         )
                     }
+                    .collapsible(isVisible: !deletingIds.contains(txn.txn_id))
                     .selectableEffect(
                         isSelected: selectedIds.contains(txn.txn_id),
                         highlightColor: appColors.secondary
                     )
-                    .collapsible(isVisible: !deletingIds.contains(txn.txn_id))
                     .animation(
                         .spring(response: 0.38, dampingFraction: 0.82),
                         value: deletingIds.contains(txn.txn_id)

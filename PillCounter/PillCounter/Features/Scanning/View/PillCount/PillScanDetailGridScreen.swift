@@ -44,10 +44,14 @@ struct PillScanDetailGridScreen: View {
     private var countType: CountType {
         CountType(rawValue: pillScanViewModel.currentTransaction?.count_type ?? "") ?? .FIXED
     }
-
-    private var isFixed: Bool {
-        details.first?.type == ControlledStep.containerInitiate.rawValue || countType == .FIXED
-    }
+//
+//     var isFixed: Bool {
+//        if countType == .FIXED { return true }
+//        // REGULAR count with a container-initiate detail also shows target count
+//        return details.first?.type == ControlledStep.containerInitiate.rawValue
+//    }
+//    
+    @State private var isFixed: Bool = false
 
 
     // MARK: - Body
@@ -62,48 +66,51 @@ struct PillScanDetailGridScreen: View {
                 showBackButton: true,
                 showHamburgerMenu: false,
                 title: isEditing ? "DELETE TRANSACTION" : "TOTAL COUNT",
-                headerActionsBackground: appColors.primaryBackground
+                headerActionsBackground: appColors.primaryBackground,
+                backgroundColor: appColors.secondaryBackground
             )
-            .onAppear(){
-                print("Result: \(details.first?.type ?? "N/A")")
+            .onAppear {
+                if countType == .FIXED { return }
+                isFixed = details.first?.type == ControlledStep.containerInitiate.rawValue
             }
-
             // MARK: - Edit mode bottom bar
             if isEditing {
                 VStack {
                     Spacer()
-                    HStack(spacing: 12) {
-                        Button {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                isEditing = false
-                                selectedIds.removeAll()
-                            }
-                        } label: {
-                            Text("CANCEL")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(appColors.primary)
-                                .frame(maxWidth: 140)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(appColors.primary, lineWidth: 1)
-                                )
-                        }
 
-                        Button {
-                            showDeleteConfirm = true
-                        } label: {
-                            Text("DELETE")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: 140)
-                                .padding(.vertical, 10)
-                                .background(
-                                    selectedIds.isEmpty
-                                        ? Color.gray : appColors.primary
-                                )
-                                .cornerRadius(20)
-                        }
+                    EqualWidthHStackButtons(spacing: 16) {
+                        PillCountingButton(
+                            title: "CANCEL",
+                            textColor: appColors.primary,
+                            backgroundColor: .clear,
+                            borderColor: appColors.primary,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isEditing = false
+                                    selectedIds.removeAll()
+                                }
+                            }
+                        )
+
+                        PillCountingButton(
+                            title: "DELETE",
+                            textColor: selectedIds.isEmpty ? .white.opacity(0.6) : .white,
+                            backgroundColor: selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary,
+                            borderColor: .clear,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                showDeleteConfirm = true
+                            }
+                        )
                         .disabled(selectedIds.isEmpty)
                     }
                     .frame(maxWidth: .infinity)
@@ -138,25 +145,22 @@ struct PillScanDetailGridScreen: View {
     @ViewBuilder
     private var headerActions: some View {
         if isEditing {
-            // Select All checkbox
-            HStack(spacing: 10) {
-                let allIds = Set(details.map { $0.txn_details_id })
-                let allSelected = !allIds.isEmpty && selectedIds == allIds
+            let allIds = Set(details.map { $0.txn_details_id })
+            let allSelected = !allIds.isEmpty && selectedIds == allIds
 
-                ZStack {
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(appColors.primary, lineWidth: 1)
-                        .frame(width: 18, height: 18)
-                    if allSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(appColors.primary)
-                    }
-                }
-                Text("Select All")
+            HStack(spacing: 10) {
+                Image(allSelected ? "icon_unselected" : "icon_selected")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .foregroundStyle(appColors.primary)
+
+                Text(allSelected ? "Unselect All" : "Select All")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(appColors.primary)
             }
+            .contentShape(Rectangle())
             .onTapGesture { toggleAll() }
             .padding(.trailing, 16)
             .transition(.opacity)
@@ -204,7 +208,7 @@ struct PillScanDetailGridScreen: View {
             if isLandscape {
                 HStack(spacing: 8) {
                     Text(drugName)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(appColors.text)
                         .lineLimit(1)
 
@@ -215,7 +219,7 @@ struct PillScanDetailGridScreen: View {
             } else {
                 VStack(alignment: .center, spacing: 8) {
                     Text(drugName)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(appColors.text)
                         .lineLimit(1)
 
@@ -228,7 +232,7 @@ struct PillScanDetailGridScreen: View {
     }
     
     private var countView: some View {
-        Text(isFixed ? "\(pillCount)/\(targetCount)" : "\(pillCount)")
+        Text(!isFixed ? "\(pillCount)/\(targetCount)" : "\(pillCount)")
             .font(.system(size: 25, weight: .bold))
             .foregroundColor(appColors.secondary)
     }

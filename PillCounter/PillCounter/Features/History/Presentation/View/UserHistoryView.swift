@@ -36,6 +36,8 @@ struct UserHistoryView: View {
     
     @State private var listVersion: Int = 0
     @State private var hasAppeared: Bool = false
+    @State private var appearedTxnIds: Set<String> = []
+    @State private var appearedBatchIds: Set<Int64> = []
 
     // MARK: - Body
     var body: some View {
@@ -65,10 +67,12 @@ struct UserHistoryView: View {
                 }
             }
             .onAppear {
-                activeStatusFilter = stautsType
                 activeTypeFilter = filterType
-                hasAppeared = true
+                activeStatusFilter = stautsType
                 fetchAll()
+                DispatchQueue.main.async {
+                    hasAppeared = true
+                }
             }
             .onChange(of: historyViewModel.selectedStartDate) { _, _ in fetchAll() }
             .onChange(of: historyViewModel.selectedEndDate)   { _, _ in fetchAll() }
@@ -80,10 +84,14 @@ struct UserHistoryView: View {
                 fetchAll()
             }
             .onChange(of: activeStatusFilter) { _, _ in
+                appearedTxnIds.removeAll()
+                appearedBatchIds.removeAll()
                 historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
                 listVersion += 1
             }
             .onChange(of: searchText) { _, _ in
+                appearedTxnIds.removeAll()
+                appearedBatchIds.removeAll()
                 historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
                 listVersion += 1
             }
@@ -195,6 +203,8 @@ struct UserHistoryView: View {
             )
             await historyViewModel.getBatchesByDate(startDate: start, endDate: end)
             historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+            appearedTxnIds.removeAll()
+            appearedBatchIds.removeAll()
             listVersion += 1
         }
     }
@@ -234,28 +244,34 @@ struct UserHistoryView: View {
                 VStack(spacing: 15) {
                     HStack {
                         txnTypeFilter
-                        Button {
-                            let isEmpty: Bool
-                            
-                            if activeTypeFilter == .fixed {
-                                isEmpty = historyViewModel.transactionRows.isEmpty
-                            } else {
-                                isEmpty = historyViewModel.batchRows.isEmpty
+                        let isEmpty = activeTypeFilter == .fixed
+                            ? historyViewModel.transactionRows.isEmpty
+                            : historyViewModel.batchRows.isEmpty
+
+                        if !isEmpty {
+                            Button {
+                                let isEmpty: Bool
+                                
+                                if activeTypeFilter == .fixed {
+                                    isEmpty = historyViewModel.transactionRows.isEmpty
+                                } else {
+                                    isEmpty = historyViewModel.batchRows.isEmpty
+                                }
+                                
+                                if isEmpty {
+                                    toastManager.show(message: "No items to delete")
+                                } else {
+                                    showDeleteConfirmation = true
+                                }
+                                
+                            } label: {
+                                Image("delete")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 24, height: 24)
+                                    .overlay(appColors.primary)
+                                    .mask(Image("delete").resizable().scaledToFit())
                             }
-                            
-                            if isEmpty {
-                                toastManager.show(message: "No items to delete")
-                            } else {
-                                showDeleteConfirmation = true
-                            }
-                            
-                        } label: {
-                            Image("delete")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 24, height: 24)
-                                .overlay(appColors.primary)
-                                .mask(Image("delete").resizable().scaledToFit())
                         }
                     }
                     statusFilterChips
@@ -274,6 +290,7 @@ struct UserHistoryView: View {
                 }
                 .padding(.bottom, 20)
             }
+            .id(listVersion)
             .animation(nil, value: activeTypeFilter)
             .animation(nil, value: historyViewModel.transactionRows.count)
             .animation(nil, value: historyViewModel.batchRows.count)
@@ -305,20 +322,24 @@ struct UserHistoryView: View {
             .padding(.top, 40)
         } else {
             ForEach(Array(historyViewModel.transactionRows.enumerated()), id: \.element.id) { index, row in
+                let didAppear = appearedTxnIds.contains(row.id)
+
                 DispenseItemRowView(data: row, appColors: appColors)
                     .onTapGesture {
-                        historyViewModel.selectedTransactionId = Int64(row.id)
+                        historyViewModel.selectedTransactionId = Int64(row.id) ?? 0
                         router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
                     }
-                    .offset(y: 0)
-                    .opacity(1)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(
-                        .spring(response: 0.45, dampingFraction: 0.82)
-                            .delay(Double(index) * 0.05),
-                        value: listVersion
-                    )
-                
+                    .opacity(didAppear ? 1 : 0)
+                    .offset(y: didAppear ? 0 : 20)
+                    .onAppear {
+                        guard !appearedTxnIds.contains(row.id) else { return }
+                        withAnimation(
+                            .spring(response: 0.42, dampingFraction: 0.78)
+                                .delay(Double(index) * 0.06)
+                        ) {
+                            appearedTxnIds.insert(row.id)
+                        }
+                    }
             }
         }
     }
@@ -342,17 +363,23 @@ struct UserHistoryView: View {
             .padding(.top, 40)
         } else {
             ForEach(Array(historyViewModel.batchRows.enumerated()), id: \.element.batchId) { index, row in
+                let hasAppeared = appearedBatchIds.contains(row.batchId)
                 StockItemRowView(data: row, appColors: appColors)
                     .onTapGesture {
                         historyViewModel.selectedBatchId = row.batchId
                         router.navigate(to: .authentication(.user(.userSettings(.HistoryBatchDetail))))
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(
-                        .spring(response: 0.45, dampingFraction: 0.82)
-                            .delay(Double(index) * 0.05),
-                        value: listVersion 
-                    )
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 20)
+                    .onAppear {
+                        guard !appearedBatchIds.contains(row.batchId) else { return }
+                        withAnimation(
+                            .spring(response: 0.42, dampingFraction: 0.78)
+                                .delay(Double(index) * 0.06)
+                        ) {
+                            appearedBatchIds.insert(row.batchId)
+                        }
+                    }
             }
         }
     }

@@ -122,7 +122,7 @@ struct UserSettingsView: View {
         
         
         return ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 30) {
+            VStack(alignment: .leading, spacing: 24) {
                 
                 // MARK: Pill Counting
                 ToggleRowView(
@@ -138,7 +138,7 @@ struct UserSettingsView: View {
                 VStack (spacing: 15){
                     Text(NSLocalizedString("REQUIRED_DOUBLE_COUNT", comment: ""))
                         .foregroundStyle(appColors.text)
-                        .fontWeight(.semibold)
+                        .fontWeight(.regular)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     HStack(spacing: 4) {
@@ -149,7 +149,7 @@ struct UserSettingsView: View {
                                     ? appColors.secondary
                                     : appColors.text.opacity(0.35)
                                 )
-                                .fontWeight(.semibold)
+                                .fontWeight(.regular)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -182,13 +182,13 @@ struct UserSettingsView: View {
                 VStack (spacing: 15){
                     Text(NSLocalizedString("SAVE_HISTORY", comment: ""))
                         .foregroundStyle(appColors.text)
-                        .fontWeight(.semibold)
+                        .fontWeight(.regular)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     
                     Text(selectedSaveHistoryOption.displayText)
                         .foregroundColor(appColors.secondary)
-                        .fontWeight(.semibold)
+                        .fontWeight(.regular)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                 }
@@ -241,7 +241,7 @@ struct UserSettingsView: View {
                     Text(NSLocalizedString("CLEAR_ALL_LOCAL_DATA", comment: ""))
                         .foregroundStyle(appColors.text)
                         .padding(.horizontal)
-                        .fontWeight(Font.Weight.semibold)
+                        .fontWeight(Font.Weight.regular)
                     
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -257,8 +257,8 @@ struct UserSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding( .top, 45)
-        .padding(.horizontal, isLandscape ? SafeAreaInsets.leading : 10)
+        .padding(.top, 64)
+        .padding(.horizontal,10)
         .background(appColors.secondaryBackground)
     }
     
@@ -417,7 +417,7 @@ struct ToggleRowView: View {
     var body: some View {
         HStack {
             Text(title)
-                .fontWeight(Font.Weight.semibold)
+                .fontWeight(Font.Weight.regular)
             Spacer()
             PillCountingToggleButton(
                 isOn: Binding(

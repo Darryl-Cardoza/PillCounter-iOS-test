@@ -206,7 +206,6 @@ struct StockCountBatchDetail: View {
     @ViewBuilder
     private var mainContent: some View {
         
-        
         VStack(spacing: 0) {
 
             // SCROLLABLE CONTENT
@@ -226,7 +225,7 @@ struct StockCountBatchDetail: View {
                             isEditing: $isEditing
                         )
                     }
-                    .padding(isLandscape ? 20 : 0)
+                    .padding(0)
                     .padding(.bottom, 20)
                 }
             }
@@ -279,7 +278,7 @@ struct StockCountBatchDetail: View {
             }
             .padding(.bottom, 20)
         }
-        .padding(.top, 65)
+        .padding(.top, 55)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
@@ -355,7 +354,6 @@ extension StockCountBatchDetail{
     private var showNoteOptionPopup: some View {
         NotePopupView(
             title: "Would you like to add a note?",
-            showClose: true,
             text: $stockCountVieModel.note,
             errorMessage: noteError,
             primaryTitle: "YES",
@@ -364,7 +362,7 @@ extension StockCountBatchDetail{
                     noteError = "Please add a note"
                     return
                 }
-
+                
                 noteError = nil
                 showNoteOptions = false
                 showEndBatchPopUp = true
@@ -382,5 +380,6 @@ extension StockCountBatchDetail{
                 stockCountVieModel.note = ""
             }
         )
-    }}
+    }
+}
 

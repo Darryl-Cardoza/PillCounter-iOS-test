@@ -55,12 +55,11 @@
                                 highlightColor: appColors.secondary
                             )
                         }
-                        // ← shadow goes HERE, before collapsible clips
+                        .collapsible(isVisible: !deletingIds.contains(batch.batch_id))
                         .selectableEffect(
                             isSelected: selectedIds.contains(batch.batch_id),
                             highlightColor: appColors.secondary
                         )
-                        .collapsible(isVisible: !deletingIds.contains(batch.batch_id))
                         .animation(
                             .spring(response: 0.38, dampingFraction: 0.82),
                             value: deletingIds.contains(batch.batch_id)

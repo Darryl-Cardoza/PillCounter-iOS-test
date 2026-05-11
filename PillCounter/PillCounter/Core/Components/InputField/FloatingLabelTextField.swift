@@ -27,13 +27,16 @@ struct FloatingLabelTextField: View {
                 .foregroundColor(appColors.text.opacity(0.75))
                 .offset(y: isActive ? -16 : 0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
+                .padding(.leading, 8)
 
             // Text input
             Group {
                 if isSecure {
                     SecureField("", text: $text)
+                        .padding(.leading, 8)
                 } else {
                     TextField("", text: $text)
+                        .padding(.leading, 8)
                         .keyboardType(keyboardType)
                 }
             }

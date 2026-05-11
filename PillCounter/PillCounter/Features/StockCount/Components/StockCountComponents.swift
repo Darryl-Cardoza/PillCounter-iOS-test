@@ -44,7 +44,7 @@ struct StockTransactionListView: View {
                         isExpanded: Binding(
                             get: { expandedNdc == txn.ndc },
                             set: { newValue in
-                                withAnimation(.easeInOut(duration: 0.25)) {  // ✅ Added animation
+                                withAnimation(.easeInOut(duration: 0.25)) {
                                     expandedNdc = newValue ? txn.ndc : nil
                                 }
                             }

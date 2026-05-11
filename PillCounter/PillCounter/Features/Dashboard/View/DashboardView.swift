@@ -43,7 +43,14 @@ struct DashboardView: View {
     @State private var pmsToastColor: Color = .green
     @State private var showPmsToast: Bool = false
     @State private var pmsToastTask: Task<Void, Never>? = nil
-    let isIpad = UIDevice.current.userInterfaceIdiom == .pad
+
+    private var isIpad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
+    private var scale: CGFloat {
+        isIpad ? 1.5 : 1.0
+    }
 
     var body: some View {
         ZStack {
@@ -53,30 +60,46 @@ struct DashboardView: View {
                     VStack(spacing: 10) {
                         Spacer()
                         Spacer()
-                        Image("dispense_dashboard_icon")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 55, height: 55)
-                            .foregroundColor(appColors.secondary)
-                            .padding(40)
-                            .background(
-                                ZStack {
-                                    Circle()
-                                        .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
-                                        .blur(radius: 5)
-                                    Circle()
-                                        .stroke(appColors.primary, lineWidth: 4)
-                                }
-                            )
-                        Spacer().frame(height: 15)
-
-                        Text("FIXED_COUNT_TITLE")
-                            .font(.title)
-                            .foregroundStyle(appColors.secondary)
-
-                        Text("FIXED_COUNT_SUBTITLE")
-                            .foregroundStyle(appColors.text)
+                        VStack(spacing: 15) {
+                            Image("dispense_dashboard_icon")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(
+                                    width: isIpad ? 80 : 65,
+                                    height: isIpad ? 80 : 65
+                                )
+                                .foregroundColor(appColors.secondary)
+                                .padding(40 * scale)
+                                .background(
+                                    ZStack {
+                                        Circle()
+                                            .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
+                                            .blur(radius: 5 * scale)
+                                        Circle()
+                                            .stroke(appColors.primary, lineWidth: 4 )
+                                    }
+                                )
+                            Spacer().frame(height: 15)
+                            
+                            Text("FIXED_COUNT_TITLE")
+                                .font(.title)
+                                .foregroundStyle(appColors.secondary)
+                            
+                            Text("FIXED_COUNT_SUBTITLE")
+                                .foregroundStyle(appColors.text)
+                            
+                        }
+                        .padding(30)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            router.selectedPillScanningType = .FIXED
+                            router.navigate(
+                                to: .authentication(
+                                    .login(
+                                        .dashboard(
+                                            .pillCount(.barcodeScanning(.rx_label))))))
+                        }
 
                         Spacer()
 
@@ -85,7 +108,7 @@ struct DashboardView: View {
                                 iconName: "check_with_circle",
                                 title: "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
                                 textColor: appColors.primary,
-                                backgroundColor: appColors.primaryBackground,
+                                backgroundColor: appColors.primaryBackground.opacity(0.4),
                                 action: {
                                     router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .completed)))))
                                 },
@@ -93,11 +116,17 @@ struct DashboardView: View {
                             )
                             .frame(maxWidth: .infinity)
 
+                            if isIpad {
+                                Spacer()
+                                    .frame(width: 70)
+                            }
+                         
+                            
                             PillCountingButton(
                                 iconName: "partial",
                                 title: "\(userViewModel.fixedCountTransactionPartialCount) \(NSLocalizedString("PENDING", comment: ""))",
                                 textColor: appColors.primary,
-                                backgroundColor: appColors.primaryBackground,
+                                backgroundColor: appColors.primaryBackground.opacity(0.4),
                                 action: {
                                     router.selectedPillScanningType = .FIXED
                                     router.navigate(
@@ -115,44 +144,56 @@ struct DashboardView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.secondaryBackground)
-                    .onTapGesture {
-                        router.selectedPillScanningType = .FIXED
-                        router.navigate(
-                            to: .authentication(
-                                .login(
-                                    .dashboard(
-                                        .pillCount(.barcodeScanning(.rx_label))))))
-                    }
+//                    .onTapGesture {
+//                        router.selectedPillScanningType = .FIXED
+//                        router.navigate(
+//                            to: .authentication(
+//                                .login(
+//                                    .dashboard(
+//                                        .pillCount(.barcodeScanning(.rx_label))))))
+//                    }
                 },
                 bottomContent: {
                     VStack(spacing: 10) {
                         Spacer()
                         Spacer()
-                        Image("placeholder_history")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 65, height: 65)
-                            .foregroundColor(appColors.secondary)
-                            .padding(40)
-                            .background(
-                                ZStack {
-                                    Circle()
-                                        .stroke(appColors.primary.opacity(0.3), lineWidth: 9)
-                                        .blur(radius: 5)
-                                    Circle()
-                                        .stroke(appColors.primary, lineWidth: 4)
-                                }
-                            )
-                        Spacer().frame(height: 15)
-
-                        Text("REGULAR_COUNT_TITLE")
-                            .font(.title)
-                            .foregroundStyle(appColors.secondary)
-
-                        Text("REGULAR_COUNT_SUBTITLE")
-                            .foregroundStyle(appColors.text)
-
+                        VStack(spacing: 15) {
+                            Image("placeholder_history")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(
+                                    width: isIpad ? 90 : 65,
+                                    height: isIpad ? 90 : 65
+                                )
+                                .foregroundColor(appColors.secondary)
+                                .padding(40 * scale)
+                                .background(
+                                    ZStack {
+                                        Circle()
+                                            .stroke(appColors.primary.opacity(0.3), lineWidth: 9 )
+                                            .blur(radius: 5 * scale)
+                                        Circle()
+                                            .stroke(appColors.primary, lineWidth: 4)
+                                    }
+                                )
+                            Spacer().frame(height: 15)
+                            
+                            Text("REGULAR_COUNT_TITLE")
+                                .font(.title)
+                                .foregroundStyle(appColors.secondary)
+                            
+                            Text("REGULAR_COUNT_SUBTITLE")
+                                .foregroundStyle(appColors.text)
+                            
+                        }
+                        .padding(30)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            router.selectedPillScanningType = .REGULAR
+                            showStockCountPopup.toggle()
+                            resetStockCountSelection()
+                        }
                         Spacer()
                         
                         HStack(spacing: isIpad ? 24 : 42) {
@@ -160,20 +201,24 @@ struct DashboardView: View {
                                 iconName: "check_with_circle",
                                 title: "\(stockCountViewModel.totalCompletedBatchCount) \(NSLocalizedString("COMPLETED", comment: ""))",
                                 textColor: appColors.primary,
-                                backgroundColor: appColors.secondaryBackground,
+                                backgroundColor: appColors.secondaryBackground.opacity(0.4),
                                 action: {
-                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular, .pending)))))
+                                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular, .completed)))))
                                 },
                                 iconColor: appColors.primary
                             )
                             .frame(maxWidth: .infinity)
 
+                            if isIpad {
+                                Spacer()
+                                    .frame(width: 70)
+                            }
                          
                             PillCountingButton(
                                 iconName: "partial",
                                 title: "\(stockCountViewModel.totalBatchCount) \(NSLocalizedString("PENDING", comment: ""))",
                                 textColor: appColors.primary,
-                                backgroundColor: appColors.secondaryBackground,
+                                backgroundColor: appColors.secondaryBackground.opacity(0.4),
                                 action: {
                                     router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
                                 },
@@ -187,11 +232,11 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.primaryBackground)
                     .cornerRadius(24)
-                    .onTapGesture {
-                        router.selectedPillScanningType = .REGULAR
-                        showStockCountPopup.toggle()
-                        resetStockCountSelection()
-                    }
+//                    .onTapGesture {
+//                        router.selectedPillScanningType = .REGULAR
+//                        showStockCountPopup.toggle()
+//                        resetStockCountSelection()
+//                    }
                 },
                 showBackButton: false,
                 showHamburgerMenu: true,

@@ -54,7 +54,8 @@ struct HistoryTransactionDetailView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: transaction?.drug?.drug_name ?? "Unknown Drug"
+                title: transaction?.drug?.drug_name ?? "Unknown Drug",
+                backgroundColor: appColors.primaryBackground
             )
 
             if pdfService.isLoading {
@@ -98,43 +99,46 @@ struct HistoryTransactionDetailView: View {
     // MARK: - Portrait Layout
     private var maintContent: some View {
         VStack(spacing: 0) {
+
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
+
                     VStack(spacing: 24) {
                         collapsibleSections
-                        Spacer()
+                        Spacer(minLength: 80)
                     }
-                    .padding(.top, 80)
-                    .padding(.bottom, 80)
+                    .padding(.bottom, 40)
                     .padding(.horizontal, 10)
                     .frame(maxWidth: .infinity)
-
-                    HStack {
-                        Spacer()
-                        DeleteOkButtons(
-                            appColors: appColors,
-                            onDelete: {
-                                Task {
-                                    await historyViewModel.softDeleteTransaction(
-                                        txnId: transaction?.txn_id ?? 0
-                                    )
-                                    router.navigateBack()
-                                }
-                            },
-                            onOk: {
-                                router.navigateBack()
-                            }
-                        )
-                        Spacer()
-                    }
-                    .padding(.top, 70)
-
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(appColors.secondaryBackground)
+                .frame(maxWidth: .infinity)
+                .background(appColors.primaryBackground)
             }
+
+            HStack {
+                Spacer()
+
+                DeleteOkButtons(
+                    appColors: appColors,
+                    onDelete: {
+                        Task {
+                            await historyViewModel.softDeleteTransaction(
+                                txnId: transaction?.txn_id ?? 0
+                            )
+                            router.navigateBack()
+                        }
+                    },
+                    onOk: {
+                        router.navigateBack()
+                    }
+                )
+
+                Spacer()
+            }
+            .padding(.vertical, 16)
+            .background(appColors.primaryBackground)
         }
-        .padding(.top,45)
+        .padding(.top, 64)
     }
 
     // MARK: - PDF
@@ -176,7 +180,8 @@ extension HistoryTransactionDetailView {
                 CollapsibleBox(
                     title: NSLocalizedString("PILL COUNT", comment: ""),
                     allowCollapse: false,
-                    defaultExpanded: true
+                    defaultExpanded: true,
+                    bgColor: appColors.secondaryBackground
                 ) {
                     collapsableBoxContent(step: .targetVerification)
                 }
@@ -188,7 +193,8 @@ extension HistoryTransactionDetailView {
                 CollapsibleBox(
                     title: NSLocalizedString("INITIAL CONTAINER COUNT", comment: ""),
                     allowCollapse: false,
-                    defaultExpanded: true
+                    defaultExpanded: true,
+                    bgColor: appColors.secondaryBackground
                 ) {
                     collapsableBoxContent(step: .containerInitiate, showTargetCount: false)
                 }
@@ -196,17 +202,23 @@ extension HistoryTransactionDetailView {
             
             if let ndc = transaction?.substitueDrug?.ndc,
                !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty  {
-                CollapsibleBox(title: NSLocalizedString("REQUESTED_DRUG_DETAILS", comment: "")) {
+                CollapsibleBox(
+                    title: NSLocalizedString("REQUESTED_DRUG_DETAILS", comment: ""),
+                    bgColor: appColors.secondaryBackground
+                ) {
                     substituedInfoList
                 }
             }
             
-            CollapsibleBox(title: drugDetailsTitle) {
+            CollapsibleBox(title: drugDetailsTitle,   bgColor: appColors.secondaryBackground) {
                 detailsInfoList
             }
 
             if let type = transaction?.drug?.drug_type, !type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                CollapsibleBox(title: NSLocalizedString("PILL COUNT", comment: "")) {
+                CollapsibleBox(
+                    title: NSLocalizedString("PILL COUNT", comment: ""),
+                    bgColor: appColors.secondaryBackground
+                ) {
                     collapsableBoxContent(step: .targetVerification)
                 }
             }
@@ -214,7 +226,10 @@ extension HistoryTransactionDetailView {
             if let details = historyViewModel.detailsByStep[.targetReverification],
                !details.isEmpty
             {
-                CollapsibleBox(title: NSLocalizedString("PILL RECOUNT", comment: "")) {
+                CollapsibleBox(
+                    title: NSLocalizedString("PILL RECOUNT", comment: ""),
+                    bgColor: appColors.secondaryBackground
+                ) {
                     collapsableBoxContent(step: .targetReverification)
                 }
             }
@@ -222,7 +237,10 @@ extension HistoryTransactionDetailView {
             if let details = historyViewModel.detailsByStep[.vial],
                !details.isEmpty
             {
-                CollapsibleBox(title: NSLocalizedString("DISPENSED VIAL", comment: "")) {
+                CollapsibleBox(
+                    title: NSLocalizedString("DISPENSED VIAL", comment: ""),
+                    bgColor: appColors.secondaryBackground
+                ) {
                     collapsableBoxContent(step: .vial, showVialInfo: true)
                 }
             }
@@ -230,12 +248,15 @@ extension HistoryTransactionDetailView {
             if let details = historyViewModel.detailsByStep[.containerPending],
                !details.isEmpty
             {
-                CollapsibleBox(title: NSLocalizedString("REMAINING_CONTAINER_COUNT", comment: "")) {
+                CollapsibleBox(
+                    title: NSLocalizedString("REMAINING_CONTAINER_COUNT", comment: ""),
+                    bgColor: appColors.secondaryBackground
+                ) {
                     collapsableBoxContent(step: .containerPending, showTargetCount: false)
                 }
             }
 
-            CollapsibleBox(title: NSLocalizedString("NOTE", comment: "")) {
+            CollapsibleBox(title: NSLocalizedString("NOTE", comment: "") ,  bgColor: appColors.secondaryBackground) {
                 notesContent
             }
         }
@@ -247,7 +268,7 @@ extension HistoryTransactionDetailView {
         showTargetCount: Bool = true,
         showVialInfo: Bool = false
     ) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 20) {
             if !showVialInfo {
                 HStack(spacing: 20) {
                     ThumbnailImageView(

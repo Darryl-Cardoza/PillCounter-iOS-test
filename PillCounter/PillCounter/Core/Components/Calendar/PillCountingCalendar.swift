@@ -101,6 +101,7 @@ struct PillCountingCalendar: View {
         let isEnd     = endDate.map   { isSameDay(date, $0) } ?? false
         let inRange   = isInRange(date)
         let future    = isFuture(date)
+        let isToday   = calendar.isDateInToday(date)
 
         // The range background should stretch full-width but be clipped on the
         // left for the start and on the right for the end (creating pill caps).
@@ -149,6 +150,7 @@ struct PillCountingCalendar: View {
                     .font(.body)
                     .foregroundColor(
                         (isStart || isEnd) ? .white :
+                        isToday            ? selectedColor :
                         inRange            ? textColor :
                                              textColor
                     )

@@ -1015,33 +1015,40 @@ struct ConfettiParticle: Identifiable {
 
 // MARK: Vial
 struct VialBottomContentView: View {
-    
+
     let appColors: AppColors
-    
+    let isCaptured: Bool
+
     var onRedo: () -> Void
     var onCapture: () -> Void
     var onDone: () -> Void
-    
+
     @Environment(\.isLandscape) private var isLandscape
 
     var body: some View {
-        
+
         let layout = isLandscape
         ? AnyLayout(VStackLayout(spacing: 70))
         : AnyLayout(HStackLayout(spacing: 90))
-        
+
         layout {
-            
+
             // Redo
             VStack(spacing: 10) {
                 Image("redo_icon")
-                    .foregroundColor(appColors.primary)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(isCaptured ? appColors.primary : appColors.primaryBackground)
+
                 
                 Text("Redo")
                     .font(.caption)
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(appColors.text )
             }
             .onTapGesture {
+                guard isCaptured else { return }
                 onRedo()
             }
             
@@ -1054,7 +1061,7 @@ struct VialBottomContentView: View {
                 
                 Image(systemName: "camera")
                     .font(.system(size: 28, weight: .medium))
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(Color.white)
             }
             .onTapGesture {
                 onCapture()
@@ -1064,13 +1071,14 @@ struct VialBottomContentView: View {
             // Done
             VStack(spacing: 10) {
                 Image("done_icon")
-                    .foregroundColor(appColors.primary)
-                
+                    .foregroundColor(isCaptured ? appColors.primary : .gray)
+
                 Text("Done")
                     .font(.caption)
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(isCaptured ? appColors.text : .gray)
             }
             .onTapGesture {
+                guard isCaptured else { return }
                 onDone()
             }
         }

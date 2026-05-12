@@ -8,7 +8,7 @@
 import Foundation
 
 protocol UserRepositoryProtocol {
-    
+
     func getUser(accessToken: String, currentAppVersion: String, fcmToken: String) async throws -> UserResponse
 
     func updateUserProfile(
@@ -17,8 +17,10 @@ protocol UserRepositoryProtocol {
 
     func deleteUserProfile(accessToken: String) async throws
         -> DeleteUserResponse
-    
+
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse
+
+    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, accessToken: String) async throws -> UpdateTerminalResponse
 }
 
 
@@ -81,6 +83,20 @@ final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
         )
     }
     
+    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, accessToken: String) async throws -> UpdateTerminalResponse {
+        let body: [String: Any] = [
+            "terminal_name": terminalName,
+            "is_active": isActive
+        ]
+        return try await Self.performRequest(
+            url: APIConstants.updateTerminal(terminalId: terminalId),
+            method: .put,
+            accessToken: accessToken,
+            body: body,
+            responseType: UpdateTerminalResponse.self
+        )
+    }
+
     // refresh token to refresh the access token.
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
         

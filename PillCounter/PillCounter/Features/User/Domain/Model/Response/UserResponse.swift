@@ -4,6 +4,7 @@
 //
 //  Created by HC on 11/11/25.
 //
+//
 
 import Foundation
 
@@ -25,20 +26,28 @@ struct UserResponse: Codable {
 
 // MARK: - Data
 struct UserData: Codable {
-    /// Some APIs wrap data inside `user`, others expose profile/settings directly.
+    
+    /// Some APIs wrap data inside `user`,
+    /// others expose profile/settings directly.
+    
     let user: UserDetails?
     let profile: UserProfile?
     let settings: UserSettings?
+    let terminals: [UserTerminal]?  
 }
 
 // MARK: - UserDetails
 struct UserDetails: Codable {
+    
     let userId: String?
     let isVerified: Bool?
     let createdAt: String?
     let updatedAt: String?
+    
     let profile: UserProfile?
     let settings: UserSettings?
+    let terminals: [UserTerminal]?
+    
     let auth: UserAuth?
     let role: UserRole?
 
@@ -47,8 +56,11 @@ struct UserDetails: Codable {
         case isVerified = "is_verified"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        
         case profile
         case settings
+        case terminals
+        
         case auth
         case role
     }
@@ -61,28 +73,37 @@ struct UserProfile: Codable {
     let email: String?
     let phoneNumber: String?
     let avatarURL: String?
+    
     let isProfileCompleted: Bool?
     let pharmacyName: String?
     let npiID: String?
+    
     let isVerified: Bool?
     let isHl7Enabled: Bool?
-    let bucket: [String]
+    
+    let bucket: [String]?
+    
     let role: UserRole?
     let userId: String?
 
     enum CodingKeys: String, CodingKey {
-        case fname = "fname"
-        case lname = "lname"
+        case fname
+        case lname
         case email
+        
         case phoneNumber = "phone_number"
         case avatarURL = "avatar_url"
+        
         case isProfileCompleted = "is_profile_completed"
         case pharmacyName = "pharmacy_name"
         case npiID = "npi_id"
+        
         case isVerified = "is_verified"
-        case isHl7Enabled =  "is_hl7_enabled"
-        case bucket = "bucket"
-        case role = "role"
+        case isHl7Enabled = "is_hl7_enabled"
+        
+        case bucket
+        case role
+        
         case userId = "user_id"
     }
 }
@@ -124,3 +145,20 @@ struct UserRole: Codable {
     }
 }
 
+// MARK: - Terminal
+struct UserTerminal: Codable {
+    let terminalId: String?
+    let terminalName: String?
+    let isActive: Bool?
+    let createdAt: String?
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case terminalId = "terminal_id"
+        case terminalName = "terminal_name"
+        case isActive = "is_active"
+        
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}

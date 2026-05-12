@@ -145,6 +145,10 @@ struct UserProfileScreen: View {
                 keyboardType: .phonePad,
                 maxLength: 10
             )
+
+            if !userViewModel.terminals.isEmpty {
+                terminalDropdown
+            }
         }
     }
     
@@ -162,7 +166,7 @@ struct UserProfileScreen: View {
                 text: $userViewModel.firstName,
                 maxLength: 30
             )
-            
+
             FloatingLabelTextField(
                 placeholder: NSLocalizedString("PHARMACY_NAME", comment: ""),
                 text: $userViewModel.pharmacyName,
@@ -174,6 +178,10 @@ struct UserProfileScreen: View {
                 text: $userViewModel.email,
                 disabled: true
             )
+
+            if !userViewModel.terminals.isEmpty {
+                terminalDropdown
+            }
         }
     }
 
@@ -184,7 +192,7 @@ struct UserProfileScreen: View {
                 text: $userViewModel.lastName,
                 maxLength: 30
             )
-            
+
             FloatingLabelTextField(
                 placeholder: NSLocalizedString("PHONE_NUMBER", comment: ""),
                 text: $userViewModel.phoneNumber,
@@ -198,6 +206,58 @@ struct UserProfileScreen: View {
                 keyboardType: .phonePad,
                 maxLength: 10
             )
+        }
+    }
+
+    private var terminalDropdown: some View {
+        Menu {
+            ForEach(userViewModel.terminals, id: \.terminalId) { terminal in
+                Button {
+                    guard terminal.terminalId != userViewModel.selectedTerminal?.terminalId else { return }
+                    Task {
+                        let success = await userViewModel.updateTerminal(terminal)
+                        if success {
+                            toastManager.show(message: "Terminal updated successfully.")
+                        } else {
+                            toastManager.show(message: "Failed to update terminal. Please try again.")
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text(terminal.terminalName ?? "")
+                        if terminal.terminalId == userViewModel.selectedTerminal?.terminalId {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            ZStack(alignment: .leading) {
+                Text(NSLocalizedString("TERMINAL", comment: ""))
+                    .font(.caption)
+                    .foregroundColor(appColors.text.opacity(0.75))
+                    .offset(y: -16)
+                    .padding(.leading, 16)
+
+                HStack {
+                    Text(userViewModel.selectedTerminal?.terminalName ?? "")
+                        .font(.body)
+                        .foregroundColor(appColors.text)
+                        .padding(.leading, 16)
+                        .padding(.top, 10)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(appColors.text.opacity(0.75))
+                        .padding(.trailing, 16)
+                        .padding(.top, 10)
+                }
+            }
+            .frame(height: 64)
+            .background(appColors.secondaryBackground)
+            .cornerRadius(10)
         }
     }
 

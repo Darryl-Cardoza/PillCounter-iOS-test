@@ -144,14 +144,6 @@ struct DashboardView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.secondaryBackground)
-//                    .onTapGesture {
-//                        router.selectedPillScanningType = .FIXED
-//                        router.navigate(
-//                            to: .authentication(
-//                                .login(
-//                                    .dashboard(
-//                                        .pillCount(.barcodeScanning(.rx_label))))))
-//                    }
                 },
                 bottomContent: {
                     VStack(spacing: 10) {
@@ -232,11 +224,6 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.primaryBackground)
                     .cornerRadius(24)
-//                    .onTapGesture {
-//                        router.selectedPillScanningType = .REGULAR
-//                        showStockCountPopup.toggle()
-//                        resetStockCountSelection()
-//                    }
                 },
                 showBackButton: false,
                 showHamburgerMenu: true,

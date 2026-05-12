@@ -7,10 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		790300082F6986C300A4FDB7 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 790300072F6986C300A4FDB7 /* ComposeApp */; };
-		796F346D2F8E7107004A795B /* ios-server.p12 in Resources */ = {isa = PBXBuildFile; fileRef = 796F346C2F8E7107004A795B /* ios-server.p12 */; };
+		7967E1462FA33F00009E2B99 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 7967E1452FA33F00009E2B99 /* ComposeApp */; };
 		79963B792F8543920053241C /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 79963B782F8543920053241C /* FirebaseMessaging */; };
-		799F7DED2F31EB15008701B3 /* android-server.p12 in Resources */ = {isa = PBXBuildFile; fileRef = 799F7DEC2F31EB15008701B3 /* android-server.p12 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,14 +32,13 @@
 		473A48F52EB4F11200EEA905 /* PillCounter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PillCounter.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		473A490B2EB4F11300EEA905 /* PillCounterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PillCounterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		473A49152EB4F11300EEA905 /* PillCounterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PillCounterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		796F346C2F8E7107004A795B /* ios-server.p12 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ios-server.p12"; sourceTree = "<group>"; };
-		799F7DEC2F31EB15008701B3 /* android-server.p12 */ = {isa = PBXFileReference; lastKnownFileType = file; path = "android-server.p12"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		47793CE82EF940640023EAD4 /* Exceptions for "PillCounter" folder in "PillCounter" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Core/Components/Untitled.swift,
 				Info.plist,
 			);
 			target = 473A48F42EB4F11200EEA905 /* PillCounter */;
@@ -75,7 +72,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				79963B792F8543920053241C /* FirebaseMessaging in Frameworks */,
-				790300082F6986C300A4FDB7 /* ComposeApp in Frameworks */,
+				7967E1462FA33F00009E2B99 /* ComposeApp in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,13 +96,11 @@
 		473A48EC2EB4F11200EEA905 = {
 			isa = PBXGroup;
 			children = (
-				799F7DEC2F31EB15008701B3 /* android-server.p12 */,
 				473A48F72EB4F11200EEA905 /* PillCounter */,
 				473A490E2EB4F11300EEA905 /* PillCounterTests */,
 				473A49182EB4F11300EEA905 /* PillCounterUITests */,
 				790300062F6986C300A4FDB7 /* Frameworks */,
 				473A48F62EB4F11200EEA905 /* Products */,
-				796F346C2F8E7107004A795B /* ios-server.p12 */,
 			);
 			sourceTree = "<group>";
 		};
@@ -146,8 +141,8 @@
 			);
 			name = PillCounter;
 			packageProductDependencies = (
-				790300072F6986C300A4FDB7 /* ComposeApp */,
 				79963B782F8543920053241C /* FirebaseMessaging */,
+				7967E1452FA33F00009E2B99 /* ComposeApp */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -235,8 +230,8 @@
 			mainGroup = 473A48EC2EB4F11200EEA905;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				790300052F69867100A4FDB7 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
 				79963B772F8543920053241C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				7967E1472FA33FAB009E2B99 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -255,8 +250,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				796F346D2F8E7107004A795B /* ios-server.p12 in Resources */,
-				799F7DED2F31EB15008701B3 /* android-server.p12 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -676,7 +669,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		790300052F69867100A4FDB7 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
+		7967E1472FA33FAB009E2B99 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage";
 		};
@@ -694,9 +687,8 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		790300072F6986C300A4FDB7 /* ComposeApp */ = {
+		7967E1452FA33F00009E2B99 /* ComposeApp */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 790300052F69867100A4FDB7 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */;
 			productName = ComposeApp;
 		};
 		79963B782F8543920053241C /* FirebaseMessaging */ = {

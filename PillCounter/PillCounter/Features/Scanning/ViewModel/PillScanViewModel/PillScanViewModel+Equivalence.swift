@@ -13,6 +13,7 @@ extension PillScanViewModel {
             return true
         }
 
+
         print("✅ [NDC] Expected:", expectedNdc)
         print("✅ [NDC] Scanned:", scannedNdc)
 
@@ -87,7 +88,7 @@ extension PillScanViewModel {
     // Get Only PMS transaction
     func getExpectedPmsNdc() -> String? {
         guard let txn = selectedTransaction else {
-            print("❌ [NDC] No selected transaction")
+            print("[NDC] No selected transaction")
             return nil
         }
 
@@ -96,11 +97,11 @@ extension PillScanViewModel {
               !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               txn.count_type == CountType.FIXED.rawValue
         else {
-            print("⚠️ [NDC] Conditions not met → skipping PMS NDC")
+            print("[NDC] Conditions not met → skipping PMS NDC")
             return nil
         }
 
-        print("✅ [NDC] Using PMS NDC:", ndc)
+        print("[NDC] Using PMS NDC:", ndc)
         return ndc
     }
 }

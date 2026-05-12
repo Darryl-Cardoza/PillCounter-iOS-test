@@ -137,17 +137,37 @@ struct QRBarcodeScannerView: View {
                 },
                 headerActions: {
                     HStack {
+                        Button {
+                            router.navigateBack()
+                        } label: {
+                            Image("back_icon")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 24, height: 24)
+                                .padding(12)
+                                .clipShape(Circle())
+                        }
+
                         Spacer()
+
                         PillCountInstructionOverlay(text: scanType.instructionText)
+
                         Spacer()
+
+                        // Keeps overlay perfectly centered
+                        Color.clear
+                            .frame(width: 48, height: 48)
                     }
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 65)
                 },
-                showBackButton: true,
+                showBackButton: false,
                 showHamburgerMenu: false,  // We have a manual entry button instead
                 title: "",  // No title for scanner, usually cleaner
-                allowKeyboardResize: true
+                allowKeyboardResize: true,
+                
             )
+            .ignoresSafeArea(.all)
             .onTapGesture {
                 UIApplication.hideKeyboard()
             }
@@ -174,6 +194,9 @@ struct QRBarcodeScannerView: View {
             isFromScanning = false
             scannedData = nil
             scanType = currentScanType
+            if scanType == .barcode {
+                handleStepVoice()
+            }
         }
         // MARK: - LIFECYCLE
         .task {
@@ -211,24 +234,9 @@ struct QRBarcodeScannerView: View {
                 scanTimeoutTask?.cancel()
             }
         }
-//        .onChange(of: showPillTargetCountPopup) { _, newValue in
-//            if newValue == false {
-//                restartFullScannerFlow()
-//            }
-//        }
         .onChange(of: scanType){_, newValue in
             handleStepVoice()
         }
-//        .onChange(of: pillScanViewModel.shouldAutoProceedToCount) {
-//            _,
-//            shouldProceed in
-//            guard shouldProceed else { return }
-//            handleSubstitute()
-//            pillScanViewModel.shouldAutoProceedToCount = false
-//        }
-//        .customPopup(isPresented: $showPillTargetCountPopup) {
-//            mannulaEntryTargetCount
-//        }
         .customPopup(
             isPresented: $pillScanViewModel.showNdcEquivalencePopup,
             dismissOnBackgroundTap: false
@@ -244,7 +252,7 @@ struct QRBarcodeScannerView: View {
         ) {
             stockCountScannedDetailsPopUp
         }
-        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup){
+        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup, dismissOnBackgroundTap: false){
             rxScanSuccessPopup
         }
         .customPopup(isPresented: $pillScanViewModel.showScannedDrugInfoPopoup,  dismissOnBackgroundTap: false){
@@ -268,6 +276,8 @@ struct QRBarcodeScannerView: View {
             .background(Color.black.opacity(0.5))
             .cornerRadius(24)
     }
+    
+  
 
     private func startScanTimeout() {
         scanTimeoutTask?.cancel()
@@ -289,40 +299,20 @@ struct QRBarcodeScannerView: View {
 
     
     private func handleStockCountAddAction() {
-        switch scannedBottleContainerStatus {
-        case .sealed:
-            Task {
-                guard let batchId = stockCountVieModel.currentBatch?.batch_id else {
-                    return
-                }
-                await pillScanViewModel.createTxnForBatchFromScan(
-                    rawValueFromBarcodeOrQr: scannedData,
-                    ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
-                    drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
-                    quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
-                    countType: .REGULAR,
-                    batchId: batchId,
-                    containerStatus: .sealed
-                )
-               stockCountVieModel.showStockCountScannedDetails  = false
+        Task {
+            guard let batchId = stockCountVieModel.currentBatch?.batch_id else {
+                return
             }
-            
-        case .opened:
-            Task {
-                guard let batchId = stockCountVieModel.currentBatch?.batch_id else {
-                    return
-                }
-                await pillScanViewModel.createTxnForBatchFromScan(
-                    rawValueFromBarcodeOrQr: scannedData,
-                    ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
-                    drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
-                    quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
-                    countType: .REGULAR,
-                    batchId: batchId,
-                    containerStatus: .opened
-                )
-               stockCountVieModel.showStockCountScannedDetails  = false
-            }
+            await pillScanViewModel.createTxnForBatchFromScan(
+                rawValueFromBarcodeOrQr: scannedData,
+                ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
+                drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
+                quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
+                countType: .REGULAR,
+                batchId: batchId,
+                containerStatus: scannedBottleContainerStatus
+            )
+           stockCountVieModel.showStockCountScannedDetails  = false
         }
     }
 }
@@ -333,8 +323,6 @@ extension QRBarcodeScannerView {
     private func handleScannedCode(_ newValue: String) {
 
         if !newValue.isEmpty {
-
-            // Prevent duplicates
             if pillScanViewModel.isDrugFound != nil {
                 return
             }
@@ -362,21 +350,20 @@ extension QRBarcodeScannerView {
                 scannedData = newValue
 
                 Task { @MainActor in
-                    guard
-                    pillScanViewModel.checkIsNdcMatch(
+                    
+                    guard pillScanViewModel.checkIsNdcMatch(
                         rawValueFromBarcodeOrQr: newValue
-                    )
-                    else {
+                    ) else {
                         return
                     }
-
+                    
                     if router.selectedPillScanningType == .FIXED
                          && pillScanViewModel.selectedTransaction?.target_count
                              == nil
                      {
                          switch currentScanType {
                          case .rx_label:
-                             if pillScanViewModel.matchesBarcodeFormat(newValue) && currentScanType == .rx_label {
+                             if pillScanViewModel.matchesBarcodeFormat(newValue) {
                                  pillScanViewModel.parseScanData(actualValue: newValue)
                              } else {
                                  pillScanViewModel.isNdcEquivalent = false
@@ -384,15 +371,15 @@ extension QRBarcodeScannerView {
                                  pillScanViewModel.showToastMessage(text: "Invalid RX Barcode")
                              }
                          case .barcode:
-                             // Normal QR / barcode scan flow
                              pillScanViewModel.showScannedDrugInfoPopoup = true
-                         
                          case .stockCount:
+                             print("Stock Count Flow")
+                             await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                              return
                          }
                          
-                         
                      } else {
+                         print("Regular Stock Count Flow")
                          await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                      }
                 }
@@ -627,7 +614,6 @@ extension QRBarcodeScannerView {
 
             onConfirm: {
                 if pillScanViewModel.isNdcEquivalent {
-//                    handleSubstitute()
                     pillScanViewModel.showNdcEquivalencePopup = false
                     pillScanViewModel.showScannedDrugInfoPopoup = true
                 } else {
@@ -661,8 +647,6 @@ extension QRBarcodeScannerView {
         }
     }
 
-
-    
     private func restartFullScannerFlow() {
         showScannedData = false
         showMannualEntryPopup = false
@@ -680,6 +664,7 @@ extension QRBarcodeScannerView {
         pillScanViewModel.ndcNumber = ""
         pillScanViewModel.drugName = ""
         pillScanViewModel.drugNameMannuallyEntered = ""
+        stockCountVieModel.reset()
     }
 }
 
@@ -827,41 +812,10 @@ extension QRBarcodeScannerView {
                        title: "Bucket",
                        value: pillScanViewModel.selectedBucket 
                    )
-//                   VStack(alignment: .leading, spacing: 8) {
-//                       Text("Select Bucket")
-//                           .font(.system(size: 14))
-//                           .foregroundColor(appColors.text)
-//
-//                       Menu {
-//                           ForEach(pillScanViewModel.bucketOptions, id: \.self) { bucket in
-//                               Button(bucket) {
-//                                   pillScanViewModel.selectedBucket = bucket
-//                               }
-//                           }
-//                       } label: {
-//                           HStack {
-//                               Text(pillScanViewModel.selectedBucket.isEmpty ? "Select Bucket" : pillScanViewModel.selectedBucket)
-//                                   .foregroundColor(appColors.text)
-//
-//                               Spacer()
-//
-//                               Image(systemName: "chevron.down")
-//                                   .foregroundColor(appColors.text.opacity(0.7))
-//                           }
-//                           .padding()
-//                           .frame(maxWidth: .infinity)
-//                           .background(appColors.secondaryBackground)
-//                           .cornerRadius(10)
-//                           .overlay(
-//                               RoundedRectangle(cornerRadius: 10)
-//                                   .stroke(appColors.primary, lineWidth: 1.5)
-//                           )
-//                       }
-//                   }
                }
            }
            .scrollIndicators(.hidden)
-           .fixedSize(horizontal: false, vertical: !isLandscape)
+           .fixedSize(horizontal: false, vertical: true)
            // MARK: Buttons
            EqualWidthHStackButtons(spacing: 30) {
                PillCountingButton(
@@ -926,7 +880,7 @@ extension QRBarcodeScannerView {
                }
            }
            .scrollIndicators(.hidden)
-           .fixedSize(horizontal: false, vertical: !isLandscape)
+           .fixedSize(horizontal: false, vertical: true)
            //  BUTTONS
            EqualWidthHStackButtons(spacing: 30) {
                PillCountingButton(
@@ -968,22 +922,20 @@ extension QRBarcodeScannerView {
     
     private var showBarcodeNotFoundPopup : some View{
         ConfirmationDialogue(
-            title: "",
+            title: "Drug Not Found",
             message: "The scanned barcode is not recognized. Please try again.",
             cancelButtonText: "Cancel",
             confirmButtonText: "Rescan",
             showSingleConfirmButton: true,
             onCancel: {
                 restartFullScannerFlow()
-                stockCountVieModel.barcodeNotFound = false
             },
             onConfirm: {
                 restartFullScannerFlow()
-                stockCountVieModel.barcodeNotFound = false
             }
         )
     }
-    
+
     private var scannedNdcDoesNotMatchPmsBatchPopoup : some View{
         ConfirmationDialogue(
             title: "Incorrect NDC",
@@ -993,20 +945,10 @@ extension QRBarcodeScannerView {
             showSingleConfirmButton: true,
             onCancel: {
                 restartFullScannerFlow()
-                stockCountVieModel.showScannedNdcDoesNotMatch = false
             },
             onConfirm: {
                 restartFullScannerFlow()
-                stockCountVieModel.showScannedNdcDoesNotMatch = false
             }
         )
     }
 }
-
-
-@discardableResult
-func DLOG(_ msg: String) -> Bool {
-    print("[Scanner] \(msg)")
-    return true
-}
-

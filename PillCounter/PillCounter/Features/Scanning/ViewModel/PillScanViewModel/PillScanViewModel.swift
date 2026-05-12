@@ -52,8 +52,6 @@ class PillScanViewModel: ObservableObject {
 
     // get the user id
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
-    let doubleCountRequired = AppStorageManager.shared.isDoubleCountRequired
-    let backCountRequired = AppStorageManager.shared.isBackCountRequired
         
 
     private var cancellables = Set<AnyCancellable>()
@@ -77,12 +75,14 @@ class PillScanViewModel: ObservableObject {
     @Published var isNdcEquivalent: Bool = false
     @Published var showNdcEquivalencePopup = false
     @Published var shouldAutoProceedToCount = false
-
-
     @Published var isNdcAdded: Bool = false
     
     // MARK: Stock Count State
     @Published var addCurrentOpenPillCount: Int = 0
+
+    // Set to true before pushing to PillScanDetailGridScreen so onDisappear
+    // in PillCountView knows not to clear transaction data mid-push.
+    var isNavigatingToDetailGrid: Bool = false
 
     //MARK: RX FLow
     @Published var showRxFlowPopup: Bool = false

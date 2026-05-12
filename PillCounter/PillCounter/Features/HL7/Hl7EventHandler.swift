@@ -1,6 +1,6 @@
-
 import ComposeApp
 
+/// Handles HL7 events and bridges them to ViewModels and controllers.
 final class Hl7EventHandler: Hl7EventListener {
 
     private let pillScanViewModel: PillScanViewModel
@@ -14,69 +14,56 @@ final class Hl7EventHandler: Hl7EventListener {
         self.userViewModel = userViewModel
     }
 
-    // MARK: - Service Events
 
-    func onServiceStarted() {
-        print("[HL7] Service started")
+    /// Called when HL7 server starts listening.
+    func onHL7ServerStarted(port: Int) {
+        Log("Server started on port \(port)")
     }
 
-    func onServiceStopped() {
-        print("[HL7] Service stopped")
+    /// Called when HL7 server stops.
+    func onHl7ServerStopped() {
+        Log("Server stopped")
     }
 
-    func onServerStarted(port: Int) {
-        print("[HL7] Server started on port \(port)")
-    }
-
-    func onServerStopped() {
-        print("[HL7] Server stopped")
-    }
-
+    /// Called when Bonjour service is registered.
     func onBonjourRegistered(serviceName: String) {
-        print("[HL7] Bonjour registered: \(serviceName)")
+        Log("Bonjour registered: \(serviceName)")
     }
 
-    // MARK: - Incoming HL7 (Server side — PMS → PillCounter)
-
-    func onMessageReceived(
-        message: CompleteHL7Message,
-        messageId: String
-    ) {
-        print("[HL7] Message received | id=\(messageId)")
-
+    /// Called when a new HL7 message is received from PMS.
+    func onMessageReceived(message: CompleteHL7Message) {
         Task { @MainActor in
+            // Process incoming HL7 message
             self.pillScanViewModel.handleReceivedMessage(
                 message: message
             ) { _ in
+                // Refresh transactions after processing
                 self.userViewModel.getAllTransactionsAndFilterByCountType()
             }
         }
-
-        HL7NotificationManager.show(
-            title: "HL7 Message Received",
-            body: "New order received from PMS"
-        )
     }
 
-    // MARK: - ACK Events
-
+    /// Called after ACK is sent to PMS.
     func onAckSent(messageId: String) {
-        print("[HL7] ACK sent | id=\(messageId)")
+        Log("ACK sent | id=\(messageId)")
     }
 
-    func onAckReceived(messageId: String?, ackCode: String) {
+    /// Called when ACK is received from PMS.
+    func onAckReceived(messageId: String?, ackCode: String, hl7:String) {
+        Log("ACK received | id=\(messageId ?? "nil") code=\(ackCode)")
+
         Task { @MainActor in
             Hl7ServiceController.shared.onAckReceived(
                 messageId: messageId,
-                ackCode: ackCode
+                ackCode: ackCode,
+                hl7: hl7
             )
         }
     }
 
-    // MARK: - Client Events
-
-    func onClientConnected() {
-        print("[HL7] Client connected")
+    /// Called when PMS client connects.
+    func onClientConnected(serviceName: String) {
+        Log("Client connected: \(serviceName)")
 
         Task { @MainActor in
             Hl7ServiceController.shared.onClientConnected()
@@ -85,22 +72,20 @@ final class Hl7EventHandler: Hl7EventListener {
 
         HL7NotificationManager.show(
             title: "PMS Connected",
-            body: "PillCounter is now connected to PMS"
+            body: "Connected to \(serviceName)"
         )
     }
 
+    /// Called when PMS client disconnects.
     func onClientDisconnected() {
-        print("[HL7] Client disconnected")
-
+        Log("Client disconnected")
         Task { @MainActor in
             userViewModel.setPmsConnected(false)
         }
-        // NOTE: No controller call needed here.
-        // Hl7ServiceManager keeps the browser alive and will auto-reconnect.
     }
 
-    // MARK: - Error
+    /// Called when any HL7-related error occurs.
     func onError(source: String, error: Error) {
-        print("[HL7] Error | \(source) | \(error.localizedDescription)")
+        Log("Error | \(source) | \(error.localizedDescription)")
     }
 }

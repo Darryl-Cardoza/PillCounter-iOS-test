@@ -36,7 +36,7 @@ struct EmptyStateView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 60, height: 60)
-                    .foregroundColor(appColors.primary)
+                    .foregroundColor(appColors.secondary)
                     .padding(20)
             }
 

@@ -63,11 +63,61 @@ extension PillScanViewModel {
         }
 
         // MARK: 5️⃣ Create / Get Drug
-        let drugIdToUse: Int64 = {
-            if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
-                return existingDrug.drug_id
-            } else {
+        var drugIdToUse: Int64
+
+        // MARK: Check by NDC
+        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+
+            if (existingDrug.gtin ?? "").isEmpty, !gtin.isEmpty {
+                existingDrug.gtin = gtin
+                CoreDataManager.shared.save(context: pillDataLocalStorage.mainThreadContext)
+                Log("Updated GTIN for existing drug → \(ndc)")
+            }
+
+            drugIdToUse = existingDrug.drug_id
+        }
+
+        // MARK: Check by GTIN
+        else if !gtin.isEmpty,
+                let existingByGtin = pillDataLocalStorage.getPillByGtin(by: gtin) {
+
+            drugIdToUse = existingByGtin.drug_id
+        }
+
+        // MARK: API fallback
+        else {
+            let request = NdcValidationRequest(targetNdc: ndc, scannedNdc: ndc)
+
+            do {
+                let response = try await controlledRepo.getControlledDrugInfo(
+                    ndcValidationRequest: request
+                )
+
+                if let lookup = response.data?.scannedNdc?.lookupName,
+                   !lookup.isEmpty {
+
+                    let newId = generateUniqueDrugId()
+
+                    pillDataLocalStorage.saveManualPill(
+                        ndc: response.data?.scannedNdc?.packageNdc ?? ndc,
+                        gtin: gtin,
+                        drugId: newId,
+                        drugName: lookup,
+                        drugType: response.data?.scannedNdc?.deaSchedule,
+                        packageQty: response.data?.scannedNdc?.safeQuantity ?? quantity
+                    )
+
+                    drugIdToUse = newId
+                } else {
+                    throw NSError(domain: "HL7", code: -1)
+                }
+
+            } catch {
+
+                Log("API failed → fallback create")
+
                 let newId = generateUniqueDrugId()
+
                 pillDataLocalStorage.saveManualPill(
                     ndc: ndc,
                     gtin: gtin,
@@ -75,9 +125,10 @@ extension PillScanViewModel {
                     drugName: drugName,
                     packageQty: quantity
                 )
-                return newId
+
+                drugIdToUse = newId
             }
-        }()
+        }
 
         // MARK: 6️⃣ Create Transaction
         await createTransaction(
@@ -111,7 +162,6 @@ extension PillScanViewModel {
         // MARK: 9️⃣ Update current txn
         if let updatedTxn = pillDataLocalStorage
             .fetchPillCountTransactionByTransactionId(txnId: latestTxn.txn_id) {
-
             self.currentTransaction = updatedTxn
 
             print("New txn set:", updatedTxn.txn_id)
@@ -155,13 +205,6 @@ extension PillScanViewModel {
         switch containerStatus {
             
         case .sealed:
-            // Add full bottle
-//            updateCounts(
-//                txnId: txn.txn_id,
-//                bottleQty: currentBottle + 1,
-//                looseQty: currentLoose
-//            )
-            
             pillDataLocalStorage.updateCounts(
                 txnId: txn.txn_id,
                 bottleQty: Int32(currentBottle + 1),
@@ -172,12 +215,6 @@ extension PillScanViewModel {
 
             
         case .opened:
-            // Add loose pills
-//            updateCounts(
-//                txnId: txn.txn_id,
-//                bottleQty: currentBottle,
-//                looseQty: currentLoose + scannedQty
-//            )
             pillDataLocalStorage.updateCounts(
                 txnId: txn.txn_id,
                 bottleQty: Int32(currentBottle),
@@ -186,125 +223,7 @@ extension PillScanViewModel {
             handlePostScanUI(containerStatus: containerStatus)
         }
     }
-    
-//    @MainActor
-//    func createBatchAndTxnsFromHL7(
-//        inventoryItems: [InventoryItemData],
-//        countType: CountType,
-//        rxNo: String?,
-//        bucketId: String?
-//    ) async {
-//
-//        guard !inventoryItems.isEmpty else { return }
-//
-//        // MARK: Pre-resolve all drugs BEFORE creating batch
-//        struct ResolvedItem {
-//            let ndc: String
-//            let drugId: Int64
-//            let resolvedName: String
-//            let lot: String
-//            let expiry: String
-//            let targetCount: Int32
-//        }
-//
-//        var resolvedItems: [ResolvedItem] = []
-//
-//        for (_, _inventory) in inventoryItems.enumerated() {
-//
-//            let ndc         = _inventory.substanceStatusCode ?? ""
-//            let lot         = _inventory.lotNumber ?? ""
-//            let expiry      = _inventory.expirationDateTime ?? ""
-//            let targetCount = Int32(_inventory.currentQuantity ?? "0") ?? 0
-//
-//            guard !ndc.isEmpty else {
-//                continue
-//            }
-//
-//            // MARK: Local DB check
-//            if let existing = pillDataLocalStorage.getPillByNdc(by: ndc) {
-//                guard let localName = existing.drug_name, !localName.isEmpty else {
-//                    continue
-//                }
-//                resolvedItems.append(ResolvedItem(
-//                    ndc: ndc,
-//                    drugId: existing.drug_id,
-//                    resolvedName: localName,   // ← local only, no rawName fallback
-//                    lot: lot,
-//                    expiry: expiry,
-//                    targetCount: targetCount
-//                ))
-//                continue
-//            }
-//
-//            // MARK: API check
-//            let request = NdcValidationRequest(targetNdc: ndc, scannedNdc: ndc)
-//
-//            do {
-//                let response = try await controlledRepo.getControlledDrugInfo(
-//                    ndcValidationRequest: request
-//                )
-//
-//                guard let lookup = response.data?.scannedNdc?.lookupName,
-//                      !lookup.isEmpty else {
-//                    continue
-//                }
-//
-//                let newId = generateUniqueDrugId()
-//                pillDataLocalStorage.saveManualPill(
-//                    ndc: response.data?.scannedNdc?.packageNdc ?? "",
-//                    drugId: newId,
-//                    drugName: lookup,
-//                    drugType: response.data?.scannedNdc?.deaSchedule,
-//                    packageQty: response.data?.scannedNdc?.safeQuantity ?? 0
-//                )
-//
-//                resolvedItems.append(
-//                ResolvedItem(
-//                    ndc: response.data?.scannedNdc?.packageNdc ?? "",
-//                    drugId: newId,
-//                    resolvedName: lookup,
-//                    lot: lot,
-//                    expiry: expiry,
-//                    targetCount: 0
-//                ))
-//
-//            } catch {
-//                continue
-//            }
-//        }
-//
-//        // MARK: Guard — only proceed if at least one item resolved
-//        guard !resolvedItems.isEmpty else {
-//            return
-//        }
-//
-//        // MARK: Create ONE Batch (only now, after validation)
-//        guard let batch = pillDataLocalStorage.createBatch(
-//            bucketId: bucketId ?? "",
-//            isFromPms: true
-//        ) else {
-//            return
-//        }
-//
-//        let batchId = batch.batch_id
-//
-//        // MARK: Create transactions only for resolved items
-//        for (_, item) in resolvedItems.enumerated() {
-//            await createTransaction(
-//                drugId: item.drugId,
-//                countType: countType,
-//                isComingFromPms: true,
-//                targetCount: item.targetCount,
-//                drugName: item.resolvedName,
-//                batchId: batchId,
-//                expirationDate: item.expiry,
-//                lotNumber: item.lot,
-//                rxNo: rxNo,
-//                bucketId: bucketId
-//            )
-//        }
-//    }
-//
+
     
     @MainActor
     func createBatchAndTxnsFromHL7Request(
@@ -334,7 +253,7 @@ extension PillScanViewModel {
 
             let ndc = med.drugCode 
             let lot = ""          // RXE usually doesn't send lot
-            let expiry = ""       // RXE usually doesn't send expiry
+            let expiry = ""       // RXE usually doesn't s expiry
             let targetCount: Int32 = 0 // request → no quantity
 
             guard !ndc.isEmpty else { continue }
@@ -402,7 +321,6 @@ extension PillScanViewModel {
         // MARK: Create Batch
         guard let batch = pillDataLocalStorage.createBatch(
             bucketId: bucketId ?? "",
-            isFromPms: true,
             requestId: requestId
         ) else { return }
 

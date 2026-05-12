@@ -12,7 +12,6 @@ import Combine
 final class Hl7ServiceManager {
 
     // MARK: - Configuration
-
     private let port: UInt16
     private let serviceName: String
     private let serviceType: String
@@ -47,8 +46,10 @@ final class Hl7ServiceManager {
     /// Prevents duplicate connection attempts while a connection is already
     /// being established or is ready.
     private var isConnectingOrConnected = false
-
     private var isServerRunning = false
+    
+    private var currentInterface: NWInterface?
+    private var currentServiceName: String?
 
     // MARK: - Events
 
@@ -79,7 +80,6 @@ final class Hl7ServiceManager {
         stopBrowsing()
         disconnectClientInternal(notifyListener: true)
         stopServerIfRunning()
-        listener?.onServiceStopped()
     }
 
     // MARK: - Client Disconnect (external call — e.g. from controller)
@@ -121,7 +121,6 @@ final class Hl7ServiceManager {
         imageServer?.stop()
         imageServer = nil
         isServerRunning = false
-        listener?.onServerStopped()
         print("[HL7][SERVER] Stopped")
     }
 
@@ -132,10 +131,21 @@ final class Hl7ServiceManager {
             guard let self else { return }
 
             if path.status == .satisfied && path.usesInterfaceType(.wifi) {
-                print("[HL7][NETWORK] WiFi available — starting browser")
-                self.startBrowsing()
+                // Detect interface change (AP switch, e.g. home → office WiFi)
+                let activeInterface = path.availableInterfaces.first(where: { $0.type == .wifi })
+
+                if activeInterface?.name != self.currentInterface?.name {
+                    // Interface changed — restart browser so Bonjour re-resolves on new network
+                    print("[HL7][NETWORK] WiFi interface changed → restarting browser")
+                    self.currentInterface = activeInterface
+                    self.stopBrowsing()
+                    self.disconnectClientInternal(notifyListener: true)
+                }
+
+                self.startBrowsing()   // guard inside prevents duplicate starts
             } else {
                 print("[HL7][NETWORK] WiFi lost — stopping everything")
+                self.currentInterface = nil
                 self.stopBrowsing()
                 self.disconnectClientInternal(notifyListener: true)
             }
@@ -163,24 +173,37 @@ final class Hl7ServiceManager {
             using: parameters
         )
 
-        b.stateUpdateHandler = { state in
+        b.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
             print("[HL7][BROWSER] State: \(state)")
+
+            // NEW: if the browser itself fails, restart it after a short delay
+            if case .failed(let error) = state {
+                print("[HL7][BROWSER] Failed: \(error) — restarting in 3s")
+                self.browser?.cancel()
+                self.browser = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    // Only restart if we're still on WiFi
+                    if self.monitor.currentPath.status == .satisfied &&
+                       self.monitor.currentPath.usesInterfaceType(.wifi) {
+                        self.startBrowsing()
+                    }
+                }
+            }
         }
 
         b.browseResultsChangedHandler = { [weak self] results, _ in
             guard let self else { return }
             print("[HL7][BROWSER] Results updated count=\(results.count)")
 
-            // If already connected or in-progress, do nothing
             guard !self.isConnectingOrConnected else {
                 print("[HL7][BROWSER] Already connected/connecting — skipping")
                 return
             }
 
-            // PMS not visible yet — wait for next callback
             guard let result = results.first else {
                 print("[HL7][BROWSER] PMS not visible yet — waiting")
-                return
+                return  // browser stays alive — will fire again when PMS appears
             }
 
             self.connectToResult(result)
@@ -201,6 +224,7 @@ final class Hl7ServiceManager {
     // MARK: - Connect to Discovered PMS
 
     private func connectToResult(_ result: NWBrowser.Result) {
+        
         // Double-check guard — browseResultsChangedHandler can fire rapidly
         guard !isConnectingOrConnected else {
             print("[HL7][CLIENT] Connect guard hit — already in progress")
@@ -208,10 +232,9 @@ final class Hl7ServiceManager {
         }
 
         guard case let .service(name, _, _, _) = result.endpoint else {
-            print("[HL7][CLIENT] Unexpected endpoint type")
             return
         }
-
+        self.currentServiceName = name
         print("[HL7][CLIENT] Connecting to PMS service: \(name)")
         isConnectingOrConnected = true
 
@@ -251,7 +274,7 @@ final class Hl7ServiceManager {
 
         case .ready:
             isClientConnected = true
-            listener?.onClientConnected()
+            listener?.onClientConnected(serviceName: currentServiceName ?? "")
             startHeartbeat()
             startReceiving()
             startServerIfNeeded()
@@ -297,8 +320,7 @@ final class Hl7ServiceManager {
                     guard let self else { return }
                     let parsed = self.parser.parse(hl7Message: raw)
                     self.listener?.onMessageReceived(
-                        message: parsed,
-                        messageId: messageId
+                        message: parsed
                     )
                 },
                 onAckSent: { [weak self] messageId in
@@ -311,7 +333,6 @@ final class Hl7ServiceManager {
 
             isServerRunning = true
 
-            listener?.onServerStarted(port: Int(port))
             listener?.onBonjourRegistered(serviceName: serviceName)
 
             print("[HL7][SERVER] Started on port \(port)")
@@ -456,15 +477,8 @@ final class Hl7ServiceManager {
 
         listener?.onAckReceived(
             messageId: messageId?.isEmpty == true ? nil : messageId,
-            ackCode: ackCode
+            ackCode: ackCode,
+            hl7: hl7
         )
-    }
-}
-
-// MARK: - Array Safe Subscript
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

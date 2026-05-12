@@ -8,6 +8,18 @@
 import SwiftUI
 import UIKit
 
+// MARK: - ShareSheet (SwiftUI wrapper for UIActivityViewController)
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let vc = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
 final class PDFShareService: ObservableObject {
 
     @Published var isLoading: Bool = false

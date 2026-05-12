@@ -11,8 +11,7 @@ protocol ListItemIdentifiable {
     var id: Int64 { get }
 }
 
-struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
-
+struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.ID == Int64 {
     // data
     let items: [Item]
     let title: String
@@ -31,7 +30,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
 
     let menuOptions: [Option]
     let optionLabel: (Option) -> String
-
+    let filterView: (() -> any View)?
     // environment variables
     @EnvironmentObject private var appColors: AppColors
 
@@ -47,9 +46,9 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
     @State private var isEditing: Bool = false
     @State private var selectedIds: Set<Int64> = []
 
-    // other
     @State private var selectedItem: Item?
-    @State private var showMenu: Bool = false
+    
+
 
     // MARK: BODY
     var body: some View {
@@ -58,23 +57,63 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View {
                 topRatio: 1.0,
                 topContent: { contentView },
                 bottomContent: { EmptyView() },
-                headerActions: {
-                    header
-                },
-                showBackButton: !isSearching && !isEditing,
+                headerActions: { header },
+                showBackButton: !isSearching,
                 showHamburgerMenu: false,
-                title: (isSearching || isEditing) ? "" : title,
-                headerActionsBackground: appColors.primaryBackground
+                title: isSearching
+                    ? ""
+                    : (isEditing ? "DELETE BATCHES" : title),
+                headerActionsBackground: appColors.primaryBackground,
+                backgroundColor: appColors.primaryBackground
             )
-            .customPopup(isPresented: $showMenu) {
-                MenuOption(
-                    options: menuOptions,
-                    selectedOption: .constant(menuOptions.first!),
-                    isPresented: $showMenu,
-                    label: optionLabel
-                ) { option in
-                    onSelectOption(option, selectedItem)
+            
+            if isEditing {
+                VStack {
+                    Spacer()
+
+                    EqualWidthHStackButtons(spacing: 16) {
+                        PillCountingButton(
+                            title: "CANCEL",
+                            textColor: appColors.primary,
+                            backgroundColor: .clear,
+                            borderColor: appColors.primary,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isEditing = false
+                                    selectedIds.removeAll()
+                                }
+                            }
+                        )
+
+                        PillCountingButton(
+                            title: "DELETE",
+                            textColor: selectedIds.isEmpty ? .white.opacity(0.6) : .white,
+                            backgroundColor: selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary,
+                            borderColor: .clear,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                onDelete(selectedIds)
+                            }
+                        )
+                        .disabled(selectedIds.isEmpty)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(appColors.primaryBackground)
+                    .padding(.bottom, 20)
                 }
+                .ignoresSafeArea(edges: .bottom)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeOut(duration: 0.3), value: isEditing)
             }
         }
         .onChange(of: searchText) { _, new in
@@ -92,37 +131,44 @@ extension GenericListScreen {
 
     fileprivate var contentView: some View {
         VStack {
-            if isEditing {
-                HStack {
-                    Text("\(selectedIds.count) Selected")
-                    Spacer()
-                    Text("Tap item(s) to delete.")
-                        .foregroundStyle(appColors.secondary)
-                }
-                .padding(.horizontal)
+            if let filterView = filterView {
+                AnyView(filterView())
+                    .padding(.horizontal)
+                    .padding(.top, 8)
             }
-
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(filteredItems) { item in
                         row(item)
                     }
-
                     if filteredItems.isEmpty {
-                        EmptyStateView(
-                            imageName: nil,
-                            systemImageName: "magnifyingglass",
-                            title: "No results found",
-                            subtitle: nil
-                        )
-                        .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
+                        if debouncedSearchText.isEmpty {
+                            // No data at all
+                            EmptyStateView(
+                                imageName: nil,
+                                systemImageName: nil,
+                                title:  "No pending counts available",
+                                subtitle: nil
+                            )
+                            .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
+                        } else {
+                            // Search active but no match
+                            EmptyStateView(
+                                imageName: nil,
+                                systemImageName: "magnifyingglass",
+                                title: "No results found",
+                                subtitle: nil
+                            )
+                            .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
+                        }
                     }
                 }
                 .padding(.horizontal)
+                .padding(.bottom, isEditing ? 100 : 20)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 90)
+        .padding(.top, 65)
         .background(appColors.primaryBackground)
 
     }
@@ -144,48 +190,44 @@ extension GenericListScreen {
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isEditing)
             .onTapGesture {
                 if isEditing {
-                    toggle(item.id as! Int64)
+                    toggle(item.id)
                 } else {
                     onRowTap(item)
                 }
-            }
-            .onLongPressGesture {
-                selectedItem = item
-                showMenu = true
-            }
+         }
     }
 }
 
 extension GenericListScreen {
-
+    private var isAllSelected: Bool {
+        let allIds = Set(items.map { $0.id })
+        return !allIds.isEmpty && selectedIds == allIds
+    }
+    
     fileprivate var header: some View {
         Group {
             if isEditing {
-                HStack {
-                    Button("Select All") {
-                        toggleAll()
-                    }
-                    .foregroundColor(appColors.primary)
-
-                    Spacer()
-
-                    Button("Delete") {
-                        onDelete(selectedIds)
-                    }
-                    .foregroundColor(appColors.primary)
-
-                    Button("Cancel") {
-                        withAnimation(.spring()) {
-                            isEditing = false
-                            selectedIds.removeAll()
-                        }
-                    }
-                    .foregroundColor(appColors.primary)
+                HStack(spacing: 10) {
+                    // ICON (selected / unselected)
+                    Image(isAllSelected ? "icon_unselected" : "icon_selected")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .foregroundStyle(appColors.primary)
+                    
+                    // TEXT (dynamic)
+                    Text(isAllSelected ? "Unselect All" : "Select All")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(appColors.primary)
                 }
-                .padding(.horizontal, 10)
+                .contentShape(Rectangle()) // makes full row tappable
+                .onTapGesture {
+                    toggleAll()
+                }
+                .padding(.trailing, 16)
                 .transition(.opacity)
-
-            } else if isSearching {
+            }else if isSearching {
                 UnderlinedSearchBar(
                     text: $searchText,
                     isFocused: $isSearchFieldFocused,
@@ -202,26 +244,27 @@ extension GenericListScreen {
 
             } else {
                 HStack(spacing: 16) {
-                    
-                    Button {
-                        withAnimation(.spring()) {
-                            isSearching = true
-                            isSearchFieldFocused = true
+                    if !items.isEmpty {
+                        Button {
+                            withAnimation(.spring()) {
+                                isSearching = true
+                                isSearchFieldFocused = true
+                            }
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 20))
+                                .foregroundColor(appColors.primary)
                         }
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 20))
-                            .foregroundColor(appColors.primary)
-                    }
 
-                    Button {
-                        withAnimation(.spring()) {
-                            isEditing = true
+                        Button {
+                            withAnimation(.spring()) {
+                                isEditing = true
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 20))
+                                .foregroundColor(appColors.primary)
                         }
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 20))
-                            .foregroundColor(appColors.primary)
                     }
                 }
                 .padding(.trailing, 16)
@@ -258,7 +301,7 @@ extension GenericListScreen {
     }
 
     fileprivate func toggleAll() {
-        let allIds = Set(items.map { $0.id as! Int64 })
+        let allIds = Set(items.map { $0.id })
 
         if selectedIds == allIds {
             selectedIds.removeAll()

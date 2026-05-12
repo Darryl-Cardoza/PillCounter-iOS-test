@@ -39,7 +39,6 @@ struct PillCountingStepResolver {
         
 
         // -------- CONTROLLED FLOW --------
-        let doubleCountRequired = AppStorageManager.shared.isDoubleCountRequired
         let backCountRequired = AppStorageManager.shared.isBackCountRequired
         let selectedSchedules = AppStorageManager.shared.selectedSchedules
 
@@ -51,8 +50,7 @@ struct PillCountingStepResolver {
         ]
 
 
-        if doubleCountRequired,
-           let drugSchedule,
+        if let drugSchedule,
            selectedSchedules.contains(drugSchedule) {
            steps.append(.targetReverification)
         }

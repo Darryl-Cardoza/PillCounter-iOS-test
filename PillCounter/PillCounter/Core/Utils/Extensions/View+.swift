@@ -66,3 +66,22 @@ extension UIImage {
         return normalizedImage ?? self
     }
 }
+
+extension View {
+    func selectableEffect(
+        isSelected: Bool,
+        highlightColor: Color,
+        scale: CGFloat = 0.98,
+        shadowRadius: CGFloat = 6
+    ) -> some View {
+        self
+            .shadow(
+                color: isSelected ? highlightColor.opacity(0.5) : .clear,
+                radius: shadowRadius,
+                x: 0,
+                y: 0
+            )
+            .scaleEffect(isSelected ? scale : 1)
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}

@@ -34,10 +34,17 @@
 	</dict>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_pillcountingtest._tcp</string>
-		<string>_pillcounting._tcp</string>
-		<string>_pillcounting._tcp</string>
+		<string>_ritepmsserver5._tcp</string>
+		<string>_ritepmsserver4._tcp</string>
+		<string>_ritepmsserver3._tcp</string>
+		<string>_ritepmsserver1._tcp</string>
+		<string>_ritepmsserver2._tcp</string>
 		<string>_ritepmsserver._tcp</string>
+		<string>_pillcounting4._tcp</string>
+		<string>_pillcounting3._tcp</string>
+		<string>_pillcounting2._tcp</string>
+		<string>_pillcounting1._tcp</string>
+		<string>_pillcounting._tcp</string>
 	</array>
 </dict>
 </plist>

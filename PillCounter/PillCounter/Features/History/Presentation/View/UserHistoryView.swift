@@ -1,0 +1,478 @@
+//
+//  UserHistoryView.swift
+//  PillCounter
+//
+//  Features/History/Presentation/View/UserHistoryView.swift
+//
+
+import SwiftUI
+import Foundation
+
+struct UserHistoryView: View {
+    
+    @Environment(\.isLandscape) private var isLandscape
+    @EnvironmentObject private var appColors: AppColors
+    @EnvironmentObject private var router: Router
+    @EnvironmentObject private var historyViewModel: HistoryViewModel
+    
+    @EnvironmentObject private var toastManager: ToastManager
+
+    // MARK: - Date State
+    @State private var showDeleteConfirmation: Bool = false
+
+    // MARK: - Search State
+    @State private var isSearching: Bool = false
+    @State private var searchText: String = ""
+    @FocusState private var isSearchFieldFocused: Bool
+
+    // MARK: - PDF
+    @StateObject private var pdfService = PDFShareService.shared
+
+    // MARK: - Filter State
+    let filterType: HistoryFilterType
+    let stautsType: HistoryStatusFilter
+    @State private var activeTypeFilter: HistoryFilterType = .fixed
+    @State private var activeStatusFilter: HistoryStatusFilter = .all
+    
+    @State private var listVersion: Int = 0
+    @State private var hasAppeared: Bool = false
+    @State private var appearedTxnIds: Set<String> = []
+    @State private var appearedBatchIds: Set<Int64> = []
+
+    // MARK: - Body
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                BaseView(
+                    topRatio: computedTopRatio,
+                    topContent: {
+                        topContentView
+                    },
+                    bottomContent: {
+                        bottomContentView
+                    },
+                    headerActions: {
+                        headerActionsView
+                    },
+                    showBackButton: !isSearching,
+                    showHamburgerMenu: false,
+                    title: isSearching ? "" : NSLocalizedString("HISTORY", comment: "")
+                )
+                
+                if pdfService.isLoading {
+                    ZStack {
+                        Color.black.opacity(0.5).ignoresSafeArea()
+                        PillCountingLoader()
+                    }
+                }
+            }
+            .onAppear {
+                activeTypeFilter = filterType
+                activeStatusFilter = stautsType
+                fetchAll()
+                DispatchQueue.main.async {
+                    hasAppeared = true
+                }
+            }
+            .onChange(of: historyViewModel.selectedStartDate) { _, _ in fetchAll() }
+            .onChange(of: historyViewModel.selectedEndDate)   { _, _ in fetchAll() }
+            .onChange(of: activeTypeFilter) { _, _ in
+                if hasAppeared {
+                    activeStatusFilter = .all
+                }
+                searchText = ""
+                fetchAll()
+            }
+            .onChange(of: activeStatusFilter) { _, _ in
+                appearedTxnIds.removeAll()
+                appearedBatchIds.removeAll()
+                historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+                listVersion += 1
+            }
+            .onChange(of: searchText) { _, _ in
+                appearedTxnIds.removeAll()
+                appearedBatchIds.removeAll()
+                historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+                listVersion += 1
+            }
+            .customPopup(isPresented: $showDeleteConfirmation) {
+                deleteConfirmationPopUp
+            }
+        }
+    }
+
+    // MARK: - Top Ratio
+    // Portrait: 0.4 normal / 0.2 searching (top-bottom split by height)
+    // Landscape: 0.4 normal (left-right split by width) / 1.0 searching (full-width left panel)
+    private var computedTopRatio: CGFloat {
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        if isLandscape && isSearching { return  isIPad ? 1.0 : 2.0 }
+        if isSearching { return isLandscape ? 0 : 0.08 }
+        // iPad needs less ratio for calendar since screen is taller/wider
+        if isLandscape {
+            return isIPad ? 0.35 : 0.4
+        }
+        return isIPad ? 0.35 : 0.4
+    }
+
+
+    // MARK: - Top Content
+    @ViewBuilder
+    private var topContentView: some View {
+        if isLandscape && isSearching {
+            // Full-width panel: calendar hidden, list fills content below header
+            landscapeSearchContent
+        } else if !isSearching {
+            userHistoryContent()
+        }
+        // Portrait + searching: empty top area (list is in bottomContent)
+    }
+
+    // MARK: - Bottom Content
+    @ViewBuilder
+    private var bottomContentView: some View {
+        if isLandscape && isSearching {
+            EmptyView()
+        } else {
+            userHistoryTransactionsList
+        }
+    }
+
+    // MARK: - Header Actions (portrait + landscape)
+    @ViewBuilder
+    private var headerActionsView: some View {
+        if isSearching {
+            UnderlinedSearchBar(
+                text: $searchText,
+                isFocused: $isSearchFieldFocused,
+                appColors: appColors,
+                onExitSearch: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isSearching = false
+                        searchText = ""
+                        isSearchFieldFocused = false
+                    }
+                }
+            )
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        } else if !isLandscape {
+            // Portrait only — in landscape the search icon lives in the calendar panel
+            HStack {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isSearching = true
+                        isSearchFieldFocused = true
+                    }
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 20))
+                        .foregroundStyle(appColors.primary)
+                }
+            }
+            .padding(.trailing, 16)
+            .padding(.bottom, 5)
+            .transition(.opacity)
+        }
+    }
+
+    // MARK: - Landscape Search Content
+    // topRatio: 1.0 so this is the full screen; top-pad to clear the header overlay.
+    private var landscapeSearchContent: some View {
+        userHistoryTransactionsList
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(appColors.secondaryBackground)
+            .padding(.top, 40)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearching)
+    }
+
+    // MARK: - Fetch All
+    private func fetchAll() {
+        guard let start = historyViewModel.selectedStartDate else {
+            historyViewModel.filteredTransactionsOfUserByDate = []
+            historyViewModel.filteredBatchesOfUserByDate = []
+            return
+        }
+
+        let end = historyViewModel.selectedEndDate ?? start
+
+        Task {
+            await historyViewModel.getTransactionsByDate(
+                startDate: start,
+                endDate: end,
+                filter: activeTypeFilter
+            )
+            await historyViewModel.getBatchesByDate(startDate: start, endDate: end)
+            historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+            appearedTxnIds.removeAll()
+            appearedBatchIds.removeAll()
+            listVersion += 1
+        }
+    }
+
+    
+    // MARK: - Delete Confirmation Popup
+    private var deleteConfirmationPopUp: some View {
+        ConfirmationDialogue(
+            title: "Confirm Delete",
+            message: "Are you sure you want to delete the records for the selected date? This action cannot be undone.",
+            cancelButtonText: "NO",
+            confirmButtonText: "YES",
+            onCancel: {
+                showDeleteConfirmation = false
+            },
+            onConfirm: {
+                Task {
+                    guard let start = historyViewModel.selectedStartDate else { return }
+                    await historyViewModel.softDeleteTransactionsForSelectedDate(
+                        startDate: start,
+                        endDate: historyViewModel.selectedEndDate ?? start,
+                        filter: activeTypeFilter,
+                        status: activeStatusFilter,
+                        search: searchText
+                    )
+                    showDeleteConfirmation = false
+                }
+            }
+        )
+        .frame(width: 275)
+    }
+
+    // MARK: - Transaction List (used as bottomContent in normal mode, and inside
+    private var userHistoryTransactionsList: some View {
+        VStack(spacing: 8) {
+            if !isSearching{
+                VStack(spacing: 15) {
+                    HStack {
+                        txnTypeFilter
+                        let isEmpty = activeTypeFilter == .fixed
+                            ? historyViewModel.transactionRows.isEmpty
+                            : historyViewModel.batchRows.isEmpty
+
+                        if !isEmpty {
+                            Button {
+                                let isEmpty: Bool
+                                
+                                if activeTypeFilter == .fixed {
+                                    isEmpty = historyViewModel.transactionRows.isEmpty
+                                } else {
+                                    isEmpty = historyViewModel.batchRows.isEmpty
+                                }
+                                
+                                if isEmpty {
+                                    toastManager.show(message: "No items to delete")
+                                } else {
+                                    showDeleteConfirmation = true
+                                }
+                                
+                            } label: {
+                                Image("delete")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 24, height: 24)
+                                    .overlay(appColors.primary)
+                                    .mask(Image("delete").resizable().scaledToFit())
+                            }
+                        }
+                    }
+                    statusFilterChips
+                }
+                
+                Spacer().frame(height: 10)
+            }
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading) {
+                    if activeTypeFilter == .fixed {
+                        transactionContent
+                    } else {
+                        batchContent
+                    }
+                }
+                .padding(.bottom, 20)
+            }
+            .id(listVersion)
+            .animation(nil, value: activeTypeFilter)
+            .animation(nil, value: historyViewModel.transactionRows.count)
+            .animation(nil, value: historyViewModel.batchRows.count)
+
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(appColors.primaryBackground)
+        .cornerRadius(24)
+    }
+
+    // MARK: - Transaction Content
+    @ViewBuilder
+    private var transactionContent: some View {
+        if historyViewModel.filteredTransactionsOfUserByDate.isEmpty {
+            ContentUnavailableView(
+                "No History",
+                systemImage: "clock.arrow.circlepath",
+                description: Text("No transactions found for this period.")
+            )
+            .padding(.top, 40)
+        } else if historyViewModel.transactionRows.isEmpty {
+            ContentUnavailableView(
+                "No Results",
+                systemImage: "magnifyingglass",
+                description: Text("No transactions match your search.")
+            )
+            .padding(.top, 40)
+        } else {
+            ForEach(Array(historyViewModel.transactionRows.enumerated()), id: \.element.id) { index, row in
+                let didAppear = appearedTxnIds.contains(row.id)
+
+                DispenseItemRowView(data: row, appColors: appColors)
+                    .onTapGesture {
+                        historyViewModel.selectedTransactionId = Int64(row.id) ?? 0
+                        router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
+                    }
+                    .opacity(didAppear ? 1 : 0)
+                    .offset(y: didAppear ? 0 : 20)
+                    .onAppear {
+                        guard !appearedTxnIds.contains(row.id) else { return }
+                        withAnimation(
+                            .spring(response: 0.42, dampingFraction: 0.78)
+                                .delay(Double(index) * 0.06)
+                        ) {
+                            appearedTxnIds.insert(row.id)
+                        }
+                    }
+            }
+        }
+    }
+
+    // MARK: - Batch Content
+    @ViewBuilder
+    private var batchContent: some View {
+        if historyViewModel.filteredBatchesOfUserByDate.isEmpty {
+            ContentUnavailableView(
+                "No History",
+                systemImage: "clock.arrow.circlepath",
+                description: Text("No Batches found for this period.")
+            )
+            .padding(.top, 40)
+        } else if historyViewModel.batchRows.isEmpty {
+            ContentUnavailableView(
+                "No Results",
+                systemImage: "magnifyingglass",
+                description: Text("No Batches match your search.")
+            )
+            .padding(.top, 40)
+        } else {
+            ForEach(Array(historyViewModel.batchRows.enumerated()), id: \.element.batchId) { index, row in
+                let hasAppeared = appearedBatchIds.contains(row.batchId)
+                StockItemRowView(data: row, appColors: appColors)
+                    .onTapGesture {
+                        historyViewModel.selectedBatchId = row.batchId
+                        router.navigate(to: .authentication(.user(.userSettings(.HistoryBatchDetail))))
+                    }
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 20)
+                    .onAppear {
+                        guard !appearedBatchIds.contains(row.batchId) else { return }
+                        withAnimation(
+                            .spring(response: 0.42, dampingFraction: 0.78)
+                                .delay(Double(index) * 0.06)
+                        ) {
+                            appearedBatchIds.insert(row.batchId)
+                        }
+                    }
+            }
+        }
+    }
+
+    // MARK: - Calendar
+    private func userHistoryContent() -> some View {
+        ZStack(alignment: .topTrailing) {
+            PillCountingCalendar(
+                selectedColor: appColors.primary,
+                textColor: appColors.text,
+                backgroundColor: .clear,
+                startDate: $historyViewModel.selectedStartDate,
+                endDate: $historyViewModel.selectedEndDate,
+                monthsToShow: $historyViewModel.calendarMonthsToShow
+            )
+            .padding(.top,  50)
+            .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            if isLandscape {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isSearching = true
+                        isSearchFieldFocused = true
+                    }
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 20))
+                        .foregroundStyle(appColors.primary)
+                }
+                .padding(.top, 10)
+                .padding(.trailing, 16)
+            }
+        }
+        .background(appColors.secondaryBackground)
+    }
+
+    // MARK: - Status Filter Chips
+    private var statusFilterChips: some View {
+        let counts = historyViewModel.getStatusCounts(for: activeTypeFilter)
+
+        return HStack(spacing: 8) {
+            FilterChip(
+                label: "All",
+                count: counts.all,
+                value: HistoryStatusFilter.all,
+                selectedValue: activeStatusFilter,
+                appColors: appColors
+            ) { activeStatusFilter = $0 }
+
+            FilterChip(
+                label: "Completed",
+                count: counts.completed,
+                value: .completed,
+                selectedValue: activeStatusFilter,
+                appColors: appColors
+            ) { activeStatusFilter = $0 }
+
+            FilterChip(
+                label: "Pending",
+                count: counts.pending,
+                value: .pending,
+                selectedValue: activeStatusFilter,
+                appColors: appColors
+            ) { activeStatusFilter = $0 }
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Type Filter Chips
+    private var txnTypeFilter: some View {
+        let dispenseCount = historyViewModel.filteredTransactionsOfUserByDate.count
+        let stockCount    = historyViewModel.filteredBatchesOfUserByDate.count
+
+        return HStack(spacing: 8) {
+            FilterChip(
+                label: "Dispensed",
+                count: dispenseCount,
+                value: HistoryFilterType.fixed,
+                selectedValue: activeTypeFilter,
+                appColors: appColors
+            ) { activeTypeFilter = $0 }
+
+            FilterChip(
+                label: "Stock Count",
+                count: stockCount,
+                value: .regular,
+                selectedValue: activeTypeFilter,
+                appColors: appColors
+            ) { activeTypeFilter = $0 }
+
+            Spacer()
+        }
+    }
+}

@@ -30,7 +30,6 @@ final class Letterbox {
         let w = frame.extent.width
         let h = frame.extent.height
 
-     
 
         // SCALE
         let scale = min(
@@ -50,7 +49,6 @@ final class Letterbox {
             padX: padX,
             padY: padY
         )
-
 
         // RESIZE + PAD
         let resized = frame

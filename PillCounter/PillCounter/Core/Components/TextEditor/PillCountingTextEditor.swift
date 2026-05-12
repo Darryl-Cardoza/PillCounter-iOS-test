@@ -44,8 +44,8 @@ struct PillCounterTextEditor: View {
                 if text.isEmpty {
                     Text(placeholder)
                         .foregroundColor(appColors.text.opacity(0.4))
-                        .padding(.top, 12)
-                        .padding(.leading, 4)
+                        .padding(.top, 6)
+                        .padding(.leading, 5)
                 }
 
                 TextEditor(text: $text)
@@ -53,7 +53,7 @@ struct PillCounterTextEditor: View {
                     .frame(minHeight: minHeight, maxHeight: maxHeight)
                     .disabled(disabled)
                     .scrollContentBackground(.hidden)
-                    .padding(.leading, -4) // aligns cursor with placeholder
+                    .padding(.leading, 4) // aligns cursor with placeholder
             }
             .padding(.trailing, 12)
         }

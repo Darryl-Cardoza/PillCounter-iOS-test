@@ -27,59 +27,70 @@ struct PillCountingCalendar: View {
 
     @Binding var startDate: Date?
     @Binding var endDate: Date?
-
-    @State private var monthsToShow: [Date] = []
-
+    @Binding var monthsToShow: [Date]
+    
     private let calendar = Calendar.current
     private let days = ["S", "M", "T", "W", "T", "F", "S"]
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 24) {
-                ForEach(monthsToShow, id: \.self) { month in
-                    VStack(alignment: .leading, spacing: 10) {
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 24) {
+                    ForEach(Array(monthsToShow.enumerated()), id: \.offset) { index, month in
+                        VStack(alignment: .leading, spacing: 10) {
 
-                        // Month Header
-                        Text(monthYearString(for: month))
-                            .font(.title3.bold())
-                            .foregroundColor(textColor)
-
-                        // Weekday Row
-                        HStack {
-                            ForEach(days.indices, id: \.self) { index in
-                                Text(days[index])
-                                    .font(.caption)
-                                    .foregroundColor(textColor.opacity(0.7))
-                                    .frame(maxWidth: .infinity)
+                            // Month Header
+                            HStack {
+                                Spacer()
+                                Text(monthYearString(for: month))
+                                    .fontWeight(.regular)
+                                    .foregroundColor(appColors.primary)
+                                Spacer()
                             }
-                        }
+                            .id(index)
 
-                        // Grid of days
-                        let daysInMonth = getDaysInMonth(for: month)
+                            // Weekday Row
+                            HStack {
+                                ForEach(days.indices, id: \.self) { index in
+                                    Text(days[index])
+                                        .font(.caption)
+                                        .foregroundColor(appColors.text)
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
 
-                        // We need the column index to know if a cell is at the
-                        // left or right edge of the week row for rounded caps.
-                        LazyVGrid(
-                            columns: Array(repeating: .init(.flexible(), spacing: 0), count: 7),
-                            spacing: 6
-                        ) {
-                            ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, date in
-                                if let date = date {
-                                    dayCell(for: date, columnIndex: index % 7)
-                                } else {
-                                    // Empty leading cell — still needs range bg if
-                                    // the range wraps across this row start.
-                                    Color.clear.frame(height: 40)
+                            // Days Grid
+                            let daysInMonth = getDaysInMonth(for: month)
+
+                            LazyVGrid(
+                                columns: Array(repeating: .init(.flexible(), spacing: 0), count: 7),
+                                spacing: 6
+                            ) {
+                                ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, date in
+                                    if let date = date {
+                                        dayCell(for: date, columnIndex: index % 7)
+                                    } else {
+                                        Color.clear.frame(height: 40)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
+            .onAppear {
+                if monthsToShow.isEmpty {
+                    initializeMonths()
+                }
+
+                DispatchQueue.main.async {
+                    if let index = monthIndex(for: Date()) {
+                        proxy.scrollTo(index, anchor: .center)
+                    }
+                }
+            }
         }
-        .defaultScrollAnchor(.bottom)
-        .onAppear { initializeMonths() }
     }
 
     // MARK: - Day Cell
@@ -90,6 +101,7 @@ struct PillCountingCalendar: View {
         let isEnd     = endDate.map   { isSameDay(date, $0) } ?? false
         let inRange   = isInRange(date)
         let future    = isFuture(date)
+        let isToday   = calendar.isDateInToday(date)
 
         // The range background should stretch full-width but be clipped on the
         // left for the start and on the right for the end (creating pill caps).
@@ -99,6 +111,7 @@ struct PillCountingCalendar: View {
                 if inRange || isStart || isEnd {
                     GeometryReader { geo in
                         let h = geo.size.height
+                        let inset: CGFloat = 5
                         // Determine which horizontal edges get rounded caps
                         let roundLeft  = isStart || columnIndex == 0
                         let roundRight = isEnd   || columnIndex == 6
@@ -110,7 +123,8 @@ struct PillCountingCalendar: View {
                             bottomRight: roundRight ? h / 2 : 0
                         )
                         .fill(selectedColor.opacity(0.25))
-                        // Hide the right half of the circle background on start
+                        .padding(.leading, isStart ? inset : 0)
+                        .padding(.trailing, isEnd ? inset : 0)
                         // and left half on end so the strip doesn't bleed outside.
                         .frame(
                             width: geo.size.width + (isStart && !isEnd ? geo.size.width * 0.0 : 0),
@@ -136,6 +150,7 @@ struct PillCountingCalendar: View {
                     .font(.body)
                     .foregroundColor(
                         (isStart || isEnd) ? .white :
+                        isToday            ? selectedColor :
                         inRange            ? textColor :
                                              textColor
                     )
@@ -144,7 +159,8 @@ struct PillCountingCalendar: View {
             .disabled(future)
             .opacity(future ? 0.3 : 1)
         }
-        .frame(height: 40)
+        .frame(maxWidth: .infinity, minHeight: 40)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Selection Logic
@@ -171,7 +187,11 @@ struct PillCountingCalendar: View {
     }
 
     // MARK: - Range Helpers
-
+    private func monthIndex(for date: Date) -> Int? {
+        monthsToShow.firstIndex {
+            calendar.isDate($0, equalTo: date, toGranularity: .month)
+        }
+    }
     /// Returns true when `date` is strictly between startDate and endDate.
     private func isInRange(_ date: Date) -> Bool {
         guard let s = startDate, let e = endDate else { return false }

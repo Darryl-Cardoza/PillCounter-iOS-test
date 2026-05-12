@@ -13,7 +13,8 @@ final class PillsDataLocalStorage {
     static let shared = PillsDataLocalStorage()
 
      var pendingTxnController: NSFetchedResultsController<PillCountTransactionEntity>?
-     var pendingTxnDelegate: PendingTxnFetchedResultsDelegate?
+    
+    
     
     // init function.
     private init() {}
@@ -25,31 +26,23 @@ final class PillsDataLocalStorage {
     // background context
     //    private let backgroundContext = CoreDataManager.shared.backgroundContext
 
-    // save pill the drug master entity
+    // save pill the drug master entity — upsert by ndc
     func savePill(from response: GetDrugResponse, ndc: String, drugId: Int64) {
 
-        // check if the response is empty or pill data is present or not.
         guard let pillData = response.data else {
             print("❌ No pill data found.")
             return
         }
 
-        // now if the pill data is found.HL7MessageBuilder
-        // save the pill data in the local db.
-
-        let entity = DrugMasterEntity(context: mainThreadContext)
-
-        // feed the values for each attribute.
-        entity.drug_id = drugId
-        entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
+        let entity = fetchOrCreateDrug(ndc: ndc, drugId: drugId)
         entity.drug_name = pillData.genericName
-        entity.ndc = ndc  // this is the values stored that we are sending to the backend for calling the api.
         entity.drug_type = ""
+        entity.ndc = ndc
 
         CoreDataManager.shared.save(context: mainThreadContext)
     }
-    
-    // save mannual pill
+
+    // save manual pill — upsert by ndc
     func saveManualPill(
         ndc: String,
         gtin: String = "",
@@ -58,16 +51,51 @@ final class PillsDataLocalStorage {
         drugType: String? = nil,
         packageQty: Int32 = 0
     ) {
-        let entity = DrugMasterEntity(context: mainThreadContext)
+        let entity = fetchOrCreateDrug(ndc: ndc, drugId: drugId)
 
+        if entity.drug_name == nil || entity.drug_name!.isEmpty {
+            entity.drug_name = drugName
+        }
+        if !gtin.isEmpty { entity.gtin = gtin }
+        if let drugType { entity.drug_type = drugType }
+        if packageQty > 0 { entity.package_qty = packageQty }
+        entity.ndc = ndc
+
+        CoreDataManager.shared.save(context: mainThreadContext)
+    }
+
+    /// Fetch existing DrugMasterEntity by ndc, or create a new one.
+    /// Uses ndc as the unique key — prevents duplicate rows across flows.
+    @discardableResult
+    func fetchOrCreateDrug(ndc: String, drugId: Int64) -> DrugMasterEntity {
+        if let existing = getPillByNdc(by: ndc) {
+            return existing
+        }
+        let entity = DrugMasterEntity(context: mainThreadContext)
         entity.drug_id = drugId
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
-        entity.drug_name = drugName
-        entity.ndc = ndc
-        entity.gtin = gtin
-        entity.drug_type = drugType
-        entity.package_qty = packageQty
+        return entity
+    }
 
+    /// Remove duplicate DrugMasterEntity rows that share the same ndc,
+    /// keeping only the first (oldest created_at).
+    func deduplicateDrugMaster() {
+        let all = getAllPills()
+        var seen: [String: DrugMasterEntity] = [:]
+        for drug in all {
+            let key = drug.ndc ?? ""
+            if key.isEmpty { continue }
+            if let existing = seen[key] {
+                if drug.created_at < existing.created_at {
+                    mainThreadContext.delete(existing)
+                    seen[key] = drug
+                } else {
+                    mainThreadContext.delete(drug)
+                }
+            } else {
+                seen[key] = drug
+            }
+        }
         CoreDataManager.shared.save(context: mainThreadContext)
     }
 
@@ -185,23 +213,21 @@ final class PillsDataLocalStorage {
         return try? mainThreadContext.fetch(request).first
     }
 
-    // update the status of the particular transaction
-    func updateTransactionStatus(txnId: Int64, newStatus: CountStatus) {
-        // fetch from the db that particular transaction.
-        guard
-            let transaction = fetchPillCountTransactionByTransactionId(
-                txnId: txnId)
-        else {
-            print("❌ no transaction found.")
-            return
-        }
-
-        transaction.status = newStatus.rawValue
-        transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-        
-
-        CoreDataManager.shared.save(context: mainThreadContext)
-    }
+//    // update the status of the particular transaction
+//    func updateTransactionStatus(txnId: Int64, newStatus: CountStatus) {
+//        // fetch from the db that particular transaction.
+//        guard
+//            let transaction = fetchPillCountTransactionByTransactionId(
+//                txnId: txnId)
+//        else {
+//            print("❌ no transaction found.")
+//            return
+//        }
+//
+//        transaction.status = newStatus.rawValue
+//        transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+//        CoreDataManager.shared.save(context: mainThreadContext)
+//    }
 
     // function to update or insert note.
     func updateNote(txnId: Int64, note: String) {
@@ -221,6 +247,16 @@ final class PillsDataLocalStorage {
 
     }
 
+    func fetchTransactionById(txnId: String) -> PillCountTransactionEntity? {
+         let request: NSFetchRequest<PillCountTransactionEntity> =
+             PillCountTransactionEntity.fetchRequest()
+         request.predicate = NSPredicate(
+             format: "txn_id == %@ AND is_deleted == false", txnId
+         )
+         request.fetchLimit = 1
+         return try? mainThreadContext.fetch(request).first
+     }
+    
     // function to update the target count.
     func updateTargetCount(txnId: Int64, targetCount: Int32) {
 
@@ -692,6 +728,7 @@ final class PillsDataLocalStorage {
     // Update an existing transaction instead of creating a new one
     func updateTransaction(
         txnId: Int64,
+        substituedDrugId: Int64? = nil,
         drugId: Int64?,
         countType: CountType,
         targetCount: Int32?,
@@ -752,14 +789,15 @@ final class PillsDataLocalStorage {
         print("[DB][SYNC] After update → isSynced =", txn.is_synced)
     }
     
-    func updateBatchStatus(batchId: Int64, status: String) {
+    func updateBatchStatus(batchId: Int64, status: CountStatus) {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
 
         request.predicate = NSPredicate(format: "batch_id == %lld", batchId)
 
         if let batch = try? mainThreadContext.fetch(request).first {
-            batch.status = status
+            batch.status = status.rawValue
             CoreDataManager.shared.save(context: mainThreadContext)
+            transactionsDidChange.send()
 
             print("Batch status updated to \(status)")
         } else {
@@ -810,31 +848,30 @@ final class PillsDataLocalStorage {
             
             // MARK: 1️⃣ Delete All Transaction Details
             let detailFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
-            let detailDelete = NSBatchDeleteRequest(fetchRequest: detailFetch)
-            try context.execute(detailDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: detailFetch))
             
             // MARK: 2️⃣ Delete All Transactions
             let txnFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionEntity.fetchRequest()
-            let txnDelete = NSBatchDeleteRequest(fetchRequest: txnFetch)
-            try context.execute(txnDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: txnFetch))
             
-            // MARK: 3️⃣ Delete All Drugs
+            // MARK: 3️⃣ Delete All Batches  ✅ FIX HERE
+            let batchFetch: NSFetchRequest<NSFetchRequestResult> = BatchCountEntity.fetchRequest()
+            try context.execute(NSBatchDeleteRequest(fetchRequest: batchFetch))
+            
+            // MARK: 4️⃣ Delete All Drugs
             let drugFetch: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
-            let drugDelete = NSBatchDeleteRequest(fetchRequest: drugFetch)
-            try context.execute(drugDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: drugFetch))
             
-            // MARK: 4️⃣ Delete All Images from Documents Directory
+            // MARK: 5️⃣ Delete All Images
             if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
                 let files = try fileManager.contentsOfDirectory(at: documentsURL, includingPropertiesForKeys: nil)
-                
                 for fileURL in files {
                     try? fileManager.removeItem(at: fileURL)
                 }
-                
                 print("All local image files removed.")
             }
             
-            // MARK: 5️⃣ Reset Transaction ID Counters
+            // MARK: 6️⃣ Reset Counters
             UserDefaults.standard.removeObject(forKey: "txnTransactionIdCounter")
             UserDefaults.standard.removeObject(forKey: "txnDetailIdCounter")
             
@@ -846,7 +883,6 @@ final class PillsDataLocalStorage {
             print("Failed to clear local data:", error)
         }
     }
-    
 
     
     // For Controlled Drug
@@ -949,7 +985,9 @@ final class PillsDataLocalStorage {
         drugId: Int64,
         drugName: String? = nil,
         ndc: String? = nil,
-        drugType: String? = nil
+        gtin: String? = nil,
+        drugType: String? = nil,
+        packageQty: Int32? = nil
     ) {
 
         guard let drug = fetchDrugById(drugId) else {
@@ -957,17 +995,11 @@ final class PillsDataLocalStorage {
             return
         }
 
-        if let drugName {
-            drug.drug_name = drugName
-        }
-
-        if let ndc {
-            drug.ndc = ndc
-        }
-
-        if let drugType {
-            drug.drug_type = drugType
-        }
+        if let drugName { drug.drug_name = drugName }
+        if let ndc { drug.ndc = ndc }
+        if let gtin, !gtin.isEmpty { drug.gtin = gtin }
+        if let drugType { drug.drug_type = drugType }
+        if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
 
         CoreDataManager.shared.save(context: mainThreadContext)
 
@@ -1040,7 +1072,7 @@ final class PillsDataLocalStorage {
             📦 Bucket: \(batch.bucket_id ?? "")
             📊 Status: \(batch.status ?? "")
             🗑️ Deleted: \(batch.is_deleted)
-            📡 From PMS: \(batch.is_from_pms)
+            📡 From PMS: \(batch.req_id_from_pms)
                requstId:\(batch.req_id_from_pms)
             ---------------------------------------
             """)

@@ -83,13 +83,12 @@ private extension ControlledStepRow {
             .resizable()
             .scaledToFit()
             .frame(width: 20, height: 20)
-            .colorMultiply(iconColor(for: state))
+            .colorMultiply(appColors.text)
             .padding(8)
             .frame(width: 40, height: 40)
             .background(
                 Circle()
-                    .fill(appColors.primaryBackground)
-                    .shadow(color: .black.opacity(0.14), radius: 4, x: 0, y: 2)
+                    .fill(appColors.secondaryBackground)
                     .overlay(
                         Circle()
                             .stroke(
@@ -98,6 +97,7 @@ private extension ControlledStepRow {
                             )
                     )
             )
+            .foregroundColor(appColors.text)
             .opacity(stateOpacity(for: state))
     }
     
@@ -123,7 +123,7 @@ private extension ControlledStepRow {
             return 1
             
         case .upcoming:
-            return 0.50
+            return 0.65
         }
     }
 }

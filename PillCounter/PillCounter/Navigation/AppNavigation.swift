@@ -47,7 +47,7 @@ struct AppNavigation: View {
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(.login(.dashboard(.fixedCountPartial))):
-                        CountHistoryView(title: "pending dispense counts")
+                        DispenseCountPartialTxnList(title: "pending dispense counts")
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(
@@ -64,6 +64,12 @@ struct AppNavigation: View {
                         OPillCountView()
                             .navigationBarBackButtonHidden(true)
                         
+                    case .authentication(
+                        .login(.dashboard(.pillCount(.pillCountHistoryView)))):
+                        
+                        PillScanDetailGridScreen()
+                            .navigationBarBackButtonHidden(true)
+
                     case .authentication(.user(.hamburgerMenu)):
                         HamburgerMenuView()
                             .navigationBarBackButtonHidden(true)
@@ -87,7 +93,12 @@ struct AppNavigation: View {
                         // before navigating to this screen make sure to set the current transaction of the pill scan view model to the selected transaction.
                     case .authentication(
                         .user(.userSettings(.HistoryTransactionDetail))):
-                        HistoryTransactionDetailViewNew()
+                        HistoryTransactionDetailView()
+                            .navigationBarBackButtonHidden(true)
+
+                    case .authentication(
+                        .user(.userSettings(.HistoryBatchDetail))):
+                        HistoryBatchDetailView()
                             .navigationBarBackButtonHidden(true)
                         
                     case .authentication(
@@ -106,12 +117,6 @@ struct AppNavigation: View {
                         .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))
                     ):
                         StockCountPartialBatchListScreen()
-                            .navigationBarBackButtonHidden(true)
-                        
-                    case .authentication(
-                        .login(.dashboard(.pillCount(.stockCount(.stockCountPendingBatchListScreen))))
-                    ):
-                        StockCountRequestedList()
                             .navigationBarBackButtonHidden(true)
                     }
                 }

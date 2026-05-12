@@ -244,7 +244,7 @@ struct QRBarcodeScannerView: View {
         ) {
             stockCountScannedDetailsPopUp
         }
-        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup){
+        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup, dismissOnBackgroundTap: false){
             rxScanSuccessPopup
         }
         .customPopup(isPresented: $pillScanViewModel.showScannedDrugInfoPopoup,  dismissOnBackgroundTap: false){
@@ -289,40 +289,20 @@ struct QRBarcodeScannerView: View {
 
     
     private func handleStockCountAddAction() {
-        switch scannedBottleContainerStatus {
-        case .sealed:
-            Task {
-                guard let batchId = stockCountVieModel.currentBatch?.batch_id else {
-                    return
-                }
-                await pillScanViewModel.createTxnForBatchFromScan(
-                    rawValueFromBarcodeOrQr: scannedData,
-                    ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
-                    drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
-                    quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
-                    countType: .REGULAR,
-                    batchId: batchId,
-                    containerStatus: .sealed
-                )
-               stockCountVieModel.showStockCountScannedDetails  = false
+        Task {
+            guard let batchId = stockCountVieModel.currentBatch?.batch_id else {
+                return
             }
-            
-        case .opened:
-            Task {
-                guard let batchId = stockCountVieModel.currentBatch?.batch_id else {
-                    return
-                }
-                await pillScanViewModel.createTxnForBatchFromScan(
-                    rawValueFromBarcodeOrQr: scannedData,
-                    ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
-                    drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
-                    quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
-                    countType: .REGULAR,
-                    batchId: batchId,
-                    containerStatus: .opened
-                )
-               stockCountVieModel.showStockCountScannedDetails  = false
-            }
+            await pillScanViewModel.createTxnForBatchFromScan(
+                rawValueFromBarcodeOrQr: scannedData,
+                ndc: stockCountVieModel.scannedDrugData?.ndc ?? "",
+                drugName: stockCountVieModel.scannedDrugData?.drugName ?? "",
+                quantity: Int32(Int(stockCountVieModel.scannedDrugData?.quantity ?? 0)),
+                countType: .REGULAR,
+                batchId: batchId,
+                containerStatus: scannedBottleContainerStatus
+            )
+           stockCountVieModel.showStockCountScannedDetails  = false
         }
     }
 }
@@ -333,8 +313,6 @@ extension QRBarcodeScannerView {
     private func handleScannedCode(_ newValue: String) {
 
         if !newValue.isEmpty {
-
-            // Prevent duplicates
             if pillScanViewModel.isDrugFound != nil {
                 return
             }
@@ -362,14 +340,13 @@ extension QRBarcodeScannerView {
                 scannedData = newValue
 
                 Task { @MainActor in
-                    guard
-                    pillScanViewModel.checkIsNdcMatch(
+                    
+                    guard pillScanViewModel.checkIsNdcMatch(
                         rawValueFromBarcodeOrQr: newValue
-                    )
-                    else {
+                    ) else {
                         return
                     }
-
+                    
                     if router.selectedPillScanningType == .FIXED
                          && pillScanViewModel.selectedTransaction?.target_count
                              == nil
@@ -384,15 +361,15 @@ extension QRBarcodeScannerView {
                                  pillScanViewModel.showToastMessage(text: "Invalid RX Barcode")
                              }
                          case .barcode:
-                             // Normal QR / barcode scan flow
                              pillScanViewModel.showScannedDrugInfoPopoup = true
-                         
                          case .stockCount:
+                             print("Stock Count Flow")
+                             await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                              return
                          }
                          
-                         
                      } else {
+                         print("Regular Stock Count Flow")
                          await stockCountVieModel.getScannedDrugData(rawValue: newValue)
                      }
                 }
@@ -1002,11 +979,3 @@ extension QRBarcodeScannerView {
         )
     }
 }
-
-
-@discardableResult
-func DLOG(_ msg: String) -> Bool {
-    print("[Scanner] \(msg)")
-    return true
-}
-

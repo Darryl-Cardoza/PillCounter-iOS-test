@@ -422,13 +422,13 @@ extension BaseView {
     private var pmsIconColor: Color {
         switch pmsConnectionState {
         case .connected:
-            return AppColors.shared.primary
+            return appColors.secondary
             
         case .disconnected:
             return .gray
             
         case .connecting:
-            return AppColors.shared.primary
+            return appColors.secondary
             
         case .notAvailable:
             return .gray

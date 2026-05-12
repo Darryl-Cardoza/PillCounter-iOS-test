@@ -17,11 +17,20 @@ final class CoreDataManager {
     // init function
     private init() {
         container = NSPersistentContainer(name: "PillCounter")
+
+        guard let description = container.persistentStoreDescriptions.first else {
+            fatalError("No store description")
+        }
+
+        // Encrypt at file level (iOS Data Protection)
+        description.setOption(
+            FileProtectionType.complete as NSObject,
+            forKey: NSPersistentStoreFileProtectionKey
+        )
+
         container.loadPersistentStores { description, error in
             if let error = error {
-                print(
-                    "❌ Failed to load Core Date : \(error.localizedDescription)"
-                )
+                print("Failed to load Core Data: \(error.localizedDescription)")
             }
         }
     }
@@ -41,7 +50,7 @@ final class CoreDataManager {
             do {
                 try context.save()
             } catch let error {
-                print("❌ Error saving Core data : \(error.localizedDescription)")
+                print("Error saving Core data : \(error.localizedDescription)")
             }
         }
     }

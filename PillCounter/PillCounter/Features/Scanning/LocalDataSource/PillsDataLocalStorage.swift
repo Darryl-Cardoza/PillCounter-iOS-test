@@ -13,7 +13,6 @@ final class PillsDataLocalStorage {
     static let shared = PillsDataLocalStorage()
 
      var pendingTxnController: NSFetchedResultsController<PillCountTransactionEntity>?
-     var pendingTxnDelegate: PendingTxnFetchedResultsDelegate?
     
     // init function.
     private init() {}
@@ -198,7 +197,6 @@ final class PillsDataLocalStorage {
 
         transaction.status = newStatus.rawValue
         transaction.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-        
 
         CoreDataManager.shared.save(context: mainThreadContext)
     }
@@ -221,6 +219,16 @@ final class PillsDataLocalStorage {
 
     }
 
+    func fetchTransactionById(txnId: String) -> PillCountTransactionEntity? {
+         let request: NSFetchRequest<PillCountTransactionEntity> =
+             PillCountTransactionEntity.fetchRequest()
+         request.predicate = NSPredicate(
+             format: "txn_id == %@ AND is_deleted == false", txnId
+         )
+         request.fetchLimit = 1
+         return try? mainThreadContext.fetch(request).first
+     }
+    
     // function to update the target count.
     func updateTargetCount(txnId: Int64, targetCount: Int32) {
 
@@ -752,14 +760,15 @@ final class PillsDataLocalStorage {
         print("[DB][SYNC] After update → isSynced =", txn.is_synced)
     }
     
-    func updateBatchStatus(batchId: Int64, status: String) {
+    func updateBatchStatus(batchId: Int64, status: CountStatus) {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
 
         request.predicate = NSPredicate(format: "batch_id == %lld", batchId)
 
         if let batch = try? mainThreadContext.fetch(request).first {
-            batch.status = status
+            batch.status = status.rawValue
             CoreDataManager.shared.save(context: mainThreadContext)
+            transactionsDidChange.send()
 
             print("Batch status updated to \(status)")
         } else {
@@ -810,31 +819,30 @@ final class PillsDataLocalStorage {
             
             // MARK: 1️⃣ Delete All Transaction Details
             let detailFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
-            let detailDelete = NSBatchDeleteRequest(fetchRequest: detailFetch)
-            try context.execute(detailDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: detailFetch))
             
             // MARK: 2️⃣ Delete All Transactions
             let txnFetch: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionEntity.fetchRequest()
-            let txnDelete = NSBatchDeleteRequest(fetchRequest: txnFetch)
-            try context.execute(txnDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: txnFetch))
             
-            // MARK: 3️⃣ Delete All Drugs
+            // MARK: 3️⃣ Delete All Batches  ✅ FIX HERE
+            let batchFetch: NSFetchRequest<NSFetchRequestResult> = BatchCountEntity.fetchRequest()
+            try context.execute(NSBatchDeleteRequest(fetchRequest: batchFetch))
+            
+            // MARK: 4️⃣ Delete All Drugs
             let drugFetch: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
-            let drugDelete = NSBatchDeleteRequest(fetchRequest: drugFetch)
-            try context.execute(drugDelete)
+            try context.execute(NSBatchDeleteRequest(fetchRequest: drugFetch))
             
-            // MARK: 4️⃣ Delete All Images from Documents Directory
+            // MARK: 5️⃣ Delete All Images
             if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
                 let files = try fileManager.contentsOfDirectory(at: documentsURL, includingPropertiesForKeys: nil)
-                
                 for fileURL in files {
                     try? fileManager.removeItem(at: fileURL)
                 }
-                
                 print("All local image files removed.")
             }
             
-            // MARK: 5️⃣ Reset Transaction ID Counters
+            // MARK: 6️⃣ Reset Counters
             UserDefaults.standard.removeObject(forKey: "txnTransactionIdCounter")
             UserDefaults.standard.removeObject(forKey: "txnDetailIdCounter")
             
@@ -846,7 +854,6 @@ final class PillsDataLocalStorage {
             print("Failed to clear local data:", error)
         }
     }
-    
 
     
     // For Controlled Drug
@@ -1040,7 +1047,7 @@ final class PillsDataLocalStorage {
             📦 Bucket: \(batch.bucket_id ?? "")
             📊 Status: \(batch.status ?? "")
             🗑️ Deleted: \(batch.is_deleted)
-            📡 From PMS: \(batch.is_from_pms)
+            📡 From PMS: \(batch.req_id_from_pms)
                requstId:\(batch.req_id_from_pms)
             ---------------------------------------
             """)

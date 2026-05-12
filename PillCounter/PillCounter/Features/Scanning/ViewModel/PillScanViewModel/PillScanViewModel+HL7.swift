@@ -13,13 +13,13 @@ extension PillScanViewModel {
         message: CompleteHL7Message,
         callback: HL7SimpleCallback? = nil
     ){
-        print("Received message parsed message \(message)")
         guard let inboundType = classifyInboundMessage(message) else {
-            print("Inbount Type not found")
             return
         }
         
-        print("Message Type \(inboundType)")
+        // Notify user about incoming order
+  
+        buildNotification(message: message, messageType: inboundType)
 
         Task(priority: .background) {
             switch inboundType {
@@ -38,6 +38,8 @@ extension PillScanViewModel {
         inboundType: CountType,
         callback: HL7SimpleCallback? = nil
     ) async {
+        var hasError = false
+
 
         guard let order = message.order else {
             callback?(false)
@@ -54,6 +56,7 @@ extension PillScanViewModel {
 
             // RXE-2.1
             let ndc = medication.drugCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            let qty = Int(medication.requestedQty ?? "")
 
             // RXE-2.2
             let drugName = medication.drugName
@@ -62,6 +65,11 @@ extension PillScanViewModel {
             let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
 
             let orderId = order.placerOrderId
+            
+            if ndc.isEmpty ||   qty == nil {
+                hasError = true
+                break
+            }
             
             await processHl7DrugAndCreateTransaction(
                 ndc: ndc,
@@ -72,43 +80,9 @@ extension PillScanViewModel {
             )
         }
 
-        callback?(true)
+        callback?(!hasError)
     }
     
-    
-//    @MainActor
-//    private func createRegularHl7Transaction(
-//        message: CompleteHL7Message,
-//        inboundType: CountType,
-//        callback: HL7SimpleCallback? = nil
-//    ) async {
-//
-//        guard let inventory = message.inventoryItems.first else {
-//            print("Regular Count: No inventory found")
-//            callback?(false)
-//            return
-//        }
-//
-//        // FIXED MAPPING (based on your HL7 format)
-//        let ndc = inventory.substanceStatusCode ?? ""
-//        let drugName = inventory.substanceStatusDescription ?? "Unknown Drug"
-//        let lotNo = inventory.lotNumber ?? ""
-//        let expiryRaw = inventory.expirationDateTime ?? ""
-
-//        print("Parsed INV → NDC: \(ndc), Name: \(drugName), Count: \(targetCount)")
-//
-////        await processHl7DrugAndCreateTransaction(
-////            ndc: ndc,
-////            drugName: drugName,
-////            countType: inboundType,
-////            targetCount: targetCount,
-////            rxNo: message.order?.placerOrderId
-////        )
-////
-//        
-//        
-//        callback?(true)
-//    }
 
     @MainActor
     private func createRegularHl7Transaction(
@@ -153,43 +127,122 @@ extension PillScanViewModel {
         rxNo: String? = nil
     ) async {
 
-        print("🧾 HL7 Drug Processing → NDC: \(ndc), Name: \(drugName)")
+        guard !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Log("HL7: Missing NDC")
+            return
+        }
 
-        var drugIdToUse: Int64
+        var drugIdToUse: Int64 = 0
+        var resolvedName: String = drugName
 
-        // Create new drug synchronously
-        drugIdToUse = generateUniqueDrugId()
+        if let existing = pillDataLocalStorage.getPillByNdc(by: ndc),
+           let localName = existing.drug_name,
+           !localName.isEmpty {
 
-        print("Drug not found — creating new DrugMaster entry")
+            drugIdToUse = existing.drug_id
+            resolvedName = localName
 
-        pillDataLocalStorage.saveManualPill(
-            ndc: ndc,
-            drugId: drugIdToUse,
-            drugName: drugName,
-        
-        )
+            Log("HL7: Drug found locally → \(resolvedName)")
+        }
+        else {
 
-        self.drugName = drugName
-    
+            let request = NdcValidationRequest(
+                targetNdc: ndc,
+                scannedNdc: ndc
+            )
 
-        // 3️⃣ Create transaction
+            do {
+                let response = try await controlledRepo.getControlledDrugInfo(
+                    ndcValidationRequest: request
+                )
+
+                if let lookup = response.data?.scannedNdc?.lookupName,
+                   !lookup.isEmpty {
+
+                    let newId = generateUniqueDrugId()
+
+                    drugIdToUse = newId
+                    resolvedName = lookup
+
+                    // Save to local DB
+                    pillDataLocalStorage.saveManualPill(
+                        ndc: response.data?.scannedNdc?.packageNdc ?? ndc,
+                        drugId: newId,
+                        drugName: lookup,
+                        drugType: response.data?.scannedNdc?.deaSchedule,
+                        packageQty: response.data?.scannedNdc?.safeQuantity ?? 0
+                    )
+
+                    Log("HL7: Drug created via API → \(lookup)")
+                } else {
+                    Log("HL7: API returned empty drug name")
+                    return
+                }
+
+            } catch {
+                Log("HL7: API failed for NDC \(ndc) → \(error.localizedDescription)")
+                return
+            }
+        }
+
+        // MARK: 3️⃣ Create Transaction
         await createTransaction(
             drugId: drugIdToUse,
             countType: countType,
             isComingFromPms: true,
             isControlled: true,
             targetCount: targetCount,
-            drugName: drugName,
+            drugName: resolvedName,
             rxNo: rxNo
         )
 
-        // 4️⃣ Refresh transaction details
+        // MARK: 4️⃣ Refresh UI / State
         getAllTransactionDetailsOfTheCurrentTransaction()
 
-        // 5️⃣ Update target count if fixed
         if countType == .FIXED {
             updateTargetCountForCurrentTransaction()
         }
     }
     
+    
+    func buildNotification(
+        message: CompleteHL7Message,
+        messageType: CountType
+    ) {
+
+        let orderId = message.order?.placerOrderId ?? ""
+        let meds = message.medications
+
+        let title: String
+        let body: String
+
+        if messageType == .FIXED {
+
+            title = "New RX Fill Request"
+
+            if meds.count == 1 {
+                let med = meds[0]
+                let name = med.drugName
+                let qty = Int(med.requestedQty ?? "0") ?? 0
+
+                body = "Rx \(orderId) • \(name) • Qty: \(qty)"
+            } else {
+                body = "Rx \(orderId) • \(meds.count) items to fill"
+            }
+
+        } else {
+            title = "Inventory Request"
+
+            if meds.count == 1 {
+                body = "\(meds.count) item need stock count"
+            } else {
+                body = "\(meds.count) items need stock count"
+            }
+        }
+
+        HL7NotificationManager.show(
+            title: title,
+            body: body
+        )
+    }
 }

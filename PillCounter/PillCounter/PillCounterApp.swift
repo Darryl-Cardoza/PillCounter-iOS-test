@@ -25,6 +25,7 @@ struct PillCounterApp: App {
     @StateObject private var pillScanViewModel = PillScanViewModel()
     @StateObject private var userViewModel = UserViewModel()
     @StateObject private var stockCountViewModel = StockCountViewModel()
+    @StateObject private var historyViewModel = HistoryViewModel()
     @StateObject private var toastManager = ToastManager()
 
     private let isCompromised: Bool
@@ -79,6 +80,7 @@ struct PillCounterApp: App {
                             .environmentObject(confirmationDialogueManager)
                             .environmentObject(pillScanViewModel)
                             .environmentObject(stockCountViewModel)
+                            .environmentObject(historyViewModel)
                             .environmentObject(toastManager)
                             .onAppear {
                                 startSecurityMonitoring()

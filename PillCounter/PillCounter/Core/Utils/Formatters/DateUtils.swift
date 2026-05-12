@@ -21,4 +21,25 @@ struct DateUtils {
 
         return formatter.string(from: date)
     }
+    
+    static func formatToUSDateTime(_ timestamp: Int64?) -> String {
+        guard let timestamp else { return "" }
+
+        let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM/dd/yyyy hh:mm a"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+
+        return formatter.string(from: date)
+    }
+    
+    
+    // MARK: - Timestamp
+    static func currentTimestamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMddHHmmss"
+        return formatter.string(from: Date())
+    }
+
 }

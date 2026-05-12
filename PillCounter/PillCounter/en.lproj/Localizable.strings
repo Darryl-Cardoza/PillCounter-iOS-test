@@ -29,12 +29,12 @@
 "ERROR_INVALID_OTP" = "";
 
 // MARK: - DASHBOARD
-
-"COMPLETED" = "completed";
-"PENDING" = "pending";
+"COMPLETED" = "Completed";
+"PENDING" = "Pending";
 "PARTIAL" = "Partials";
 "NEWRX"  = "New Rx";
 "NDCREQ" = "NDC Req.";
+
 
 // MARK: - DASHBOARD POPUP
 "CONTINUE_LAST_BATCH" = "Continue last Batch";
@@ -85,8 +85,8 @@
 "REQUIRED_DOUBLE_COUNT" = "Require Double Counts";
 "REQUIRED_BACK_COUNT" = "Require Back Counts";
 "REQUIRED_ADJUST_REASON" = "Require Adjust Reasons";
-"HAPTIC_FEEDBACK" = "Haptic Feedback";
-"SOUND_FEEDBACK" = "Sound Feedback";
+"HAPTIC_FEEDBACK" = "Pill Count Haptic Feedback";
+"SOUND_FEEDBACK" = "Pill Count Sound Feedback";
 "VOICE_INSTRUCTIONS" = "Voice Feedback";
 "CLEAR_ALL_LOCAL_DATA" = "Clear All Local Data";
 
@@ -103,7 +103,7 @@
 "SUBSTITUTED_DRUG_DETAILS" = "SUBSTITUTED DRUG DETAILS";
 "PILL_RECOUNT" = "PILL RECOUNT";
 "DISPENSED_VIAL" = "DISPENSED VIAL";
-"REMAINING_CONTAINER_COUNT" = "REMAINING CONTAINER COUNT";
+"REMAINING_CONTAINER_COUNT" = "REMAINING PILL COUNT IN STOCK BOTTLE";
 "NOTE" = "NOTE";
 "TOTAL_COUNT" = "TOTAL COUNT";
 "SUBSTITUED_DRUG"= "Substituted Drug";

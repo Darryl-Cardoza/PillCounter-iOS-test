@@ -39,7 +39,6 @@ final class PillDetectionService {
         completion: @escaping ([DetectionResult], Int) -> Void
     ) {
 
-
         guard let model else {
             return
         }

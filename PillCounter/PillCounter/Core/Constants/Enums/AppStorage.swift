@@ -33,7 +33,6 @@ final class AppStorageManager {
         static let bucketList = "bucket_list"
     
        static let isPillCountingEnabled = "isPillCountingEnabled"
-       static let isDoubleCountRequired = "isDoubleCountRequired"
        static let isBackCountRequired = "isBackCountRequired"
        static let isHapticEnabled = "isHapticEnabled"
        static let isSoundEnabled = "isSoundEnabled"
@@ -113,17 +112,13 @@ final class AppStorageManager {
         }
     }
     
-    var isDoubleCountRequired: Bool {
-        get {
-            defaults.bool(forKey: AppStorageKeys.isDoubleCountRequired)
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isDoubleCountRequired)
-        }
-    }
+    
     var isBackCountRequired: Bool {
         get {
-            defaults.bool(forKey: AppStorageKeys.isBackCountRequired)
+            if defaults.object(forKey: AppStorageKeys.isBackCountRequired) == nil {
+                return true
+            }
+            return defaults.bool(forKey: AppStorageKeys.isBackCountRequired)
         }
         set {
             defaults.setValue(newValue, forKey: AppStorageKeys.isBackCountRequired)
@@ -132,24 +127,35 @@ final class AppStorageManager {
     
     var isHapticEnabled: Bool {
         get {
-            defaults.bool(forKey: AppStorageKeys.isHapticEnabled)
+            if defaults.object(forKey: AppStorageKeys.isHapticEnabled) == nil {
+                return true
+            }
+            return defaults.bool(forKey: AppStorageKeys.isHapticEnabled)
         }
         set {
             defaults.setValue(newValue, forKey: AppStorageKeys.isHapticEnabled)
         }
     }
+    
     var isSoundEnabled: Bool {
         get {
-            defaults.bool(forKey: AppStorageKeys.isSoundEnabled)
+            if defaults.object(forKey: AppStorageKeys.isSoundEnabled) == nil {
+                return true
+            }
+            return defaults.bool(forKey: AppStorageKeys.isSoundEnabled)
         }
         set {
             defaults.setValue(newValue, forKey: AppStorageKeys.isSoundEnabled)
         }
     }
+
     
     var isSpeechEnabled: Bool {
         get {
-            defaults.bool(forKey: AppStorageKeys.isSpeechEnabled)
+            if defaults.object(forKey: AppStorageKeys.isSpeechEnabled) == nil {
+                return true
+            }
+            return defaults.bool(forKey: AppStorageKeys.isSpeechEnabled)
         }
         set {
             defaults.setValue(newValue, forKey: AppStorageKeys.isSpeechEnabled)

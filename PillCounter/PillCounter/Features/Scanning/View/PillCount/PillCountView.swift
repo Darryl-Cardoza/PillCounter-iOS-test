@@ -50,6 +50,7 @@ struct OPillCountView: View {
     //Controlled Drug Step
     @State private var showStepCompletionPopup: Bool = false
     @State private var showCountMismatchPopup: Bool = false
+    @State private var showSkipContainerPopup: Bool = false
     
     // Vial View State
     @State private var vialCapturedImagePath: String? = nil
@@ -156,9 +157,13 @@ struct OPillCountView: View {
         }
         .ignoresSafeArea(.keyboard)
         .onDisappear {
+            if pillScanViewModel.isNavigatingToDetailGrid {
+                pillScanViewModel.isNavigatingToDetailGrid = false
+                return
+            }
             // Clean up transaction reference when leaving
             pillScanViewModel.currentTransaction = nil
-            pillScanViewModel.currentTransactionTransactionDetails = nil
+            pillScanViewModel.currentTransactionTransactionDetails = nil //here
             pillScanViewModel.note = ""
             pillScanViewModel.currentControlledStep = .scan
             pillScanViewModel.currentControlledTargetCount = nil
@@ -181,7 +186,7 @@ struct OPillCountView: View {
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .active:
-                cameraService.resumeIfPaused()
+                cameraService.start()
             case .background, .inactive:
                 cameraService.stop()
             @unknown default:
@@ -219,6 +224,9 @@ struct OPillCountView: View {
         .customPopup(isPresented: $showCountMismatchPopup) {
             countMismatchDialog
         }
+        .customPopup(isPresented: $showSkipContainerPopup, dismissOnBackgroundTap: false) {
+            skipContainerPopup
+        }
         .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
             if show {
                 showConfirmCompletionPopup = true
@@ -226,6 +234,11 @@ struct OPillCountView: View {
         }
         .onChange(of: pillScanViewModel.currentControlledStep) { _, newStep in
             handleStepVoice(newStep)
+            
+            if newStep == .containerPending &&
+                 pillScanViewModel.isContainerPendingZero() {
+                  showSkipContainerPopup = true
+            }
         }
         .fullScreenCover(isPresented: $showFullScreenImage) {
             FullScreenImageView(
@@ -406,9 +419,7 @@ extension OPillCountView {
                 }
             }
 
-            Text(
-                "Cannot add a batch with 0 pills.\nPlease ensure pills are detected by the camera."
-            )
+            Text("Cannot add a batch with 0 pills.\nPlease ensure pills are detected by the camera.")
             .foregroundStyle(appColors.text)
             .multilineTextAlignment(.center)
             .padding(.horizontal)
@@ -580,14 +591,9 @@ extension OPillCountView {
                 vialCapturedImagePath = nil
                 if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                     router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
-                    
                     guard let txn = pillScanViewModel.currentTransaction else {
-                        print("❌ No current transaction")
                         return
                     }
-
-                    Hl7ServiceController.shared.sendTransaction(txn)
-                
                 }else{
                     stockCountViewModel.updateCounts(
                         txnId: pillScanViewModel.currentTransaction?.txn_id ,
@@ -647,8 +653,8 @@ extension OPillCountView {
             confirmButtonText: "OK",
             onCancel: {
                 showStepCompletionPopup = false
-                capturedVialImage = nil
-                vialCapturedImagePath = nil
+//                capturedVialImage = nil
+//                vialCapturedImagePath = nil
             },
             onConfirm: {
                 showStepCompletionPopup = false
@@ -760,164 +766,26 @@ extension OPillCountView {
         }
         .frame(width: 250)
     }
-}
-
-
-struct FullScreenImageView: View {
     
-    let image: Image?
-    let onDismiss: () -> Void
-
-    @State private var scale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-
-    @State private var lastScale: CGFloat = 1
-    @State private var lastOffset: CGSize = .zero
-
-    @GestureState private var gestureScale: CGFloat = 1
-    @GestureState private var gestureDrag: CGSize = .zero
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Color.black.ignoresSafeArea()
-
-                if let image {
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(scale * gestureScale)
-                        .offset(
-                            x: boundedOffset(
-                                proposed: offset.width + gestureDrag.width,
-                                size: geo.size,
-                                scale: scale * gestureScale
-                            ).width,
-                            y: boundedOffset(
-                                proposed: offset.height + gestureDrag.height,
-                                size: geo.size,
-                                scale: scale * gestureScale
-                            ).height
-                        )
-                        .gesture(pinchGesture)
-                        .gesture(dragGesture(in: geo.size))
-                        .onTapGesture(count: 2) {
-                            handleDoubleTap()
-                        }
-                }
-
-                closeButton
+    private var skipContainerPopup: some View {
+        ConfirmationDialogue(
+            title: "Skip Step",
+            message: "Remaining count is 0. Do you want to skip container pending step?",
+            cancelButtonText: "CANCEL",
+            confirmButtonText: "SKIP",
+            onCancel: {
+                showSkipContainerPopup = false
+            },
+            onConfirm: {
+                showSkipContainerPopup = false
+                handleComplete()
             }
-        }
-    }
-
-    // MARK: - Gestures
-
-    private var pinchGesture: some Gesture {
-        MagnificationGesture()
-            .updating($gestureScale) { value, state, _ in
-                state = value
-            }
-            .onEnded { value in
-                let newScale = scale * value
-                scale = min(max(newScale, 1), 4)
-
-                if scale == 1 {
-                    resetPosition()
-                }
-            }
-    }
-
-    private func dragGesture(in size: CGSize) -> some Gesture {
-        DragGesture()
-            .updating($gestureDrag) { value, state, _ in
-                state = value.translation
-            }
-            .onEnded { value in
-                if scale == 1 && value.translation.height > 140 {
-                    onDismiss()
-                    return
-                }
-
-                let newOffset = CGSize(
-                    width: offset.width + value.translation.width,
-                    height: offset.height + value.translation.height
-                )
-
-                offset = boundedOffset(
-                    proposed: newOffset,
-                    size: size,
-                    scale: scale
-                )
-            }
-    }
-
-    // MARK: - Logic
-
-    private func handleDoubleTap() {
-        withAnimation(.easeInOut) {
-            if scale > 1 {
-                scale = 1
-                resetPosition()
-            } else {
-                scale = 2
-            }
-        }
-    }
-
-    private func resetPosition() {
-        withAnimation(.easeOut) {
-            offset = .zero
-            lastOffset = .zero
-        }
-    }
-
-    /// Prevents image from leaving screen bounds
-    private func boundedOffset(
-        proposed: CGSize,
-        size: CGSize,
-        scale: CGFloat
-    ) -> CGSize {
-        let imageWidth = size.width * scale
-        let imageHeight = size.height * scale
-
-        let horizontalLimit = max(0, (imageWidth - size.width) / 2)
-        let verticalLimit = max(0, (imageHeight - size.height) / 2)
-
-        return CGSize(
-            width: min(max(proposed.width, -horizontalLimit), horizontalLimit),
-            height: min(max(proposed.height, -verticalLimit), verticalLimit)
         )
-    }
-
-    private func boundedOffset(
-        proposed: CGFloat,
-        size: CGSize,
-        scale: CGFloat
-    ) -> CGSize {
-        boundedOffset(
-            proposed: CGSize(width: proposed, height: proposed),
-            size: size,
-            scale: scale
-        )
-    }
-
-    // MARK: - Close Button
-    private var closeButton: some View {
-        VStack {
-            HStack {
-                Spacer()
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(.white)
-                        .padding()
-                }
-            }
-            Spacer()
-        }
     }
 }
+
+
+
 
 
 // View Action button
@@ -956,10 +824,6 @@ extension OPillCountView {
             showSuccessAnimation = false
         }
         
-//        var savedPath: String? = nil
-//        if let compositeImage = cameraService.captureSnapshotWithOverlays() {
-//            savedPath = PhotoFileManager.shared.saveImage(compositeImage)
-//        }
         
         var savedPath: String? = nil
 
@@ -973,16 +837,16 @@ extension OPillCountView {
 
             let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
 
-            // Step 1: Process image
+            // Step 1: Compress + grayscale (snapshot already oriented & has overlays)
             guard let processed = rawImage
-                .compressedGrayscale(maxWidth: 1080, quality: 0.5)
+                .compressedGrayscale(maxWidth: 1080, quality: 1.0)
             else { return }
 
-            // Step 2: Get file size FIRST
+            // Step 2: Get file size AFTER compression
             guard let data = processed.jpegData(compressionQuality: 0.5) else { return }
             let fileSizeKB = Double(data.count) / 1024.0
 
-            // Step 3: Add overlay
+            // Step 3: Burn metadata overlay onto the already-oriented+overlaid image
             let finalImage = processed.addingMetadataOverlay(
                 ndc: pillScanViewModel.currentTransaction?.drug?.ndc ?? "",
                 user: user,
@@ -1038,6 +902,11 @@ extension OPillCountView {
     }
     
     private func handleVialCapture() {
+        guard capturedVialImage == nil else {
+            pillScanViewModel.showToastMessage(text: "Image already captured. Tap Redo to capture again.")
+            return
+        }
+
         guard let image = cameraService.captureSnapshot() else {
             return
         }

@@ -8,37 +8,52 @@
 import Network
 import Foundation
 
-final class HL7TLSClient {
+/// Handles TCP connection to PMS and sends HL7 messages using MLLP framing.
+final class HL7Client {
 
+    /// Active connection to PMS
     private var connection: NWConnection?
+
+    /// Background queue for network operations
     private let queue = DispatchQueue(label: "com.pillcounter.hl7.client")
 
+    /// Establishes connection to PMS using host and port.
     func connect(host: String, port: Int, onReady: @escaping () -> Void) {
+
+        // Configure TCP parameters with peer-to-peer support
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = true
 
+        // Create endpoint from host and port
         let endpoint = NWEndpoint.hostPort(
             host: NWEndpoint.Host(host),
             port: NWEndpoint.Port(integerLiteral: NWEndpoint.Port.IntegerLiteralType(port))
         )
 
+        // Create connection
         connection = NWConnection(to: endpoint, using: parameters)
 
+        // Observe connection state
         connection?.stateUpdateHandler = { state in
             switch state {
+
             case .ready:
-                print("HL7 Client connected to \(host):\(port)")
+                Log("HL7 Client connected to \(host):\(port)")
                 onReady()
+
             case .failed(let error):
-                print("HL7 Client connection failed: \(error)")
+                Log("HL7 Client connection failed: \(error.localizedDescription)")
+
             default:
                 break
             }
         }
 
+        // Start connection
         connection?.start(queue: queue)
     }
 
+    /// Sends HL7 message wrapped in MLLP frame.
     func sendHL7(_ hl7: String) {
         guard let connection else { return }
 
@@ -46,29 +61,16 @@ final class HL7TLSClient {
 
         connection.send(content: framed, completion: .contentProcessed { error in
             if let error {
-                print("HL7 send error: \(error)")
+                Log("HL7 send error: \(error.localizedDescription)")
             } else {
-                print("HL7 message sent")
+                Log("HL7 message sent")
             }
         })
     }
 
+    /// Disconnects from PMS.
     func disconnect() {
         connection?.cancel()
         connection = nil
-    }
-}
-
-
-enum MLLP {
-    static let start: UInt8 = 0x0B
-    static let end1: UInt8 = 0x1C
-    static let end2: UInt8 = 0x0D
-
-    static func frame(_ message: String) -> Data {
-        var data = Data([start])
-        data.append(message.data(using: .utf8)!)
-        data.append(contentsOf: [end1, end2])
-        return data
     }
 }

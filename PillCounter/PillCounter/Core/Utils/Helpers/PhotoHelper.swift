@@ -67,6 +67,18 @@ struct PhotoFileManager {
         return nil
     }
     
+    // MARK: - Load UIImage
+    /// Returns the raw UIImage — use this when you need to pass to fullScreenCover(item:)
+    /// or anywhere a UIImage reference is required.
+    func loadUIImage(from fileName: String) -> UIImage? {
+        guard let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let fileURL = documentsDirectory.appendingPathComponent(fileName)
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return UIImage(data: data)
+    }
+    
     // MARK: - Delete Image
     /// Deletes an image file from the Documents Directory.
     /// - Parameter fileName: The name of the file to delete.

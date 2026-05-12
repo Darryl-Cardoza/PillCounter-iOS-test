@@ -69,6 +69,10 @@ struct OPillCountView: View {
         }
     }
 
+    private var isIpad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+    
     // MARK: - BODY
     var body: some View {
         ZStack {
@@ -124,10 +128,19 @@ struct OPillCountView: View {
                                 .clipShape(Circle())
                         }
 
-                        Spacer()
-
+                        if !isLandscape {
+                            Spacer()
+                        }
+                        
+                        
                         if !controlledStepInstruction.isEmpty {
                             PillCountInstructionOverlay(text: controlledStepInstruction)
+                                .padding(
+                                    .leading,
+                                    isLandscape
+                                    ? (isIpad ? 220 : 100)
+                                    : 0
+                                )
                         }
 
                         Spacer()
@@ -136,7 +149,7 @@ struct OPillCountView: View {
                         Color.clear
                             .frame(width: 48, height: 48)
                     }
-                    .padding(.top, 65)
+                    .padding(.top, isLandscape ? 20 : 60)
                     .padding(.horizontal, 8)
                 },
                 showBackButton: false,

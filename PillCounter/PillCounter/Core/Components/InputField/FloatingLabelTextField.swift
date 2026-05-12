@@ -24,7 +24,7 @@ struct FloatingLabelTextField: View {
             // Floating placeholder label
             Text(placeholder)
                 .font(isActive ? .caption : .body)
-                .foregroundColor(appColors.text.opacity(0.75))
+                .foregroundColor(isFocused ? appColors.primary : appColors.text.opacity(0.75))
                 .offset(y: isActive ? -16 : 0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
                 .padding(.leading, 8)

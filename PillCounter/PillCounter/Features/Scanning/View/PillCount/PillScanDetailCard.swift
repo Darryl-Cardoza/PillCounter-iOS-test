@@ -25,7 +25,6 @@ struct PillScanDetailCard: View {
  
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
- 
             ZStack {
                 Rectangle()
                     .fill(appColors.secondaryBackground)
@@ -90,7 +89,7 @@ struct PillScanDetailCard: View {
             {
                 image
                     .resizable()
-                    .scaledToFill()          // fill the box — crops instead of shrinking
+                    .scaledToFill()
                     .frame(width: size.width, height: size.height)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .contentShape(RoundedRectangle(cornerRadius: 10))
@@ -100,12 +99,12 @@ struct PillScanDetailCard: View {
                     .frame(width: size.width, height: size.height)
                     .overlay(
                         Image(systemName: "photo")
-                            .font(.system(size: size.width * 0.25))  // scales with container
+                            .font(.system(size: size.width * 0.25))
                             .foregroundColor(.gray.opacity(0.4))
                     )
             }
         }
-        .aspectRatio(4/3, contentMode: .fit)   // ← controls the card shape universally
+        .aspectRatio(4/3, contentMode: .fit)
         .frame(maxWidth: 250)                  // ← cap size on iPad so it doesn't go huge
     }
  

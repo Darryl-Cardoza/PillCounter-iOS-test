@@ -301,7 +301,11 @@ struct BottomControlsView: View {
                 isScanPill: $showHistoryOrScanPillIcon,
                 onResetPills: onReset
             )
-            .padding(.top, isIpad ? 50 : 20)
+            .padding(.top, isIpad ? 42 : 24)
+            
+            if !isIpad{
+                Spacer()
+            }
           
             VStack {
                 if showHistoryOrScanPillIcon {
@@ -355,6 +359,10 @@ struct CountAddButtonView: View {
     @State private var displayedCount: Int = 0
     @State private var popScale: CGFloat = 1.0
     @State private var countTimer: Timer? = nil
+    
+    private var uiScale: CGFloat {
+         UIDevice.current.userInterfaceIdiom == .pad ? 1.5 : 1.0
+     }
 
     var body: some View {
         VStack(spacing: -20) {
@@ -366,13 +374,19 @@ struct CountAddButtonView: View {
                         style: StrokeStyle(lineWidth: ringLineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(90))
-                    .frame(width: size, height: size)
+                    .frame(
+                        width: size * uiScale,
+                        height: size * uiScale
+                    )
                     .id(animationID)
                     .onAppear { updateAnimationState() }
                     .onChange(of: isAnimating) { _, _ in updateAnimationState() }
 
                 Text("\(displayedCount)")
-                    .font(.system(size: size * 0.28, weight: .bold))
+                    .font(.system(
+                        size: size * 0.28 * uiScale,
+                        weight: .semibold
+                    ))
                     .foregroundStyle(textColor)
                     .scaleEffect(popScale)
             }
@@ -399,6 +413,7 @@ struct CountAddButtonView: View {
             }
             .disabled(isDisabled)
         }
+        .padding(.top, 10)
     }
 
     // MARK: - Snap to zero instantly
@@ -499,7 +514,7 @@ struct BottomControlsViewBodyForPillScan: View {
                     addButton
                         .frame(width: isIpad ? 160 : 120, height: isIpad ? 600 : 120)
                         .frame(maxWidth: .infinity)
-                        .padding(.top, isIpad ? 12 : 36)
+                        .padding(.top, isIpad ? 12 : 48)
                     
                     Spacer()
                     
@@ -513,12 +528,13 @@ struct BottomControlsViewBodyForPillScan: View {
                                     router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
                                 }
                             }
+
                         Spacer()
                         allDoneButton
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     .padding(.horizontal, isIpad ? 40 : 16)
-                    .padding(.bottom, 32)
+                    .padding(.bottom, isIpad ? 36 : 18)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -526,7 +542,8 @@ struct BottomControlsViewBodyForPillScan: View {
                 // All three in one bottom-aligned row
                 HStack(alignment: .bottom) {
                     totalCountView
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment:  isIpad ? .center : .leading)
+                        .padding(.bottom, 12)
                         .onTapGesture {
                             if pillScanViewModel.currentTransaction?.count_type ==  CountType.FIXED.rawValue {
                                 pillScanViewModel.isNavigatingToDetailGrid = true
@@ -534,15 +551,17 @@ struct BottomControlsViewBodyForPillScan: View {
                             }
                         }
 
+
                     addButton
                         .frame(maxWidth: .infinity)
 
                     allDoneButton
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .frame(maxWidth: .infinity, alignment: isIpad  ? .center : .trailing)
+                        .padding(.bottom, 12)
                 }
                 .padding(.horizontal)
-                .padding(.bottom, isIpad ? 50 : 40)
-                .padding(.top, isIpad ? 20 : 0)
+                .padding(.bottom,  40)
+                .padding(.top, 20)
             }
         }
         .onAppear {
@@ -603,7 +622,7 @@ struct BottomControlsViewBodyForPillScan: View {
                     .overlay(appColors.primary)
                     .mask(Image("all_done").resizable().scaledToFit())
 
-                Spacer().frame(height: 10)
+                Spacer().frame(height: 8)
                 Text("All Done")
                     .foregroundStyle(appColors.text)
                     .font(.system(size: 16))
@@ -648,9 +667,7 @@ struct TotalCountView: View {
         
         VStack(spacing: 6) {
 
-            if !showTarget {
                 Spacer()
-            }
 
             // Current Total
             Text("\(currentTotalCount)")
@@ -787,36 +804,23 @@ struct BottomControlsViewHeader: View {
         Group {
             if isLandScape {
                 VStack(spacing: 2) {
-//                    HStack {
-//                        resetButton
-//                        Spacer()
-//                        historyScanButton
-//                    }
-
                     Text(drugName)
                         .foregroundStyle(appColors.text)
-                        .font(.system(size: 18))
+                        .font(.system(size: 16))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                        .padding(.top, 30)
+                        .padding(.horizontal, 16)
                 }
             } else {
                 ZStack {
-                    // Layer 1: The Text (Centered)
                     Text(drugName)
                         .foregroundStyle(appColors.text)
-                        .font(.system(size: 20))
+                        .font(.system(size: 16))
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 44)
+                        .padding(.horizontal, 16)
+                        .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .center)
 
-                    // Layer 2: The Buttons (Left & Right edges)
-//                    HStack {
-//                        resetButton
-//                        Spacer()
-//                        historyScanButton
-//                    }
                 }
             }
         }

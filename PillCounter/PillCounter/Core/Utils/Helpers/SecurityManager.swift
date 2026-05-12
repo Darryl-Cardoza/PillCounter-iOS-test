@@ -21,6 +21,7 @@ struct SecurityManager {
             || isDebuggerAttached()
             || isRunningOnSimulator()
             || isTampered()
+//        return false
         
     }
 

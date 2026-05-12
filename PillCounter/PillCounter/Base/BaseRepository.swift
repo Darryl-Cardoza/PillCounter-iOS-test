@@ -121,11 +121,6 @@ extension BaseRepositoryProtocol {
 
         throw APIError.serverError(statusCode: 500)  // failsafe
     }
-
-    // MARK: - Headers
-    var xServerKey: String {
-        Keychain.getPassword(for: "runtime_unit_payload_v3") ?? ""
-    }
     
     static func headers(_ accessToken: String?) -> [String: String] {
         var headers: [String: String] = [
@@ -134,6 +129,7 @@ extension BaseRepositoryProtocol {
         ]
         // Read from Keychain — NEVER hardcode
         let serverKey = ConfigurationManager.shared.xServerKey
+        print(serverKey)
         if !serverKey.isEmpty {
             headers["X-Server-Key"] = serverKey
         }

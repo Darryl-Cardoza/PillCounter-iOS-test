@@ -13,23 +13,9 @@
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>pill.ccrlindia.com</key>
-			<dict>
-				<key>NSExceptionRequiresForwardSecrecy</key>
-				<false/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-			</dict>
+			<dict/>
 			<key>www.pill.ccrlindia.com</key>
-			<dict>
-				<key>NSExceptionRequiresForwardSecrecy</key>
-				<false/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-			</dict>
+			<dict/>
 		</dict>
 	</dict>
 	<key>NSBonjourServices</key>

@@ -53,4 +53,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 //        //SAVE + RESUME ANY WAITERS
 //        FCMManager.shared.updateToken(token)
 //    }
+    
+    func application(
+            _ application: UIApplication,
+            shouldSaveSecureApplicationState coder: NSCoder
+        ) -> Bool {
+            return false
+        }
+
+        func application(
+            _ application: UIApplication,
+            shouldRestoreSecureApplicationState coder: NSCoder
+        ) -> Bool {
+            return false
+        }
 }

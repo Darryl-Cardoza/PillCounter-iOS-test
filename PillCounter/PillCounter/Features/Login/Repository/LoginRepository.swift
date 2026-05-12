@@ -33,7 +33,8 @@ final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
             body: [
                 "email": email
             ],
-            responseType: SendOTPResponse.self
+            responseType: SendOTPResponse.self,
+            extraHeaders: ["Cache-Control": "no-store"]
         )
     }
     

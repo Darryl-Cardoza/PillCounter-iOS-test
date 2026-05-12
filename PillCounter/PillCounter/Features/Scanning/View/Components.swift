@@ -564,6 +564,7 @@ struct BottomControlsViewBodyForPillScan: View {
                 .padding(.top, 20)
             }
         }
+        .cornerRadius(24)
         .onAppear {
             if !isPausedDueToInactivity { handleCountChange() }
         }
@@ -1030,7 +1031,6 @@ struct VialBottomContentView: View {
     @Environment(\.isLandscape) private var isLandscape
 
     var body: some View {
-
         let layout = isLandscape
         ? AnyLayout(VStackLayout(spacing: 70))
         : AnyLayout(HStackLayout(spacing: 90))
@@ -1088,6 +1088,10 @@ struct VialBottomContentView: View {
         }
         .padding(.vertical, 25)
         .padding(.horizontal)
+        .background(
+            RoundedRectangle(cornerRadius: 50)
+                .fill(appColors.secondaryBackground)
+        )
     }
 }
 

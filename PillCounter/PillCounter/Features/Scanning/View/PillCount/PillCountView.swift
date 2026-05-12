@@ -107,11 +107,22 @@ struct OPillCountView: View {
                     .id("camera-content")
                 },
                 bottomContent: {
-                    if pillScanViewModel.currentControlledStep == .vial {
-                        vialControlBottomView
-                    } else {
-                        controlsContent
+                    ZStack {
+                        if pillScanViewModel.currentControlledStep == .vial {
+                            vialControlBottomView
+                        } else {
+                            controlsContent
+                        }
                     }
+                    .background(appColors.secondaryBackground)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: isLandscape ? 24 : 24,
+                            bottomLeadingRadius: isLandscape ? 24 : 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: isLandscape ? 0 : 24
+                        )
+                    )
                 },
                 headerActions: {
                     HStack {
@@ -158,7 +169,8 @@ struct OPillCountView: View {
                     router.setRoot(
                         to: .authentication(.login(.dashboard(.dashboardHome))))
                     cameraService.stop()
-                }
+                },
+                
             )
             .ignoresSafeArea(.all)
 
@@ -377,13 +389,9 @@ extension OPillCountView {
                 handleVialDone()
             }
         )
-        .background(
-            RoundedRectangle(cornerRadius: 28)
-                .fill(appColors.secondaryBackground)
-        )
     }
 
-//    // Async task to fetch transaction data on load.
+    // Async task to fetch transaction data on load.
     private func initializeTransaction() {
         Task {
             if pillScanViewModel.currentTransaction == nil {

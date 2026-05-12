@@ -33,7 +33,6 @@ public enum LoginFlow: Hashable, Codable {
 public enum DashboardFlow: Hashable, Codable {
     case dashboardHome
     case fixedCountPartial
-    case regularCountPartial
     case pillCount(ScanningFlow)
 }
 
@@ -41,7 +40,6 @@ public enum ScanningFlow: Codable, Hashable {
     case barcodeScanning(ScanType)
     case pillCountView
     case pillCountHistoryView
-    case controlledDrug(ControlFlow)
     case stockCount(StockCountFlow)
 }
 
@@ -50,9 +48,7 @@ public enum StockCountFlow: Codable, Hashable {
     case stockCountPartialBatchListScreen
 }
 
-public enum ControlFlow: Hashable, Codable {
-    case vialCount
-}
+
 
 public enum UserFlow: Hashable, Codable {
     case hamburgerMenu
@@ -79,7 +75,7 @@ public enum ScanType: Codable, Hashable {
 
 
 public enum HamburgerMenuFLow: Hashable, Codable {
-    case History(HistoryFilterType)
+    case History(HistoryFilterType, HistoryStatusFilter)
     case profile
     case settings
     case unsyncedTransaction
@@ -117,7 +113,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
         switch self {
         case .FixedCount: return "target_count_step3"
         case .RegularCount: return "placeholder_history"
-        case .Profile: return "profile_icon_new"
+        case .Profile: return "profile_icon"
         case .History: return "history_icon"
         case .UnsyncedTransaction: return "unsync_icon"
         case .Settings: return "settings_icon"
@@ -182,7 +178,7 @@ enum CountStatus: String, Codable {
     case FORCE_COMPLETED
 }
 
-enum HistoryStatusFilter: String, CaseIterable {
+public enum HistoryStatusFilter: String, CaseIterable, Codable {
     case all       = "All"
     case completed = "Completed"
     case pending   = "Pending"
@@ -228,6 +224,8 @@ enum ControlledStep: String, CaseIterable {
             return NSLocalizedString("CONTROLLED_CONTAINER_PENDING", comment: "")
         }
     }
+    
+
 }
 
 public enum StockCountOption: Hashable {
@@ -242,7 +240,6 @@ public enum StockCountOptionContainerStatus: Hashable {
 
 
 //HL7 ENUMS
-
 public enum PmsConnectionState {
     case connected
     case disconnected

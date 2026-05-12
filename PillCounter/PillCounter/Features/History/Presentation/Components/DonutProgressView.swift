@@ -12,25 +12,39 @@ struct DonutProgressView: View {
     let appColors: AppColors
     let size: CGFloat
 
+    @State private var animatedFraction: Double = 0
+
     var body: some View {
         ZStack {
-            // Background (remaining)
             Circle()
                 .fill(appColors.primaryBackground)
 
-            // Progress (filled pie)
-            PieShape(fraction: fraction)
+            PieShape(fraction: animatedFraction)
                 .fill(appColors.secondary)
-                .rotationEffect(.degrees(-90)) // start from top
+                .rotationEffect(.degrees(-90))
         }
         .frame(width: size, height: size)
-        .animation(.easeInOut(duration: 0.4), value: fraction)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.6)) {
+                animatedFraction = fraction
+            }
+        }
+        .onChange(of: fraction) { _, newValue in
+            withAnimation(.easeInOut(duration: 0.4)) {
+                animatedFraction = newValue
+            }
+        }
     }
 }
 
 
 struct PieShape: Shape {
     var fraction: Double
+
+    var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -45,7 +59,7 @@ struct PieShape: Shape {
             radius: radius,
             startAngle: .degrees(0),
             endAngle: .degrees(360 * fraction),
-            clockwise: false // ← this controls direction
+            clockwise: false
         )
 
         path.closeSubpath()

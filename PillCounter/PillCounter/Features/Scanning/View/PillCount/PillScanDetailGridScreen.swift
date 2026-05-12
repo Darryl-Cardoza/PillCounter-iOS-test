@@ -19,7 +19,7 @@ struct PillScanDetailGridScreen: View {
     @State private var isEditing: Bool = false
     @State private var selectedIds: Set<Int64> = []
     @State private var showDeleteConfirm: Bool = false
-    @State private var selectedUIImage: UIImage? = nil
+    @State private var selectedUIImage: Image? = nil
     @State private var showImageViewer = false
 
     
@@ -44,12 +44,19 @@ struct PillScanDetailGridScreen: View {
     private var countType: CountType {
         CountType(rawValue: pillScanViewModel.currentTransaction?.count_type ?? "") ?? .FIXED
     }
-
-    private var isFixed: Bool { details.first?.type != ControlledStep.containerInitiate.rawValue || countType == .FIXED}
+//
+//     var isFixed: Bool {
+//        if countType == .FIXED { return true }
+//        // REGULAR count with a container-initiate detail also shows target count
+//        return details.first?.type == ControlledStep.containerInitiate.rawValue
+//    }
+//    
+    @State private var isFixed: Bool = false
 
 
     // MARK: - Body
     var body: some View {
+        
         ZStack {
             BaseView(
                 topRatio: 1.0,
@@ -59,45 +66,51 @@ struct PillScanDetailGridScreen: View {
                 showBackButton: true,
                 showHamburgerMenu: false,
                 title: isEditing ? "DELETE TRANSACTION" : "TOTAL COUNT",
-                headerActionsBackground: appColors.primaryBackground
+                headerActionsBackground: appColors.primaryBackground,
+                backgroundColor: appColors.secondaryBackground
             )
-
+            .onAppear {
+                if countType == .FIXED { return }
+                isFixed = details.first?.type == ControlledStep.containerInitiate.rawValue
+            }
             // MARK: - Edit mode bottom bar
             if isEditing {
                 VStack {
                     Spacer()
-                    HStack(spacing: 12) {
-                        Button {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                isEditing = false
-                                selectedIds.removeAll()
-                            }
-                        } label: {
-                            Text("CANCEL")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(appColors.primary)
-                                .frame(maxWidth: 140)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(appColors.primary, lineWidth: 1)
-                                )
-                        }
 
-                        Button {
-                            showDeleteConfirm = true
-                        } label: {
-                            Text("DELETE")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: 140)
-                                .padding(.vertical, 10)
-                                .background(
-                                    selectedIds.isEmpty
-                                        ? Color.gray : appColors.primary
-                                )
-                                .cornerRadius(20)
-                        }
+                    EqualWidthHStackButtons(spacing: 16) {
+                        PillCountingButton(
+                            title: "CANCEL",
+                            textColor: appColors.primary,
+                            backgroundColor: .clear,
+                            borderColor: appColors.primary,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isEditing = false
+                                    selectedIds.removeAll()
+                                }
+                            }
+                        )
+
+                        PillCountingButton(
+                            title: "DELETE",
+                            textColor: selectedIds.isEmpty ? .white.opacity(0.6) : .white,
+                            backgroundColor: selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary,
+                            borderColor: .clear,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                showDeleteConfirm = true
+                            }
+                        )
                         .disabled(selectedIds.isEmpty)
                     }
                     .frame(maxWidth: .infinity)
@@ -110,11 +123,19 @@ struct PillScanDetailGridScreen: View {
                 .animation(.easeOut(duration: 0.3), value: isEditing)
             }
         }
-        .fullScreenCover(item: $selectedUIImage) { uiImage in
-                 ZoomableImageViewer(uiImage: uiImage) {
-                     selectedUIImage = nil
-                 }
-             }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { selectedUIImage != nil },
+                set: { if !$0 { selectedUIImage = nil } }
+            )
+        ) {
+            if let image = selectedUIImage {
+                FullScreenImageView(image: image) {
+                    selectedUIImage = nil
+                }
+            }
+        }
+
         .customPopup(isPresented: $showDeleteConfirm) {
             deleteConfirmationDialog
         }
@@ -124,25 +145,22 @@ struct PillScanDetailGridScreen: View {
     @ViewBuilder
     private var headerActions: some View {
         if isEditing {
-            // Select All checkbox
-            HStack(spacing: 10) {
-                let allIds = Set(details.map { $0.txn_details_id })
-                let allSelected = !allIds.isEmpty && selectedIds == allIds
+            let allIds = Set(details.map { $0.txn_details_id })
+            let allSelected = !allIds.isEmpty && selectedIds == allIds
 
-                ZStack {
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(appColors.primary, lineWidth: 1)
-                        .frame(width: 18, height: 18)
-                    if allSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(appColors.primary)
-                    }
-                }
-                Text("Select All")
+            HStack(spacing: 10) {
+                Image(allSelected ? "icon_unselected" : "icon_selected")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .foregroundStyle(appColors.primary)
+
+                Text(allSelected ? "Unselect All" : "Select All")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(appColors.primary)
             }
+            .contentShape(Rectangle())
             .onTapGesture { toggleAll() }
             .padding(.trailing, 16)
             .transition(.opacity)
@@ -190,7 +208,7 @@ struct PillScanDetailGridScreen: View {
             if isLandscape {
                 HStack(spacing: 8) {
                     Text(drugName)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(appColors.text)
                         .lineLimit(1)
 
@@ -201,7 +219,7 @@ struct PillScanDetailGridScreen: View {
             } else {
                 VStack(alignment: .center, spacing: 8) {
                     Text(drugName)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(appColors.text)
                         .lineLimit(1)
 
@@ -214,7 +232,7 @@ struct PillScanDetailGridScreen: View {
     }
     
     private var countView: some View {
-        Text(isFixed ? "\(pillCount)/\(targetCount)" : "\(pillCount)")
+        Text(!isFixed ? "\(pillCount)/\(targetCount)" : "\(pillCount)")
             .font(.system(size: 25, weight: .bold))
             .foregroundColor(appColors.secondary)
     }
@@ -226,35 +244,44 @@ struct PillScanDetailGridScreen: View {
                 emptyState
             } else {
                 LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10)
-                    ],
+                    columns: gridColumns,
                     spacing: 10
                 ) {
                     ForEach(details, id: \.txn_details_id) { detail in
                         PillScanDetailCard(
-                              detail: detail,
-                              isEditing: isEditing,
-                              isSelected: selectedIds.contains(detail.txn_details_id)
+                            detail: detail,
+                            isEditing: isEditing,
+                            isSelected: selectedIds.contains(detail.txn_details_id)
                         )
                         .onTapGesture {
-                                if isEditing {
-                                    toggleSelection(detail.txn_details_id)
-                                }else {
-                                    if let path = detail.image_path,
-                                        let uiImage = PhotoFileManager.shared.loadUIImage(from: path)
-                                     {
-                                         selectedUIImage = uiImage
-                                     }
+                            if isEditing {
+                                toggleSelection(detail.txn_details_id)
+                            } else {
+                                if let path = detail.image_path,
+                                   let uiImage = PhotoFileManager.shared.loadImage(from: path) {
+                                    selectedUIImage = uiImage
                                 }
-                         }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, isEditing ? 100 : 20)
             }
         }
+    }
+    
+    private var gridColumns: [GridItem] {
+        let columnCount: Int
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            columnCount = 4
+        } else {
+            columnCount = 2
+        }
+        return Array(
+            repeating: GridItem(.flexible(), spacing: 10),
+            count: columnCount
+        )
     }
 
     // MARK: - Landscape: horizontal scroll
@@ -273,10 +300,10 @@ struct PillScanDetailGridScreen: View {
                                 toggleSelection(detail.txn_details_id)
                             }else{
                                 if let path = detail.image_path,
-                                              let uiImage = PhotoFileManager.shared.loadUIImage(from: path)
-                                           {
-                                               selectedUIImage = uiImage
-                                           }
+                                  let uiImage = PhotoFileManager.shared.loadImage(from: path)
+                               {
+                                   selectedUIImage = uiImage
+                               }
                             }
                         }
                     }

@@ -16,8 +16,12 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
+    @EnvironmentObject private var stockCountViewModel: StockCountViewModel
 
     @State private var showLogoutPopup: Bool = false
+    @State private var showStockCountPopup: Bool = false
+    @State private var showSelectBucketIdPopup: Bool = false
+    @State private var selectedStockCountOption: StockCountOption = .newBatch
     
     @AppStorage(AppStorageManager.AppStorageKeys.saveHistoryOption)
     
@@ -41,11 +45,17 @@ struct HamburgerMenuView: View {
                 headerActions: { EmptyView() },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: NSLocalizedString("PROFILE", comment: "")
+                title: ""
             )
         }
         .customPopup(isPresented: $showLogoutPopup) {
             logoutPopUp
+        }
+        .customPopup(isPresented: $showStockCountPopup) {
+            stockCountPopUp
+        }
+        .customPopup(isPresented: $showSelectBucketIdPopup) {
+            selectBucketPopUp
         }
         .onAppear {
             Task {
@@ -104,7 +114,7 @@ struct HamburgerMenuView: View {
             .padding(.bottom, 40)
         }
         // BaseView header offset
-        .padding(.top, 80)
+        .padding(.top, 45)
         // Safe Area handling for Landscape
         .padding(
             .horizontal,
@@ -172,7 +182,7 @@ struct HamburgerMenuView: View {
                         for: item,
                         isLandscape: isLandscape,
                         monthDuration: monthDuration
-                    )
+                    ).padding(.top, 20)
                 }
             }
             // UNIFIED PADDING: Ensures exact same spacing for every item type
@@ -202,8 +212,7 @@ struct HamburgerMenuView: View {
               
         case .FixedCount:
             countButtonsRow(
-                completedCount: userViewModel
-                    .fixedCountTransactionCompletedCount,
+                completedCount: userViewModel.fixedCountTransactionCompletedCount,
                 partialCount: userViewModel.fixedCountTransactionPartialCount,
                 completedColor: appColors.primary,
                 partialColor: appColors.primary,
@@ -222,9 +231,8 @@ struct HamburgerMenuView: View {
 
         case .RegularCount:
             countButtonsRow(
-                completedCount: userViewModel
-                    .regularCountTransactionCompletedCount,
-                partialCount: userViewModel.regularCountTransactionPartialCount,
+                completedCount: stockCountViewModel.totalCompletedBatchCount,
+                partialCount:stockCountViewModel.totalBatchCount,
                 completedColor: appColors.primary,
                 partialColor: appColors.primary,
                 completedBg: appColors.primaryBackground,
@@ -236,7 +244,7 @@ struct HamburgerMenuView: View {
                         router.selectedPillScanningType = .REGULAR
                         router.navigate(
                             to: .authentication(
-                                .login(.dashboard(.regularCountPartial))))
+                                .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
                 }
             )
 
@@ -276,7 +284,7 @@ struct HamburgerMenuView: View {
                 verticalPadding: 8,
                 iconSize: 16,
                 action: {
-                    router.navigate(to: .authentication(.user(.userSettings(.History(historyType)))))
+                    router.navigate(to: .authentication(.user(.userSettings(.History(historyType, .completed)))))
                 },
                 iconColor: primaryIconColor
             )
@@ -303,6 +311,155 @@ struct HamburgerMenuView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - STOCK COUNT POPUP
+    private var stockCountPopUp: some View {
+        VStack(spacing: 35) {
+            VStack(alignment: .leading) {
+                Text(NSLocalizedString("WHAT_WOULD_YOU_DO", comment: ""))
+                    .font(.system(size: 16))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(appColors.text)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 28) {
+                PillCountingRadioButton(
+                    option: StockCountOption.newBatch,
+                    selectedOption: $selectedStockCountOption,
+                    label: NSLocalizedString("CREATE_NEW_BATCH", comment: ""),
+                    selectedColor: appColors.secondary,
+                    unselectedColor: .gray,
+                    size: 20,
+                    lineWidth: 2,
+                    textColor: appColors.text
+                )
+                PillCountingRadioButton(
+                    option: StockCountOption.existingBatch,
+                    selectedOption: $selectedStockCountOption,
+                    label: NSLocalizedString("CONTINUE_LAST_BATCH", comment: ""),
+                    selectedColor: appColors.secondary,
+                    unselectedColor: .gray,
+                    size: 20,
+                    lineWidth: 2,
+                    textColor: appColors.text
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            EqualWidthHStackButtons(spacing: 20) {
+                PillCountingButton(
+                    iconName: nil,
+                    title: NSLocalizedString("CANCEL", comment: ""),
+                    textColor: appColors.text,
+                    backgroundColor: .clear,
+                    borderColor: appColors.primary,
+                    font: .system(size: 14, weight: .semibold),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 20,
+                    iconSize: 0,
+                    action: { showStockCountPopup = false }
+                )
+                PillCountingButton(
+                    iconName: nil,
+                    title: "OK",
+                    textColor: Color.white,
+                    backgroundColor: appColors.primary,
+                    borderColor: .clear,
+                    font: .system(size: 14, weight: .semibold),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 20,
+                    iconSize: 0,
+                    action: {
+                        switch selectedStockCountOption {
+                        case .newBatch:
+                            let buckets = userViewModel.bucket
+                            pillScanViewModel.bucketOptions = buckets
+                            pillScanViewModel.selectedBucket = buckets.first ?? ""
+                            showSelectBucketIdPopup = true
+                            showStockCountPopup = false
+                        case .existingBatch:
+                            if stockCountViewModel.continueLastBatch() {
+                                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
+                            } else {
+                                pillScanViewModel.showToastMessage(text: "No last batch found")
+                            }
+                            showStockCountPopup = false
+                        }
+                    }
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - SELECT BUCKET POPUP
+    private var selectBucketPopUp: some View {
+        VStack(spacing: 35) {
+            VStack(alignment: .leading) {
+                Text(NSLocalizedString("SELECT_BUCKET", comment: ""))
+                    .font(.system(size: 16))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(appColors.text)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 28) {
+                ForEach(pillScanViewModel.bucketOptions, id: \.self) { bucket in
+                    PillCountingRadioButton(
+                        option: bucket,
+                        selectedOption: $pillScanViewModel.selectedBucket,
+                        label: bucket,
+                        selectedColor: appColors.secondary,
+                        unselectedColor: .gray,
+                        size: 20,
+                        lineWidth: 2,
+                        textColor: appColors.text
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            EqualWidthHStackButtons(spacing: 20) {
+                PillCountingButton(
+                    iconName: nil,
+                    title: NSLocalizedString("CANCEL", comment: ""),
+                    textColor: appColors.text,
+                    backgroundColor: .clear,
+                    borderColor: appColors.primary,
+                    font: .system(size: 14, weight: .semibold),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 20,
+                    iconSize: 0,
+                    action: { showSelectBucketIdPopup = false }
+                )
+                PillCountingButton(
+                    iconName: nil,
+                    title: "OK",
+                    textColor: Color.white,
+                    backgroundColor: appColors.primary,
+                    borderColor: .clear,
+                    font: .system(size: 14, weight: .semibold),
+                    cornerRadius: 30,
+                    horizontalPadding: 32,
+                    verticalPadding: 20,
+                    iconSize: 0,
+                    action: {
+                        stockCountViewModel.createNewBatch(bucketId: pillScanViewModel.selectedBucket)
+                        router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
+                        showSelectBucketIdPopup = false
+                    }
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(.horizontal, 8)
+    }
+
     // MARK: - MENU ACTION HANDLER
     private func handleMenuSelection(_ item: HamburgerMenuItem) {
         switch item {
@@ -310,7 +467,7 @@ struct HamburgerMenuView: View {
             router.selectedPillScanningType = .FIXED
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.barcodeScanning(.barcode))))))
+                    .login(.dashboard(.pillCount(.barcodeScanning(.rx_label))))))
             
         case .UnsyncedTransaction:
             router.navigate(
@@ -322,9 +479,8 @@ struct HamburgerMenuView: View {
 
         case .RegularCount:
             router.selectedPillScanningType = .REGULAR
-            router.navigate(
-                to: .authentication(
-                    .login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
+            showStockCountPopup = true
+            selectedStockCountOption = .newBatch
 
         case .Logout:
             Task {
@@ -335,7 +491,7 @@ struct HamburgerMenuView: View {
             router.navigate(to: .authentication(.user(.userSettings(.profile))))
 
         case .History:
-            router.navigate(to: .authentication(.user(.userSettings(.History(.fixed)))))
+            router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .all)))))
 
         }
     }

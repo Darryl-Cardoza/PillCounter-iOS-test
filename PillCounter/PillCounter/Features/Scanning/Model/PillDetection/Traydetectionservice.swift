@@ -31,7 +31,7 @@ final class TrayDetectionService {
     private func loadModel() {
         do {
             let cfg = MLModelConfiguration()
-            cfg.computeUnits = .cpuOnly
+            cfg.computeUnits = .cpuAndNeuralEngine
             model = try trayBest(configuration: cfg)
         } catch {
         }

@@ -21,6 +21,10 @@ struct UserProfileScreen: View {
         Bool = true
 
     @State private var firstName: String = ""
+    
+    @State private var npiText: String = ""
+
+    
     var body: some View {
         ZStack {
             BaseView(
@@ -46,10 +50,11 @@ struct UserProfileScreen: View {
                     EmptyView()
                 },
                 headerActions: { EmptyView() },
-                showBackButton: false,
+                showBackButton: true,
                 showHamburgerMenu: false,
                 title: NSLocalizedString("PROFILE", comment: ""),
-                allowKeyboardResize: true,
+                backgroundColor: appColors.primaryBackground,
+                allowKeyboardResize: false,
             )
 
             if userViewModel.isLoading {
@@ -101,81 +106,48 @@ struct UserProfileScreen: View {
     }
 
     private var potraitProfileColums: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(NSLocalizedString("FIRST_NAME", comment: ""))
-                .foregroundStyle(appColors.text)
+        VStack(alignment: .leading, spacing: 16) {
 
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("FIRST_NAME", comment: ""),
                 text: $userViewModel.firstName,
-                validation: .name,
                 maxLength: 30
             )
 
-            Text(NSLocalizedString("LAST_NAME", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("LAST_NAME", comment: ""),
                 text: $userViewModel.lastName,
-                validation: .name,
                 maxLength: 30
             )
 
-            Text(NSLocalizedString("PHARMACY_NAME", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("PHARMACY_NAME", comment: ""),
                 text: $userViewModel.pharmacyName,
-                validation: .none,
                 maxLength: 30
             )
 
-            Text(NSLocalizedString("PHONE_NUMBER", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("PHONE_NUMBER", comment: ""),
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                validation: .phone,
                 maxLength: 10
             )
 
-            Text(NSLocalizedString("EMAIL", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: true,
-                text: $userViewModel.email
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("EMAIL", comment: ""),
+                text: $userViewModel.email,
+                disabled: true
             )
 
-            Text(NSLocalizedString("NPI_ID", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("NPI_ID", comment: ""),
                 text: $userViewModel.npiID,
                 keyboardType: .phonePad,
-                validation: .phone,
                 maxLength: 10
             )
         }
     }
-
+    
     private var landscapeProfileColums: some View {
         HStack(alignment: .top, spacing: 12) {
             leftProfileColumn
@@ -185,79 +157,45 @@ struct UserProfileScreen: View {
 
     private var leftProfileColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(NSLocalizedString("FIRST_NAME", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("FIRST_NAME", comment: ""),
                 text: $userViewModel.firstName,
-                validation: .name,
                 maxLength: 30
             )
-
-            Text(NSLocalizedString("PHARMACY_NAME", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("PHARMACY_NAME", comment: ""),
                 text: $userViewModel.pharmacyName,
-                validation: .none,
                 maxLength: 30
             )
 
-            Text(NSLocalizedString("EMAIL", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: true,
-                text: $userViewModel.email
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("EMAIL", comment: ""),
+                text: $userViewModel.email,
+                disabled: true
             )
         }
     }
 
     private var rightProfileColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(NSLocalizedString("LAST_NAME", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("LAST_NAME", comment: ""),
                 text: $userViewModel.lastName,
-                validation: .name,
                 maxLength: 30
             )
-
-            Text(NSLocalizedString("PHONE_NUMBER", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("PHONE_NUMBER", comment: ""),
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                validation: .phone,
                 maxLength: 10
             )
 
-            Text(NSLocalizedString("NPI_ID", comment: ""))
-                .foregroundStyle(appColors.text)
-
-            PillCounterInputField(
-                imageName: nil,
-                placeholder: "",
-                disabled: false,
+            FloatingLabelTextField(
+                placeholder: NSLocalizedString("NPI_ID", comment: ""),
                 text: $userViewModel.npiID,
                 keyboardType: .phonePad,
-                validation: .npi,
                 maxLength: 10
             )
         }
@@ -282,19 +220,19 @@ struct UserProfileScreen: View {
             )
 
             // SKIP
-            PillCountingButton(
-                iconName: nil,
-                title: NSLocalizedString("SKIP", comment: ""),
-                textColor: appColors.primary,
-                backgroundColor: .clear,
-                borderColor: appColors.primary,
-                font: .system(size: 16, weight: .semibold),
-                cornerRadius: 40,
-                horizontalPadding: 22,
-                verticalPadding: 15,
-                iconSize: 24,
-                action: onSkipTapped
-            )
+//            PillCountingButton(
+//                iconName: nil,
+//                title: NSLocalizedString("SKIP", comment: ""),
+//                textColor: appColors.primary,
+//                backgroundColor: .clear,
+//                borderColor: appColors.primary,
+//                font: .system(size: 16, weight: .semibold),
+//                cornerRadius: 40,
+//                horizontalPadding: 22,
+//                verticalPadding: 15,
+//                iconSize: 24,
+//                action: onSkipTapped
+//            )
 
             // SAVE
             PillCountingButton(
@@ -349,7 +287,7 @@ struct UserProfileScreen: View {
     private func profileScreenLandscape() -> some View {
         VStack(spacing: 0) {
 
-            profileHeader
+//            profileHeader
 
             ScrollView {
                 VStack(spacing: 20) {
@@ -362,70 +300,71 @@ struct UserProfileScreen: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
-                    HStack {
-                        Spacer()
-                        actionButtons
-                        Spacer()
-                    }
-                    .padding(.bottom, 20)
+                   
                 }
                 .padding(.horizontal)
             }
-        }
-        .background(appColors.primaryBackground)
-    }
-    private func profileScreenPotrait() -> some View {
-        VStack(spacing: 0) {
-
-            profileHeader
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-
-                    Spacer().frame(height: 20)
-
-                    potraitProfileColums
-
-                    Spacer().frame(height: 30)
-                    actionButtons
-                    
-                }
-                .padding(.horizontal)
+            
+            Spacer()
+            
+            HStack {
+                Spacer()
+                actionButtons
+                Spacer()
             }
+            .padding(.bottom, 20)
         }
+        .padding(.top, 65 )
         .background(appColors.primaryBackground)
     }
     
-    private var profileHeader: some View {
-        HStack {
-            if !isNewUser {
-                Button {
-                    router.navigateBack()
-                } label: {
-                    HStack {
-                        Image("back_icon")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
+    private func profileScreenPotrait() -> some View {
+        VStack(spacing: 0) {
 
-                        Text(NSLocalizedString("PROFILE", comment: ""))
-                            .font(.headline)
-                            .foregroundStyle(appColors.text)
-                    }
+//            profileHeader
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    potraitProfileColums
                 }
             }
+            .padding(.horizontal)
 
             Spacer()
+            
+            HStack {
+                Spacer()
+                actionButtons
+                Spacer()
+            }
+            .padding(.vertical)
         }
-        .padding(.top, SafeAreaInsets.top + 10)
-        .padding(.horizontal)
-        .padding(.vertical,8)
+        .padding(.top, 65)
     }
-}
-
-#Preview {
-    let userViewModel = UserViewModel()
-    UserProfileScreen()
-        .preferredColorScheme(.dark)
-        .environmentObject(userViewModel)
+    
+//    private var profileHeader: some View {
+//        HStack {
+//            if !isNewUser {
+//                Button {
+//                    router.navigateBack()
+//                } label: {
+//                    HStack {
+//                        Image("back_icon")
+//                            .resizable()
+//                            .scaledToFit()
+//                            .frame(width: 24, height: 24)
+//
+//                        Text(NSLocalizedString("PROFILE", comment: ""))
+//                            .font(.headline)
+//                            .foregroundStyle(appColors.text)
+//                    }
+//                }
+//            }
+//
+//            Spacer()
+//        }
+//        .padding(.horizontal)
+//        .padding(.vertical,10)
+//        .padding(.bottom, 30)
+//    }
 }

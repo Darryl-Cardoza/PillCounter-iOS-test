@@ -83,7 +83,7 @@
 "TOGGLE_BUTTON_TEXT" = "Always ask to add Notes";
 "SAVE_HISTORY" = "Save History For";
 "REQUIRED_DOUBLE_COUNT" = "Require Double Counts";
-"REQUIRED_BACK_COUNT" = "Require Back Counts";
+"REQUIRED_BACK_COUNT" = "Require Back Counts for Controlled drug";
 "REQUIRED_ADJUST_REASON" = "Require Adjust Reasons";
 "HAPTIC_FEEDBACK" = "Pill Count Haptic Feedback";
 "SOUND_FEEDBACK" = "Pill Count Sound Feedback";
@@ -94,19 +94,22 @@
 
 //POPUPS
 "GENERIC_EQUIVALENT_SCANNED"  = "GENERIC EQUIVALENT SCANNED";
-"GENERIC_EQUIVALENT_SUBTITLE" = "Scanned item is a generic equivalent to the speficied drug";
+"GENERIC_EQUIVALENT_SUBTITLE" = "Scanned item is a generic equivalent to the specified drug";
 "DO_YOU_WANT_SUBSTITUE" = "Do you want to substitute?";
 
 //MARK: HISTORY SCREEN
 "PILL_COUNT" = "PILL COUNT";
 "INITIAL_CONTAINER_COUNT" = "INITIAL CONTAINER COUNT";
 "SUBSTITUTED_DRUG_DETAILS" = "SUBSTITUTED DRUG DETAILS";
+"REQUESTED_DRUG_DETAILS" = "REQUESTED DRUG DETAILS";
+"DISPENCED_DRUG_DETAILS" = "DISPENSED DRUG DETAILS";
 "PILL_RECOUNT" = "PILL RECOUNT";
 "DISPENSED_VIAL" = "DISPENSED VIAL";
 "REMAINING_CONTAINER_COUNT" = "REMAINING PILL COUNT IN STOCK BOTTLE";
 "NOTE" = "NOTE";
 "TOTAL_COUNT" = "TOTAL COUNT";
 "SUBSTITUED_DRUG"= "Substituted Drug";
+"DRUG_NAME" = "Drug Name";
 "NDC" = "NDC";
 "EXPIRY_NO" = "Expiry No";
 "LOT_NO" = "Lot No";
@@ -121,11 +124,12 @@
 
 //MARK: CONTROLLED STEP
 "CONTROLLED_SCAN" = "Scan Container QR Code";
-"CONTROLLED_CONTAINER_INITIATE" = "Count all pills from container";
+"CONTROLLED_CONTAINER_INITIATE" = "Count all Pills from container";
 "CONTROLLED_TARGET_VERIFICATION" = "Count Prescribed quantity";
 "CONTROLLED_TARGET_REVERIFICATION" = "Recount Prescribed Quantity.";
 "CONTROLLED_VIAL" = "Take picture of the counted Pills Vial";
 "CONTROLLED_CONTAINER_PENDING" = "Count all remaining Pills from Container";
+"REGULAR_TARGET_REVERIFICATION" = "Count Pills from Open Container";
 "SCAN_BARCODE" = "Scan container QR code";
 "SCAN_STOCK_COUNT_BARCODE" = "Scan Stock Bottle";
 "SCAN_RX_LABEL_BARCODE" = "Scan Rx Label";

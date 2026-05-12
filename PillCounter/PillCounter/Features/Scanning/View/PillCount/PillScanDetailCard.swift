@@ -31,11 +31,10 @@ struct PillScanDetailCard: View {
                     .fill(appColors.secondaryBackground)
 
                 imageView(path: detail.image_path)
-                    .frame(height: 120)
-                    .padding(8)
+                    .padding(12)
             }
             .frame(height: 160)
-            .clipShape(TopRoundedRectangle(radius: 10))
+            .clipShape(TopRoundedRectangle(radius: 8))
             
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(detail.pill_count)")
@@ -107,7 +106,7 @@ struct PillScanDetailCard: View {
             }
         }
         .aspectRatio(4/3, contentMode: .fit)   // ← controls the card shape universally
-        .frame(maxWidth: 300)                  // ← cap size on iPad so it doesn't go huge
+        .frame(maxWidth: 250)                  // ← cap size on iPad so it doesn't go huge
     }
  
     // MARK: - Selection circle

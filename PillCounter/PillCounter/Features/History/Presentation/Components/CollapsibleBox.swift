@@ -11,6 +11,7 @@ struct CollapsibleBox<Content: View>: View {
     let title: String
     let content: Content
     var allowCollapse: Bool = true
+    let bgColor: Color?
 
     @State private var isExpanded: Bool
 
@@ -20,15 +21,17 @@ struct CollapsibleBox<Content: View>: View {
         title: String,
         allowCollapse: Bool = true,
         defaultExpanded: Bool = false,
+        bgColor: Color? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.allowCollapse = allowCollapse
         self._isExpanded = State(initialValue: allowCollapse ? defaultExpanded : true)
         self.content = content()
+        self.bgColor = bgColor
     }
 
-
+  
     var body: some View {
         VStack(spacing: 0) {
             // HEADER
@@ -64,7 +67,7 @@ struct CollapsibleBox<Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .background(appColors.primaryBackground)
+        .background(bgColor ?? appColors.primaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

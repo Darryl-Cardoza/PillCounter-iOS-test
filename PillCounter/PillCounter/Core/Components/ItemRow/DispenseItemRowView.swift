@@ -38,7 +38,7 @@ struct DispenseItemRowView: View {
             ThumbnailImageView(
                 imagePath: data.barcodeImagePath,
                 width: 80,
-                height: 54,
+                height: 64,
                 cornerRadius: 8,
                 borderColor: appColors.primaryBackground,
                 placeholderImageName: "dispense_placeholder",

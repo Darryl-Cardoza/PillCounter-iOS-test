@@ -128,7 +128,7 @@ final class HL7BatchSyncQueue {
         let txns = storage.fetchTransactionsByBatch(batchId: item.batchId)
 
         print("📊 [Queue] Transactions count:", txns.count)
-
+        
         guard !txns.isEmpty, let user = txns.first?.user else {
             print("❌ [Queue] Missing txns or user for batch:", item.batchId)
             queue.removeFirst()
@@ -136,6 +136,7 @@ final class HL7BatchSyncQueue {
             return
         }
 
+        
         // Persist the resolved requestId back to Core Data if it was generated
         if batch.req_id_from_pms == nil {
             print("💾 [Queue] Persisting generated requestId:", item.requestId)
@@ -143,7 +144,7 @@ final class HL7BatchSyncQueue {
         }
 
         let hl7 = hl7Builder.buildInventoryMessage(batch: batch, user: user)
-
+        print("hl7\(hl7)")
         print("📡 [HL7] Sending batch:", item.batchId,
               "| requestId:", item.requestId)
 
@@ -255,7 +256,7 @@ final class HL7BatchSyncQueue {
     private func persistGeneratedRequestId(_ requestId: String, for batch: BatchCountEntity) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            batch.req_id_from_pms = requestId
+            batch.req_id_from_pms = "REQ\(String(batch.batch_id))"
             try? self.storage.mainThreadContext.save()
         }
     }

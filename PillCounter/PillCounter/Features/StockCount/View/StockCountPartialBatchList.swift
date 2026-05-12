@@ -21,27 +21,61 @@
         @State private var batchCounts: [Int64: Int] = [:]
         @State private var batches: [BatchCountEntity] = []
         @State private var resetList: Bool = false
+        
+        //Added For Animation
+        @State private var appearedIds: Set<Int64> = []
+        @State private var listReady: Bool = false
+        @State private var deletingIds: Set<Int64> = []
+        
+
 
         var body: some View {
             GenericListScreen<BatchCountEntity, TransactionDetailOption>(
                 items: batches,
-                title: "PARTIAL COUNTS",
+                title: "PENDING BATCHES",
                 resetTrigger: resetList,
-              
-                
                 // ROW UI — selectedIds is Set<Int64> from GenericListScreen
                 rowView: { batch, isEditing, selectedIds in
                     AnyView(
-                        StockItemRowView(
-                            data: batch.toStockData(
-                                ndcCount: batchCounts[batch.batch_id] ?? 0
-                            ),
-                            appColors: appColors
-                        )
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.red.opacity(deletingIds.contains(batch.batch_id) ? 0.12 : 0))
+                                .animation(.easeIn(duration: 0.15), value: deletingIds.contains(batch.batch_id))
+
+                            StockItemRowView(
+                                data: batch.toStockData(ndcCount: batchCounts[batch.batch_id] ?? 0),
+                                appColors: appColors
+                            )
+                            .listRowAnimated(
+                                id: batch.batch_id,
+                                index: batches.firstIndex(where: { $0.batch_id == batch.batch_id }) ?? 0,
+                                isEditing: isEditing,
+                                isSelected: selectedIds.contains(batch.batch_id),
+                                isDeleting: deletingIds.contains(batch.batch_id),
+                                highlightColor: appColors.secondary
+                            )
+                        }
+                        .collapsible(isVisible: !deletingIds.contains(batch.batch_id))
                         .selectableEffect(
                             isSelected: selectedIds.contains(batch.batch_id),
                             highlightColor: appColors.secondary
                         )
+                        .animation(
+                            .spring(response: 0.38, dampingFraction: 0.82),
+                            value: deletingIds.contains(batch.batch_id)
+                        )
+                        .onAppear {
+                            guard !appearedIds.contains(batch.batch_id) else { return }
+                            let index = batches.firstIndex(where: {
+                                $0.batch_id == batch.batch_id
+                            }) ?? 0
+                            withAnimation(
+                                .spring(response: 0.42, dampingFraction: 0.78)
+                                .delay(Double(index) * 0.07)
+                            ) {
+                                appearedIds.insert(batch.batch_id)
+                            }
+                        }
                     )
                 },
 
@@ -136,6 +170,8 @@
 
                 ThumbnailImageView(
                     imagePath: "",
+                    width: 80,
+                    height: 64,
                     placeholderImageName: batch.req_id_from_pms != nil ? "new_rx" : "batch_icon",
                     isFromPms: false,
                     showImageBackground: appColors.primaryBackground
@@ -195,8 +231,7 @@
                     pendingAction = .delete(id)
                 }
             case .forceComplete:
-                if let id = selectedBatchId {
-                }
+               return
             }
         }
     }
@@ -232,9 +267,7 @@
                             pendingAction = .delete(id)
                         }
                     case .forceComplete:
-                        if let id = selectedBatchId {
-                            showMenuOptions = false
-                        }
+                       return
                     }
                 }
             )
@@ -254,22 +287,33 @@
                 }
             )
         }
-
         private func handleConfirmedAction() {
             guard let action = pendingAction else { return }
             pendingAction = nil
 
             switch action {
             case .delete(let id):
-                stockCountViewMoel.pillDataLocalStorage.deleteBatches(ids: [id])
-                resetList.toggle()
-                reloadBatches()
+                deletingIds.insert(id)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    stockCountViewMoel.pillDataLocalStorage.deleteBatches(ids: [id])
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        batches.removeAll { $0.batch_id == id }
+                    }
+                    deletingIds.remove(id)
+                    resetList.toggle()
+                }
 
 
             case .multiDelete(let ids):
-                stockCountViewMoel.pillDataLocalStorage.deleteBatches(ids: ids)
-                resetList.toggle()
-                reloadBatches()
+                deletingIds.formUnion(ids)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    stockCountViewMoel.pillDataLocalStorage.deleteBatches(ids: ids)
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        batches.removeAll { ids.contains($0.batch_id) }
+                    }
+                    deletingIds.subtract(ids)
+                    resetList.toggle()
+                }
             }
         }
 

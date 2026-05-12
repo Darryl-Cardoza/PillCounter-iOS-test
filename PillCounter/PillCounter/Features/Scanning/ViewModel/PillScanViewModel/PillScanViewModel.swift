@@ -75,8 +75,6 @@ class PillScanViewModel: ObservableObject {
     @Published var isNdcEquivalent: Bool = false
     @Published var showNdcEquivalencePopup = false
     @Published var shouldAutoProceedToCount = false
-
-
     @Published var isNdcAdded: Bool = false
     
     // MARK: Stock Count State

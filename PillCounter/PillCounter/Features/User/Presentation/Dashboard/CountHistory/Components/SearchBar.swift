@@ -19,7 +19,7 @@ struct UnderlinedSearchBar: View {
             Button(action: onExitSearch) {
                 Image(systemName: "xmark")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(appColors.secondary)
+                    .foregroundColor(appColors.primary)
             }
 
             // 2. Search Field with Underline
@@ -39,7 +39,7 @@ struct UnderlinedSearchBar: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(appColors.secondary)
+                                .foregroundColor(appColors.primary)
                         }
                     }
                 }
@@ -47,7 +47,7 @@ struct UnderlinedSearchBar: View {
                 // The Underline
                 Rectangle()
                     .frame(height: 1)
-                    .foregroundColor(appColors.secondary)
+                    .foregroundColor(appColors.primary)
             }
         }
         .padding(.vertical, 8)

@@ -98,7 +98,7 @@ struct ZoomControlView: View {
                 GeometryReader { geo in
                     let width = geo.size.width
 
-                    let horizontalPadding: CGFloat = 16   // slider internal padding
+                    let horizontalPadding: CGFloat = 16
                     let usableWidth = width - (horizontalPadding * 2)
 
                     let percentage = (cameraService.zoomFactor - minZoom) / (maxZoom - minZoom)
@@ -291,6 +291,8 @@ struct BottomControlsView: View {
     }
     
     var body: some View {
+        let isIpad = UIDevice.current.userInterfaceIdiom == .pad
+
         VStack(spacing: 0) {
             BottomControlsViewHeader(
                 drugName: pillScanViewModel.currentTransaction?.drug?.drug_name
@@ -299,9 +301,8 @@ struct BottomControlsView: View {
                 isScanPill: $showHistoryOrScanPillIcon,
                 onResetPills: onReset
             )
-            .padding()
-            .padding(.top, isLandscape ? 0 : 10)
-
+            .padding(.top, isIpad ? 50 : 20)
+          
             VStack {
                 if showHistoryOrScanPillIcon {
                     BottonControlsViewForTransactionList(
@@ -309,8 +310,6 @@ struct BottomControlsView: View {
                             .currentTransactionTransactionDetails ?? [],
                         appColors: appColors,
                         countType: router.selectedPillScanningType ?? .FIXED,
-//                        targetCount: pillScanViewModel.currentTransaction?
-//                            .target_count ?? 0,
                         targetCount: targetCount ,
                         onTap: onTransactionDetailTapped,
                         isLandscape: isLandscape
@@ -320,8 +319,6 @@ struct BottomControlsView: View {
                     BottomControlsViewBodyForPillScan(
                         appColors: appColors,
                         countType: router.selectedPillScanningType ?? .FIXED,
-//                        targetCount: pillScanViewModel.currentTransaction?
-//                            .target_count ?? 0,
                         targetCount: targetCount,
                         currentTotalCount: completeCount,
                         currentScanningCount: cameraService.stableCount,
@@ -332,7 +329,7 @@ struct BottomControlsView: View {
                             .isPausedDueToInactivity,
                         isAddButtonDisabled: isAddButtonDisabled
                     )
-                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -353,42 +350,44 @@ struct CountAddButtonView: View {
     let onAddTap: () -> Void
     var isDisabled: Bool = false
 
-    // We use a UUID to force SwiftUI to recreate the view when animation state changes.
-    // This prevents the "repeatForever" from getting stuck or not resetting correctly.
     @State private var animationID = UUID()
     @State private var trimValue: CGFloat = 1.0
+    @State private var displayedCount: Int = 0
+    @State private var popScale: CGFloat = 1.0
+    @State private var countTimer: Timer? = nil
 
     var body: some View {
         VStack(spacing: -20) {
-
-            // Circle with animated stroke
             ZStack {
                 Circle()
                     .trim(from: 0, to: trimValue)
                     .stroke(
                         ringColor,
-                        style: StrokeStyle(
-                            lineWidth: ringLineWidth,
-                            lineCap: .round
-                        )
+                        style: StrokeStyle(lineWidth: ringLineWidth, lineCap: .round)
                     )
-                    .rotationEffect(.degrees(90))  // Start at 6 o'clock
+                    .rotationEffect(.degrees(90))
                     .frame(width: size, height: size)
-                    .id(animationID)  // Critical for resetting animation cleanly
-                    .onAppear {
-                        updateAnimationState()
-                    }
-                    .onChange(of: isAnimating) { _, _ in
-                        updateAnimationState()
-                    }
+                    .id(animationID)
+                    .onAppear { updateAnimationState() }
+                    .onChange(of: isAnimating) { _, _ in updateAnimationState() }
 
-                Text("\(count)")
+                Text("\(displayedCount)")
                     .font(.system(size: size * 0.28, weight: .bold))
                     .foregroundStyle(textColor)
+                    .scaleEffect(popScale)
             }
             .opacity(isDisabled ? 0.5 : 1.0)
+            .onChange(of: count) { _, newCount in
+                if newCount == 0 {
+                    snapToZero()
+                } else {
+                    animateCount(to: newCount)
+                }
+            }
+            .onAppear {
+                displayedCount = count
+            }
 
-            // Add button
             Button(action: onAddTap) {
                 Text(isDisabled ? "Wait..." : "Add")
                     .font(.system(size: 16, weight: .semibold))
@@ -402,29 +401,68 @@ struct CountAddButtonView: View {
         }
     }
 
-    private func updateAnimationState() {
-        // Regenerate ID to kill any existing animation context
-        animationID = UUID()
+    // MARK: - Snap to zero instantly
+    private func snapToZero() {
+        countTimer?.invalidate()
+        countTimer = nil
+        displayedCount = 0
+        popScale = 1.0
+    }
 
+    // MARK: - Fast timer-based count
+    private func animateCount(to target: Int) {
+        countTimer?.invalidate()
+        countTimer = nil
+
+        let start = displayedCount
+        let delta = target - start
+        guard delta != 0 else { return }
+
+        let stepCount = abs(delta)
+        let increment = delta > 0 ? 1 : -1
+
+        // Total roll duration — 40ms per step, max 300ms total
+        // e.g. +1 = 40ms (nearly instant), +10 = 300ms (fast ticker)
+        let totalDuration: Double = min(Double(stepCount) * 0.04, 0.3)
+        let interval: Double = totalDuration / Double(stepCount)
+
+        var current = start
+
+        countTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { t in
+            current += increment
+            displayedCount = current
+
+            // Tiny pop on each tick
+            popScale = 1.15
+            withAnimation(.spring(response: 0.12, dampingFraction: 0.45)) {
+                popScale = 1.0
+            }
+
+            if current == target {
+                t.invalidate()
+                countTimer = nil
+            }
+        }
+        // Fire immediately on main run loop including scroll
+        RunLoop.main.add(countTimer!, forMode: .common)
+    }
+
+    // MARK: - Ring animation
+    private func updateAnimationState() {
+        animationID = UUID()
         if isAnimating {
-            // Start with empty circle
             trimValue = 0
-            withAnimation(
-                .linear(duration: 1.5)
-                    .repeatForever(autoreverses: false)
-            ) {
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                 trimValue = 1
             }
             DispatchQueue.main.asyncAfter(deadline: .now()) {
-                 guard isAnimating else { return }
-
-                 FeedbackManager.shared.triggerDetectionFeedback(
-                     isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
-                     isSoundEnabled: AppStorageManager.shared.isSoundEnabled
-                 )
-             }
+                guard isAnimating else { return }
+                FeedbackManager.shared.triggerDetectionFeedback(
+                    isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
+                    isSoundEnabled: AppStorageManager.shared.isSoundEnabled
+                )
+            }
         } else {
-            // Stop state: Full Circle Visible immediately
             withAnimation(.linear(duration: 0.2)) {
                 trimValue = 1
             }
@@ -452,20 +490,37 @@ struct BottomControlsViewBodyForPillScan: View {
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
 
     var body: some View {
+        let isIpad = UIDevice.current.userInterfaceIdiom == .pad
+
         Group {
             if isLandscape {
-//                Spacer().frame(height: 200)
-                // MARK: - LANDSCAPE LAYOUT
-                // 1. Center: Add Button
-                // 2. Below: Row with Total Count (Left) and All Done (Right)
-                VStack(spacing: 5) {
+                VStack(spacing: 0) {
+                    // addButton centered — constrain its size so it doesn't grow huge
                     addButton
-                    HStack(alignment: .bottom) {
+                        .frame(width: isIpad ? 160 : 120, height: isIpad ? 600 : 120)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, isIpad ? 12 : 36)
+                    
+                    Spacer()
+                    
+                    // Bottom row: Total Count + All Done
+                    HStack(alignment: .center, spacing: 16) {
                         totalCountView
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onTapGesture {
+                                if pillScanViewModel.currentTransaction?.count_type ==  CountType.FIXED.rawValue {
+                                    pillScanViewModel.isNavigatingToDetailGrid = true
+                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+                                }
+                            }
                         Spacer()
                         allDoneButton
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
+                    .padding(.horizontal, isIpad ? 40 : 16)
+                    .padding(.bottom, 32)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 // MARK: - PORTRAIT LAYOUT
                 // All three in one bottom-aligned row
@@ -473,8 +528,10 @@ struct BottomControlsViewBodyForPillScan: View {
                     totalCountView
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .onTapGesture {
-                            pillScanViewModel.isNavigatingToDetailGrid = true
-                            router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+                            if pillScanViewModel.currentTransaction?.count_type ==  CountType.FIXED.rawValue {
+                                pillScanViewModel.isNavigatingToDetailGrid = true
+                                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+                            }
                         }
 
                     addButton
@@ -484,6 +541,8 @@ struct BottomControlsViewBodyForPillScan: View {
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(.horizontal)
+                .padding(.bottom, isIpad ? 50 : 40)
+                .padding(.top, isIpad ? 20 : 0)
             }
         }
         .onAppear {
@@ -512,7 +571,7 @@ struct BottomControlsViewBodyForPillScan: View {
             ringColor: appColors.secondary,
             buttonColor: appColors.primary,
             textColor: appColors.text,
-            ringLineWidth: 5,
+            ringLineWidth: 3,
             size: 120,
             isAnimating: isAnimating,
             onAddTap: { onAddPills() },
@@ -956,33 +1015,40 @@ struct ConfettiParticle: Identifiable {
 
 // MARK: Vial
 struct VialBottomContentView: View {
-    
+
     let appColors: AppColors
-    
+    let isCaptured: Bool
+
     var onRedo: () -> Void
     var onCapture: () -> Void
     var onDone: () -> Void
-    
+
     @Environment(\.isLandscape) private var isLandscape
 
     var body: some View {
-        
+
         let layout = isLandscape
         ? AnyLayout(VStackLayout(spacing: 70))
         : AnyLayout(HStackLayout(spacing: 90))
-        
+
         layout {
-            
+
             // Redo
             VStack(spacing: 10) {
                 Image("redo_icon")
-                    .foregroundColor(appColors.primary)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(isCaptured ? appColors.primary : appColors.primaryBackground)
+
                 
                 Text("Redo")
                     .font(.caption)
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(appColors.text )
             }
             .onTapGesture {
+                guard isCaptured else { return }
                 onRedo()
             }
             
@@ -995,7 +1061,7 @@ struct VialBottomContentView: View {
                 
                 Image(systemName: "camera")
                     .font(.system(size: 28, weight: .medium))
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(Color.white)
             }
             .onTapGesture {
                 onCapture()
@@ -1005,13 +1071,14 @@ struct VialBottomContentView: View {
             // Done
             VStack(spacing: 10) {
                 Image("done_icon")
-                    .foregroundColor(appColors.primary)
-                
+                    .foregroundColor(isCaptured ? appColors.primary : .gray)
+
                 Text("Done")
                     .font(.caption)
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(isCaptured ? appColors.text : .gray)
             }
             .onTapGesture {
+                guard isCaptured else { return }
                 onDone()
             }
         }

@@ -6,19 +6,16 @@
 //
 import SwiftUI
 
+
 struct FullScreenImageView: View {
-    
+
     let image: Image?
     let onDismiss: () -> Void
 
     @State private var scale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-
     @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
-
-    @GestureState private var gestureScale: CGFloat = 1
-    @GestureState private var gestureDrag: CGSize = .zero
 
     var body: some View {
         GeometryReader { geo in
@@ -29,119 +26,99 @@ struct FullScreenImageView: View {
                     image
                         .resizable()
                         .scaledToFit()
-                        .scaleEffect(scale * gestureScale)
-                        .offset(
-                            x: boundedOffset(
-                                proposed: offset.width + gestureDrag.width,
-                                size: geo.size,
-                                scale: scale * gestureScale
-                            ).width,
-                            y: boundedOffset(
-                                proposed: offset.height + gestureDrag.height,
-                                size: geo.size,
-                                scale: scale * gestureScale
-                            ).height
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .gesture(
+                            SimultaneousGesture(
+                                MagnificationGesture()
+                                    .onChanged { value in
+                                        let proposed = lastScale * value
+                                        scale = min(max(proposed, 1), 4)
+                                    }
+                                    .onEnded { _ in
+                                        lastScale = scale
+                                        if scale <= 1 {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                                scale      = 1
+                                                lastScale  = 1
+                                                offset     = .zero
+                                                lastOffset = .zero
+                                            }
+                                        } else {
+                                            let clamped = clampedOffset(offset, in: geo.size, scale: scale)
+                                            withAnimation(.spring(response: 0.25)) {
+                                                offset     = clamped
+                                                lastOffset = clamped
+                                            }
+                                        }
+                                    },
+                                DragGesture(minimumDistance: 1)
+                                    .onChanged { value in
+                                        if scale > 1 {
+                                            // Pan when zoomed in
+                                            let proposed = CGSize(
+                                                width:  lastOffset.width  + value.translation.width,
+                                                height: lastOffset.height + value.translation.height
+                                            )
+                                            offset = clampedOffset(proposed, in: geo.size, scale: scale)
+                                        } else {
+                                            // Dismiss drag when at normal scale
+                                            if value.translation.height > 0 {
+                                                offset = CGSize(width: 0, height: value.translation.height)
+                                            }
+                                        }
+                                    }
+                                    .onEnded { value in
+                                        if scale > 1 {
+                                            let proposed = CGSize(
+                                                width:  lastOffset.width  + value.translation.width,
+                                                height: lastOffset.height + value.translation.height
+                                            )
+                                            let clamped = clampedOffset(proposed, in: geo.size, scale: scale)
+                                            offset     = clamped
+                                            lastOffset = clamped
+                                        } else {
+                                            // Dismiss if dragged down far enough
+                                            if value.translation.height > 120 {
+                                                onDismiss()
+                                            } else {
+                                                withAnimation(.spring(response: 0.3)) {
+                                                    offset = .zero
+                                                }
+                                            }
+                                        }
+                                    }
+                            )
                         )
-                        .gesture(pinchGesture)
-                        .gesture(dragGesture(in: geo.size))
                         .onTapGesture(count: 2) {
-                            handleDoubleTap()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                if scale > 1 {
+                                    scale      = 1
+                                    lastScale  = 1
+                                    offset     = .zero
+                                    lastOffset = .zero
+                                } else {
+                                    scale     = 2.5
+                                    lastScale = 2.5
+                                }
+                            }
                         }
                 }
 
                 closeButton
             }
         }
+        .ignoresSafeArea()
     }
 
-    // MARK: - Gestures
-
-    private var pinchGesture: some Gesture {
-        MagnificationGesture()
-            .updating($gestureScale) { value, state, _ in
-                state = value
-            }
-            .onEnded { value in
-                let newScale = scale * value
-                scale = min(max(newScale, 1), 4)
-
-                if scale == 1 {
-                    resetPosition()
-                }
-            }
-    }
-
-    private func dragGesture(in size: CGSize) -> some Gesture {
-        DragGesture()
-            .updating($gestureDrag) { value, state, _ in
-                state = value.translation
-            }
-            .onEnded { value in
-                if scale == 1 && value.translation.height > 140 {
-                    onDismiss()
-                    return
-                }
-
-                let newOffset = CGSize(
-                    width: offset.width + value.translation.width,
-                    height: offset.height + value.translation.height
-                )
-
-                offset = boundedOffset(
-                    proposed: newOffset,
-                    size: size,
-                    scale: scale
-                )
-            }
-    }
-
-    // MARK: - Logic
-
-    private func handleDoubleTap() {
-        withAnimation(.easeInOut) {
-            if scale > 1 {
-                scale = 1
-                resetPosition()
-            } else {
-                scale = 2
-            }
-        }
-    }
-
-    private func resetPosition() {
-        withAnimation(.easeOut) {
-            offset = .zero
-            lastOffset = .zero
-        }
-    }
-
-    /// Prevents image from leaving screen bounds
-    private func boundedOffset(
-        proposed: CGSize,
-        size: CGSize,
-        scale: CGFloat
-    ) -> CGSize {
-        let imageWidth = size.width * scale
-        let imageHeight = size.height * scale
-
-        let horizontalLimit = max(0, (imageWidth - size.width) / 2)
-        let verticalLimit = max(0, (imageHeight - size.height) / 2)
-
+    // MARK: - Clamp offset so image never pans beyond its zoomed edges
+    private func clampedOffset(_ proposed: CGSize, in size: CGSize, scale: CGFloat) -> CGSize {
+        let maxX = max(0, (size.width  * (scale - 1)) / 2)
+        let maxY = max(0, (size.height * (scale - 1)) / 2)
         return CGSize(
-            width: min(max(proposed.width, -horizontalLimit), horizontalLimit),
-            height: min(max(proposed.height, -verticalLimit), verticalLimit)
-        )
-    }
-
-    private func boundedOffset(
-        proposed: CGFloat,
-        size: CGSize,
-        scale: CGFloat
-    ) -> CGSize {
-        boundedOffset(
-            proposed: CGSize(width: proposed, height: proposed),
-            size: size,
-            scale: scale
+            width:  min(max(proposed.width,  -maxX), maxX),
+            height: min(max(proposed.height, -maxY), maxY)
         )
     }
 
@@ -153,7 +130,7 @@ struct FullScreenImageView: View {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(.white)
+                        .foregroundColor(.white.opacity(0.85))
                         .padding()
                 }
             }

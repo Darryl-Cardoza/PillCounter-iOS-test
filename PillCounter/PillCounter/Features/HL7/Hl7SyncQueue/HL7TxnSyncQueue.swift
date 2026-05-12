@@ -68,6 +68,11 @@ final class HL7TxnSyncQueue {
         print("📦 [TxnQueue] Found pending txns:", txns.count)
 
         for txn in txns {
+            if txn.is_deleted {
+                  print("⛔️ [TxnQueue] Skipping deleted txn:", txn.txn_id)
+                  continue
+            }
+            
             let txnId = txn.txn_id
             let requestId = resolvedRequestId(for: txn)
 
@@ -105,7 +110,7 @@ final class HL7TxnSyncQueue {
         }
 
         let hl7 = hl7Builder.buildCompletionMessage(txn: txn, user: user)
-
+        print("hl7\(hl7)")
         guard let manager = hl7Manager, !hl7.isEmpty else {
             print("❌ [TxnQueue] HL7 invalid or manager nil")
             return

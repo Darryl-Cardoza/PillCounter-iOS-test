@@ -24,6 +24,10 @@ struct StockCountBatchDetail: View {
     
     @State private var exportedPDFURL: URL? = nil
     @State private var showShareSheet:  Bool = false
+    @State private var showNoteOptions: Bool = false
+    @State private var isGeneratingPDF: Bool = false
+    
+    @State private var noteError: String?
 
     private var allIds: Set<String> {
         Set(stockCountVieModel.groupedTransactions.map { $0.ndc })
@@ -59,6 +63,7 @@ struct StockCountBatchDetail: View {
                 showHamburgerMenu: false,
                 title: isEditing ? "" :  String( "BATCH ID \(stockCountVieModel.currentBatch?.batch_id ?? 0)"),
                 headerActionsBackground: appColors.primaryBackground,
+                backgroundColor: appColors.primaryBackground,
                 onBack: {
                     router.navigateBack()
                 }
@@ -66,13 +71,31 @@ struct StockCountBatchDetail: View {
             .onAppear {
                 stockCountVieModel.getCountData()
             }
+            .sheet(isPresented: $showShareSheet, onDismiss: {
+                if let url = exportedPDFURL {
+                    try? FileManager.default.removeItem(at: url)
+                    exportedPDFURL = nil
+                }
+            }) {
+                if let url = exportedPDFURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
             .customPopup(isPresented: $showEndBatchPopUp) {
                 showEndBatchPopup
             }
             .customPopup(isPresented: $showExportPopUp) {
                 showConfirmExportPopup
             }
+            .customPopup(isPresented: $showNoteOptions){
+                showNoteOptionPopup
+            }
 
+            if isGeneratingPDF {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                PillCountingLoader()
+            }
         }
     }
     
@@ -145,9 +168,22 @@ struct StockCountBatchDetail: View {
 
             HStack(spacing: 16) {
 
-                // PDF BUTTON (your existing one)
+                // PDF BUTTON
                 Button {
-                    showExportPopUp.toggle()
+                    let batch = stockCountVieModel.currentBatch
+                    let txns  = stockCountVieModel.groupedTransactions
+                    let note  = stockCountVieModel.note.isEmpty ? nil : stockCountVieModel.note
+                    isGeneratingPDF = true
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let url = StockCountPDFExporter.export(batch: batch, transactions: txns, note: note)
+                        DispatchQueue.main.async {
+                            isGeneratingPDF = false
+                            if let url {
+                                exportedPDFURL = url
+                                showShareSheet = true
+                            }
+                        }
+                    }
                 } label: {
                     Image("pdf")
                         .resizable()
@@ -160,18 +196,6 @@ struct StockCountBatchDetail: View {
                                 .scaledToFit()
                         )
                 }
-
-                // TRASH → Enter edit mode
-                Button {
-//                    withAnimation {
-//                        isEditing = true
-//                        selectedTxnIds.removeAll()
-//                    }
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 20))
-                        .foregroundStyle(appColors.primary)
-                }
             }
             .padding(.trailing)
         }
@@ -181,7 +205,7 @@ struct StockCountBatchDetail: View {
     // MARK: VIEWS
     @ViewBuilder
     private var mainContent: some View {
-
+        
         VStack(spacing: 0) {
 
             // SCROLLABLE CONTENT
@@ -200,9 +224,8 @@ struct StockCountBatchDetail: View {
                             selectedIds: $selectedTxnIds,
                             isEditing: $isEditing
                         )
-
                     }
-                    .padding(isLandscape ? 20 : 0)
+                    .padding(0)
                     .padding(.bottom, 20)
                 }
             }
@@ -211,7 +234,7 @@ struct StockCountBatchDetail: View {
             EqualWidthHStackButtons(spacing: 16) {
 
                 PillCountingButton(
-                    title: "END BATCH",
+                    title: "END COUNT",
                     textColor: appColors.primary,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
@@ -221,7 +244,12 @@ struct StockCountBatchDetail: View {
                     verticalPadding: 20,
                     iconSize: 0,
                     action: {
-                        showEndBatchPopUp.toggle()
+                        if stockCountVieModel.isNoteEnable {
+                            showNoteOptions = true
+                            stockCountVieModel.note = ""
+                        } else {
+                            showEndBatchPopUp = true
+                        }
                     }
                 )
 
@@ -248,9 +276,9 @@ struct StockCountBatchDetail: View {
                     }
                 )
             }
-            .padding()
+            .padding(.bottom, 20)
         }
-        .padding(.top, isLandscape ? SafeAreaInsets.top + 40 : 90)
+        .padding(.top, 55)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
@@ -288,8 +316,8 @@ extension StockCountBatchDetail{
         ConfirmationDialogue(
             title: NSLocalizedString("CONFIRM_END_BATCH", comment: ""),
             message: hasNoCount
-                ? "No transactions or counts added. Do you want to end the batch?"
-                : nil,
+            ? "No transactions or counts added. Do you want to end the batch?"
+            : nil,
             cancelButtonText: "NO",
             confirmButtonText: "YES",
             onCancel: {
@@ -297,11 +325,10 @@ extension StockCountBatchDetail{
             },
             onConfirm: {
                 showEndBatchPopUp = false
-
                 if let batchId = stockCountVieModel.currentBatch?.batch_id {
                     stockCountVieModel.completeBatch(batchId: batchId)
                 }
-
+                stockCountVieModel.note = ""
                 router.setRoot(
                     to: .authentication(.login(.dashboard(.dashboardHome)))
                 )
@@ -320,6 +347,37 @@ extension StockCountBatchDetail{
             },
             onConfirm: {
                 showExportPopUp = false
+            }
+        )
+    }
+    
+    private var showNoteOptionPopup: some View {
+        NotePopupView(
+            title: "Would you like to add a note?",
+            text: $stockCountVieModel.note,
+            errorMessage: noteError,
+            primaryTitle: "YES",
+            primaryAction: {
+                if stockCountVieModel.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    noteError = "Please add a note"
+                    return
+                }
+                
+                noteError = nil
+                showNoteOptions = false
+                showEndBatchPopUp = true
+            },
+            secondaryTitle: "SKIP",
+            secondaryAction: {
+                noteError = nil
+                showNoteOptions = false
+                stockCountVieModel.note = ""
+                showEndBatchPopUp = true
+            },
+            onClose: {
+                noteError = nil
+                showNoteOptions = false
+                stockCountVieModel.note = ""
             }
         )
     }

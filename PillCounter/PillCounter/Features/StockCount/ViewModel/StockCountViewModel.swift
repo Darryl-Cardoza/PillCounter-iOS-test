@@ -34,6 +34,9 @@ class StockCountViewModel: ObservableObject {
     @Published var showScannedNdcDoesNotMatch: Bool = false
     @Published var batchNdcSet: Set<String> = []
     @Published var selectedTransaction: PillCountTransactionEntity? = nil
+    @Published var note: String = ""
+    
+    @AppStorage(AppStorageManager.AppStorageKeys.isPillCountingEnabled) var isNoteEnable: Bool = false
 
     // MARK: - Combine
 
@@ -87,9 +90,11 @@ class StockCountViewModel: ObservableObject {
     }
 
     func continueLastBatch() -> Bool {
-        guard let lastBatch = pillDataLocalStorage.fetchLastCreatedBatch() else { return false }
+        guard let lastBatch = pillDataLocalStorage.fetchLastCreatedBatch() else {
+            return false
+        }
         currentBatch = lastBatch
-        reloadAllState()   // currentBatch just changed — force immediate refresh
+        reloadAllState()
         return true
     }
 
@@ -113,13 +118,20 @@ class StockCountViewModel: ObservableObject {
         txns.forEach {
             pillDataLocalStorage.updateTransactionStatus(txnId: $0.txn_id, newStatus: .COMPLETED)
         }
-
+        
         // Save batch status THEN fire publisher — no race condition
         pillDataLocalStorage.updateBatchStatus(batchId: batchId, status: .COMPLETED) { [weak self] in
             // This runs on main thread, after Core Data save is confirmed
             self?.pillDataLocalStorage.transactionsDidChange.send()
-            print("✅ Batch \(batchId) marked COMPLETED — publisher fired after save")
         }
+        
+        if !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+               pillDataLocalStorage.updateBatchNote(
+                   batchId: batchId,
+                   note: note
+               )
+            note = ""
+         }
     }
 
     // MARK: - Transactions
@@ -162,6 +174,7 @@ class StockCountViewModel: ObservableObject {
     private func fetchDrugDataOnly(gtin: String) async {
         guard !gtin.isEmpty else {
             showScanError = true
+            barcodeNotFound = true
             return
         }
 
@@ -229,6 +242,9 @@ class StockCountViewModel: ObservableObject {
         scannedDrugData = nil
         showStockCountScannedDetails = false
         showScanError = false
+        barcodeNotFound = false
+        showScannedNdcDoesNotMatch = false
+        isLoading = false
     }
 
     // MARK: - Mapper
@@ -260,10 +276,12 @@ class StockCountViewModel: ObservableObject {
             }
 
             return GroupedTransaction(
+                txnId:       txnList.first?.txn_id ?? 0,
                 ndc:          ndc,
                 drugName:     drugName,
                 total:        totalSealed + totalOpen,
                 sealedBottles: totalSealed,
+                sealedBottleQty: txnList.first?.bottle_qty ?? 0,
                 openPills:    totalOpen,
                 lotDetails:   lotDetails
             )
@@ -291,10 +309,12 @@ struct StockTransaction: Identifiable, Hashable {
 }
 
 struct GroupedTransaction {
+    let txnId:  Int64
     let ndc:           String
     let drugName:      String
     let total:         Int32
     let sealedBottles: Int32
+    let sealedBottleQty: Int32
     let openPills:     Int32
     let lotDetails:    [LotDetail]
 }

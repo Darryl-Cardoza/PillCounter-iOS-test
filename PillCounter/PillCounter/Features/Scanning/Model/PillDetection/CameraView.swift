@@ -113,7 +113,7 @@ struct DetectionOverlay: View {
                             using: layer
                         )
                         
-                        let badgeSize: CGFloat = 20
+                        let badgeSize: CGFloat = 16
                         
                         Circle()
                             .fill(Color.black.opacity(0.8))

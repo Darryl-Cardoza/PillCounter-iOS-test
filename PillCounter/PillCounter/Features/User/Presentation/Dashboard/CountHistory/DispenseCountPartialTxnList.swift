@@ -20,6 +20,10 @@ struct DispenseCountPartialTxnList: View {
     @State private var resetList: Bool = false
     @State private var activePmsFilter: PmsFilter = .all
     
+    //Animation
+    @State private var appearedIds: Set<Int64> = []
+    @State private var deletingIds: Set<Int64> = []
+    
     let title: String
     
     private var filteredTransactions: [PillCountTransactionEntity] {
@@ -42,14 +46,49 @@ struct DispenseCountPartialTxnList: View {
             // MARK: - ROW UI
             rowView: { txn, isEditing, selectedIds in
                 AnyView(
-                    DispenseItemRowView(
-                        data: txn.toRowData(pillCount: pillCounts[txn.txn_id] ?? 0),
-                        appColors: appColors
-                    )
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.red.opacity(deletingIds.contains(txn.txn_id) ? 0.12 : 0))
+                            .animation(.easeIn(duration: 0.15), value: deletingIds.contains(txn.txn_id))
+
+                        DispenseItemRowView(
+                            data: txn.toRowData(pillCount: pillCounts[txn.txn_id] ?? 0),
+                            appColors: appColors
+                        )
+                        .listRowAnimated(
+                            id: txn.txn_id,
+                            index: filteredTransactions.firstIndex(where: {
+                                $0.txn_id == txn.txn_id
+                            }) ?? 0,
+                            isEditing: isEditing,
+                            isSelected: selectedIds.contains(txn.txn_id),
+                            isDeleting: deletingIds.contains(txn.txn_id),
+                            highlightColor: appColors.secondary
+                        )
+                    }
+                    .collapsible(isVisible: !deletingIds.contains(txn.txn_id))
                     .selectableEffect(
                         isSelected: selectedIds.contains(txn.txn_id),
                         highlightColor: appColors.secondary
                     )
+                    .animation(
+                        .spring(response: 0.38, dampingFraction: 0.82),
+                        value: deletingIds.contains(txn.txn_id)
+                    )
+                    .onAppear {
+                        guard !appearedIds.contains(txn.txn_id) else { return }
+
+                        let index = filteredTransactions.firstIndex(where: {
+                            $0.txn_id == txn.txn_id
+                        }) ?? 0
+
+                        withAnimation(
+                            .spring(response: 0.42, dampingFraction: 0.78)
+                            .delay(Double(index) * 0.07)
+                        ) {
+                            appearedIds.insert(txn.txn_id)
+                        }
+                    }
                 )
             },
 
@@ -83,9 +122,10 @@ struct DispenseCountPartialTxnList: View {
 
             menuOptions: TransactionDetailOption.allCases,
             optionLabel: { $0.rawValue },
-            filterView: {
-                AnyView(pmsFilterChips)
-            }
+//            filterView: {
+//                AnyView(pmsFilterChips)
+//            }
+            filterView: nil
         )
         .onAppear {
             reloadTransactions()
@@ -217,26 +257,44 @@ extension DispenseCountPartialTxnList {
 
         switch action {
         case .delete(let id):
-            Task {
-                await userViewModel.softDeleteTheSelectedTransaction(
-                    transactionId: id,
-                    countType: countType
-                )
-                await MainActor.run {
-                    resetList.toggle()
-                    reloadTransactions()
+            deletingIds.insert(id)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                Task {
+                    await userViewModel.softDeleteTheSelectedTransaction(
+                        transactionId: id,
+                        countType: countType
+                    )
+
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            transactions.removeAll { $0.txn_id == id }
+                        }
+
+                        deletingIds.remove(id)
+                        resetList.toggle()
+                    }
                 }
             }
 
         case .multiDelete(let ids):
-            Task {
-                await userViewModel.softDeleteMultipleTransactions(
-                    txnIds: ids,
-                    countType: countType
-                )
-                await MainActor.run {
-                    resetList.toggle()
-                    reloadTransactions()
+            deletingIds.formUnion(ids)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                Task {
+                    await userViewModel.softDeleteMultipleTransactions(
+                        txnIds: ids,
+                        countType: countType
+                    )
+
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            transactions.removeAll { ids.contains($0.txn_id) }
+                        }
+
+                        deletingIds.subtract(ids)
+                        resetList.toggle()
+                    }
                 }
             }
         }

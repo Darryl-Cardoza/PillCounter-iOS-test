@@ -47,6 +47,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
     @State private var selectedIds: Set<Int64> = []
 
     @State private var selectedItem: Item?
+    
 
 
     // MARK: BODY
@@ -62,45 +63,48 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
                 title: isSearching
                     ? ""
                     : (isEditing ? "DELETE BATCHES" : title),
-                headerActionsBackground: appColors.primaryBackground
+                headerActionsBackground: appColors.primaryBackground,
+                backgroundColor: appColors.primaryBackground
             )
             
             if isEditing {
                 VStack {
                     Spacer()
 
-                    HStack(spacing: 12) {
-
-                        // CANCEL
-                        Button {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                isEditing = false
-                                selectedIds.removeAll()
+                    EqualWidthHStackButtons(spacing: 16) {
+                        PillCountingButton(
+                            title: "CANCEL",
+                            textColor: appColors.primary,
+                            backgroundColor: .clear,
+                            borderColor: appColors.primary,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    isEditing = false
+                                    selectedIds.removeAll()
+                                }
                             }
-                        } label: {
-                            Text("CANCEL")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(appColors.primary)
-                                .frame(maxWidth: 140)
-                                .padding(.vertical, 10)
-                        }
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(appColors.primary, lineWidth: 1)
                         )
 
-                        // DELETE
-                        Button {
-                            onDelete(selectedIds)
-                        } label: {
-                            Text("DELETE")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: 140)
-                                .padding(.vertical, 10)
-                        }
-                        .background(appColors.primary)
-                        .cornerRadius(20)
+                        PillCountingButton(
+                            title: "DELETE",
+                            textColor: selectedIds.isEmpty ? .white.opacity(0.6) : .white,
+                            backgroundColor: selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary,
+                            borderColor: .clear,
+                            font: .system(size: 14, weight: .semibold),
+                            cornerRadius: 30,
+                            horizontalPadding: 32,
+                            verticalPadding: 14,
+                            iconSize: 0,
+                            action: {
+                                onDelete(selectedIds)
+                            }
+                        )
+                        .disabled(selectedIds.isEmpty)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -143,7 +147,7 @@ extension GenericListScreen {
                             EmptyStateView(
                                 imageName: nil,
                                 systemImageName: nil,
-                                title:  "No partial counts available",
+                                title:  "No pending counts available",
                                 subtitle: nil
                             )
                             .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
@@ -164,7 +168,7 @@ extension GenericListScreen {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 90)
+        .padding(.top, 65)
         .background(appColors.primaryBackground)
 
     }
@@ -203,57 +207,27 @@ extension GenericListScreen {
     fileprivate var header: some View {
         Group {
             if isEditing {
-//                HStack {
-//                    Button("Select All") {
-//                        toggleAll()
-//                    }
-//                    .foregroundColor(appColors.primary)
-//
-//                    Spacer()
-//
-//                    Button("Delete") {
-//                        onDelete(selectedIds)
-//                    }
-//                    .foregroundColor(appColors.primary)
-//
-//                    Button("Cancel") {
-//                        withAnimation(.spring()) {
-//                            isEditing = false
-//                            selectedIds.removeAll()
-//                        }
-//                    }
-//                    .foregroundColor(appColors.primary)
-//                }
-//                .padding(.horizontal, 10)
-//                .transition(.opacity)
-                
                 HStack(spacing: 10) {
-
-                    // CHECKBOX
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(appColors.primary, lineWidth: 1)
-                            .frame(width: 18, height: 18)
-
-                        if isAllSelected {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(appColors.primary)
-                        }
-                    }
-
-                    Text("Select All")
+                    // ICON (selected / unselected)
+                    Image(isAllSelected ? "icon_unselected" : "icon_selected")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .foregroundStyle(appColors.primary)
+                    
+                    // TEXT (dynamic)
+                    Text(isAllSelected ? "Unselect All" : "Select All")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(appColors.primary)
-
                 }
+                .contentShape(Rectangle()) // makes full row tappable
                 .onTapGesture {
                     toggleAll()
                 }
                 .padding(.trailing, 16)
                 .transition(.opacity)
-
-            } else if isSearching {
+            }else if isSearching {
                 UnderlinedSearchBar(
                     text: $searchText,
                     isFocused: $isSearchFieldFocused,
@@ -270,26 +244,27 @@ extension GenericListScreen {
 
             } else {
                 HStack(spacing: 16) {
-                    
-                    Button {
-                        withAnimation(.spring()) {
-                            isSearching = true
-                            isSearchFieldFocused = true
+                    if !items.isEmpty {
+                        Button {
+                            withAnimation(.spring()) {
+                                isSearching = true
+                                isSearchFieldFocused = true
+                            }
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 20))
+                                .foregroundColor(appColors.primary)
                         }
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 20))
-                            .foregroundColor(appColors.primary)
-                    }
 
-                    Button {
-                        withAnimation(.spring()) {
-                            isEditing = true
+                        Button {
+                            withAnimation(.spring()) {
+                                isEditing = true
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 20))
+                                .foregroundColor(appColors.primary)
                         }
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 20))
-                            .foregroundColor(appColors.primary)
                     }
                 }
                 .padding(.trailing, 16)

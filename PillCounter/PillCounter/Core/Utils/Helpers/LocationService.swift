@@ -40,13 +40,17 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
             if let place = placemarks?.first {
 
-                let area = place.subLocality ?? place.locality ?? ""
+                let area = place.subLocality ?? ""
                 let city = place.locality ?? place.administrativeArea ?? ""
+                let pincode = place.postalCode ?? ""
 
-                // Example: Andheri, Mumbai
-                self.locationString = [area, city]
-                    .filter { !$0.isEmpty }
-                    .joined(separator: ", ")
+                // Format: Andheri, Mumbai - 400053
+                self.locationString = [
+                    [area, city].filter { !$0.isEmpty }.joined(separator: ", "),
+                    pincode.isEmpty ? nil : pincode
+                ]
+                .compactMap { $0 }
+                .joined(separator: " - ")
 
             } else {
                 self.locationString = "Location unavailable"

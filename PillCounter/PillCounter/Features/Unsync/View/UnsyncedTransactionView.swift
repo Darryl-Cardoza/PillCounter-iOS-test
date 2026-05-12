@@ -20,6 +20,7 @@ struct UnsyncedTransactionView: View {
     @StateObject private var viewModel = UnsyncedViewModel()
     @EnvironmentObject private var userViewModel: UserViewModel
 
+
     var body: some View {
         ZStack {
             BaseView(
@@ -35,7 +36,8 @@ struct UnsyncedTransactionView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: "UNSYNCED TRANSACTIONS"
+                title: "UNSYNCED TRANSACTIONS",
+                backgroundColor: appColors.primaryBackground
             )
         }
     }
@@ -46,36 +48,35 @@ struct UnsyncedTransactionView: View {
 private extension UnsyncedTransactionView {
 
     var contentView: some View {
+        
         let isEmpty = viewModel.batches.isEmpty && viewModel.transactions.isEmpty
 
         return ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
                 if isEmpty {
                     VStack {
-                        Spacer()
-
                         EmptyStateView(
                             imageName: "check_with_circle",
                             systemImageName: nil,
                             title: "All transactions are synced",
                             subtitle: nil
                         )
+                        .padding(.top, 120)
 
                         Spacer()
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: UIScreen.main.bounds.height * 0.7)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 20) {
                         batchesSection
                         transactionsSection
                     }
-                    .padding(.top, 90)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 100) // leave room for sync button
+            .padding(.bottom, 100)
         }
+        .padding(.top, 64)
         .background(appColors.primaryBackground)
         .safeAreaInset(edge: .bottom) {
             VStack (spacing: 5){
@@ -84,6 +85,7 @@ private extension UnsyncedTransactionView {
                         PillCountInstructionOverlay(text: "PMS not connected", backgroundOpacity: 1)
                     }
                     syncButtonArea
+                        .padding(.bottom, 8)
                 }
             }
         }
@@ -98,12 +100,20 @@ private extension UnsyncedTransactionView {
     var batchesSection: some View {
         if !viewModel.batches.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "BATCHES", count: viewModel.batches.count)
+                sectionHeader(title: "STOCKS", count: viewModel.batches.count)
 
-                ForEach(viewModel.batches, id: \.batchId) { batch in
+                ForEach(Array(viewModel.batches.enumerated()), id: \.offset) { index, batch in
                     StockItemRowView(
                         data: batch,
                         appColors: appColors
+                    )
+                    .listRowAnimated(
+                        id: Int64(index),
+                        index: index,
+                        isEditing: false,
+                        isSelected: false,
+                        isDeleting: false,
+                        highlightColor: appColors.secondary
                     )
                 }
             }
@@ -119,12 +129,20 @@ private extension UnsyncedTransactionView {
     var transactionsSection: some View {
         if !viewModel.transactions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "TRANSACTIONS", count: viewModel.transactions.count)
+                sectionHeader(title: "DISPENSES", count: viewModel.transactions.count)
 
-                ForEach(viewModel.transactions) { txn in
+                ForEach(Array(viewModel.transactions.enumerated()), id: \.offset) { index, txn in
                     DispenseItemRowView(
                         data: txn,
                         appColors: appColors
+                    )
+                    .listRowAnimated(
+                        id: Int64(index),
+                        index: index,
+                        isEditing: false,
+                        isSelected: false,
+                        isDeleting: false,
+                        highlightColor: appColors.secondary
                     )
                 }
             }
@@ -139,12 +157,12 @@ private extension UnsyncedTransactionView {
     func sectionHeader(title: String, count: Int) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundColor(appColors.text.opacity(0.5))
                 .kerning(1.2)
 
             Text("\(count)")
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundColor(.white)
                 .frame(minWidth: 20, minHeight: 20)
                 .background(appColors.primary)
@@ -166,15 +184,10 @@ private extension UnsyncedTransactionView {
             if viewModel.batches.isEmpty {
                 Text("PMS not connected")
                     .font(.system(size: 12))
-                    .foregroundColor(appColors.text.opacity(0.6))
+                    .foregroundColor(appColors.text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(colorScheme == .dark
-                                  ? Color.white.opacity(0.08)
-                                  : Color.black.opacity(0.06))
-                    )
+                    .background(appColors.secondaryBackground)
             }
 
             Button {
@@ -188,11 +201,19 @@ private extension UnsyncedTransactionView {
                     } else {
                         Text("SYNC ALL")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(
+                                userViewModel.pmsConnectionState == .disconnected
+                                    ? .white.opacity(0.5)
+                                    : .white
+                            )
                     }
                 }
                 .frame(width: 140, height: 48)
-                .background(appColors.primary)
+                .background(
+                    userViewModel.pmsConnectionState == .disconnected
+                    ? appColors.secondaryBackground.opacity(0.5)
+                    : appColors.primary
+                )
                 .cornerRadius(24)
             }
             .disabled(viewModel.isSyncing)

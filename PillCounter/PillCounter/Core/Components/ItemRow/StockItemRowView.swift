@@ -13,15 +13,6 @@ struct StockItemRowView: View {
 
 
 
-//    private var displayText: String {
-//        "\(data.pillCount) / \(data.targetCount)"
-//    }
-
-//    private var fillFraction: Double {
-//        guard data.targetCount > 0 else { return 0 }
-//        return min(Double(data.pillCount) / Double(data.targetCount), 1.0)
-//    }
-
     // MARK: - Body
 
     var body: some View {
@@ -33,7 +24,7 @@ struct StockItemRowView: View {
                 height: 60,
                 cornerRadius: 8,
                 borderColor: appColors.primaryBackground,
-                placeholderImageName:  data.isFromPms ? "batch_icon" : "dispense_placeholder",
+                placeholderImageName:  data.isFromPms ? "dispense_placeholder" : "batch_icon",
                 placeholderBackgroundColor: appColors.text,
                 placeholderSize: CGSize(width: 28, height: 28),
                 showImageBackground: appColors.primaryBackground
@@ -66,7 +57,7 @@ struct StockItemRowView: View {
 
             // Right side
             HStack(spacing: 10) {
-                VStack(spacing: 4) {
+                VStack(spacing: 8) {
                   
                     Text(String(data.ndcCount))
                         .foregroundColor(appColors.secondary)

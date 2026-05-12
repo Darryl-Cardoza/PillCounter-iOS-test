@@ -86,13 +86,11 @@ struct PillCountingButton: View {
                 Text(title)
                     .font(font)
                     .foregroundColor(textColor)
-                    // Ensure text stays on one line
-                    .fixedSize(horizontal: true, vertical: false)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            // Use a ZStack behavior: If width is provided, frame it.
-            // If not, allow flexible expansion if maxWidth was infinity (not used here but good practice)
             .frame(maxWidth: .infinity, alignment: .center)
             .background(backgroundColor)
             .overlay(
@@ -100,7 +98,7 @@ struct PillCountingButton: View {
                     .stroke(borderColor, lineWidth: 1.5)
             )
             .cornerRadius(cornerRadius)
-            .contentShape(Rectangle()) // Ensures tap area fills the frame
+            .contentShape(Rectangle()) 
         }
         .buttonStyle(.plain)
     }

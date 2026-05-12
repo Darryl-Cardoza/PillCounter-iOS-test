@@ -38,6 +38,12 @@ class HistoryViewModel: ObservableObject {
     @Published var selectedBatchId: Int64? = nil
     @Published var selectedBatch: BatchCountEntity? = nil
     @Published var groupedTransactionsForBatch: [GroupedTransaction] = []
+    @Published var isLoading: Bool = false
+
+    // MARK: - Published: Calendar selection (persists across orientation changes)
+    @Published var selectedStartDate: Date? = Date()
+    @Published var selectedEndDate: Date? = nil
+    @Published var calendarMonthsToShow: [Date] = []
 
 
 
@@ -153,17 +159,53 @@ class HistoryViewModel: ObservableObject {
     }
 
     // MARK: - Soft Delete for Selected Date
+//    func softDeleteTransactionsForSelectedDate(
+//        startDate: Date,
+//        endDate: Date,
+//        filter: HistoryFilterType
+//    ) async {
+//        let toDelete = filteredTransactionsOfUserByDate
+//        guard !toDelete.isEmpty else { return }
+//        for txn in toDelete {
+//            pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
+//        }
+//        await getTransactionsByDate(startDate: startDate, endDate: endDate, filter: filter)
+//    }
+    
+    // MARK: - Soft Delete: Transactions (filter = .fixed)
     func softDeleteTransactionsForSelectedDate(
         startDate: Date,
         endDate: Date,
-        filter: HistoryFilterType
+        filter: HistoryFilterType,
+        status: HistoryStatusFilter,
+        search: String
     ) async {
-        let toDelete = filteredTransactionsOfUserByDate
-        guard !toDelete.isEmpty else { return }
-        for txn in toDelete {
-            pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
+        switch filter {
+        case .fixed:
+            let rowIdsToDelete = Set(transactionRows.map { Int64($0.id) })
+            let toDelete = filteredTransactionsOfUserByDate.filter {
+                rowIdsToDelete.contains($0.txn_id)
+            }
+            guard !toDelete.isEmpty else { return }
+            for txn in toDelete {
+                pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
+            }
+            await getTransactionsByDate(startDate: startDate, endDate: endDate, filter: filter)
+
+        case .regular:
+            let batchIdsToDelete = Set(batchRows.map { $0.batchId })  // ← StockData.batchId field
+            let toDelete = filteredBatchesOfUserByDate.filter {
+                batchIdsToDelete.contains($0.batch_id)
+            }
+            guard !toDelete.isEmpty else { return }
+
+            // deleteBatches soft-deletes both the batch AND its child transactions in one call
+            pillLocalDB.deleteBatches(ids: Set(toDelete.map { $0.batch_id }))
+
+            await getBatchesByDate(startDate: startDate, endDate: endDate)
         }
-        await getTransactionsByDate(startDate: startDate, endDate: endDate, filter: filter)
+
+        applyFilters(status: status, search: search)
     }
 
     // MARK: - Soft Delete Single Transaction (used from detail view)
@@ -192,6 +234,8 @@ class HistoryViewModel: ObservableObject {
 
     // MARK: - Detail: Prepare step-grouped details
     func prepareDetails(for transaction: PillCountTransactionEntity) {
+        isLoading = false
+
         guard let allDetails = transaction.pillCountTransactionDetails?.allObjects
                 as? [PillCountTransactionDetailsEntity]
         else {
@@ -201,6 +245,9 @@ class HistoryViewModel: ObservableObject {
         let valid = allDetails.filter { !$0.is_deleted }
         detailsByStep = Dictionary(grouping: valid) { detail in
             ControlledStep(rawValue: detail.type ?? "") ?? .containerInitiate
+        }
+        DispatchQueue.main.async {
+              self.isLoading = true
         }
     }
 
@@ -255,10 +302,12 @@ class HistoryViewModel: ObservableObject {
                 ))
             }
             return GroupedTransaction(
+                txnId: txnList.first?.txn_id ?? 0,
                 ndc: ndc,
                 drugName: drugName,
                 total: totalSealed + totalOpen,
                 sealedBottles: totalSealed,
+                sealedBottleQty: txnList.first?.bottle_qty ?? 0,
                 openPills: totalOpen,
                 lotDetails: lotDetails
             )

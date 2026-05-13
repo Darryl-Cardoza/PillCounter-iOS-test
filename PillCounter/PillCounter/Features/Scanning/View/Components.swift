@@ -1105,10 +1105,6 @@ struct VialBottomContentView: View {
         }
         .padding(.vertical, 25)
         .padding(.horizontal)
-        .background(
-            RoundedRectangle(cornerRadius: 50)
-                .fill(appColors.secondaryBackground)
-        )
     }
 }
 

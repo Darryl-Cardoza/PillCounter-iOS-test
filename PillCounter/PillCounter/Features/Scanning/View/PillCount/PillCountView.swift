@@ -114,7 +114,7 @@ struct OPillCountView: View {
                             controlsContent
                         }
                     }
-                    .background(appColors.secondaryBackground)
+                
                     .clipShape(
                         UnevenRoundedRectangle(
                             topLeadingRadius: isLandscape ? 24 : 24,
@@ -727,7 +727,7 @@ extension OPillCountView {
     private var showNoteOptionPopup: some View {
         NotePopupView(
             title: "ADD NOTE",
-            showClose: true,
+            showClose: false,
             text: $pillScanViewModel.note,
             errorMessage: errorMessageOfNote,
             primaryTitle: "SAVE",

@@ -190,7 +190,6 @@ extension BaseView {
                     width: isLandscape ? size.width * topRatio : size.width,
                     height: isLandscape ? size.height : size.height * topRatio
                 )
-                .clipped()
 
             if allowKeyboardResize {
                 bottomContent()
@@ -271,22 +270,20 @@ extension BaseView {
 
 // MARK: - COMPONENT BUILDERS
 extension BaseView {
-
+    
     private var backButton: some View {
         Button {
             handleBackAction()
         } label: {
             HStack {
-                Image("back_icon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 24, height: 24)
-                    .padding(12)
-                    .background(
-                        backButtonBackground ?? Color.clear
-                    )
-                    .clipShape(Circle())
-
+                PillCountingIconView(
+                    imageName: "back_icon",
+                    size: 24,
+                    padding: 12,
+                    foregroundColor: appColors.primary,
+                    backgroundColor: backButtonBackground ?? Color.clear,
+                    scaleOnIpad: true
+                )
                 Text((title.count > 25 ? "\(title.prefix(25))..." : title).uppercased())
                     .foregroundStyle(appColors.text)
                     .font(.headline)
@@ -324,26 +321,20 @@ extension BaseView {
         }
     }
 
-    private var isIpad: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-    }
-
-    private var scale: CGFloat {
-        isIpad ? 1.5 : 1.0
-    }
+  
 
     private var hamburgerMenuButton: some View {
         Button {
             router.navigate(to: .authentication(.user(.hamburgerMenu)))
         } label: {
-            Image("hamburger_menu")
-                .resizable()
-                .scaledToFit()
-                .frame(
-                    width: 28 * scale,
-                    height: 28 * scale
-                )
-                .padding(12 * scale)
+            PillCountingIconView(
+                imageName: "hamburger_menu",
+                size: 28,
+                padding: 12,
+                foregroundColor: appColors.primary,
+                backgroundColor: .clear,
+                scaleOnIpad: true
+            )
         }
         .transition(.opacity)
     }

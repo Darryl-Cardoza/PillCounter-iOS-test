@@ -86,14 +86,15 @@ final class HL7TLSServer {
     // MARK: - Stop
 
     func stop() {
-        // Cancel all active client connections before stopping the listener
-        activeConnections.values.forEach { $0.cancel() }
-        activeConnections.removeAll()
-        listener?.cancel()
-        listener = nil
-        Log("HL7 TLS Server stopped")
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.activeConnections.values.forEach { $0.cancel() }
+            self.activeConnections.removeAll()
+            self.listener?.cancel()
+            self.listener = nil
+            Log("HL7 TLS Server stopped")
+        }
     }
-
     // MARK: - Connection Tracking
 
     private func track(_ connection: NWConnection) {

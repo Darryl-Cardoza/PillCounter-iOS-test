@@ -52,7 +52,6 @@ final class Hl7ServiceManager {
     private var currentServiceName: String?
 
     // MARK: - Events
-
     weak var listener: Hl7EventListener?
 
     // MARK: - Init

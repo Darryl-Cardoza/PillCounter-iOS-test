@@ -145,6 +145,10 @@ struct UserProfileScreen: View {
                 keyboardType: .phonePad,
                 maxLength: 10
             )
+
+            if !userViewModel.terminals.isEmpty {
+                terminalDropdown
+            }
         }
     }
     
@@ -162,7 +166,7 @@ struct UserProfileScreen: View {
                 text: $userViewModel.firstName,
                 maxLength: 30
             )
-            
+
             FloatingLabelTextField(
                 placeholder: NSLocalizedString("PHARMACY_NAME", comment: ""),
                 text: $userViewModel.pharmacyName,
@@ -174,6 +178,10 @@ struct UserProfileScreen: View {
                 text: $userViewModel.email,
                 disabled: true
             )
+
+            if !userViewModel.terminals.isEmpty {
+                terminalDropdown
+            }
         }
     }
 
@@ -184,7 +192,7 @@ struct UserProfileScreen: View {
                 text: $userViewModel.lastName,
                 maxLength: 30
             )
-            
+
             FloatingLabelTextField(
                 placeholder: NSLocalizedString("PHONE_NUMBER", comment: ""),
                 text: $userViewModel.phoneNumber,
@@ -198,6 +206,51 @@ struct UserProfileScreen: View {
                 keyboardType: .phonePad,
                 maxLength: 10
             )
+        }
+    }
+
+    private var terminalDropdown: some View {
+        Menu {
+            ForEach(userViewModel.terminals, id: \.terminalId) { terminal in
+                Button {
+                    guard terminal.terminalId != userViewModel.pendingTerminal?.terminalId else { return }
+                    userViewModel.selectTerminal(terminal)
+                } label: {
+                    HStack {
+                        Text(terminal.terminalName ?? "")
+                        if terminal.terminalId == userViewModel.pendingTerminal?.terminalId {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            ZStack(alignment: .leading) {
+                Text(NSLocalizedString("Terminal", comment: ""))
+                    .font(.caption)
+                    .foregroundColor(appColors.text.opacity(0.75))
+                    .offset(y: -16)
+                    .padding(.leading, 16)
+
+                HStack {
+                    Text(userViewModel.pendingTerminal?.terminalName ?? "")
+                        .font(.body)
+                        .foregroundColor(appColors.text)
+                        .padding(.leading, 16)
+                        .padding(.top, 10)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(appColors.text.opacity(0.75))
+                        .padding(.trailing, 16)
+                        .padding(.top, 10)
+                }
+            }
+            .frame(height: 64)
+            .background(appColors.secondaryBackground)
+            .cornerRadius(10)
         }
     }
 
@@ -272,15 +325,31 @@ struct UserProfileScreen: View {
                     return
                 }
             }
-            await userViewModel.updateUserProfile()
-            toastManager.show(message: "Profile updated successfully.")
-            if userViewModel.isProfileUpdated {
-                isNewUser = false
-                userViewModel.isProfileUpdated = false
-                router.navigateBack()
-            }else {
-                toastManager.show(message: "Failed to update profile. Please try again.")
+
+            // Update terminal if selection changed
+            let terminalChanged = userViewModel.pendingTerminal?.terminalId != userViewModel.selectedTerminal?.terminalId
+            if let pending = userViewModel.pendingTerminal, terminalChanged {
+                let terminalSuccess = await userViewModel.updateTerminal(pending)
+                if !terminalSuccess {
+                    toastManager.show(message: "Failed to update terminal. Please try again.")
+                    return
+                }
+                Hl7ServiceController.shared.restartForTerminalChange()
             }
+
+            let profileChanged = userViewModel.hasProfileChanged()
+            if profileChanged {
+                await userViewModel.updateUserProfile()
+                if !userViewModel.isProfileUpdated {
+                    toastManager.show(message: "Failed to update profile. Please try again.")
+                    return
+                }
+                userViewModel.isProfileUpdated = false
+            }
+
+            toastManager.show(message: "Profile updated successfully.")
+            isNewUser = false
+            router.navigateBack()
         }
     }
 

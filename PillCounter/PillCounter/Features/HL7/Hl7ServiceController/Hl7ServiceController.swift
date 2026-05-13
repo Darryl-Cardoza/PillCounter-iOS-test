@@ -29,6 +29,9 @@ final class Hl7ServiceController: ObservableObject {
     @AppStorage(AppStorageManager.AppStorageKeys.pillCounterHostName)
     private var pillCounterHostName: String = ""
 
+    @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
+    private var selectedTerminalName: String = ""
+
     // MARK: - Dependencies
 
     let pillDataLocalStorage = PillsDataLocalStorage.shared
@@ -85,13 +88,25 @@ final class Hl7ServiceController: ObservableObject {
     private func startHl7Services() {
         guard hl7Manager == nil, let handler = hl7Handler else { return }
 
+        let serviceName = selectedTerminalName.isEmpty ? "PillCounter" : selectedTerminalName
         hl7Manager = Hl7ServiceManager(
             port: 2575,
-            serviceName: "Terminal-2",
+            serviceName: serviceName,
             serviceType: pillCounterHostName,
             pmsServiceType: pmsHostName,
             listener: handler
         )
+    }
+
+    /// Call this after a terminal update so HL7 rebroadcasts with the new name.
+    func restartForTerminalChange() {
+        guard shouldStartService else { return }
+        stopService()
+        startHl7Services()
+        setupBatchSyncQueue()
+        setupTxnSyncQueue()
+        observeTxnChanges()
+        observeBatchCompletion()
     }
 
     private func stopService() {

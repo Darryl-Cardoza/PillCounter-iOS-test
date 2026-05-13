@@ -164,9 +164,12 @@ extension PillScanViewModel {
                     drugIdToUse = newId
                     resolvedName = lookup
 
-                    // Save to local DB
+                    // Use the original HL7 ndc as the key so subsequent getPillByNdc
+                    // lookups (which also use the HL7 ndc) find this record.
+                    // packageNdc from the API may differ, which would orphan the saved
+                    // drug and break the transaction's drug relationship.
                     pillDataLocalStorage.saveManualPill(
-                        ndc: response.data?.scannedNdc?.packageNdc ?? ndc,
+                        ndc: ndc,
                         drugId: newId,
                         drugName: lookup,
                         drugType: response.data?.scannedNdc?.deaSchedule,

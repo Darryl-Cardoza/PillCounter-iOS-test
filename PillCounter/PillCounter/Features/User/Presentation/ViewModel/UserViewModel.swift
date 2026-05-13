@@ -53,6 +53,11 @@ class UserViewModel: ObservableObject {
     @Published var pharmacyName: String = ""
     @Published var npiID: String = ""
 
+    // terminals
+    @Published var terminals: [UserTerminal] = []
+    @Published var selectedTerminal: UserTerminal? = nil
+    @Published var pendingTerminal: UserTerminal? = nil
+
     // when user updates the profile successfully,
     @Published var isProfileUpdated: Bool = false
 
@@ -220,6 +225,18 @@ class UserViewModel: ObservableObject {
                     populateEditableFields(from: user)
                 }
 
+                print("[Terminals] data.user.terminals: \(String(describing: getUserResult.data?.user?.terminals))")
+                print("[Terminals] data.terminals: \(String(describing: getUserResult.data?.terminals))")
+                let fetchedTerminals = getUserResult.data?.user?.terminals
+                    ?? getUserResult.data?.terminals
+                    ?? []
+                print("[Terminals] fetchedTerminals count: \(fetchedTerminals.count)")
+                terminals = fetchedTerminals
+                if selectedTerminal == nil {
+                    selectedTerminal = fetchedTerminals.first(where: { $0.isActive == true }) ?? fetchedTerminals.first
+                    pendingTerminal = selectedTerminal
+                }
+
                 userID = getUserResult.data?.profile?.userId ?? ""
 
                 if let userId = userProfileDetails?.userId,
@@ -248,7 +265,7 @@ class UserViewModel: ObservableObject {
         phoneNumber = user.phoneNumber ?? ""
         pharmacyName = user.pharmacyName ?? ""
         npiID = user.npiID ?? ""
-        self.bucket = user.bucket
+        self.bucket = user.bucket ?? ["NORMAL"]
         self.fullName = fullName
     }
 
@@ -267,9 +284,14 @@ class UserViewModel: ObservableObject {
 
         do {
             
+            let combinedName = [firstName, lastName]
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+
             let request = UpdateUserProfileRequest(
-                fname: firstName,
-                lname: lastName,
+                fname: combinedName,
+                lname: nil,
                 pharmacyName: pharmacyName,
                 phoneNumber: phoneNumber,
                 npiID: npiID,
@@ -295,8 +317,7 @@ class UserViewModel: ObservableObject {
                     ?? previousUserProfileDetails
                 
                 if !userID.isEmpty {
-                    userLocalDB.updateUser(userId: userID, field: .fname, value: firstName)
-                    userLocalDB.updateUser(userId: userID, field: .lname, value: lastName)
+                    userLocalDB.updateUser(userId: userID, field: .fname, value: combinedName)
                     userLocalDB.updateUser(userId: userID, field: .email, value: email)
                     userLocalDB.updateUser(userId: userID, field: .pharmacyName, value: pharmacyName)
                     userLocalDB.updateUser(userId: userID, field: .phoneNumber, value: phoneNumber)
@@ -309,11 +330,19 @@ class UserViewModel: ObservableObject {
         }
     }
     // func to check if any updates were there in the profile.
+    func hasProfileChanged() -> Bool {
+        return hasUserProfileChanged()
+    }
+
     private func hasUserProfileChanged() -> Bool {
         guard let original = userProfileDetails else { return true }  // if no original data, treat as changed
 
         let originalName = original.fname ?? ""
-        let fullNameChanged = "\(firstName) \(lastName)" != originalName
+        let currentName = [firstName, lastName]
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let fullNameChanged = currentName != originalName
         let pharmacyChanged = pharmacyName != (original.pharmacyName ?? "")
         let phoneChanged = phoneNumber != (original.phoneNumber ?? "")
         let npiChanged = npiID != (original.npiID ?? "")
@@ -781,6 +810,40 @@ class UserViewModel: ObservableObject {
         }
     }
 
+    // MARK: - UPDATE TERMINAL
+
+    /// UI-only selection — no API call; persisted on Save.
+    func selectTerminal(_ terminal: UserTerminal) {
+        pendingTerminal = terminal
+    }
+
+    func updateTerminal(_ terminal: UserTerminal) async -> Bool {
+        guard let terminalId = terminal.terminalId,
+              let terminalName = terminal.terminalName else { return false }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let response = try await userRepo.updateTerminal(
+                terminalId: terminalId,
+                terminalName: terminalName,
+                isActive: true,
+                accessToken: accessToken
+            )
+            if response.isSuccess ?? false {
+                selectedTerminal = terminal
+                pendingTerminal = terminal
+                AppStorageManager.shared.selectedTerminalName = terminalName
+                return true
+            }
+            return false
+        } catch {
+            print("Failed to update terminal: \(error)")
+            return false
+        }
+    }
+
     // MARK: - DELETE USER PROFILE
     func deleteUserProfile() async {
         isLoading = true
@@ -986,6 +1049,8 @@ class UserViewModel: ObservableObject {
         phoneNumber = ""
         pharmacyName = ""
         npiID = ""
+        terminals = []
+        selectedTerminal = nil
 
         // Transactions
         historyCountTransactions = []

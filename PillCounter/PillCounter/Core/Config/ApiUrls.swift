@@ -33,6 +33,11 @@ struct APIConstants {
     // MARK: - MOBILE
     static let getMobileSettings = "\(baseURL)/mobile/get/settings?platform" // need to add query parameter to send the ios version.
     
+    // MARK: - TERMINAL
+    static func updateTerminal(terminalId: String) -> String {
+        "\(baseURL)/terminals/update/\(terminalId)"
+    }
+
     // MARK: - DRUG SERVICE
     static let getDrugInfo = "\(baseURL)/drugs/ndc"
     

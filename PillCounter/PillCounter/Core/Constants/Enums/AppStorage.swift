@@ -29,6 +29,7 @@ final class AppStorageManager {
         static let isHl7Enable: String = "is_hl7_enable"
         static let pmsHostName = "pms_host_name"
         static let pillCounterHostName = "pillcounter_host_name"
+        static let selectedTerminalName = "selected_terminal_name"
         static let barcodeFormat = "barcode_format"
         static let bucketList = "bucket_list"
     
@@ -218,8 +219,16 @@ final class AppStorageManager {
             defaults.setValue(newValue, forKey: AppStorageKeys.pillCounterHostName)
         }
     }
-    
- 
+
+    var selectedTerminalName: String {
+        get {
+            defaults.string(forKey: AppStorageKeys.selectedTerminalName) ?? ""
+        }
+        set {
+            defaults.setValue(newValue, forKey: AppStorageKeys.selectedTerminalName)
+        }
+    }
+
     // MARK: - Add email
     func addEmail(_ email: String) {
         guard !userSavedEmails.contains(email) else { return }
@@ -287,5 +296,6 @@ final class AppStorageManager {
         defaults.removeObject(forKey: AppStorageKeys.isHl7Enable)
         defaults.removeObject(forKey: AppStorageKeys.pmsHostName)
         defaults.removeObject(forKey: AppStorageKeys.pillCounterHostName)
+        defaults.removeObject(forKey: AppStorageKeys.selectedTerminalName)
     }
 }

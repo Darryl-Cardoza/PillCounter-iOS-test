@@ -56,6 +56,7 @@ class UserViewModel: ObservableObject {
     // terminals
     @Published var terminals: [UserTerminal] = []
     @Published var selectedTerminal: UserTerminal? = nil
+    @Published var pendingTerminal: UserTerminal? = nil
 
     // when user updates the profile successfully,
     @Published var isProfileUpdated: Bool = false
@@ -233,6 +234,7 @@ class UserViewModel: ObservableObject {
                 terminals = fetchedTerminals
                 if selectedTerminal == nil {
                     selectedTerminal = fetchedTerminals.first(where: { $0.isActive == true }) ?? fetchedTerminals.first
+                    pendingTerminal = selectedTerminal
                 }
 
                 userID = getUserResult.data?.profile?.userId ?? ""
@@ -328,6 +330,10 @@ class UserViewModel: ObservableObject {
         }
     }
     // func to check if any updates were there in the profile.
+    func hasProfileChanged() -> Bool {
+        return hasUserProfileChanged()
+    }
+
     private func hasUserProfileChanged() -> Bool {
         guard let original = userProfileDetails else { return true }  // if no original data, treat as changed
 
@@ -805,6 +811,12 @@ class UserViewModel: ObservableObject {
     }
 
     // MARK: - UPDATE TERMINAL
+
+    /// UI-only selection — no API call; persisted on Save.
+    func selectTerminal(_ terminal: UserTerminal) {
+        pendingTerminal = terminal
+    }
+
     func updateTerminal(_ terminal: UserTerminal) async -> Bool {
         guard let terminalId = terminal.terminalId,
               let terminalName = terminal.terminalName else { return false }
@@ -821,6 +833,8 @@ class UserViewModel: ObservableObject {
             )
             if response.isSuccess ?? false {
                 selectedTerminal = terminal
+                pendingTerminal = terminal
+                AppStorageManager.shared.selectedTerminalName = terminalName
                 return true
             }
             return false

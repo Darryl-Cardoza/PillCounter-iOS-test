@@ -66,8 +66,7 @@ class BarcodeAndQRDecoder: ObservableObject {
         // 1️⃣ Detect plain numeric barcodes (EAN-8, EAN-13, UPC-A, ITF-14)
         // These do NOT contain GS1 AIs like (01)
         if raw.range(of: #"^\d{8,14}$"#, options: .regularExpression) != nil {
-            let gtin14 = normalizeGTIN14(raw)
-            let result = GS1BarcodeData(gtin: gtin14)
+            let result = GS1BarcodeData(gtin: raw)
             return result
         }
 
@@ -83,7 +82,7 @@ class BarcodeAndQRDecoder: ObservableObject {
 
         // 3️⃣ Extract simple string fields
         let rawGTIN = extract("GTIN", from: cleaned)
-        result.gtin = normalizeGTIN14(rawGTIN)
+        result.gtin = rawGTIN
         result.lotNumber = extract("LotNumber", from: cleaned)
         result.serialNumber = extract("SerialNumber", from: cleaned)
 
@@ -175,10 +174,5 @@ class BarcodeAndQRDecoder: ObservableObject {
         return intValue / divisor
     }
     
-    private func normalizeGTIN14(_ gtin: String?) -> String? {
-        guard let gtin = gtin else { return nil }
-        if gtin.count == 14 { return gtin }
-        if gtin.count < 14 { return String(repeating: "0", count: 14 - gtin.count) + gtin }
-        return gtin
-    }
+
 }

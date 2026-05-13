@@ -213,19 +213,12 @@ struct UserProfileScreen: View {
         Menu {
             ForEach(userViewModel.terminals, id: \.terminalId) { terminal in
                 Button {
-                    guard terminal.terminalId != userViewModel.selectedTerminal?.terminalId else { return }
-                    Task {
-                        let success = await userViewModel.updateTerminal(terminal)
-                        if success {
-                            toastManager.show(message: "Terminal updated successfully.")
-                        } else {
-                            toastManager.show(message: "Failed to update terminal. Please try again.")
-                        }
-                    }
+                    guard terminal.terminalId != userViewModel.pendingTerminal?.terminalId else { return }
+                    userViewModel.selectTerminal(terminal)
                 } label: {
                     HStack {
                         Text(terminal.terminalName ?? "")
-                        if terminal.terminalId == userViewModel.selectedTerminal?.terminalId {
+                        if terminal.terminalId == userViewModel.pendingTerminal?.terminalId {
                             Image(systemName: "checkmark")
                         }
                     }
@@ -233,14 +226,14 @@ struct UserProfileScreen: View {
             }
         } label: {
             ZStack(alignment: .leading) {
-                Text(NSLocalizedString("TERMINAL", comment: ""))
+                Text(NSLocalizedString("Terminal", comment: ""))
                     .font(.caption)
                     .foregroundColor(appColors.text.opacity(0.75))
                     .offset(y: -16)
                     .padding(.leading, 16)
 
                 HStack {
-                    Text(userViewModel.selectedTerminal?.terminalName ?? "")
+                    Text(userViewModel.pendingTerminal?.terminalName ?? "")
                         .font(.body)
                         .foregroundColor(appColors.text)
                         .padding(.leading, 16)
@@ -332,15 +325,31 @@ struct UserProfileScreen: View {
                     return
                 }
             }
-            await userViewModel.updateUserProfile()
-            toastManager.show(message: "Profile updated successfully.")
-            if userViewModel.isProfileUpdated {
-                isNewUser = false
-                userViewModel.isProfileUpdated = false
-                router.navigateBack()
-            }else {
-                toastManager.show(message: "Failed to update profile. Please try again.")
+
+            // Update terminal if selection changed
+            let terminalChanged = userViewModel.pendingTerminal?.terminalId != userViewModel.selectedTerminal?.terminalId
+            if let pending = userViewModel.pendingTerminal, terminalChanged {
+                let terminalSuccess = await userViewModel.updateTerminal(pending)
+                if !terminalSuccess {
+                    toastManager.show(message: "Failed to update terminal. Please try again.")
+                    return
+                }
+                Hl7ServiceController.shared.restartForTerminalChange()
             }
+
+            let profileChanged = userViewModel.hasProfileChanged()
+            if profileChanged {
+                await userViewModel.updateUserProfile()
+                if !userViewModel.isProfileUpdated {
+                    toastManager.show(message: "Failed to update profile. Please try again.")
+                    return
+                }
+                userViewModel.isProfileUpdated = false
+            }
+
+            toastManager.show(message: "Profile updated successfully.")
+            isNewUser = false
+            router.navigateBack()
         }
     }
 

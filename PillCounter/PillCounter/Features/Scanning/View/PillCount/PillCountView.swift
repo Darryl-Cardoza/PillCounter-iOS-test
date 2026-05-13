@@ -128,21 +128,23 @@ struct OPillCountView: View {
                     HStack {
                         Button {
                             router.setRoot(
-                                to: .authentication(.login(.dashboard(.dashboardHome))))
+                                to: .authentication(.login(.dashboard(.dashboardHome)))
+                            )
                             cameraService.stop()
                         } label: {
-                            Image("back_icon")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 24, height: 24)
-                                .padding(12)
-                                .clipShape(Circle())
+                            PillCountingIconView(
+                                imageName: "back_icon",
+                                size: 24,
+                                padding: 12,
+                                foregroundColor: appColors.primary,
+                                backgroundColor: .clear,
+                                scaleOnIpad: true
+                            )
                         }
 
                         if !isLandscape {
                             Spacer()
                         }
-                        
                         
                         if !controlledStepInstruction.isEmpty {
                             PillCountInstructionOverlay(text: controlledStepInstruction)
@@ -165,12 +167,12 @@ struct OPillCountView: View {
                 },
                 showBackButton: false,
                 showHamburgerMenu: false,
+                backgroundColor: Color.clear,
                 onBack: {
                     router.setRoot(
                         to: .authentication(.login(.dashboard(.dashboardHome))))
                     cameraService.stop()
                 },
-                
             )
             .ignoresSafeArea(.all)
 

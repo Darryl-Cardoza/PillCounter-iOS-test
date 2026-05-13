@@ -353,6 +353,8 @@ struct CountAddButtonView: View {
     let isAnimating: Bool
     let onAddTap: () -> Void
     var isDisabled: Bool = false
+    let isLandscape: Bool
+    let appColors: AppColors
 
     @State private var animationID = UUID()
     @State private var trimValue: CGFloat = 1.0
@@ -361,7 +363,7 @@ struct CountAddButtonView: View {
     @State private var countTimer: Timer? = nil
     
     private var uiScale: CGFloat {
-         UIDevice.current.userInterfaceIdiom == .pad ? 1.5 : 1.0
+        UIDevice.current.userInterfaceIdiom == .pad ? (isLandscape ? 2.0 : 1.5) : 1.0
      }
 
     var body: some View {
@@ -390,7 +392,6 @@ struct CountAddButtonView: View {
                     .foregroundStyle(textColor)
                     .scaleEffect(popScale)
             }
-            .opacity(isDisabled ? 0.5 : 1.0)
             .onChange(of: count) { _, newCount in
                 if newCount == 0 {
                     snapToZero()
@@ -402,20 +403,29 @@ struct CountAddButtonView: View {
                 displayedCount = count
             }
 
-            Button(action: onAddTap) {
+            Button(action: {
+                onAddTap()
+            }) {
                 Text(isDisabled ? "Wait..." : "Add")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 10)
-                    .background(isDisabled ? Color.gray : buttonColor)
+                    .background(isDisabled ? .gray :  appColors.primary)
                     .clipShape(Capsule())
             }
+            .buttonStyle(NoPressEffectStyle())
             .disabled(isDisabled)
         }
         .padding(.top, 10)
     }
 
+    struct NoPressEffectStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label  // ignores configuration.isPressed entirely
+        }
+    }
+    
     // MARK: - Snap to zero instantly
     private func snapToZero() {
         countTimer?.invalidate()
@@ -539,29 +549,27 @@ struct BottomControlsViewBodyForPillScan: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 // MARK: - PORTRAIT LAYOUT
-                // All three in one bottom-aligned row
-                HStack(alignment: .bottom) {
+                HStack(alignment: .center) {
                     totalCountView
-                        .frame(maxWidth: .infinity, alignment:  isIpad ? .center : .leading)
-                        .padding(.bottom, 12)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .onTapGesture {
-                            if pillScanViewModel.currentTransaction?.count_type ==  CountType.FIXED.rawValue {
+                            if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                                 pillScanViewModel.isNavigatingToDetailGrid = true
                                 router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
                             }
                         }
-
+                        .padding(.bottom, isIpad ? 64 : 20)
 
                     addButton
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .center)
 
                     allDoneButton
-                        .frame(maxWidth: .infinity, alignment: isIpad  ? .center : .trailing)
-                        .padding(.bottom, 12)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.bottom, isIpad ? 64 : 20)
+
                 }
                 .padding(.horizontal)
-                .padding(.bottom,  40)
-                .padding(.top, 20)
+                .padding(.vertical, 20)
             }
         }
         .cornerRadius(24)
@@ -595,7 +603,9 @@ struct BottomControlsViewBodyForPillScan: View {
             size: 120,
             isAnimating: isAnimating,
             onAddTap: { onAddPills() },
-            isDisabled: isAddButtonDisabled
+            isDisabled: isAddButtonDisabled,
+            isLandscape: isLandscape,
+            appColors: appColors
         )
     }
 
@@ -605,7 +615,8 @@ struct BottomControlsViewBodyForPillScan: View {
             currentTotalCount: currentTotalCount,
             targetCount: targetCount,
             countType: countType,
-            appColors: appColors
+            appColors: appColors,
+            isLandscape: isLandscape
         )
     }
 
@@ -622,8 +633,11 @@ struct BottomControlsViewBodyForPillScan: View {
                     .frame(width: 50, height: 50)
                     .overlay(appColors.primary)
                     .mask(Image("all_done").resizable().scaledToFit())
-
-                Spacer().frame(height: 8)
+                if isLandscape {
+                    Spacer().frame(height: 8)
+                }else{
+                    Spacer().frame(height: 12)
+                }
                 Text("All Done")
                     .foregroundStyle(appColors.text)
                     .font(.system(size: 16))
@@ -659,6 +673,8 @@ struct TotalCountView: View {
     let targetCount: Int32?
     let countType: CountType
     let appColors: AppColors
+    let isLandscape: Bool
+
     
     private var showTarget: Bool {
         countType == .FIXED && (targetCount ?? 0) > 0
@@ -668,7 +684,7 @@ struct TotalCountView: View {
         
         VStack(spacing: 6) {
 
-                Spacer()
+            Spacer()
 
             // Current Total
             Text("\(currentTotalCount)")
@@ -686,7 +702,7 @@ struct TotalCountView: View {
             if showTarget {
                 Text("\(targetCount ?? 0)")
                     .foregroundStyle(appColors.primary)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 26, weight: .bold))
             }
 
             if !showTarget {
@@ -776,7 +792,8 @@ struct BottonControlsViewForTransactionList: View {
                     currentTotalCount: totalCount,
                     targetCount: targetCount,
                     countType: countType,
-                    appColors: appColors
+                    appColors: appColors,
+                    isLandscape: isLandscape
                 )
                 .padding(.top, 60)
             }

@@ -140,14 +140,18 @@ struct QRBarcodeScannerView: View {
                         Button {
                             router.navigateBack()
                         } label: {
-                            Image("back_icon")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 24, height: 24)
-                                .padding(12)
-                                .clipShape(Circle())
+                            PillCountingIconView(
+                                 imageName: "back_icon",
+                                 size: 24,
+                                 padding: 12,
+                                 foregroundColor: appColors.primary,
+                                 backgroundColor: Color.clear,
+                                 scaleOnIpad: true
+                             )
                         }
 
+                 
+                        
                         Spacer()
 
                         PillCountInstructionOverlay(text: scanType.instructionText)

@@ -87,7 +87,7 @@ final class Hl7ServiceController: ObservableObject {
 
         hl7Manager = Hl7ServiceManager(
             port: 2575,
-            serviceName: "PillCounter",
+            serviceName: "Terminal-2",
             serviceType: pillCounterHostName,
             pmsServiceType: pmsHostName,
             listener: handler

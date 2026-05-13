@@ -202,6 +202,7 @@ struct ZoomableImageViewer: View {
                 }
                 Spacer()
             }
+            .ignoresSafeArea(.all, edges: [.leading, .trailing, .bottom])
         }
         // Double-tap to reset zoom
         .onTapGesture(count: 2) {

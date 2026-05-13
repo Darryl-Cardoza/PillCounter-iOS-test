@@ -123,13 +123,13 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
         }
         
         .background(backgroundColor ?? appColors.secondaryBackground)
-//        .ignoresSafeArea(
-//            allowKeyboardResize ?
-//            .container :
-//            .all,
-//            edges: allowKeyboardResize ? [.top, .leading, .trailing] : .all
-//        )
         .ignoresSafeArea(edges: .bottom)
+        .ignoresSafeArea(
+            UIDevice.current.userInterfaceIdiom == .phone
+            ? .all
+            : [],
+            edges: [.leading, .trailing, .bottom]
+        )
         .environment(\.dynamicTypeSize, .medium)
     }
 }

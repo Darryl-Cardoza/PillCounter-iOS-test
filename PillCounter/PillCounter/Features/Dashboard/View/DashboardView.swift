@@ -66,8 +66,8 @@ struct DashboardView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(
-                                    width: isIpad ? 80 : 65,
-                                    height: isIpad ? 80 : 65
+                                    width: isIpad ? 80 : 60,
+                                    height: isIpad ? 80 : 60
                                 )
                                 .foregroundColor(appColors.secondary)
                                 .padding(40 * scale)
@@ -80,17 +80,21 @@ struct DashboardView: View {
                                             .stroke(appColors.primary, lineWidth: 4 )
                                     }
                                 )
-                            Spacer().frame(height: 15)
                             
-                            Text("FIXED_COUNT_TITLE")
-                                .font(.title)
-                                .foregroundStyle(appColors.secondary)
+                            Spacer()
+                                .frame(height: isIpad ? 15 : 0)
                             
-                            Text("FIXED_COUNT_SUBTITLE")
-                                .foregroundStyle(appColors.text)
+                            VStack(spacing: 8){
+                                Text("FIXED_COUNT_TITLE")
+                                    .font(.title)
+                                    .foregroundStyle(appColors.secondary)
+                                
+                                Text("FIXED_COUNT_SUBTITLE")
+                                    .foregroundStyle(appColors.text)
+                            }
                             
                         }
-                        .padding(30)
+                        .padding(isIpad ? 30 : 0)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             router.selectedPillScanningType = .FIXED
@@ -101,9 +105,10 @@ struct DashboardView: View {
                                             .pillCount(.barcodeScanning(.rx_label))))))
                         }
 
-                        Spacer()
-
-                        HStack(spacing: isIpad ? 24 : 42) {
+                        if isIpad{
+                            Spacer()
+                        }
+                        HStack(spacing: isIpad ? 24 : 0) {
                             PillCountingButton(
                                 iconName: "check_with_circle",
                                 title: "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
@@ -116,12 +121,9 @@ struct DashboardView: View {
                             )
                             .frame(maxWidth: .infinity)
 
-                            if isIpad {
-                                Spacer()
-                                    .frame(width: 70)
-                            }
+                            Spacer()
+                                .frame(width: isIpad ? 70 : 20)
                          
-                            
                             PillCountingButton(
                                 iconName: "partial",
                                 title: "\(userViewModel.fixedCountTransactionPartialCount) \(NSLocalizedString("PENDING", comment: ""))",
@@ -144,6 +146,7 @@ struct DashboardView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(appColors.secondaryBackground)
+
                 },
                 bottomContent: {
                     VStack(spacing: 10) {
@@ -169,26 +172,31 @@ struct DashboardView: View {
                                             .stroke(appColors.primary, lineWidth: 4)
                                     }
                                 )
-                            Spacer().frame(height: 15)
+                    
+                            Spacer()
+                                .frame(height: isIpad ? 15 : 0)
                             
-                            Text("REGULAR_COUNT_TITLE")
-                                .font(.title)
-                                .foregroundStyle(appColors.secondary)
-                            
-                            Text("REGULAR_COUNT_SUBTITLE")
-                                .foregroundStyle(appColors.text)
+                            VStack(spacing: 8){
+                                Text("REGULAR_COUNT_TITLE")
+                                    .font(.title)
+                                    .foregroundStyle(appColors.secondary)
+                                
+                                Text("REGULAR_COUNT_SUBTITLE")
+                                    .foregroundStyle(appColors.text)
+                            }
                             
                         }
-                        .padding(30)
+                        .padding(isIpad ? 30 : 0)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             router.selectedPillScanningType = .REGULAR
                             showStockCountPopup.toggle()
                             resetStockCountSelection()
                         }
-                        Spacer()
-                        
-                        HStack(spacing: isIpad ? 24 : 42) {
+                        if isIpad{
+                            Spacer()
+                        }
+                        HStack(spacing: isIpad ? 24 : 0) {
                             PillCountingButton(
                                 iconName: "check_with_circle",
                                 title: "\(stockCountViewModel.totalCompletedBatchCount) \(NSLocalizedString("COMPLETED", comment: ""))",
@@ -201,10 +209,8 @@ struct DashboardView: View {
                             )
                             .frame(maxWidth: .infinity)
 
-                            if isIpad {
-                                Spacer()
-                                    .frame(width: 70)
-                            }
+                            Spacer()
+                                .frame(width: isIpad ? 70 : 10)
                          
                             PillCountingButton(
                                 iconName: "partial",
@@ -230,6 +236,7 @@ struct DashboardView: View {
                 showPmsConnectionButton: isHl7Enable,
                 pmsConnectionState : userViewModel.pmsConnectionState,
             )
+           
             
             if pillScanViewModel.showToast  {
                 VStack {

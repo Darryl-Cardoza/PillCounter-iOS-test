@@ -87,7 +87,6 @@ struct PillCountingButton: View {
                     .font(font)
                     .foregroundColor(textColor)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)

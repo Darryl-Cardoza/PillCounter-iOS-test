@@ -44,13 +44,7 @@ struct PillScanDetailGridScreen: View {
     private var countType: CountType {
         CountType(rawValue: pillScanViewModel.currentTransaction?.count_type ?? "") ?? .FIXED
     }
-//
-//     var isFixed: Bool {
-//        if countType == .FIXED { return true }
-//        // REGULAR count with a container-initiate detail also shows target count
-//        return details.first?.type == ControlledStep.containerInitiate.rawValue
-//    }
-//    
+
     @State private var isFixed: Bool = false
 
 
@@ -67,11 +61,11 @@ struct PillScanDetailGridScreen: View {
                 showHamburgerMenu: false,
                 title: isEditing ? "DELETE TRANSACTION" : "TOTAL COUNT",
                 headerActionsBackground: appColors.primaryBackground,
-                backgroundColor: appColors.secondaryBackground
+                backgroundColor: appColors.primaryBackground
             )
             .onAppear {
                 if countType == .FIXED { return }
-                isFixed = details.first?.type == ControlledStep.containerInitiate.rawValue
+                isFixed = (details.first?.type != ControlledStep.containerInitiate.rawValue)
             }
             // MARK: - Edit mode bottom bar
             if isEditing {
@@ -185,7 +179,7 @@ struct PillScanDetailGridScreen: View {
 
     // MARK: - Main Content
     private var contentView: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             // Drug name + count strip
             if !isEditing{
                 infoStrip
@@ -197,7 +191,7 @@ struct PillScanDetailGridScreen: View {
                 portraitContent
             }
         }
-        .padding(.top, 90)
+        .padding(.top, 64)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
@@ -205,26 +199,15 @@ struct PillScanDetailGridScreen: View {
     // MARK: - Drug name + pill count header strip
     private var infoStrip: some View {
         Group {
-            if isLandscape {
-                HStack(spacing: 8) {
-                    Text(drugName)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(appColors.text)
-                        .lineLimit(1)
+            HStack(spacing: 8) {
+                Text(drugName)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(appColors.text)
+                    .lineLimit(1)
 
-                    Spacer()
+                Spacer()
 
-                    countView
-                }
-            } else {
-                VStack(alignment: .center, spacing: 8) {
-                    Text(drugName)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(appColors.text)
-                        .lineLimit(1)
-
-                    countView
-                }
+                countView
             }
         }
         .padding(.horizontal, 16)
@@ -274,7 +257,7 @@ struct PillScanDetailGridScreen: View {
     private var gridColumns: [GridItem] {
         let columnCount: Int
         if UIDevice.current.userInterfaceIdiom == .pad {
-            columnCount = 4
+            columnCount = isLandscape ? 6 : 4
         } else {
             columnCount = 2
         }
@@ -284,34 +267,65 @@ struct PillScanDetailGridScreen: View {
         )
     }
 
-    // MARK: - Landscape: horizontal scroll
+    // MARK: - Landscape: vertical grid for iPad, horizontal scroll for iPhone
     private var landscapeContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(details, id: \.txn_details_id) { detail in
-                        PillScanDetailCard(
-                              detail: detail,
-                              isEditing: isEditing,
-                              isSelected: selectedIds.contains(detail.txn_details_id)
-                        )
-                        .onTapGesture {
-                            if isEditing {
-                                toggleSelection(detail.txn_details_id)
-                            }else{
-                                if let path = detail.image_path,
-                                  let uiImage = PhotoFileManager.shared.loadImage(from: path)
-                               {
-                                   selectedUIImage = uiImage
-                               }
+        Group {
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                ScrollView(showsIndicators: false) {
+                    if details.isEmpty {
+                        emptyState
+                    } else {
+                        LazyVGrid(columns: gridColumns, spacing: 10) {
+                            ForEach(details, id: \.txn_details_id) { detail in
+                                PillScanDetailCard(
+                                    detail: detail,
+                                    isEditing: isEditing,
+                                    isSelected: selectedIds.contains(detail.txn_details_id)
+                                )
+                                .onTapGesture {
+                                    if isEditing {
+                                        toggleSelection(detail.txn_details_id)
+                                    } else {
+                                        if let path = detail.image_path,
+                                           let uiImage = PhotoFileManager.shared.loadImage(from: path) {
+                                            selectedUIImage = uiImage
+                                        }
+                                    }
+                                }
                             }
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, isEditing ? 100 : 20)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(details, id: \.txn_details_id) { detail in
+                                PillScanDetailCard(
+                                    detail: detail,
+                                    isEditing: isEditing,
+                                    isSelected: selectedIds.contains(detail.txn_details_id)
+                                )
+                                .onTapGesture {
+                                    if isEditing {
+                                        toggleSelection(detail.txn_details_id)
+                                    } else {
+                                        if let path = detail.image_path,
+                                           let uiImage = PhotoFileManager.shared.loadImage(from: path) {
+                                            selectedUIImage = uiImage
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    Spacer()
+                }
             }
-            Spacer()
         }
     }
 

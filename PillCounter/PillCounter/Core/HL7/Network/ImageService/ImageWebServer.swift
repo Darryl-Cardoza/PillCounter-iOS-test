@@ -34,11 +34,23 @@ final class ImageWebServer {
     private let port: NWEndpoint.Port = 8443
     private let queue = DispatchQueue(label: "com.pillcounter.imageserver", qos: .utility)
 
+    // MARK: - Session Token
+    // Rotated each time the server starts. C# client must send this in X-Api-Key header.
+    private(set) var sessionToken: String = ImageWebServer.generateToken()
+
+    private static func generateToken() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return bytes.map { String(format: "%02x", $0) }.joined()
+    }
+
     // MARK: - Lifecycle
 
-    /// Starts HTTPS image server.
-    func start() {
-        guard listener == nil else { return }
+    /// Starts HTTPS image server. Returns the session token the C# client must use.
+    @discardableResult
+    func start() -> String {
+        guard listener == nil else { return sessionToken }
+        sessionToken = ImageWebServer.generateToken()
 
         do {
             let parameters = NWParameters(tls: try configureTLS())
@@ -67,6 +79,8 @@ final class ImageWebServer {
         } catch {
             Log("Failed to start server: \(error.localizedDescription)")
         }
+
+        return sessionToken
     }
 
     /// Stops server.
@@ -130,8 +144,20 @@ final class ImageWebServer {
     /// Only endpoint: GET /images/<filename>
     private func handleRequest(_ request: String) -> String {
 
-        guard let firstLine = request.components(separatedBy: "\r\n").first else {
+        let lines = request.components(separatedBy: "\r\n")
+
+        guard let firstLine = lines.first else {
             return errorResponse(400)
+        }
+
+        // Token check — constant-time comparison to prevent timing attacks
+        let providedToken = lines
+            .first(where: { $0.lowercased().hasPrefix("x-api-key:") })
+            .map { String($0.dropFirst("x-api-key:".count)).trimmingCharacters(in: .whitespaces) }
+            ?? ""
+
+        guard constantTimeEqual(providedToken, sessionToken) else {
+            return errorResponse(401)
         }
 
         let parts = firstLine.components(separatedBy: " ")
@@ -149,30 +175,30 @@ final class ImageWebServer {
         return serveImage(fileName)
     }
 
-    // MARK: - Image Logic
-
-    /// Reads image and returns base64 response.
-    private func serveImage(_ fileName: String) -> String {
-
-        guard isSafe(fileName),
-              let url = findImage(named: fileName),
-              let data = try? Data(contentsOf: url) else {
-            return errorResponse(404)
-        }
-
-        let base64 = data.base64EncodedString(options: [])
-
-        let json = #"{"success":true,"base64":"\#(base64)"}"#
-        return response(json)
+    /// Prevents timing-based token guessing by always comparing all bytes.
+    private func constantTimeEqual(_ a: String, _ b: String) -> Bool {
+        let ab = Array(a.utf8)
+        let bb = Array(b.utf8)
+        guard ab.count == bb.count else { return false }
+        return ab.indices.reduce(into: UInt8(0)) { acc, i in acc |= ab[i] ^ bb[i] } == 0
     }
 
-    // MARK: - File Lookup
+    // MARK: - Image Logic
 
-    private func findImage(named fileName: String) -> URL? {
-        let fm = FileManager.default
-        let dir = fm.urls(for: .documentDirectory, in: .userDomainMask).first
+    /// Decrypts image in-memory and returns base64 JPEG response.
+    /// The .enc file is never served raw — PMS always receives plaintext JPEG bytes.
+    private func serveImage(_ fileName: String) -> String {
 
-        return dir?.appendingPathComponent(fileName)
+        guard isSafe(fileName) else { return errorResponse(400) }
+
+        guard var decrypted = PhotoFileManager.shared.loadDecryptedData(from: fileName) else {
+            return errorResponse(404)
+        }
+        defer { decrypted.resetBytes(in: 0..<decrypted.count) }
+
+        let base64 = decrypted.base64EncodedString(options: [])
+        let json = #"{"success":true,"base64":"\#(base64)"}"#
+        return response(json)
     }
 
     private func isSafe(_ name: String) -> Bool {

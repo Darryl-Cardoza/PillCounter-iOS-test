@@ -64,11 +64,11 @@ public enum ScanType: Codable, Hashable {
     var instructionText: String {
         switch self {
         case .barcode:
-            return NSLocalizedString("SCAN_BARCODE", comment: "")
+            return L10n.Controlled.scanBarcode
         case .stockCount:
-            return NSLocalizedString("SCAN_STOCK_COUNT_BARCODE", comment: "")
+            return L10n.Controlled.scanStockCountBarcode
         case .rx_label:
-            return NSLocalizedString("SCAN_RX_LABEL_BARCODE", comment: "")
+            return L10n.Controlled.scanRxLabelBarcode
         }
     }
 }
@@ -97,14 +97,14 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
     var title: String {
         switch self {
             case .FixedCount:
-                return NSLocalizedString("FIXED_COUNT_TITLE", comment: "")
+                return L10n.Dashboard.FixedCount.title
             case .RegularCount:
-                return NSLocalizedString("REGULAR_COUNT_TITLE", comment: "")
-            case .Profile: return NSLocalizedString("PROFILE", comment: "")
-            case .History: return NSLocalizedString("HISTORY", comment: "")
-            case .UnsyncedTransaction: return NSLocalizedString("Unsynced Transactions", comment: "")
-            case .Settings: return NSLocalizedString("SETTINGS", comment: "")
-            case .Logout: return NSLocalizedString("LOGOUT", comment: "")
+                return L10n.Dashboard.RegularCount.title
+            case .Profile: return L10n.Menu.profile
+            case .History: return L10n.Menu.history
+            case .UnsyncedTransaction: return L10n.Menu.unsync
+            case .Settings: return L10n.Menu.settings
+            case .Logout: return L10n.Menu.logout
         }
         
     }
@@ -211,17 +211,17 @@ enum ControlledStep: String, CaseIterable {
     var displayText: String {
         switch self {
         case .scan:
-            return NSLocalizedString("CONTROLLED_SCAN", comment: "")
+            return L10n.Controlled.scan
         case .containerInitiate:
-            return NSLocalizedString("CONTROLLED_CONTAINER_INITIATE", comment: "")
+            return L10n.Controlled.containerInitiate
         case .targetVerification:
-            return NSLocalizedString("CONTROLLED_TARGET_VERIFICATION", comment: "")
+            return L10n.Controlled.targetVerification
         case .targetReverification:
-            return NSLocalizedString("CONTROLLED_TARGET_REVERIFICATION", comment: "")
+            return L10n.Controlled.targetReverification
         case .vial:
-            return NSLocalizedString("CONTROLLED_VIAL", comment: "")
+            return L10n.Controlled.vial
         case .containerPending:
-            return NSLocalizedString("CONTROLLED_CONTAINER_PENDING", comment: "")
+            return L10n.Controlled.containerPending
         }
     }
     

@@ -54,7 +54,7 @@ struct HistoryTransactionDetailView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: transaction?.drug?.drug_name ?? "Unknown Drug",
+                title: transaction?.drug?.drug_name ?? L10n.History.unknownDrug,
                 backgroundColor: appColors.primaryBackground
             )
 
@@ -170,15 +170,15 @@ extension HistoryTransactionDetailView {
             var drugDetailsTitle: String {
                 if let ndc = transaction?.substitueDrug?.ndc,
                    !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return NSLocalizedString("SUBSTITUTED DRUG DETAILS", comment: "")
+                    return L10n.History.substitutedDrugDetails
                 } else {
-                    return NSLocalizedString("DISPENSED DRUG DETAILS", comment: "")
+                    return L10n.History.dispensedDrugDetails
                 }
             }
 
             if let type = transaction?.drug?.drug_type, type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 CollapsibleBox(
-                    title: NSLocalizedString("PILL COUNT", comment: ""),
+                    title: L10n.History.pillCount,
                     allowCollapse: false,
                     defaultExpanded: true,
                     bgColor: appColors.secondaryBackground
@@ -191,7 +191,7 @@ extension HistoryTransactionDetailView {
                !details.isEmpty
             {
                 CollapsibleBox(
-                    title: NSLocalizedString("INITIAL CONTAINER COUNT", comment: ""),
+                    title: L10n.History.initialContainerCount,
                     allowCollapse: false,
                     defaultExpanded: true,
                     bgColor: appColors.secondaryBackground
@@ -203,7 +203,7 @@ extension HistoryTransactionDetailView {
             if let ndc = transaction?.substitueDrug?.ndc,
                !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty  {
                 CollapsibleBox(
-                    title: NSLocalizedString("REQUESTED_DRUG_DETAILS", comment: ""),
+                    title: L10n.History.requestedDrugDetails,
                     bgColor: appColors.secondaryBackground
                 ) {
                     substituedInfoList
@@ -216,7 +216,7 @@ extension HistoryTransactionDetailView {
 
             if let type = transaction?.drug?.drug_type, !type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 CollapsibleBox(
-                    title: NSLocalizedString("PILL COUNT", comment: ""),
+                    title: L10n.History.pillCount,
                     bgColor: appColors.secondaryBackground
                 ) {
                     collapsableBoxContent(step: .targetVerification)
@@ -227,7 +227,7 @@ extension HistoryTransactionDetailView {
                !details.isEmpty
             {
                 CollapsibleBox(
-                    title: NSLocalizedString("PILL RECOUNT", comment: ""),
+                    title: L10n.History.pillRecount,
                     bgColor: appColors.secondaryBackground
                 ) {
                     collapsableBoxContent(step: .targetReverification)
@@ -238,7 +238,7 @@ extension HistoryTransactionDetailView {
                !details.isEmpty
             {
                 CollapsibleBox(
-                    title: NSLocalizedString("DISPENSED VIAL", comment: ""),
+                    title: L10n.History.dispensedVial,
                     bgColor: appColors.secondaryBackground
                 ) {
                     collapsableBoxContent(step: .vial, showVialInfo: true)
@@ -249,14 +249,14 @@ extension HistoryTransactionDetailView {
                !details.isEmpty
             {
                 CollapsibleBox(
-                    title: NSLocalizedString("REMAINING_CONTAINER_COUNT", comment: ""),
+                    title: L10n.History.remainingContainerCount,
                     bgColor: appColors.secondaryBackground
                 ) {
                     collapsableBoxContent(step: .containerPending, showTargetCount: false)
                 }
             }
 
-            CollapsibleBox(title: NSLocalizedString("NOTE", comment: "") ,  bgColor: appColors.secondaryBackground) {
+            CollapsibleBox(title: L10n.Common.note, bgColor: appColors.secondaryBackground) {
                 notesContent
             }
         }
@@ -316,7 +316,7 @@ extension HistoryTransactionDetailView {
                             }
                         }
 
-                        Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
+                        Text(L10n.History.totalCount)
                             .foregroundStyle(appColors.text)
                             .font(.system(size: 14))
                             .fontWeight(.semibold)
@@ -399,37 +399,37 @@ extension HistoryTransactionDetailView {
     private var detailsInfoList: some View {
         VStack(spacing: 0) {
             detailRow(
-                label: NSLocalizedString("SUBSTITUED_DRUG", comment: ""),
+                label: L10n.History.substitutedDrug,
                 value: transaction?.drug?.drug_name ?? "N/A"
             )
             Divider().background(appColors.text.opacity(0.1))
 
             detailRow(
-                label: NSLocalizedString("NDC", comment: ""),
+                label: L10n.History.ndc,
                 value: transaction?.drug?.ndc ?? "N/A"
             )
             Divider().background(appColors.text.opacity(0.1))
 
             detailRow(
-                label: NSLocalizedString("EXPIRY_NO", comment: ""),
+                label: L10n.History.expiryNo,
                 value: transaction?.expiry ?? "N/A"
             )
             Divider().background(appColors.text.opacity(0.1))
 
             detailRow(
-                label: NSLocalizedString("LOT_NO", comment: ""),
+                label: L10n.History.lotNo,
                 value: transaction?.lot_no ?? "N/A"
             )
             Divider().background(appColors.text.opacity(0.1))
 
             detailRow(
-                label: NSLocalizedString("DATE", comment: ""),
+                label: L10n.Common.date,
                 value: Formatter.getDateString(from: transaction?.created_at ?? 0)
             )
             Divider().background(appColors.text.opacity(0.1))
 
             detailRow(
-                label: NSLocalizedString("TIME", comment: ""),
+                label: L10n.Common.time,
                 value: Formatter.getTimeString(from: transaction?.created_at ?? 0)
             )
         }
@@ -438,13 +438,13 @@ extension HistoryTransactionDetailView {
     private var substituedInfoList: some View {
         VStack(spacing: 0) {
             detailRow(
-                label: NSLocalizedString("DRUG_NAME", comment: ""),
+                label: L10n.History.drugName,
                 value: transaction?.substitueDrug?.drug_name ?? "N/A"
             )
             Divider().background(appColors.text.opacity(0.1))
 
             detailRow(
-                label: NSLocalizedString("NDC", comment: ""),
+                label: L10n.History.ndc,
                 value: transaction?.substitueDrug?.ndc ?? "N/A"
             )
         }
@@ -492,7 +492,7 @@ struct DeleteOkButtons: View {
             // DELETE
             PillCountingButton(
                 iconName: nil,
-                title: "DELETE",
+                title: L10n.History.deleteButton,
                 textColor: appColors.primary,
                 backgroundColor: .clear,
                 borderColor: appColors.primary,
@@ -507,7 +507,7 @@ struct DeleteOkButtons: View {
             // OK
             PillCountingButton(
                 iconName: nil,
-                title: "OK",
+                title: L10n.History.okButton,
                 textColor: Color.white,
                 backgroundColor: appColors.primary,
                 borderColor: .clear,

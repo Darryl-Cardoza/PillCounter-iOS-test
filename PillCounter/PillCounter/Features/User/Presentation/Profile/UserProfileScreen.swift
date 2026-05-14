@@ -52,7 +52,7 @@ struct UserProfileScreen: View {
                 headerActions: { EmptyView() },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: NSLocalizedString("PROFILE", comment: ""),
+                title: L10n.Menu.profile,
                 backgroundColor: appColors.primaryBackground,
                 allowKeyboardResize: false,
             )
@@ -84,13 +84,10 @@ struct UserProfileScreen: View {
 
     private var deleteConfirmation: some View {
         ConfirmationDialogue(
-            title: NSLocalizedString("CONFIRM DELETE", comment: ""),
-            message: NSLocalizedString(
-                "Are you sure you want to delete your profile? This action cannot be undone.",
-                comment: ""
-            ),
-            cancelButtonText: NSLocalizedString("CANCEL", comment: ""),
-            confirmButtonText: NSLocalizedString("DELETE", comment: ""),
+            title: L10n.Profile.Popup.confirmDeleteTitle,
+            message: L10n.Profile.Popup.confirmDeleteMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.delete,
             onCancel: {
                 showDeleteConfirmation = false
             },
@@ -109,38 +106,38 @@ struct UserProfileScreen: View {
         VStack(alignment: .leading, spacing: 16) {
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("FIRST_NAME", comment: ""),
+                placeholder: L10n.Profile.firstName,
                 text: $userViewModel.firstName,
                 maxLength: 30
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("LAST_NAME", comment: ""),
+                placeholder: L10n.Profile.lastName,
                 text: $userViewModel.lastName,
                 maxLength: 30
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("PHARMACY_NAME", comment: ""),
+                placeholder: L10n.Profile.pharmacyName,
                 text: $userViewModel.pharmacyName,
                 maxLength: 30
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("PHONE_NUMBER", comment: ""),
+                placeholder: L10n.Profile.phoneNumber,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
                 maxLength: 10
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("EMAIL", comment: ""),
+                placeholder: L10n.Common.email,
                 text: $userViewModel.email,
                 disabled: true
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("NPI_ID", comment: ""),
+                placeholder: L10n.Profile.npiId,
                 text: $userViewModel.npiID,
                 keyboardType: .phonePad,
                 maxLength: 10
@@ -162,19 +159,19 @@ struct UserProfileScreen: View {
     private var leftProfileColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("FIRST_NAME", comment: ""),
+                placeholder: L10n.Profile.firstName,
                 text: $userViewModel.firstName,
                 maxLength: 30
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("PHARMACY_NAME", comment: ""),
+                placeholder: L10n.Profile.pharmacyName,
                 text: $userViewModel.pharmacyName,
                 maxLength: 30
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("EMAIL", comment: ""),
+                placeholder: L10n.Common.email,
                 text: $userViewModel.email,
                 disabled: true
             )
@@ -188,20 +185,20 @@ struct UserProfileScreen: View {
     private var rightProfileColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("LAST_NAME", comment: ""),
+                placeholder: L10n.Profile.lastName,
                 text: $userViewModel.lastName,
                 maxLength: 30
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("PHONE_NUMBER", comment: ""),
+                placeholder: L10n.Profile.phoneNumber,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
                 maxLength: 10
             )
 
             FloatingLabelTextField(
-                placeholder: NSLocalizedString("NPI_ID", comment: ""),
+                placeholder: L10n.Profile.npiId,
                 text: $userViewModel.npiID,
                 keyboardType: .phonePad,
                 maxLength: 10
@@ -226,7 +223,7 @@ struct UserProfileScreen: View {
             }
         } label: {
             ZStack(alignment: .leading) {
-                Text(NSLocalizedString("Terminal", comment: ""))
+                Text(L10n.Profile.terminal)
                     .font(.caption)
                     .foregroundColor(appColors.text.opacity(0.75))
                     .offset(y: -16)
@@ -260,7 +257,7 @@ struct UserProfileScreen: View {
             // DELETE
             PillCountingButton(
                 iconName: nil,
-                title: NSLocalizedString("DELETE", comment: ""),
+                title: L10n.Common.delete,
                 textColor: appColors.primary,
                 backgroundColor: .clear,
                 borderColor: appColors.primary,
@@ -290,7 +287,7 @@ struct UserProfileScreen: View {
             // SAVE
             PillCountingButton(
                 iconName: nil,
-                title: NSLocalizedString("SAVE", comment: ""),
+                title: L10n.Common.save,
                 textColor: Color.white,
                 backgroundColor: appColors.primary,
                 borderColor: .clear,
@@ -316,12 +313,12 @@ struct UserProfileScreen: View {
         Task {
             if !userViewModel.phoneNumber.isEmpty {
                 if userViewModel.phoneNumber.count != 10 {
-                    toastManager.show(message: "Phone number must be exactly 10 digits.")
+                    toastManager.show(message: L10n.Profile.Error.errorPhoneLengthMessage)
                     return
                 }
 
                 if !CharacterSet.decimalDigits.isSuperset(of: CharacterSet(charactersIn: userViewModel.phoneNumber)) {
-                    toastManager.show(message: "Phone number must contain only digits.")
+                    toastManager.show(message: L10n.Profile.Error.errorPhoneDigitsMessage)
                     return
                 }
             }
@@ -331,7 +328,7 @@ struct UserProfileScreen: View {
             if let pending = userViewModel.pendingTerminal, terminalChanged {
                 let terminalSuccess = await userViewModel.updateTerminal(pending)
                 if !terminalSuccess {
-                    toastManager.show(message: "Failed to update terminal. Please try again.")
+                    toastManager.show(message: L10n.Profile.Error.errorUpdateTerminalMessage)
                     return
                 }
                 Hl7ServiceController.shared.restartForTerminalChange()
@@ -341,13 +338,13 @@ struct UserProfileScreen: View {
             if profileChanged {
                 await userViewModel.updateUserProfile()
                 if !userViewModel.isProfileUpdated {
-                    toastManager.show(message: "Failed to update profile. Please try again.")
+                    toastManager.show(message: L10n.Profile.Error.errorUpdateProfileMessage)
                     return
                 }
                 userViewModel.isProfileUpdated = false
             }
 
-            toastManager.show(message: "Profile updated successfully.")
+            toastManager.show(message: L10n.Profile.successUpdateMessage)
             isNewUser = false
             router.navigateBack()
         }

@@ -85,11 +85,11 @@ struct DashboardView: View {
                                 .frame(height: isIpad ? 15 : 0)
                             
                             VStack(spacing: 8){
-                                Text("FIXED_COUNT_TITLE")
+                                Text(L10n.Dashboard.FixedCount.title)
                                     .font(.title)
                                     .foregroundStyle(appColors.secondary)
-                                
-                                Text("FIXED_COUNT_SUBTITLE")
+
+                                Text(L10n.Dashboard.FixedCount.subtitle)
                                     .foregroundStyle(appColors.text)
                             }
                             
@@ -111,7 +111,7 @@ struct DashboardView: View {
                         HStack(spacing: isIpad ? 24 : 0) {
                             PillCountingButton(
                                 iconName: "check_with_circle",
-                                title: "\(userViewModel.fixedCountTransactionCompletedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
+                                title: "\(userViewModel.fixedCountTransactionCompletedCount) \(L10n.Dashboard.completed)",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.primaryBackground.opacity(0.4),
                                 action: {
@@ -126,7 +126,7 @@ struct DashboardView: View {
                          
                             PillCountingButton(
                                 iconName: "partial",
-                                title: "\(userViewModel.fixedCountTransactionPartialCount) \(NSLocalizedString("PENDING", comment: ""))",
+                                title: "\(userViewModel.fixedCountTransactionPartialCount) \(L10n.Dashboard.pending)",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.primaryBackground.opacity(0.4),
                                 action: {
@@ -177,11 +177,11 @@ struct DashboardView: View {
                                 .frame(height: isIpad ? 15 : 0)
                             
                             VStack(spacing: 8){
-                                Text("REGULAR_COUNT_TITLE")
+                                Text(L10n.Dashboard.RegularCount.title)
                                     .font(.title)
                                     .foregroundStyle(appColors.secondary)
-                                
-                                Text("REGULAR_COUNT_SUBTITLE")
+
+                                Text(L10n.Dashboard.RegularCount.subtitle)
                                     .foregroundStyle(appColors.text)
                             }
                             
@@ -199,7 +199,7 @@ struct DashboardView: View {
                         HStack(spacing: isIpad ? 24 : 0) {
                             PillCountingButton(
                                 iconName: "check_with_circle",
-                                title: "\(stockCountViewModel.totalCompletedBatchCount) \(NSLocalizedString("COMPLETED", comment: ""))",
+                                title: "\(stockCountViewModel.totalCompletedBatchCount) \(L10n.Dashboard.completed)",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.secondaryBackground.opacity(0.4),
                                 action: {
@@ -214,7 +214,7 @@ struct DashboardView: View {
                          
                             PillCountingButton(
                                 iconName: "partial",
-                                title: "\(stockCountViewModel.totalBatchCount) \(NSLocalizedString("PENDING", comment: ""))",
+                                title: "\(stockCountViewModel.totalBatchCount) \(L10n.Dashboard.pending)",
                                 textColor: appColors.primary,
                                 backgroundColor: appColors.secondaryBackground.opacity(0.4),
                                 action: {
@@ -306,7 +306,7 @@ struct DashboardView: View {
                 
                 // title for the pop up.
                 VStack (alignment: .leading) {
-                    Text(NSLocalizedString("WHAT_WOULD_YOU_DO", comment: ""))
+                    Text(L10n.Dashboard.Popup.whatWouldYouDo)
                         .font(.system(size: 16))
                         .fontWeight(.semibold)
                         .foregroundStyle(appColors.text)
@@ -318,7 +318,7 @@ struct DashboardView: View {
                     PillCountingRadioButton(
                             option: StockCountOption.newBatch,
                             selectedOption: $selectedStockCountOption,
-                            label: NSLocalizedString("CREATE_NEW_BATCH", comment: ""),
+                            label: L10n.Dashboard.Popup.createNewBatch,
                             selectedColor: appColors.secondary,
                             unselectedColor: .gray,
                             size: 20,
@@ -328,7 +328,7 @@ struct DashboardView: View {
                     PillCountingRadioButton(
                             option: StockCountOption.existingBatch,
                             selectedOption: $selectedStockCountOption,
-                            label: NSLocalizedString("CONTINUE_LAST_BATCH", comment: ""),
+                            label: L10n.Dashboard.Popup.continueLastBatch,
                             selectedColor: appColors.secondary,
                             unselectedColor: .gray,
                             size: 20,
@@ -345,7 +345,7 @@ struct DashboardView: View {
                     // DELETE
                     PillCountingButton(
                         iconName: nil,
-                        title: NSLocalizedString("CANCEL", comment: ""),
+                        title: L10n.Common.cancel,
                         textColor: appColors.text,
                         backgroundColor: .clear,
                         borderColor: appColors.primary,
@@ -390,7 +390,7 @@ struct DashboardView: View {
                                     resetStockCountSelection()
                                 }else{
                                     print("show toast")
-                                    pillScanViewModel.showToastMessage(text: "No last batch found")
+                                    pillScanViewModel.showToastMessage(text: L10n.Menu.noLastBatchFound)
                                 }
                                 showStockCountPopup = false
                             }
@@ -412,7 +412,7 @@ struct DashboardView: View {
                 
                 // title for the pop up.
                 VStack (alignment: .leading) {
-                    Text(NSLocalizedString("SELECT_BUCKET", comment: ""))
+                    Text(L10n.Dashboard.Popup.selectBucket)
                         .font(.system(size: 16))
                         .fontWeight(.semibold)
                         .foregroundStyle(appColors.text)
@@ -440,7 +440,7 @@ struct DashboardView: View {
                 EqualWidthHStackButtons(spacing: 20) {
                     PillCountingButton(
                         iconName: nil,
-                        title: NSLocalizedString("CANCEL", comment: ""),
+                        title: L10n.Common.cancel,
                         textColor: appColors.text,
                         backgroundColor: .clear,
                         borderColor: appColors.primary,

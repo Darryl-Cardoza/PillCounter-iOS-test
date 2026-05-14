@@ -406,7 +406,7 @@ struct CountAddButtonView: View {
             Button(action: {
                 onAddTap()
             }) {
-                Text(isDisabled ? "Wait..." : "Add")
+                Text(isDisabled ? L10n.PillCount.addButtonWait : L10n.PillCount.addButton)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 28)
@@ -638,7 +638,7 @@ struct BottomControlsViewBodyForPillScan: View {
                 }else{
                     Spacer().frame(height: 12)
                 }
-                Text("All Done")
+                Text(L10n.PillCount.allDone)
                     .foregroundStyle(appColors.text)
                     .font(.system(size: 16))
             }
@@ -709,7 +709,7 @@ struct TotalCountView: View {
                 Spacer().frame(height: 10)
             }
 
-            Text("Total Count")
+            Text(L10n.PillCount.totalCount)
                 .foregroundStyle(appColors.text)
                 .font(.system(size: 16))
                 .padding(.top, 8)
@@ -772,7 +772,7 @@ struct BottonControlsViewForTransactionList: View {
             }
 
             if !isLandscape {
-                Text("Total Count")
+                Text(L10n.PillCount.totalCount)
                     .font(.caption)
                     .foregroundColor(appColors.text)
 
@@ -1064,7 +1064,7 @@ struct VialBottomContentView: View {
                     .foregroundStyle(isCaptured ? appColors.primary : appColors.primaryBackground)
 
                 
-                Text("Redo")
+                Text(L10n.PillCount.redo)
                     .font(.caption)
                     .foregroundColor(appColors.text )
             }
@@ -1094,7 +1094,7 @@ struct VialBottomContentView: View {
                 Image("done_icon")
                     .foregroundColor(isCaptured ? appColors.primary : .gray)
 
-                Text("Done")
+                Text(L10n.PillCount.done)
                     .font(.caption)
                     .foregroundColor(isCaptured ? appColors.text : .gray)
             }
@@ -1181,7 +1181,7 @@ struct MenuOption<Option: Hashable>: View {
                 // CANCEL
                 PillCountingButton(
                     iconName: nil,
-                    title: "CANCEL",
+                    title: L10n.Common.cancel,
                     textColor: appColors.text,
                     backgroundColor: appColors.primaryBackground,
                     borderColor: appColors.primary,
@@ -1194,11 +1194,11 @@ struct MenuOption<Option: Hashable>: View {
                         isPresented = false
                     }
                 )
-                
+
                 // OK
                 PillCountingButton(
                     iconName: nil,
-                    title: "OK",
+                    title: L10n.Common.ok,
                     textColor: .white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,

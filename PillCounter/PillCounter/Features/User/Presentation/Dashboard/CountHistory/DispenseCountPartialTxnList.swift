@@ -165,45 +165,6 @@ struct DispenseCountPartialTxnList: View {
 
 // MARK: - Menu Action Handler
 extension DispenseCountPartialTxnList {
-    private var pmsFilterChips: some View {
-        let pmsCount = transactions.filter { $0.is_from_pms == true }.count
-        let nonPmsCount = transactions.filter { $0.is_from_pms == false }.count
-
-        return HStack(spacing: 8) {
-
-            FilterChip(
-                label: "All",
-                count: transactions.count,
-                value: PmsFilter.all,
-                selectedValue: activePmsFilter,
-                appColors: appColors
-            ) {
-                activePmsFilter = $0
-            }
-
-            FilterChip(
-                label: "PMS",
-                count: pmsCount,
-                value: .pms,
-                selectedValue: activePmsFilter,
-                appColors: appColors
-            ) {
-                activePmsFilter = $0
-            }
-
-            FilterChip(
-                label: "Non-PMS",
-                count: nonPmsCount,
-                value: .nonPms,
-                selectedValue: activePmsFilter,
-                appColors: appColors
-            ) {
-                activePmsFilter = $0
-            }
-
-            Spacer()
-        }.padding(.bottom, 5)
-    }
     
     private func handleResume() {
         guard let txnId = selectedTransasctionId,
@@ -238,7 +199,7 @@ extension DispenseCountPartialTxnList {
         ConfirmationDialogue(
             title: dialogTitle,
             message: dialogMessage,
-            cancelButtonText: "CANCEL",
+            cancelButtonText: L10n.Common.cancel,
             confirmButtonText: confirmButtonTitle,
             onCancel: {
                 pendingAction = nil
@@ -302,24 +263,38 @@ extension DispenseCountPartialTxnList {
 
     private var dialogTitle: String {
         switch pendingAction {
-        case .delete:        return "Confirm Delete"
-        case .multiDelete:   return "Delete Selected"
-        case .none:          return ""
+        case .delete:
+            return L10n.DispensePartial.Dialog.confirmDeleteTitle
+
+        case .multiDelete:
+            return L10n.DispensePartial.Dialog.deleteSelectedTitle
+
+        case .none:
+            return ""
         }
     }
 
+
     private var dialogMessage: String {
         switch pendingAction {
-        case .delete:        return "Are you sure you want to delete this transaction?"
-        case .multiDelete:   return "Are you sure you want to delete selected transactions?"
-        case .none:          return ""
+        case .delete:
+            return L10n.DispensePartial.Dialog.deleteTransactionMessage
+
+        case .multiDelete:
+            return L10n.DispensePartial.Dialog.deleteSelectedTransactionsMessage
+
+        case .none:
+            return ""
         }
     }
 
     private var confirmButtonTitle: String {
         switch pendingAction {
-        case .delete, .multiDelete: return "DELETE"
-        case .none:                 return ""
+        case .delete, .multiDelete:
+            return L10n.Common.delete
+
+        case .none:
+            return ""
         }
     }
 }

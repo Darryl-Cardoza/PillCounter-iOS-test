@@ -36,7 +36,7 @@ struct UnsyncedTransactionView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: "UNSYNCED TRANSACTIONS",
+                title: L10n.Unsync.screenTitle,
                 backgroundColor: appColors.primaryBackground
             )
         }
@@ -58,7 +58,7 @@ private extension UnsyncedTransactionView {
                         EmptyStateView(
                             imageName: "check_with_circle",
                             systemImageName: nil,
-                            title: "All transactions are synced",
+                            title: L10n.Unsync.allSynced,
                             subtitle: nil
                         )
                         .padding(.top, 120)
@@ -82,7 +82,7 @@ private extension UnsyncedTransactionView {
             VStack (spacing: 5){
                 if !isEmpty {
                     if  userViewModel.pmsConnectionState == .disconnected{
-                        PillCountInstructionOverlay(text: "PMS not connected", backgroundOpacity: 1)
+                        PillCountInstructionOverlay(text: L10n.Unsync.pmsNotConnected, backgroundOpacity: 1)
                     }
                     syncButtonArea
                         .padding(.bottom, 8)
@@ -100,7 +100,7 @@ private extension UnsyncedTransactionView {
     var batchesSection: some View {
         if !viewModel.batches.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "STOCKS", count: viewModel.batches.count)
+                sectionHeader(title: L10n.Unsync.stocks, count: viewModel.batches.count)
 
                 ForEach(Array(viewModel.batches.enumerated()), id: \.offset) { index, batch in
                     StockItemRowView(
@@ -129,7 +129,7 @@ private extension UnsyncedTransactionView {
     var transactionsSection: some View {
         if !viewModel.transactions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: "DISPENSES", count: viewModel.transactions.count)
+                sectionHeader(title: L10n.Unsync.dispenses, count: viewModel.transactions.count)
 
                 ForEach(Array(viewModel.transactions.enumerated()), id: \.offset) { index, txn in
                     DispenseItemRowView(
@@ -182,7 +182,7 @@ private extension UnsyncedTransactionView {
         VStack(spacing: 6) {
             // PMS status badge
             if viewModel.batches.isEmpty {
-                Text("PMS not connected")
+                Text(L10n.Unsync.pmsNotConnected)
                     .font(.system(size: 12))
                     .foregroundColor(appColors.text)
                     .padding(.horizontal, 12)
@@ -199,7 +199,7 @@ private extension UnsyncedTransactionView {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(0.8)
                     } else {
-                        Text("SYNC ALL")
+                        Text(L10n.Unsync.syncAll)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(
                                 userViewModel.pmsConnectionState == .disconnected

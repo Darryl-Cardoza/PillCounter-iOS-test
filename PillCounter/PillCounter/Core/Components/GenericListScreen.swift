@@ -62,7 +62,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
                 showHamburgerMenu: false,
                 title: isSearching
                     ? ""
-                    : (isEditing ? "DELETE BATCHES" : title),
+                    : (isEditing ? L10n.GenericList.deleteBatches : title),
                 headerActionsBackground: appColors.primaryBackground,
                 backgroundColor: appColors.primaryBackground
             )
@@ -73,7 +73,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
 
                     EqualWidthHStackButtons(spacing: 16) {
                         PillCountingButton(
-                            title: "CANCEL",
+                            title: L10n.Common.cancel,
                             textColor: appColors.primary,
                             backgroundColor: .clear,
                             borderColor: appColors.primary,
@@ -91,7 +91,7 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
                         )
 
                         PillCountingButton(
-                            title: "DELETE",
+                            title: L10n.Common.delete,
                             textColor: selectedIds.isEmpty ? .white.opacity(0.6) : .white,
                             backgroundColor: selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary,
                             borderColor: .clear,
@@ -120,7 +120,6 @@ struct GenericListScreen<Item: Identifiable, Option: Hashable>: View where Item.
             debounce(new)
         }
         .onChange(of: resetTrigger) { _, _ in
-            print("Reset Triggered")
             isEditing = false
             selectedIds.removeAll()
         }
@@ -147,7 +146,7 @@ extension GenericListScreen {
                             EmptyStateView(
                                 imageName: nil,
                                 systemImageName: nil,
-                                title:  "No pending counts available",
+                                title: L10n.GenericList.noPendingCountsAvailable,
                                 subtitle: nil
                             )
                             .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
@@ -156,7 +155,7 @@ extension GenericListScreen {
                             EmptyStateView(
                                 imageName: nil,
                                 systemImageName: "magnifyingglass",
-                                title: "No results found",
+                                title: L10n.GenericList.noResultsFound,
                                 subtitle: nil
                             )
                             .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
@@ -217,8 +216,12 @@ extension GenericListScreen {
                         .foregroundStyle(appColors.primary)
                     
                     // TEXT (dynamic)
-                    Text(isAllSelected ? "Unselect All" : "Select All")
-                        .font(.system(size: 14, weight: .medium))
+                    Text(
+                        isAllSelected
+                            ? L10n.Common.unselectAll
+                            : L10n.Common.selectAll
+                    )
+                    .font(.system(size: 14, weight: .medium))
                         .foregroundColor(appColors.primary)
                 }
                 .contentShape(Rectangle()) // makes full row tappable

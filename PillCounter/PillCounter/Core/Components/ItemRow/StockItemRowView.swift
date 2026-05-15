@@ -64,7 +64,7 @@ struct StockItemRowView: View {
                         .font(.system(size: 16, weight: .bold))
                                         
 
-                    Text("NDCs")
+                    Text(NSLocalizedString("NDCS", comment: ""))
                         .foregroundColor(appColors.text)
                         .font(.system(size: 12, weight: .regular))
                 }

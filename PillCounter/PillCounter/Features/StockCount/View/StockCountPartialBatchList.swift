@@ -32,7 +32,7 @@
         var body: some View {
             GenericListScreen<BatchCountEntity, TransactionDetailOption>(
                 items: batches,
-                title: "PENDING BATCHES",
+                title: L10n.StockCountBatchList.pendingBatches,
                 resetTrigger: resetList,
                 // ROW UI — selectedIds is Set<Int64> from GenericListScreen
                 rowView: { batch, isEditing, selectedIds in
@@ -178,7 +178,11 @@
                 )
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Batch \(String(batch.batch_id))")
+                    Text(
+                        L10n.StockCountBatchList.batchPrefix(
+                            String(batch.batch_id)
+                        )
+                    )
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(appColors.text)
 
@@ -277,7 +281,7 @@
             ConfirmationDialogue(
                 title: dialogTitle,
                 message: dialogMessage,
-                cancelButtonText: "CANCEL",
+                cancelButtonText: L10n.Common.cancel,
                 confirmButtonText: confirmButtonTitle,
                 onCancel: {
                     pendingAction = nil
@@ -319,23 +323,30 @@
 
         private var dialogTitle: String {
             switch pendingAction {
-            case .delete:      return "Confirm Delete"
-            case .multiDelete: return "Delete Selected"
+            case .delete:
+                return L10n.StockCountBatchList.confirmDeleteTitle
+
+            case .multiDelete:
+                return L10n.StockCountBatchList.deleteSelectedTitle
             case .none:        return ""
             }
         }
 
         private var dialogMessage: String {
             switch pendingAction {
-            case .delete:      return "Are you sure you want to delete this batch?"
-            case .multiDelete: return "Are you sure you want to delete selected batches?"
+            case .delete:
+                return L10n.StockCountBatchList.deleteBatchMessage
+
+            case .multiDelete:
+                return L10n.StockCountBatchList.deleteSelectedBatchesMessage
             case .none:        return ""
             }
         }
 
         private var confirmButtonTitle: String {
             switch pendingAction {
-            case .delete, .multiDelete: return "DELETE"
+            case .delete, .multiDelete:
+                return L10n.Common.delete
             case .none:                 return ""
             }
         }

@@ -68,10 +68,10 @@ struct HamburgerMenuView: View {
     // MARK: - LOGOUT POP UP
     private var logoutPopUp: some View {
         ConfirmationDialogue(
-            title: "Confirm Logout",
-            message: "Are you sure you want to logout?",
-            cancelButtonText: "cancel",
-            confirmButtonText: "Logout"
+            title: L10n.Menu.confirmLogoutTitle,
+            message: L10n.Menu.confirmLogoutMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Menu.logoutButton
         ) {
             showLogoutPopup = false
         } onConfirm: {
@@ -115,7 +115,6 @@ struct HamburgerMenuView: View {
         }
         // BaseView header offset
         .padding(.top, 45)
-        // Safe Area handling for Landscape
         .padding(
             .horizontal,
             isLandscape ? SafeAreaInsets.leading : 0
@@ -275,7 +274,7 @@ struct HamburgerMenuView: View {
             PillCountingButton(
                 iconName: "check_with_circle",
                 title:
-                    "\(completedCount) \(NSLocalizedString("COMPLETED", comment: ""))",
+                    "\(completedCount) \(L10n.Dashboard.completed)",
                 textColor: completedColor,
                 backgroundColor: completedBg,
                 font: .system(size: 14, weight: .semibold),
@@ -295,7 +294,7 @@ struct HamburgerMenuView: View {
             PillCountingButton(
                 iconName: "partial",
                 title:
-                    "\(partialCount) \(NSLocalizedString("PENDING", comment: ""))",
+                    "\(partialCount) \(L10n.Dashboard.pending)",
                 textColor: partialColor,
                 backgroundColor: partialBg,
                 font: .system(size: 14, weight: .semibold),
@@ -315,7 +314,7 @@ struct HamburgerMenuView: View {
     private var stockCountPopUp: some View {
         VStack(spacing: 35) {
             VStack(alignment: .leading) {
-                Text(NSLocalizedString("WHAT_WOULD_YOU_DO", comment: ""))
+                Text(L10n.Dashboard.Popup.whatWouldYouDo)
                     .font(.system(size: 16))
                     .fontWeight(.semibold)
                     .foregroundStyle(appColors.text)
@@ -326,7 +325,7 @@ struct HamburgerMenuView: View {
                 PillCountingRadioButton(
                     option: StockCountOption.newBatch,
                     selectedOption: $selectedStockCountOption,
-                    label: NSLocalizedString("CREATE_NEW_BATCH", comment: ""),
+                    label: L10n.Dashboard.Popup.createNewBatch,
                     selectedColor: appColors.secondary,
                     unselectedColor: .gray,
                     size: 20,
@@ -336,7 +335,7 @@ struct HamburgerMenuView: View {
                 PillCountingRadioButton(
                     option: StockCountOption.existingBatch,
                     selectedOption: $selectedStockCountOption,
-                    label: NSLocalizedString("CONTINUE_LAST_BATCH", comment: ""),
+                    label: L10n.Dashboard.Popup.continueLastBatch,
                     selectedColor: appColors.secondary,
                     unselectedColor: .gray,
                     size: 20,
@@ -349,7 +348,7 @@ struct HamburgerMenuView: View {
             EqualWidthHStackButtons(spacing: 20) {
                 PillCountingButton(
                     iconName: nil,
-                    title: NSLocalizedString("CANCEL", comment: ""),
+                    title: L10n.Common.cancel,
                     textColor: appColors.text,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
@@ -383,7 +382,7 @@ struct HamburgerMenuView: View {
                             if stockCountViewModel.continueLastBatch() {
                                 router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
                             } else {
-                                pillScanViewModel.showToastMessage(text: "No last batch found")
+                                pillScanViewModel.showToastMessage(text: L10n.Menu.noLastBatchFound)
                             }
                             showStockCountPopup = false
                         }
@@ -400,7 +399,7 @@ struct HamburgerMenuView: View {
     private var selectBucketPopUp: some View {
         VStack(spacing: 35) {
             VStack(alignment: .leading) {
-                Text(NSLocalizedString("SELECT_BUCKET", comment: ""))
+                Text(L10n.Dashboard.Popup.selectBucket)
                     .font(.system(size: 16))
                     .fontWeight(.semibold)
                     .foregroundStyle(appColors.text)
@@ -426,7 +425,7 @@ struct HamburgerMenuView: View {
             EqualWidthHStackButtons(spacing: 20) {
                 PillCountingButton(
                     iconName: nil,
-                    title: NSLocalizedString("CANCEL", comment: ""),
+                    title: L10n.Common.cancel,
                     textColor: appColors.text,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,

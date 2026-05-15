@@ -56,7 +56,7 @@ struct UserHistoryView: View {
                     },
                     showBackButton: !isSearching,
                     showHamburgerMenu: false,
-                    title: isSearching ? "" : NSLocalizedString("HISTORY", comment: "")
+                    title: isSearching ? "" : L10n.History.title
                 )
                 
                 if pdfService.isLoading {
@@ -108,11 +108,10 @@ struct UserHistoryView: View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         if isLandscape && isSearching { return  1.0 }
         if isSearching { return isLandscape ? 0 : 0.10 }
-        // iPad needs less ratio for calendar since screen is taller/wider
         if isLandscape {
-            return isIPad ? 0.35 : 0.35
+            return isIPad ? 0.40 : 0.40
         }
-        return isIPad ? 0.35 : 0.35
+        return isIPad ? 0.40 : 0.35
     }
 
 
@@ -120,7 +119,6 @@ struct UserHistoryView: View {
     @ViewBuilder
     private var topContentView: some View {
         if isLandscape && isSearching {
-            // Full-width panel: calendar hidden, list fills content below header
             landscapeSearchContent
         } else if !isSearching {
             userHistoryContent()
@@ -169,7 +167,6 @@ struct UserHistoryView: View {
                 }
             }
             .padding(.trailing, 16)
-            .padding(.bottom, 5)
             .transition(.opacity)
         }
     }
@@ -212,10 +209,10 @@ struct UserHistoryView: View {
     // MARK: - Delete Confirmation Popup
     private var deleteConfirmationPopUp: some View {
         ConfirmationDialogue(
-            title: "Confirm Delete",
-            message: "Are you sure you want to delete the records for the selected date? This action cannot be undone.",
-            cancelButtonText: "NO",
-            confirmButtonText: "YES",
+            title: L10n.History.confirmDelete,
+            message: L10n.History.deleteConfirmMessage,
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes,
             onCancel: {
                 showDeleteConfirmation = false
             },
@@ -258,7 +255,7 @@ struct UserHistoryView: View {
                                 }
                                 
                                 if isEmpty {
-                                    toastManager.show(message: "No items to delete")
+                                    toastManager.show(message: L10n.History.noItemsToDelete)
                                 } else {
                                     showDeleteConfirmation = true
                                 }
@@ -307,16 +304,16 @@ struct UserHistoryView: View {
     private var transactionContent: some View {
         if historyViewModel.filteredTransactionsOfUserByDate.isEmpty {
             ContentUnavailableView(
-                "No History",
+                L10n.History.noHistory,
                 systemImage: "clock.arrow.circlepath",
-                description: Text("No transactions found for this period.")
+                description: Text(L10n.History.noTransactionsFound)
             )
             .padding(.top, 40)
         } else if historyViewModel.transactionRows.isEmpty {
             ContentUnavailableView(
-                "No Results",
+                L10n.History.noResults,
                 systemImage: "magnifyingglass",
-                description: Text("No transactions match your search.")
+                description: Text(L10n.History.noTransactionsMatch)
             )
             .padding(.top, 40)
         } else {
@@ -348,16 +345,16 @@ struct UserHistoryView: View {
     private var batchContent: some View {
         if historyViewModel.filteredBatchesOfUserByDate.isEmpty {
             ContentUnavailableView(
-                "No History",
+                L10n.History.noHistory,
                 systemImage: "clock.arrow.circlepath",
-                description: Text("No Batches found for this period.")
+                description: Text(L10n.History.noBatchesFound)
             )
             .padding(.top, 40)
         } else if historyViewModel.batchRows.isEmpty {
             ContentUnavailableView(
-                "No Results",
+                L10n.History.noResults,
                 systemImage: "magnifyingglass",
-                description: Text("No Batches match your search.")
+                description: Text(L10n.History.noBatchesMatch)
             )
             .padding(.top, 40)
         } else {
@@ -422,7 +419,7 @@ struct UserHistoryView: View {
 
         return HStack(spacing: 8) {
             FilterChip(
-                label: "All",
+                label: L10n.History.filterAll,
                 count: counts.all,
                 value: HistoryStatusFilter.all,
                 selectedValue: activeStatusFilter,
@@ -430,7 +427,7 @@ struct UserHistoryView: View {
             ) { activeStatusFilter = $0 }
 
             FilterChip(
-                label: "Completed",
+                label: L10n.History.filterCompleted,
                 count: counts.completed,
                 value: .completed,
                 selectedValue: activeStatusFilter,
@@ -438,7 +435,7 @@ struct UserHistoryView: View {
             ) { activeStatusFilter = $0 }
 
             FilterChip(
-                label: "Pending",
+                label: L10n.History.filterPending,
                 count: counts.pending,
                 value: .pending,
                 selectedValue: activeStatusFilter,
@@ -456,7 +453,7 @@ struct UserHistoryView: View {
 
         return HStack(spacing: 8) {
             FilterChip(
-                label: "Dispensed",
+                label: L10n.History.filterDispensed,
                 count: dispenseCount,
                 value: HistoryFilterType.fixed,
                 selectedValue: activeTypeFilter,
@@ -464,7 +461,7 @@ struct UserHistoryView: View {
             ) { activeTypeFilter = $0 }
 
             FilterChip(
-                label: "Stock Count",
+                label: L10n.History.filterStockCount,
                 count: stockCount,
                 value: .regular,
                 selectedValue: activeTypeFilter,

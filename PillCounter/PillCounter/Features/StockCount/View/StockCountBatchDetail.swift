@@ -61,7 +61,11 @@ struct StockCountBatchDetail: View {
                 },
                 showBackButton: !isEditing,
                 showHamburgerMenu: false,
-                title: isEditing ? "" :  String( "BATCH ID \(stockCountVieModel.currentBatch?.batch_id ?? 0)"),
+                title: isEditing
+                    ? ""
+                    : L10n.StockCountBatchDetail.batchIdTitle(
+                        stockCountVieModel.currentBatch?.batch_id ?? 0
+                    ),
                 headerActionsBackground: appColors.primaryBackground,
                 backgroundColor: appColors.primaryBackground,
                 onBack: {
@@ -122,7 +126,8 @@ struct StockCountBatchDetail: View {
 
                         Text(
                             areAllSelected
-                                ? "Deselect All" : "Select All"
+                                ? L10n.Common.unselectAll
+                                : L10n.Common.selectAll
                         )
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(appColors.text)
@@ -138,7 +143,7 @@ struct StockCountBatchDetail: View {
                     Button {
                         deleteSelectedTransactions()
                     } label: {
-                        Text("Delete")
+                        Text(L10n.StockCountBatchDetail.deleteButton)
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(
                                 selectedTxnIds.isEmpty
@@ -154,7 +159,7 @@ struct StockCountBatchDetail: View {
                             selectedTxnIds.removeAll()
                         }
                     } label: {
-                        Text("Cancel")
+                        Text(L10n.StockCountBatchDetail.cancelButton)
                             .foregroundColor(appColors.text)
                     }
                 }
@@ -213,8 +218,8 @@ struct StockCountBatchDetail: View {
                 EmptyStateView(
                     imageName: "fixed_count",
                     systemImageName: nil,
-                    title: "No Transactions Yet",
-                    subtitle: "Start adding items to this batch"
+                    title: L10n.StockCountBatchDetail.noTransactionsYet,
+                    subtitle: L10n.StockCountBatchDetail.startAddingItems
                 )
             } else {
                 ScrollView(showsIndicators: false) {
@@ -234,7 +239,7 @@ struct StockCountBatchDetail: View {
             EqualWidthHStackButtons(spacing: 16) {
 
                 PillCountingButton(
-                    title: "END COUNT",
+                    title: L10n.StockCountBatchDetail.endCount,
                     textColor: appColors.primary,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
@@ -254,7 +259,7 @@ struct StockCountBatchDetail: View {
                 )
 
                 PillCountingButton(
-                    title: "+ ADD",
+                    title: L10n.StockCountBatchDetail.addItem,
                     textColor: .white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
@@ -314,12 +319,12 @@ extension StockCountBatchDetail{
     
     private var showEndBatchPopup: some View {
         ConfirmationDialogue(
-            title: NSLocalizedString("CONFIRM_END_BATCH", comment: ""),
+            title: L10n.StockCountBatchDetail.confirmEndBatch,
             message: hasNoCount
-            ? "No transactions or counts added. Do you want to end the batch?"
-            : nil,
-            cancelButtonText: "NO",
-            confirmButtonText: "YES",
+                ? L10n.StockCountBatchDetail.noCountEndBatchMessage
+                : nil,
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes,
             onCancel: {
                 showEndBatchPopUp = false
             },
@@ -338,10 +343,10 @@ extension StockCountBatchDetail{
     
     private var showConfirmExportPopup: some View {
         ConfirmationDialogue(
-            title: NSLocalizedString("CONFIRM_EXPORT", comment: ""),
+            title: L10n.StockCountBatchDetail.confirmExport,
             message: nil,
-            cancelButtonText: "NO",
-            confirmButtonText: "YES",
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes,
             onCancel: {
                 showExportPopUp = false
             },
@@ -353,13 +358,13 @@ extension StockCountBatchDetail{
     
     private var showNoteOptionPopup: some View {
         NotePopupView(
-            title: "Would you like to add a note?",
+            title: L10n.StockCountBatchDetail.addNoteQuestion,
             text: $stockCountVieModel.note,
             errorMessage: noteError,
-            primaryTitle: "YES",
+            primaryTitle: L10n.Common.yes,
             primaryAction: {
                 if stockCountVieModel.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    noteError = "Please add a note"
+                    noteError = L10n.StockCountBatchDetail.pleaseAddNote
                     return
                 }
                 
@@ -367,7 +372,7 @@ extension StockCountBatchDetail{
                 showNoteOptions = false
                 showEndBatchPopUp = true
             },
-            secondaryTitle: "SKIP",
+            secondaryTitle: L10n.StockCountBatchDetail.skip,
             secondaryAction: {
                 noteError = nil
                 showNoteOptions = false

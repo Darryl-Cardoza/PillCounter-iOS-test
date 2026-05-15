@@ -59,7 +59,7 @@ struct PillScanDetailGridScreen: View {
                 headerActions: { headerActions },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: isEditing ? "DELETE TRANSACTION" : "TOTAL COUNT",
+                title: isEditing ? L10n.PillScan.deleteTransaction : L10n.PillScan.totalCount,
                 headerActionsBackground: appColors.primaryBackground,
                 backgroundColor: appColors.primaryBackground
             )
@@ -74,7 +74,7 @@ struct PillScanDetailGridScreen: View {
 
                     EqualWidthHStackButtons(spacing: 16) {
                         PillCountingButton(
-                            title: "CANCEL",
+                            title: L10n.Common.cancel,
                             textColor: appColors.primary,
                             backgroundColor: .clear,
                             borderColor: appColors.primary,
@@ -92,7 +92,7 @@ struct PillScanDetailGridScreen: View {
                         )
 
                         PillCountingButton(
-                            title: "DELETE",
+                            title: L10n.Common.delete,
                             textColor: selectedIds.isEmpty ? .white.opacity(0.6) : .white,
                             backgroundColor: selectedIds.isEmpty ? Color.gray.opacity(0.4) : appColors.primary,
                             borderColor: .clear,
@@ -150,7 +150,7 @@ struct PillScanDetailGridScreen: View {
                     .frame(width: 22, height: 22)
                     .foregroundStyle(appColors.primary)
 
-                Text(allSelected ? "Unselect All" : "Select All")
+                Text(allSelected ? L10n.Common.unselectAll : L10n.Common.selectAll)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(appColors.primary)
             }
@@ -474,7 +474,7 @@ struct PillScanDetailGridScreen: View {
                 .font(.system(size: 40))
                 .foregroundColor(.gray.opacity(0.4))
 
-            Text( "No scans yet")
+            Text(L10n.PillScan.noScansYet)
                 .foregroundColor(.gray)
                 .font(.system(size: 14))
         }
@@ -484,10 +484,10 @@ struct PillScanDetailGridScreen: View {
     // MARK: - Delete Confirmation
     private var deleteConfirmationDialog: some View {
         ConfirmationDialogue(
-            title: "Delete Scans",
-            message: "Are you sure you want to delete the selected scans?",
-            cancelButtonText: "CANCEL",
-            confirmButtonText: "DELETE",
+            title: L10n.PillScan.deleteScans,
+            message: L10n.PillScan.deleteScansMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.delete,
             onCancel: {
                 showDeleteConfirm = false
             },

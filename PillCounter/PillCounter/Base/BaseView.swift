@@ -190,7 +190,7 @@ extension BaseView {
                     width: isLandscape ? size.width * topRatio : size.width,
                     height: isLandscape ? size.height : size.height * topRatio
                 )
-
+                .clipped()
             if allowKeyboardResize {
                 bottomContent()
                     .frame(

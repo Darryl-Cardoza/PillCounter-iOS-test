@@ -121,7 +121,7 @@ struct QRBarcodeScannerView: View {
                                     VStack(spacing: 8) {
                                         if let batchId = stockCountVieModel.currentBatch?.batch_id {
                                             PillCountInstructionOverlay(
-                                                text: String("Batch \(batchId)")
+                                                text: String(format: L10n.BarcodeScan.batchOverlay, batchId)
                                             )
                                         }
                                     }
@@ -478,7 +478,7 @@ extension QRBarcodeScannerView {
             }) {
                 HStack {
                     Image(systemName: "doc.on.doc")
-                    Text("Copy")
+                    Text(L10n.BarcodeScan.copy)
                 }
                 .font(.caption)
                 .foregroundColor(.blue)
@@ -495,7 +495,7 @@ extension QRBarcodeScannerView {
     private var mannulaEntryTargetCount: some View {
         VStack(spacing: 25) {
             HStack {
-                Text("PILLS REQUIRED")
+                Text(L10n.BarcodeScan.pillsRequired)
                     .foregroundStyle(appColors.text)
                     .font(.headline)
 
@@ -519,7 +519,7 @@ extension QRBarcodeScannerView {
             HStack {
                 PillCountingButton(
                     iconName: nil,
-                    title: "CANCEL",
+                    title: L10n.Common.cancel,
                     textColor: appColors.text,
                     backgroundColor: appColors.primaryBackground,
                     borderColor: appColors.primary,
@@ -537,7 +537,7 @@ extension QRBarcodeScannerView {
 
                 PillCountingButton(
                     iconName: nil,
-                    title: "OK",
+                    title: L10n.Common.ok,
                     textColor: Color.white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
@@ -597,18 +597,18 @@ extension QRBarcodeScannerView {
     private var showNdcEquivalencePopup: some View {
         ConfirmationDialogue(
             title: pillScanViewModel.isNdcEquivalent
-                ? NSLocalizedString("DO_YOU_WANT_SUBSTITUE", comment: "")
-                : "Rescan Required",
+                ? L10n.GenericEquivalent.doYouWantSubstitute
+                : L10n.BarcodeScan.rescanRequired,
 
             message: pillScanViewModel.isNdcEquivalent
-                ? NSLocalizedString("GENERIC_EQUIVALENT_SUBTITLE", comment: "")
-                : "The scanned ndc is does not match",
+                ? L10n.GenericEquivalent.subtitle
+                : L10n.BarcodeScan.ndcDoesNotMatch,
 
-            cancelButtonText: "Cancel",
+            cancelButtonText: L10n.Common.cancel,
 
             confirmButtonText: pillScanViewModel.isNdcEquivalent
-                ? "Substitute"
-                : "Rescan",
+                ? L10n.BarcodeScan.substitute
+                : L10n.BarcodeScan.rescan,
 
             showSingleConfirmButton: !pillScanViewModel.isNdcEquivalent,
             onCancel: {
@@ -679,32 +679,32 @@ extension QRBarcodeScannerView {
        VStack(spacing: 23) {
            ScrollView {
                VStack {
-                   Text("QR Scanned Successfully")
+                   Text(L10n.BarcodeScan.qrScannedSuccessfully)
                        .font(.system(size: 18, weight: .bold))
                        .foregroundColor(appColors.text)
                 }
                .padding(.top)
-               
+
                VStack(spacing: 16) {
-                   
+
                    KeyValueInfoCard(
-                       title: "NDC Number",
-                       value: stockCountVieModel.scannedDrugData?.ndc ?? "" // here to come the ndc of the drug that i have scanned.
+                       title: L10n.BarcodeScan.ndcNumber,
+                       value: stockCountVieModel.scannedDrugData?.ndc ?? ""
                    )
-                   
+
                    KeyValueInfoCard(
-                       title: "Drug Name",
+                       title: L10n.BarcodeScan.drugName,
                        value: stockCountVieModel.scannedDrugData?.drugName ?? ""
                    )
-                   
+
                    KeyValueInfoCard(
-                       title: "Quantity",
-                       value: String(stockCountVieModel.scannedDrugData?.quantity ?? 0 )
+                       title: L10n.BarcodeScan.quantity,
+                       value: String(stockCountVieModel.scannedDrugData?.quantity ?? 0)
                    )
                }
-               
+
                VStack(alignment: .leading) {
-                   Text("Select Container Status")
+                   Text(L10n.BarcodeScan.selectContainerStatus)
                        .font(.system(size: 16, weight: .regular))
                        .foregroundColor(appColors.text)
                }
@@ -716,8 +716,8 @@ extension QRBarcodeScannerView {
                    selected: $scannedBottleContainerStatus
                ) { option in
                    switch option {
-                   case .sealed: return "Sealed"
-                   case .opened: return "Opened"
+                   case .sealed: return L10n.BarcodeScan.sealed
+                   case .opened: return L10n.BarcodeScan.opened
                    }
                }
            }
@@ -729,7 +729,7 @@ extension QRBarcodeScannerView {
                // DELETE
                PillCountingButton(
                    iconName: nil,
-                   title: "CANCEL",
+                   title: L10n.Common.cancel,
                    textColor: appColors.primary,
                    backgroundColor: .clear,
                    borderColor: appColors.primary,
@@ -743,11 +743,11 @@ extension QRBarcodeScannerView {
                        restartFullScannerFlow()
                    }
                )
-               
+
                // ADD button
                PillCountingButton(
                    iconName: nil,
-                   title: "ADD",
+                   title: L10n.Common.add,
                    textColor: Color.white,
                    backgroundColor: appColors.primary,
                    borderColor: .clear,
@@ -789,32 +789,32 @@ extension QRBarcodeScannerView {
        VStack(spacing: 23) {
            ScrollView {
                VStack {
-                   Text("Label Scanned Successfully")
+                   Text(L10n.BarcodeScan.labelScannedSuccessfully)
                        .font(.system(size: 18, weight: .bold))
                        .foregroundColor(appColors.text)
                }
                .padding(.top)
                VStack(spacing: 16) {
-                   
+
                    KeyValueInfoCard(
-                       title: "Rx Number",
+                       title: L10n.BarcodeScan.rxNumber,
                        value: pillScanViewModel.scannedRxData?.rxNo ?? "-"
                    )
                    KeyValueInfoCard(
-                       title: "NDC Number",
+                       title: L10n.BarcodeScan.ndcNumber,
                        value: pillScanViewModel.scannedRxData?.ndcNo ?? "-"
                    )
                    KeyValueInfoCard(
-                       title: "Drug Name",
+                       title: L10n.BarcodeScan.drugName,
                        value: pillScanViewModel.scannedRxData?.drugName ?? "-"
                    )
                    KeyValueInfoCard(
-                       title: "Quantity",
+                       title: L10n.BarcodeScan.quantity,
                        value: pillScanViewModel.scannedRxData?.qty ?? "-"
                    )
                    KeyValueInfoCard(
-                       title: "Bucket",
-                       value: pillScanViewModel.selectedBucket 
+                       title: L10n.BarcodeScan.bucket,
+                       value: pillScanViewModel.selectedBucket
                    )
                }
            }
@@ -824,7 +824,7 @@ extension QRBarcodeScannerView {
            EqualWidthHStackButtons(spacing: 30) {
                PillCountingButton(
                    iconName: nil,
-                   title: "CANCEL",
+                   title: L10n.Common.cancel,
                    textColor: appColors.primary,
                    backgroundColor: .clear,
                    borderColor: appColors.primary,
@@ -840,7 +840,7 @@ extension QRBarcodeScannerView {
                )
                PillCountingButton(
                    iconName: nil,
-                   title: "PROCEED",
+                   title: L10n.BarcodeScan.proceed,
                    textColor: appColors.text,
                    backgroundColor: appColors.primary,
                    borderColor: .clear,
@@ -866,19 +866,19 @@ extension QRBarcodeScannerView {
        VStack(spacing: 23) {
            ScrollView {
                VStack {
-                   Text("QR Scanned Successfully")
+                   Text(L10n.BarcodeScan.qrScannedSuccessfully)
                        .font(.system(size: 18, weight: .bold))
                        .foregroundColor(appColors.text)
                }
                .padding(.top)
                VStack(spacing: 16) {
                    KeyValueInfoCard(
-                       title: "NDC Number",
+                       title: L10n.BarcodeScan.ndcNumber,
                        value: pillScanViewModel.scannedRxData?.ndcNo ?? "-"
                    )
-                   
+
                    KeyValueInfoCard(
-                       title: "Drug Name",
+                       title: L10n.BarcodeScan.drugName,
                        value: pillScanViewModel.scannedRxData?.drugName ?? "-"
                    )
                }
@@ -889,7 +889,7 @@ extension QRBarcodeScannerView {
            EqualWidthHStackButtons(spacing: 30) {
                PillCountingButton(
                    iconName: nil,
-                   title: "CANCEL",
+                   title: L10n.Common.cancel,
                    textColor: appColors.primary,
                    backgroundColor: .clear,
                    borderColor: appColors.primary,
@@ -905,7 +905,7 @@ extension QRBarcodeScannerView {
                )
                PillCountingButton(
                    iconName: nil,
-                   title: "PROCEED",
+                   title: L10n.BarcodeScan.proceed,
                    textColor: Color.white,
                    backgroundColor: appColors.primary,
                    borderColor: .clear,
@@ -926,10 +926,10 @@ extension QRBarcodeScannerView {
     
     private var showBarcodeNotFoundPopup : some View{
         ConfirmationDialogue(
-            title: "Drug Not Found",
-            message: "The scanned barcode is not recognized. Please try again.",
-            cancelButtonText: "Cancel",
-            confirmButtonText: "Rescan",
+            title: L10n.BarcodeScan.drugNotFound,
+            message: L10n.BarcodeScan.drugNotFoundMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.BarcodeScan.rescan,
             showSingleConfirmButton: true,
             onCancel: {
                 restartFullScannerFlow()
@@ -942,10 +942,10 @@ extension QRBarcodeScannerView {
 
     private var scannedNdcDoesNotMatchPmsBatchPopoup : some View{
         ConfirmationDialogue(
-            title: "Incorrect NDC",
-            message: "You have scanned an incorrect NDC. This item does not match the PMS batch.",
-            cancelButtonText: "Cancel",
-            confirmButtonText: "Rescan",
+            title: L10n.BarcodeScan.incorrectNdc,
+            message: L10n.BarcodeScan.incorrectNdcMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.BarcodeScan.rescan,
             showSingleConfirmButton: true,
             onCancel: {
                 restartFullScannerFlow()

@@ -6,6 +6,7 @@
 //
 
 import CoreLocation
+import Foundation
 
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
 
@@ -13,7 +14,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
     private let manager = CLLocationManager()
 
-    @Published var locationString: String = "Fetching..."
+    @Published var locationString: String = L10n.Location.fetching
 
     private override init() {
         super.init()
@@ -53,7 +54,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
                 .joined(separator: " - ")
 
             } else {
-                self.locationString = "Location unavailable"
+                self.locationString = L10n.Location.unavailable
             }
         }
 
@@ -61,6 +62,6 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        locationString = "Location unavailable"
+        locationString = L10n.Location.unavailable
     }
 }

@@ -68,7 +68,7 @@ struct HistoryBatchDetailView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: "BATCH ID \(historyViewModel.selectedBatch?.batch_id ?? 0)",
+                title: String(format: L10n.History.batchIdTitle, historyViewModel.selectedBatch?.batch_id ?? 0),
                 headerActionsBackground: appColors.primaryBackground,
                 backgroundColor: appColors.primaryBackground,
                 onBack: {
@@ -116,8 +116,8 @@ struct HistoryBatchDetailView: View {
                 EmptyStateView(
                     imageName: "fixed_count",
                     systemImageName: nil,
-                    title: "No Transactions",
-                    subtitle: "No items found in this batch"
+                    title: L10n.History.noTransactions,
+                    subtitle: L10n.History.noItemsInBatch
                 )
             } else {
                 ScrollView(showsIndicators: false) {
@@ -141,7 +141,7 @@ struct HistoryBatchDetailView: View {
 
             // MARK: Top Row
             HStack {
-                Text("TOTAL NDC COUNT")
+                Text(L10n.History.totalNdcCount)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(appColors.text)
 
@@ -157,7 +157,7 @@ struct HistoryBatchDetailView: View {
             // MARK: Bottom Row
             if let batch = historyViewModel.selectedBatch {
                 HStack {
-                    Text("Completed on")
+                    Text(L10n.History.completedOn)
                         .font(.system(size: 13))
                         .foregroundColor(appColors.text)
 
@@ -210,7 +210,7 @@ struct HistoryBatchDetailView: View {
                         let sealedTotal = sealedDetails.reduce(Int32(0)) { $0 + $1.sealedQty }
 
                         HStack {
-                            Text("Sealed Bottles")
+                            Text(L10n.History.sealedBottles)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(appColors.text)
                             Spacer()
@@ -234,7 +234,7 @@ struct HistoryBatchDetailView: View {
                         let openTotal = openDetails.reduce(Int32(0)) { $0 + $1.openQty }
 
                         HStack {
-                            Text("Opened Bottles")
+                            Text(L10n.History.openedBottles)
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(appColors.text)
                             Spacer()
@@ -264,7 +264,7 @@ struct HistoryBatchDetailView: View {
     private var notesSection: some View {
         if let notes = historyViewModel.selectedBatch?.note,
            !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            CollapsibleBox(title: NSLocalizedString("NOTE", comment: ""),bgColor: appColors.secondaryBackground) {
+            CollapsibleBox(title: L10n.Common.note, bgColor: appColors.secondaryBackground) {
                 Text(notes)
                     .font(.system(size: 14))
                     .foregroundStyle(appColors.text)
@@ -281,10 +281,10 @@ extension HistoryBatchDetailView {
 
     private var deleteConfirmationPopup: some View {
         ConfirmationDialogue(
-            title: NSLocalizedString("CONFIRM_DELETE", comment: ""),
+            title: L10n.History.confirmDelete,
             message: nil,
-            cancelButtonText: "NO",
-            confirmButtonText: "YES",
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes,
             onCancel: {
                 showDeleteConfirmation = false
             },

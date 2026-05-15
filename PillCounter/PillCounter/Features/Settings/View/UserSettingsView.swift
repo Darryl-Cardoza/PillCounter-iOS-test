@@ -59,7 +59,7 @@ struct UserSettingsView: View {
                     headerActions: { EmptyView() },
                     showBackButton: true,
                     showHamburgerMenu: false,
-                    title: NSLocalizedString("SETTINGS", comment: "")
+                    title: L10n.Menu.settings
                 )
             }
         }
@@ -81,11 +81,10 @@ struct UserSettingsView: View {
     
     private var confirmationPopUp: some View {
         ConfirmationDialogue(
-            title: "Are you sure want to keep history for \(pendingOption?.displayText ?? selectedSaveHistoryOption.displayText)?",
-            message:
-                "Note: Data older than this period will be permanently deleted.",
-            cancelButtonText: "NO",
-            confirmButtonText: "YES"
+            title: String(format: L10n.Settings.confirmHistoryTitle, pendingOption?.displayText ?? selectedSaveHistoryOption.displayText),
+            message: L10n.Settings.confirmHistoryMessage,
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes
         ) {
             pendingOption = nil
             showConfirmationPopup = false
@@ -105,10 +104,10 @@ struct UserSettingsView: View {
     
     private var clearHistoryConfirmatioDialog: some View {
         ConfirmationDialogue(
-            title: "Are you sure want to clear all history?",
-            message: "This will delete all your saved data permanently.",
-            cancelButtonText: "NO",
-            confirmButtonText: "YES"
+            title: L10n.Settings.clearHistoryTitle,
+            message: L10n.Settings.clearHistoryMessage,
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes
         ) {
             showClearDataConfirmationPopup = false
         } onConfirm: {
@@ -126,7 +125,7 @@ struct UserSettingsView: View {
                 
                 // MARK: Pill Counting
                 ToggleRowView(
-                    title: NSLocalizedString("TOGGLE_BUTTON_TEXT", comment: ""),
+                    title: L10n.Settings.alwaysAskNotes,
                     isOn: $isPillCountingEnabled,
                     onColor: appColors.primary
                 ) { newValue in
@@ -136,7 +135,7 @@ struct UserSettingsView: View {
                 Divider().background(appColors.primaryBackground)
                 
                 VStack (spacing: 15){
-                    Text(NSLocalizedString("REQUIRED_DOUBLE_COUNT", comment: ""))
+                    Text(L10n.Settings.requireDoubleCount)
                         .foregroundStyle(appColors.text)
                         .fontWeight(.regular)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -167,7 +166,7 @@ struct UserSettingsView: View {
                 
                 // MARK: Back Count
                 ToggleRowView(
-                    title: NSLocalizedString("REQUIRED_BACK_COUNT", comment: ""),
+                    title: L10n.Settings.requireBackCount,
                     isOn: $isBackCountRequired,
                     onColor: appColors.primary
                 ) { newValue in
@@ -180,7 +179,7 @@ struct UserSettingsView: View {
                 
                 // MARK: Save History Title
                 VStack (spacing: 15){
-                    Text(NSLocalizedString("SAVE_HISTORY", comment: ""))
+                    Text(L10n.Settings.saveHistory)
                         .foregroundStyle(appColors.text)
                         .fontWeight(.regular)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -205,7 +204,7 @@ struct UserSettingsView: View {
                 
                 // MARK: Sound
                 ToggleRowView(
-                    title: NSLocalizedString("SOUND_FEEDBACK", comment: ""),
+                    title: L10n.Settings.soundFeedback,
                     isOn: $isSoundEnabled,
                     onColor: appColors.primary
                 ) { newValue in
@@ -217,7 +216,7 @@ struct UserSettingsView: View {
                 
                 // MARK: Haptic
                 ToggleRowView(
-                    title: NSLocalizedString("HAPTIC_FEEDBACK", comment: ""),
+                    title: L10n.Settings.hapticFeedback,
                     isOn: $isHapticEnabled,
                     onColor: appColors.primary
                 ) { newValue in
@@ -228,7 +227,7 @@ struct UserSettingsView: View {
                 
                 // MARK: Speech Instruction
                 ToggleRowView(
-                    title: NSLocalizedString("VOICE_INSTRUCTIONS", comment: ""),
+                    title: L10n.Settings.voiceInstructions,
                     isOn: $isSpeechEnabled,
                     onColor: appColors.primary
                 ) { newValue in
@@ -238,7 +237,7 @@ struct UserSettingsView: View {
                 Divider().background(appColors.primaryBackground)
                 
                 HStack{
-                    Text(NSLocalizedString("CLEAR_ALL_LOCAL_DATA", comment: ""))
+                    Text(L10n.Settings.clearLocalData)
                         .foregroundStyle(appColors.text)
                         .padding(.horizontal)
                         .fontWeight(Font.Weight.regular)
@@ -290,8 +289,8 @@ struct UserSettingsView: View {
     
     private func screenTitle(_ screen: SettingsSubScreen) -> String {
         switch screen {
-        case .saveHistory: return "SAVE HISTORY FOR"
-        case .schedule: return "SELECT SCHEDULE"
+        case .saveHistory: return L10n.Settings.saveHistoryScreenTitle
+        case .schedule: return L10n.Settings.scheduleScreenTitle
         }
     }
     

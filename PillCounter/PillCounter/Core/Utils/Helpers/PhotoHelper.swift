@@ -142,17 +142,19 @@ struct PhotoFileManager {
 
     // MARK: - Load as UIImage (decrypt)
     func loadUIImage(from fileName: String) -> UIImage? {
+        guard var data = loadDecryptedData(from: fileName) else { return nil }
+        defer { data.resetBytes(in: 0..<data.count) }
+        return UIImage(data: data)
+    }
+
+    // MARK: - Load decrypted raw bytes (for network serving — never written to disk)
+    func loadDecryptedData(from fileName: String) -> Data? {
         do {
             let url = try fileURL(for: fileName)
             let encrypted = try Data(contentsOf: url)
-
             let key = KeychainHelper.shared.getOrCreateEncryptionKey()
             let sealedBox = try AES.GCM.SealedBox(combined: encrypted)
-            var decrypted = try AES.GCM.open(sealedBox, using: key)
-            defer {
-                decrypted.resetBytes(in: 0..<decrypted.count)
-            }
-            return UIImage(data: decrypted)
+            return try AES.GCM.open(sealedBox, using: key)
         } catch {
             print("❌ Decrypt/load failed for \(fileName): \(error)")
             return nil

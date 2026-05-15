@@ -17,17 +17,17 @@ struct CameraPermissionView: View {
                 .frame(width: 50, height: 50)
                 .foregroundColor(.gray)
             
-            Text("Camera Access Required")
+            Text(L10n.Camera.accessRequired)
                 .font(.headline)
-            
-            Text("Please enable camera access in Settings to scan barcodes.")
+
+            Text(L10n.Camera.accessMessage)
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundColor(.gray)
                 .padding(.horizontal)
-            
+
             Button(action: openSettings) {
-                Text("Open Settings")
+                Text(L10n.Camera.openSettings)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 30)

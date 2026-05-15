@@ -63,7 +63,7 @@ struct OPillCountView: View {
         let raw  = pillScanViewModel.currentTransaction?.count_type ?? ""
 
         if raw == CountType.REGULAR.rawValue {
-            return NSLocalizedString("REGULAR_TARGET_REVERIFICATION", comment: "")
+            return L10n.Controlled.regularTargetReverification
         } else {
             return step.displayText
         }
@@ -311,7 +311,7 @@ struct OPillCountView: View {
         let text: String
 
         if  pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
-            text = NSLocalizedString("REGULAR_TARGET_REVERIFICATION", comment: "")
+            text = L10n.Controlled.regularTargetReverification
         } else {
             text = step.displayText
         }
@@ -331,7 +331,7 @@ extension OPillCountView {
             .overlay(
                 VStack(spacing: 16) {
 
-                    Text("COUNTING PAUSED DUE TO INACTIVITY.")
+                    Text(L10n.PillCount.pausedDueToInactivity)
                         .foregroundStyle(appColors.text)
 
                     Button {
@@ -339,7 +339,7 @@ extension OPillCountView {
                         cameraService.resetInactivityTimer()
                         handleStepVoice(step: pillScanViewModel.currentControlledStep)
                     } label: {
-                        Text("Resume")
+                        Text(L10n.PillCount.resume)
                             .font(.headline)
                             .foregroundColor(Color.white)
                             .padding(.horizontal, 32)
@@ -416,13 +416,11 @@ extension OPillCountView {
 
     private var deleteAllTransactionDetailsForCurrentTransaction: some View {
         VStack(spacing: 20) {
-            Text("CONFIRM DELETION")
+            Text(L10n.PillCount.confirmDeletion)
                 .foregroundStyle(appColors.text)
                 .font(.headline)
 
-            Text(
-                "Are you sure you want to delete all the transactions for this current transaction."
-            )
+            Text(L10n.PillCount.deleteAllTransactionsMessage)
             .foregroundStyle(appColors.text)
             .multilineTextAlignment(.center)
             .padding(.horizontal)
@@ -430,7 +428,7 @@ extension OPillCountView {
             HStack {
                 PillCountingButton(
                     iconName: nil,
-                    title: "NO",
+                    title: L10n.Common.no,
                     textColor: appColors.primary,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
@@ -443,7 +441,7 @@ extension OPillCountView {
                 )
                 PillCountingButton(
                     iconName: nil,
-                    title: "YES ",
+                    title: L10n.Common.yes,
                     textColor: Color.white,
                     backgroundColor: appColors.primary,
                     borderColor: appColors.primary,
@@ -464,7 +462,7 @@ extension OPillCountView {
     private var zeroCountPopupContent: some View {
         VStack(spacing: 25) {
             HStack {
-                Text("INVALID COUNT")
+                Text(L10n.PillCount.invalidCount)
                     .foregroundStyle(appColors.text)
                     .font(.headline)
 
@@ -481,14 +479,14 @@ extension OPillCountView {
                 }
             }
 
-            Text("Cannot add a batch with 0 pills.\nPlease ensure pills are detected by the camera.")
+            Text(L10n.PillCount.zeroPillsMessage)
             .foregroundStyle(appColors.text)
             .multilineTextAlignment(.center)
             .padding(.horizontal)
 
             PillCountingButton(
                 iconName: nil,
-                title: "OK",
+                title: L10n.Common.ok,
                 textColor: Color.white,
                 backgroundColor: appColors.primary,
                 borderColor: .clear,
@@ -510,7 +508,7 @@ extension OPillCountView {
             // Header
             HStack {
                 Text(
-                    "Transaction detail \(selectedTransactionDetail?.txn_details_id ?? 0)"
+                    String(format: L10n.PillCount.transactionDetail, selectedTransactionDetail?.txn_details_id ?? 0)
                 )
                 Spacer()
                 Button {
@@ -547,7 +545,7 @@ extension OPillCountView {
                 }
 
                 VStack(spacing: 10) {
-                    Text("PILLS COUNT").foregroundStyle(appColors.primary)
+                    Text(L10n.PillCount.header).foregroundStyle(appColors.primary)
                     CircleBadge(
                         size: 50,
                         strokeWidth: 0,
@@ -570,7 +568,7 @@ extension OPillCountView {
             HStack {
                 PillCountingButton(
                     iconName: nil,
-                    title: "DELETE",
+                    title: L10n.Common.delete,
                     textColor: appColors.primary,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
@@ -590,7 +588,7 @@ extension OPillCountView {
                 )
                 PillCountingButton(
                     iconName: nil,
-                    title: "OK",
+                    title: L10n.Common.ok,
                     textColor: Color.white,
                     backgroundColor: appColors.primary,
                     borderColor: appColors.primary,
@@ -634,10 +632,10 @@ extension OPillCountView {
     // Popup confirming session end if target not met.
     private var showConfirmCompletion: some View {
         ConfirmationDialogue(
-            title: "Confirm Completion",
+            title: L10n.PillCount.confirmCompletionTitle,
             message: confirmationMessage,
-            cancelButtonText: "CANCEL",
-            confirmButtonText: "OK",
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.ok,
             onCancel: {
                 showNoteOption = false
                 showConfirmCompletionPopup = false
@@ -689,10 +687,10 @@ extension OPillCountView {
     
     private var countMismatchDialog: some View {
         ConfirmationDialogue(
-            title: "Count Mismatch",
-            message: "The counted quantity does not match the target count. Do you want to proceed?",
-            cancelButtonText: "CANCEL",
-            confirmButtonText: "OK",
+            title: L10n.PillCount.countMismatchTitle,
+            message: L10n.PillCount.countMismatchMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.ok,
             onCancel: {
                 showCountMismatchPopup = false
             },
@@ -705,10 +703,10 @@ extension OPillCountView {
     
     private var showStepCompletion: some View {
         ConfirmationDialogue(
-            title: "Confirm Step Completion",
-            message: "Are you sure you want to complete this step?",
-            cancelButtonText: "CANCEL",
-            confirmButtonText: "OK",
+            title: L10n.PillCount.confirmStepCompletionTitle,
+            message: L10n.PillCount.confirmStepCompletionMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.ok,
             onCancel: {
                 showStepCompletionPopup = false
 //                capturedVialImage = nil
@@ -726,14 +724,14 @@ extension OPillCountView {
     // Popup for adding a note before saving.
     private var showNoteOptionPopup: some View {
         NotePopupView(
-            title: "ADD NOTE",
+            title: L10n.PillCount.addNote,
             showClose: false,
             text: $pillScanViewModel.note,
             errorMessage: errorMessageOfNote,
-            primaryTitle: "SAVE",
+            primaryTitle: L10n.Common.save,
             primaryAction: {
                 if pillScanViewModel.note.isEmpty {
-                    errorMessageOfNote = "Please add a note"
+                    errorMessageOfNote = L10n.PillCount.pleaseAddNote
                     return
                 }
                 showNoteOption = false
@@ -747,7 +745,7 @@ extension OPillCountView {
                     }
                 }
             },
-            secondaryTitle: pillScanViewModel.currentTransaction?.is_from_pms == false ? "SKIP" : nil,
+            secondaryTitle: pillScanViewModel.currentTransaction?.is_from_pms == false ? L10n.Common.skip : nil,
             secondaryAction: pillScanViewModel.currentTransaction?.is_from_pms == false ? {
                 showNoteOption = false
                 Task(priority: .background) {
@@ -765,10 +763,10 @@ extension OPillCountView {
     }
     private var skipContainerPopup: some View {
         ConfirmationDialogue(
-            title: "Skip Step",
-            message: "Remaining count is 0. Do you want to skip container pending step?",
-            cancelButtonText: "CANCEL",
-            confirmButtonText: "SKIP",
+            title: L10n.PillCount.skipStepTitle,
+            message: L10n.PillCount.skipStepMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.skip,
             onCancel: {
                 showSkipContainerPopup = false
             },
@@ -805,7 +803,7 @@ extension OPillCountView {
         
         // Prevent exceeding step target
         if stepTarget > 0 && newTotal > stepTarget {
-            pillScanViewModel.showToastMessage(text:"Total transaction count exceeds target." )
+            pillScanViewModel.showToastMessage(text: L10n.PillCount.totalCountExceedsTarget)
             return
         }
         
@@ -885,7 +883,7 @@ extension OPillCountView {
             if nextStep == nil {
                 showCountMismatchPopup = true
             } else {
-                pillScanViewModel.showToastMessage(text:"Count is less than target.")
+                pillScanViewModel.showToastMessage(text: L10n.PillCount.countLessThanTarget)
             }
             return
         }
@@ -906,7 +904,7 @@ extension OPillCountView {
     
     private func handleVialCapture() {
         guard capturedVialImage == nil else {
-            pillScanViewModel.showToastMessage(text: "Image already captured. Tap Redo to capture again.")
+            pillScanViewModel.showToastMessage(text: L10n.PillCount.imageAlreadyCaptured)
             return
         }
 

@@ -138,21 +138,7 @@ extension BaseRepositoryProtocol {
         }
         return headers
     }
-    
-//    static func headers(_ accessToken: String?) -> [String: String] {
-//        var headers: [String: String] = [
-//            "Content-Type": "application/json",
-////            "X-Server-Key": ConfigurationManager.shared.xServerKey,
-//            "Accept": "application/json",
-//            "X-Server-Key": "d1ff4797acb7147205bb249cce918f23a4f8e54a8d56488d79e83abcdf1b24f6f1ccc9af5dea3c1a1b5e2b6aa247ff55ac8e12f165974f8cfce41328f7ea447e",
-//        ]
-//
-//        if let token = accessToken, !token.isEmpty {
-//            headers["Authorization"] = "Bearer \(token)"
-//        }
-//
-//        return headers
-//    }
+
     
     private static func logRequest(_ request: URLRequest, body: [String: Any]?) {
         #if DEBUG
@@ -207,24 +193,19 @@ extension BaseRepositoryProtocol {
 // MARK: - SSL Bypass Delegate (Development Only)
 // This class intercepts the SSL Handshake and blindly trusts the server.
 // Equivalent to Flutter's: ..badCertificateCallback = (cert, host, port) => true
+#if DEBUG
 class UnsafeSSLManager: NSObject, URLSessionDelegate {
-    
-    func urlSession(_ session: URLSession,
-                    didReceive challenge: URLAuthenticationChallenge,
-                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        
-        // 1. Check if the challenge is for Server Trust (SSL Certificate)
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let serverTrust = challenge.protectionSpace.serverTrust {
-            
-            // 2. Create a credential from the trust object
-            let credential = URLCredential(trust: serverTrust)
-            
-            // 3. Tell URLSession to USE this credential (trusting it), regardless of validity
-            completionHandler(.useCredential, credential)
+           let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
         } else {
-            // 4. For all other auth types (like Basic Auth), perform default handling
             completionHandler(.performDefaultHandling, nil)
         }
     }
 }
+#endif

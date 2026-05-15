@@ -69,3 +69,6 @@ Config.plist
 
 # model encryption key not to be committed !!
 *.mlmodelkey
+
+# Firebase config — contains live API key, never commit
+**/GoogleService-Info.plist

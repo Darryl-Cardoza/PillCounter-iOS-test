@@ -55,6 +55,10 @@
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		47793CE82EF940640023EAD4 /* Exceptions for "PillCounter" folder in "PillCounter" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			additionalCompilerFlagsByRelativePath = {
+				Features/Scanning/Model/best.mlpackage = "xcrun coremlcompiler compile best.mlpackage ./CompiledBest \\ --encrypt-key-file /Users/riteshparekh/Documents/Darryl/Rite-Projects/PillCounterCert/best.mlmodelkey";
+				Features/Scanning/Model/trayBest.mlpackage = "xcrun coremlcompiler compile trayBest.mlpackage ./CompiledTrayBest \\ --encrypt-key-file /Users/riteshparekh/Documents/Darryl/Rite-Projects/PillCounterCert/trayBest.mlmodelkey";
+			};
 			membershipExceptions = (
 				Core/Components/Untitled.swift,
 				Info.plist,

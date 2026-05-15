@@ -16,5 +16,5 @@ target 'PillCounter' do
     # Pods for testing
   end
 
-  pod 'SQLCipher'
+  pod 'SQLCipher', '~> 4.5'
 end

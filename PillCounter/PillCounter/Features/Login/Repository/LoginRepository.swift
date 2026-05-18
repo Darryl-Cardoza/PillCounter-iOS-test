@@ -45,7 +45,8 @@ final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
             body: [
                 "email": email
             ],
-            responseType: SendOTPResponse.self
+            responseType: SendOTPResponse.self,
+            extraHeaders: ["Cache-Control": "no-store"]
         )
     }
     
@@ -60,7 +61,8 @@ final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
             url: APIConstants.verifyOTP,
             method: .post,
             body: body,
-            responseType: VerifyOTPResponse.self
+            responseType: VerifyOTPResponse.self,
+            extraHeaders: ["Cache-Control": "no-store"]
         )
     }
     
@@ -72,7 +74,8 @@ final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
             body: [
                 "refresh_token": refreshToken
             ],
-            responseType: LogoutResponse.self
+            responseType: LogoutResponse.self,
+            extraHeaders: ["Cache-Control": "no-store"]
         )
     }
 }

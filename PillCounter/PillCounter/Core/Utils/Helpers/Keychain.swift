@@ -2,40 +2,40 @@
 //  Keychain.swift
 //  PillCounter
 //
-//  Created by HC on 05/11/25.
-//
 
 import Foundation
 import Security
- 
+
 final class Keychain {
- 
+
+    private static let defaultService = "com.ritetechnologies.PillCounting"
+
     // MARK: - Save
+    /// Saves (or overwrites) a string value in the Keychain.
     static func savePassword(
-        _ password: String, for key: String, service: String = "PillCounter"
+        _ password: String,
+        for key: String,
+        service: String = defaultService
     ) {
         guard let data = password.data(using: .utf8) else { return }
- 
+
+        deletePassword(for: key, service: service)
+
         let query: [String: Any] = [
-            kSecClass as String:            kSecClassGenericPassword,
-            kSecAttrAccount as String:      key,
-            kSecAttrService as String:      service,
-            // ThisDeviceOnly — token cannot be restored from iCloud backup
-            // or migrated to another device via encrypted backup.
-            kSecAttrAccessible as String:   kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecClass as String:           kSecClassGenericPassword,
+            kSecAttrAccount as String:     key,
+            kSecAttrService as String:     service,
+            kSecAttrAccessible as String:  kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecValueData as String:       data,
         ]
- 
-        // Delete any stale entry first so SecItemAdd never returns
-        // errSecDuplicateItem and silently discards the new value.
-        SecItemDelete(query as CFDictionary)
- 
-        var addQuery = query
-        addQuery[kSecValueData as String] = data
-        SecItemAdd(addQuery as CFDictionary, nil)
+        SecItemAdd(query as CFDictionary, nil)
     }
- 
-    // MARK: - Read
-    static func getPassword(for key: String, service: String = "PillCounter") -> String? {
+
+    // MARK: - Get
+    static func getPassword(
+        for key: String,
+        service: String = defaultService
+    ) -> String? {
         let query: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrAccount as String: key,
@@ -46,16 +46,28 @@ final class Keychain {
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data,
-              let password = String(data: data, encoding: .utf8)
+              let value = String(data: data, encoding: .utf8)
         else { return nil }
-        return password
+        return value
     }
- 
+
     // MARK: - Delete
-    static func deletePassword(for key: String, service: String = "PillCounter") {
+    static func deletePassword(
+        for key: String,
+        service: String = defaultService
+    ) {
         let query: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrAccount as String: key,
+            kSecAttrService as String: service,
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+
+    // MARK: - Delete All
+    static func deleteAll(service: String = defaultService) {
+        let query: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
         ]
         SecItemDelete(query as CFDictionary)

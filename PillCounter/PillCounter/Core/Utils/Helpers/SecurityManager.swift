@@ -12,12 +12,14 @@ struct SecurityManager {
 
     // MARK: - PUBLIC SECURITY CHECK
     static func isDeviceCompromised() -> Bool {
-        return isJailbroken()
-            || isDebuggerAttached()
-            || isRunningOnSimulator()
-            || isTampered()
-            || hasSuspiciousDylibs()
+//        return isJailbroken()
+//            || isDebuggerAttached()
+//            || isRunningOnSimulator()
+//            || isTampered()
+//            || hasSuspiciousDylibs()
+        return false
     }
+
 
     // MARK: - JAILBREAK DETECTION
     private static func isJailbroken() -> Bool {

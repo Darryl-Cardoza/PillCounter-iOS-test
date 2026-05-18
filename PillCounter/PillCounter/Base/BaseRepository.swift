@@ -42,6 +42,7 @@ extension BaseRepositoryProtocol {
 
         // Headers
         var allHeaders = headers(accessToken)
+        let extra = extraHeaders ?? ["Cache-Control": "no-store"]
         if let extra = extraHeaders {
             allHeaders.merge(extra) { (_, new) in new }  // override duplicates
         }
@@ -58,17 +59,17 @@ extension BaseRepositoryProtocol {
         // SESSION SELECTION (SSL BYPASS LOGIC)
         // ------------------------------------------------------------------
         let session: URLSession
-        if shouldBypassSSL {
-            // Create a custom session with the Unsafe Delegate
-            session = URLSession(
-                configuration: .default,
-                delegate: UnsafeSSLManager(),
-                delegateQueue: nil
-            )
-        } else {
+//        if shouldBypassSSL {
+//            // Create a custom session with the Unsafe Delegate
+//            session = URLSession(
+//                configuration: .default,
+//                delegate: UnsafeSSLManager(),
+//                delegateQueue: nil
+//            )
+//        } else {
             // Use the standard secure shared session
             session = URLSession.shared
-        }
+//        }
         // ------------------------------------------------------------------
 
         var attempt = 0

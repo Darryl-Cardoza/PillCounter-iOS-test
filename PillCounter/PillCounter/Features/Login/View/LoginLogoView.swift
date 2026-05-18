@@ -30,7 +30,7 @@ struct LoginLogoView: View {
                             height: geometry.size.width * 0.25
                         )
 
-                    Text("APP_NAME")
+                    Text(L10n.Common.appName)
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(Color(hex: "#01BBD3"))
@@ -38,10 +38,10 @@ struct LoginLogoView: View {
                     Spacer()
 
                     VStack(spacing: 8) {
-                        Text("COMPANY_NAME")
+                        Text(L10n.Common.companyName)
                             .font(.subheadline)
                             .foregroundColor(appColors.text)
-                        Text("\(NSLocalizedString("VERSION", comment: "")) 1.0.0")
+                        Text("\(L10n.Common.version) 1.0.0")
                             .font(.subheadline)
                             .foregroundColor(appColors.text)
                     }

@@ -256,14 +256,40 @@ struct QRBarcodeScannerView: View {
         ) {
             stockCountScannedDetailsPopUp
         }
-        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup, dismissOnBackgroundTap: false){
-            rxScanSuccessPopup
-        }
+//        .customPopup(isPresented: $pillScanViewModel.showRxFlowPopup, dismissOnBackgroundTap: false){
+//            rxScanSuccessPopup
+//        }
         .customPopup(isPresented: $pillScanViewModel.showScannedDrugInfoPopoup,  dismissOnBackgroundTap: false){
             scannedQrSuccessfullPopup
         }
         .customPopup(isPresented: $stockCountVieModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false){
             scannedNdcDoesNotMatchPmsBatchPopoup
+        }
+        .bottomSheet(isPresented: $pillScanViewModel.showRxFlowPopup, onDismiss: {
+            pillScanViewModel.showRxFlowPopup = false
+            restartFullScannerFlow()
+        }) {
+            RxDetailsSheetContent(
+                onCancel: {
+                   pillScanViewModel.showRxFlowPopup = false
+                   restartFullScannerFlow()
+                },
+                onProceed: {
+                    Task {
+                        await pillScanViewModel.createTransactionFromRxScan()
+                        scanType = .barcode
+                        restartFullScannerFlow()
+                    }
+                },
+                drugName: pillScanViewModel.scannedRxData?.drugName ?? "-",
+                quantity: pillScanViewModel.scannedRxData?.qty ?? "-",
+                ndcNumber: pillScanViewModel.scannedRxData?.ndcNo ?? "-",
+                bucket: pillScanViewModel.selectedBucket,
+                rxNumber: pillScanViewModel.scannedRxData?.rxNo ?? "-",
+                
+              
+            )
+            .environmentObject(appColors)
         }
     }
 
@@ -346,10 +372,10 @@ extension QRBarcodeScannerView {
 
                 self.tempCapturedImage = capturedImage
 
-                // 3. Stop session after capture is done
+                // Stop session after capture is done
                 cameraManager.stopSession()
 
-                // 4. Update UI
+                // Update UI
                 showScannedData = true
                 scannedData = newValue
 

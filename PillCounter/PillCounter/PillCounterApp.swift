@@ -87,12 +87,19 @@ struct PillCounterApp: App {
                             }
                             .task {
                                 userViewModel.loadMobileThemeSettings()
-                                
+
                                 Task.detached(priority: .background) {
                                     await MainActor.run {
                                         PillsDataLocalStorage.shared
                                             .cleanUpOldHistory()
                                     }
+                                }
+
+                                // Pre-warm CoreML models at launch so the first
+                                // navigation to the camera screen doesn't hang.
+                                Task.detached(priority: .background) {
+                                    _ = PillDetector.shared
+                                    _ = TrayDetectionService.shared
                                 }
                             }
                         //show toast when succefully updated profile date

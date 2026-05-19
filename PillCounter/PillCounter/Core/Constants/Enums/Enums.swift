@@ -38,6 +38,7 @@ public enum DashboardFlow: Hashable, Codable {
 
 public enum ScanningFlow: Codable, Hashable {
     case barcodeScanning(ScanType)
+    case unifiedCamera(ScanType)
     case pillCountView
     case pillCountHistoryView
     case stockCount(StockCountFlow)

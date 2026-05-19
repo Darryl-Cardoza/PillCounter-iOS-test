@@ -14,6 +14,7 @@ import SwiftUI
 struct TrayOverlay: View {
 
     @ObservedObject var cameraService: CameraService
+    @EnvironmentObject var appColors: AppColors
 
     var body: some View {
         GeometryReader { _ in
@@ -25,10 +26,10 @@ struct TrayOverlay: View {
                         let screenRect = layerRect(for: tray, layer: layer)
 
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.yellow, lineWidth: 2)
+                            .stroke(appColors.secondary, lineWidth: 2)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.yellow.opacity(0.08))
+                                    .fill(appColors.secondary.opacity(0.08))
                             )
                             .frame(width: screenRect.width,
                                    height: screenRect.height)

@@ -17,9 +17,16 @@ final class CameraService: NSObject, ObservableObject {
     // MARK: - CAMERA CORE
     private let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
+    private let metadataOutput = AVCaptureMetadataOutput()
     private var videoInput: AVCaptureDeviceInput?
     private var captureDevice: AVCaptureDevice?
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+
+    // MARK: - BARCODE SCANNING
+    @Published var scannedCode: String = ""
+    @Published var scannedCodeType: String = ""
+    private var barcodeEnabled: Bool = false
+    private var hasScanned: Bool = false
 
     // MARK: - IMAGE PROCESSING
     private let detector = PillDetectionService()
@@ -60,7 +67,6 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     // MARK: - INIT
-    /// INITIALIZES CAMERA SERVICE AND CHECKS PERMISSIONS
     override init() {
         super.init()
         checkPermissions()
@@ -123,7 +129,50 @@ final class CameraService: NSObject, ObservableObject {
                 self.session.addOutput(self.videoOutput)
             }
 
+            // Barcode metadata output — added once; delegate set when enableBarcodeScanning() is called
+            if self.session.canAddOutput(self.metadataOutput) {
+                self.session.addOutput(self.metadataOutput)
+                self.metadataOutput.metadataObjectTypes = [
+                    .qr, .ean8, .ean13, .pdf417,
+                    .code128, .code39, .code93,
+                    .upce, .aztec, .dataMatrix,
+                    .interleaved2of5, .itf14
+                ]
+            }
+
             self.session.commitConfiguration()
+        }
+    }
+
+    // MARK: - BARCODE CONTROL
+
+    func enableBarcodeScanning() {
+        // Must run on sessionQueue so it executes AFTER configureSession() completes.
+        // Setting the delegate before the output is added to the session silently fails.
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.hasScanned = false
+            self.barcodeEnabled = true
+            self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+        }
+    }
+
+    func disableBarcodeScanning() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.barcodeEnabled = false
+            self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
+        }
+    }
+
+    func resetBarcodeScanState() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.hasScanned = false
+        }
+        DispatchQueue.main.async {
+            self.scannedCode = ""
+            self.scannedCodeType = ""
         }
     }
 
@@ -199,7 +248,7 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     /// CANCELS INACTIVITY TIMER
-    private func cancelInactivityTimer() {
+    func cancelInactivityTimer() {
         inactivityTimer?.cancel()
         inactivityTimer = nil
     }
@@ -538,5 +587,26 @@ extension CameraService {
         )
 
         text.draw(in: textRect, withAttributes: attributes)
+    }
+}
+
+// MARK: - BARCODE METADATA DELEGATE
+
+extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
+    func metadataOutput(
+        _ output: AVCaptureMetadataOutput,
+        didOutput metadataObjects: [AVMetadataObject],
+        from connection: AVCaptureConnection
+    ) {
+        guard barcodeEnabled,
+              !hasScanned,
+              let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let value = object.stringValue
+        else { return }
+
+        hasScanned = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        scannedCode = value
+        scannedCodeType = object.type.rawValue
     }
 }

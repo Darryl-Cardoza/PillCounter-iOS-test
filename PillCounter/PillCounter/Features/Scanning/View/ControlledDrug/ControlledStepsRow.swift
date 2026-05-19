@@ -40,7 +40,6 @@ struct ControlledStepRow: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal, 5)
         .padding(.vertical, 15)
         .animation(.easeInOut(duration: 0.25), value: currentStep)

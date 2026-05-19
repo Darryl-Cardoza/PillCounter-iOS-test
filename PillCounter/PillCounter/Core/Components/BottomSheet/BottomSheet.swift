@@ -15,6 +15,9 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
     @Binding var isPresented: Bool
     let dismissOnBackgroundTap: Bool
     let onDismiss: (() -> Void)?
+    let showDim: Bool
+    /// Fixed portrait height. Nil = size-to-content (existing default behaviour).
+    let portraitHeight: CGFloat?
     let sheetContent: () -> SheetContent
 
     /// Width of the side sheet in landscape
@@ -34,16 +37,18 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
 
                     ZStack {
                         if isPresented {
-                            // Dim background
-                            Color.black
-                                .opacity(dimOpacity)
-                                .ignoresSafeArea()
-                                .transition(.opacity)
-                                .onTapGesture {
-                                    if dismissOnBackgroundTap {
-                                        dismiss()
+                            // Dim background (optional)
+                            if showDim {
+                                Color.black
+                                    .opacity(dimOpacity)
+                                    .ignoresSafeArea()
+                                    .transition(.opacity)
+                                    .onTapGesture {
+                                        if dismissOnBackgroundTap {
+                                            dismiss()
+                                        }
                                     }
-                                }
+                            }
 
                             // Sheet
                             sheetView(isLandscape: isLandscape, size: geo.size)
@@ -86,14 +91,19 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
             // Bottom sheet — full width
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
-                sheetContent()
-                    .frame(maxWidth: .infinity)
-                    .clipShape(
-                        RoundedCorners(radius: cornerRadius,
-                                       corners: [.topLeft, .topRight])
-                    )
-                    .shadow(color: .black.opacity(0.2),
-                            radius: 10, x: 0, y: -2)
+                Group {
+                    if let h = portraitHeight {
+                        sheetContent().frame(maxWidth: .infinity).frame(height: h)
+                    } else {
+                        sheetContent().frame(maxWidth: .infinity)
+                    }
+                }
+                .clipShape(
+                    RoundedCorners(radius: cornerRadius,
+                                   corners: [.topLeft, .topRight])
+                )
+                .shadow(color: .black.opacity(0.2),
+                        radius: 10, x: 0, y: -2)
             }
             .ignoresSafeArea(edges: .bottom)
         }
@@ -123,17 +133,11 @@ struct RoundedCorners: Shape {
 extension View {
     /// Android-style bottom sheet.
     /// Slides up from the bottom in portrait, in from the right in landscape.
-    ///
-    /// - Parameters:
-    ///   - isPresented: Binding controlling sheet visibility.
-    ///   - dismissOnBackgroundTap: If `true`, tapping the dimmed backdrop dismisses the sheet.
-    ///     If `false`, the sheet can only be dismissed programmatically.
-    ///   - onDismiss: Called whenever the sheet transitions from presented to hidden
-    ///     (via backdrop tap or by setting `isPresented = false`).
-    ///   - content: The sheet content view.
     func bottomSheet<Content: View>(
         isPresented: Binding<Bool>,
         dismissOnBackgroundTap: Bool = true,
+        showDim: Bool = true,
+        portraitHeight: CGFloat? = nil,
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
@@ -142,6 +146,8 @@ extension View {
                 isPresented: isPresented,
                 dismissOnBackgroundTap: dismissOnBackgroundTap,
                 onDismiss: onDismiss,
+                showDim: showDim,
+                portraitHeight: portraitHeight,
                 sheetContent: content
             )
         )

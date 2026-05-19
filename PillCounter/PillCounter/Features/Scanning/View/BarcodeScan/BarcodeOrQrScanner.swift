@@ -373,7 +373,7 @@ extension QRBarcodeScannerView {
                 self.tempCapturedImage = capturedImage
 
                 // Stop session after capture is done
-                cameraManager.stopSession()
+//                cameraManager.stopSession()
 
                 // Update UI
                 showScannedData = true
@@ -683,9 +683,10 @@ extension QRBarcodeScannerView {
         showPillTargetCountPopup = false
         isFromScanning = false
         scannedData = nil
-        cameraManager.scannedCode = ""
-        cameraManager.codeType = ""
-        cameraManager.restartSession()
+//        cameraManager.scannedCode = ""
+//               cameraManager.codeType = ""
+//               cameraManager.restartSession()
+        cameraManager.resetScanState()
         startScanTimeout()
         pillScanViewModel.isCheckingNdc = false
         pillScanViewModel.ndcComparisonResponse = nil

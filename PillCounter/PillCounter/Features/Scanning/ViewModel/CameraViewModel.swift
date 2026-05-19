@@ -216,6 +216,18 @@ final class CameraViewModel: NSObject, ObservableObject {
             self.codeType = ""
         }
     }
+
+    /// Resets scan state without stopping the session — use after dismissing a sheet
+    /// when the camera is already running and only the scan lock needs clearing.
+    func resetScanState() {
+        sessionQueue.async {
+            self.hasScanned = false
+        }
+        DispatchQueue.main.async {
+            self.scannedCode = ""
+            self.codeType = ""
+        }
+    }
 }
 
 // MARK: - PHOTO DELEGATE

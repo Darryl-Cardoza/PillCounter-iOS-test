@@ -27,6 +27,8 @@ struct RxDetailsSheetContent: View {
         hSizeClass == .regular && vSizeClass == .regular
     }
 
+    // MARK: - Body
+
     var body: some View {
         Group {
             if isPad && isLandscape {
@@ -37,8 +39,12 @@ struct RxDetailsSheetContent: View {
                     .background(appColors.secondaryBackground)
             } else if isLandscape {
                 iPhoneLandscapeLayout
-                    .background(appColors.secondaryBackground)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipShape(RoundedCorners(radius: 20, corners: [.topLeft, .bottomLeft]))
+                    .background(
+                        RoundedCorners(radius: 20, corners: [.topLeft, .bottomLeft])
+                            .fill(appColors.secondaryBackground)
+                    )
             } else {
                 iPhoneLayout
                     .background(appColors.secondaryBackground)
@@ -46,160 +52,96 @@ struct RxDetailsSheetContent: View {
         }
     }
 
-    // MARK: - iPhone Layout (unchanged)
+    // MARK: - iPhone Layout (portrait + landscape)
+
     private var iPhoneLayout: some View {
-        VStack(spacing: 0) {
-            Text(L10n.BarcodeScan.labelScannedSuccessfully)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(appColors.text)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
-
-            DetailRow(
-                leading: FormBadge(),
-                title: L10n.BarcodeScan.drugName,
-                value: drugName
-            )
-
-            Divider().background(appColors.text.opacity(0.12))
-                .padding(.horizontal, 20)
-
-            DetailRow(
-                leading: ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity),
-                title: L10n.BarcodeScan.ndcNumber,
-                value: ndcNumber
-            )
-
-            Divider().background(appColors.text.opacity(0.12))
-                .padding(.horizontal, 20)
-
-            DetailRow(
-                leading: ValueBadge(label: L10n.BarcodeScan.bucket, value: bucket),
-                title: L10n.BarcodeScan.rxNumber,
-                value: rxNumber
-            )
-
-            buttons
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 24)
-        }
+        iPhoneContent(
+            badgeSize: 80,
+            titleFontSize: 14,
+            valueFontSize: 18,
+            rowVerticalPadding: 10,
+            buttonTopPadding: 10,
+            buttonBottomPadding: 16,
+            buttonHorizontalPadding: 80
+        )
     }
 
-    // MARK: - iPhone Landscape Layout
     private var iPhoneLandscapeLayout: some View {
+        iPhoneContent(
+            badgeSize: 80,
+            titleFontSize: 12,
+            valueFontSize: 14,
+            rowVerticalPadding: 8,
+            buttonTopPadding: 6,
+            buttonBottomPadding: 16,
+            buttonHorizontalPadding: 80
+        )
+    }
+
+    private func iPhoneContent(
+        badgeSize: CGFloat,
+        titleFontSize: CGFloat,
+        valueFontSize: CGFloat,
+        rowVerticalPadding: CGFloat,
+        buttonTopPadding: CGFloat,
+        buttonBottomPadding: CGFloat,
+        buttonHorizontalPadding: CGFloat
+    ) -> some View {
         VStack(spacing: 0) {
             Text(L10n.BarcodeScan.labelScannedSuccessfully)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: titleFontSize, weight: .semibold))
                 .foregroundColor(appColors.text)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 24)
-                .padding(.bottom, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
 
-            Spacer(minLength: 0)
+            iPhoneDetailRow(leading: FormBadge(isIpad: false),
+                            title: L10n.BarcodeScan.drugName,
+                            value: drugName,
+                            badgeSize: badgeSize,
+                            titleFontSize: titleFontSize,
+                            valueFontSize: valueFontSize,
+                            verticalPadding: rowVerticalPadding)
 
-            VStack(spacing: 0) {
-                iPhoneLandscapeDetailRow(
-                    leading: FormBadge(),
-                    title: L10n.BarcodeScan.drugName,
-                    value: drugName
-                )
+            Divider()
+                .background(appColors.text.opacity(0.12))
+                .padding(.horizontal, 16)
 
-                Divider().background(appColors.text.opacity(0.12))
-                    .padding(.horizontal, 20)
+            iPhoneDetailRow(leading: ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: false),
+                            title: L10n.BarcodeScan.ndcNumber,
+                            value: ndcNumber,
+                            badgeSize: badgeSize,
+                            titleFontSize: titleFontSize,
+                            valueFontSize: valueFontSize,
+                            verticalPadding: rowVerticalPadding)
 
-                iPhoneLandscapeDetailRow(
-                    leading: ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity),
-                    title: L10n.BarcodeScan.ndcNumber,
-                    value: ndcNumber
-                )
+            Divider()
+                .background(appColors.text.opacity(0.12))
+                .padding(.horizontal, 16)
 
-                Divider().background(appColors.text.opacity(0.12))
-                    .padding(.horizontal, 20)
+            iPhoneDetailRow(leading: ValueBadge(label: L10n.BarcodeScan.bucket, value: bucket, isIpad: false),
+                            title: L10n.BarcodeScan.rxNumber,
+                            value: rxNumber,
+                            badgeSize: badgeSize,
+                            titleFontSize: titleFontSize,
+                            valueFontSize: valueFontSize,
+                            verticalPadding: rowVerticalPadding)
 
-                iPhoneLandscapeDetailRow(
-                    leading: ValueBadge(label: L10n.BarcodeScan.bucket, value: bucket),
-                    title: L10n.BarcodeScan.rxNumber,
-                    value: rxNumber
-                )
-            }
-
-            Spacer(minLength: 0)
-
-            HStack(spacing: 16) {
-                PillCountingButton(
-                    title: L10n.Common.cancel,
-                    textColor: appColors.primary,
-                    backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 40,
-                    horizontalPadding: 28,
-                    verticalPadding: 14,
-                    action: onCancel
-                )
-                PillCountingButton(
-                    title: L10n.BarcodeScan.proceed,
-                    textColor: .white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 40,
-                    horizontalPadding: 28,
-                    verticalPadding: 14,
-                    action: onProceed
-                )
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 24)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private struct iPhoneLandscapeDetailRow<Leading: View>: View {
-        @EnvironmentObject private var appColors: AppColors
-
-        let leading: Leading
-        let title: String
-        let value: String
-
-        var body: some View {
-            HStack(alignment: .center, spacing: 16) {
-                leading
-                    .frame(width: 80, height: 80)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundColor(appColors.text)
-                    Text(value)
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundColor(appColors.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
+            iPhoneButtons
+                .padding(.horizontal, buttonHorizontalPadding)
+                .padding(.top, buttonTopPadding)
+                .padding(.bottom, buttonBottomPadding)
         }
     }
 
-    // MARK: - iPad Layout (matches target mockup)
+    // MARK: - iPad Portrait Layout
     private var iPadLayout: some View {
         VStack(spacing: 32) {
-
-            // Title
             Text(L10n.BarcodeScan.labelScannedSuccessfully)
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .padding(.top, 32)
 
-            // Main content row — text on left, badges on right
             HStack(alignment: .center, spacing: 32) {
-
-                // Left: drug name on top, Rx + NDC below with divider between
                 VStack(alignment: .leading, spacing: 20) {
                     LabeledText(title: L10n.BarcodeScan.drugName, value: drugName)
 
@@ -212,161 +154,139 @@ struct RxDetailsSheetContent: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Right: three square-ish badges in a row
                 HStack(spacing: 14) {
-                    FormBadge()
-                        .frame(width: 110, height: 140)
-                    ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity)
-                        .frame(width: 110, height: 140)
-                    ValueBadge(label: L10n.BarcodeScan.bucket,   value: bucket)
-                        .frame(width: 110, height: 140)
+                    FormBadge(isIpad: true).frame(width: 110, height: 140)
+                    ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: true).frame(width: 110, height: 140)
+                    ValueBadge(label: L10n.BarcodeScan.bucket,   value: bucket, isIpad: true).frame(width: 110, height: 140)
                 }
             }
             .padding(.horizontal, 32)
 
-            // Buttons — centered, not stretched
-            HStack(spacing: 16) {
-                PillCountingButton(
-                    title: L10n.Common.cancel,
-                    textColor: appColors.primary,
-                    backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 40,
-                    horizontalPadding: 40,
-                    verticalPadding: 12,
-                    action: onCancel
-                )
-                .fixedSize()
-
-                PillCountingButton(
-                    title: L10n.BarcodeScan.proceed,
-                    textColor: .white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 40,
-                    horizontalPadding: 40,
-                    verticalPadding: 12,
-                    action: onProceed
-                )
-                .fixedSize()
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 32)
+            iPadButtons
+                .padding(.bottom, 32)
         }
     }
-    
+
     // MARK: - iPad Landscape Layout
+
     private var iPadLandscapeLayout: some View {
         VStack(spacing: 16) {
-
-            // Title — stays pinned at top
             Text(L10n.BarcodeScan.labelScannedSuccessfully)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(appColors.text)
-                .padding(.top, 24)
-                .padding(.bottom, 20)
+                .padding(.top, 50)
 
             Spacer(minLength: 0)
 
-            // Three rows grouped together — vertically centered
             VStack(spacing: 20) {
-                iPadLandscapeDetailRow(
-                    leading: FormBadge(),
-                    title: L10n.BarcodeScan.drugName,
-                    value: drugName
-                )
+                iPadLandscapeDetailRow(leading: FormBadge(isIpad: true),
+                                       title: L10n.BarcodeScan.drugName,
+                                       value: drugName)
 
-                Divider().background(appColors.text.opacity(0.12))
+                Divider()
+                    .background(appColors.text.opacity(0.12))
                     .padding(.horizontal, 20)
 
-                iPadLandscapeDetailRow(
-                    leading: ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity),
-                    title: L10n.BarcodeScan.ndcNumber,
-                    value: ndcNumber
-                )
+                iPadLandscapeDetailRow(leading: ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: true),
+                                       title: L10n.BarcodeScan.ndcNumber,
+                                       value: ndcNumber)
 
-                Divider().background(appColors.text.opacity(0.12))
+                Divider()
+                    .background(appColors.text.opacity(0.12))
                     .padding(.horizontal, 20)
 
-                iPadLandscapeDetailRow(
-                    leading: ValueBadge(label: L10n.BarcodeScan.bucket, value: bucket),
-                    title: L10n.BarcodeScan.rxNumber,
-                    value: rxNumber
-                )
+                iPadLandscapeDetailRow(leading: ValueBadge(label: L10n.BarcodeScan.bucket, value: bucket, isIpad: true),
+                                       title: L10n.BarcodeScan.rxNumber,
+                                       value: rxNumber)
             }
 
             Spacer(minLength: 0)
 
-            // Buttons — pinned at bottom
-            HStack(spacing: 16) {
-                PillCountingButton(
-                    title: L10n.Common.cancel,
-                    textColor: appColors.primary,
-                    backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 40,
-                    horizontalPadding: 32,
-                    verticalPadding: 12,
-                    action: onCancel
-                )
-                .fixedSize()
-
-                PillCountingButton(
-                    title: L10n.BarcodeScan.proceed,
-                    textColor: .white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 40,
-                    horizontalPadding: 32,
-                    verticalPadding: 12,
-                    action: onProceed
-                )
-                .fixedSize()
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 28)
+            iPadButtons
+                .padding(.bottom, 28)
         }
     }
-    
-    
-    // MARK: - iPad Landscape Detail Row (bigger badge, more breathing room)
-     
-    private struct iPadLandscapeDetailRow<Leading: View>: View {
-        @EnvironmentObject private var appColors: AppColors
-     
-        let leading: Leading
-        let title: String
-        let value: String
-     
-        var body: some View {
-            HStack(alignment: .center, spacing: 16) {
-                leading
-                    .frame(width: 120, height: 120)
-     
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(title)
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(appColors.text)
-                    Text(value)
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundColor(appColors.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
+
+    // MARK: - Reusable Row Builders
+
+    @ViewBuilder
+    private func iPhoneDetailRow<Leading: View>(
+        leading: Leading,
+        title: String,
+        value: String,
+        badgeSize: CGFloat,
+        titleFontSize: CGFloat,
+        valueFontSize: CGFloat,
+        verticalPadding: CGFloat
+    ) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            leading.frame(width: badgeSize, height: badgeSize)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: titleFontSize, weight: .regular))
+                    .foregroundColor(appColors.text)
+                Text(value)
+                    .font(.system(size: valueFontSize, weight: .regular))
+                    .foregroundColor(appColors.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, verticalPadding)
+    }
+
+    @ViewBuilder
+    private func iPadLandscapeDetailRow<Leading: View>(leading: Leading, title: String, value: String) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            leading.frame(width: 120, height: 120)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(appColors.text)
+                Text(value)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundColor(appColors.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Buttons
+
+    private var iPhoneButtons: some View {
+        HStack(spacing: 12) {
+            PillCountingButton(
+                title: L10n.Common.cancel,
+                textColor: appColors.primary,
+                backgroundColor: .clear,
+                borderColor: appColors.primary,
+                font: .system(size: 13, weight: .semibold),
+                cornerRadius: 40,
+                horizontalPadding: 18,
+                verticalPadding: 11,
+                action: onCancel
+            )
+            PillCountingButton(
+                title: L10n.BarcodeScan.proceed,
+                textColor: .white,
+                backgroundColor: appColors.primary,
+                borderColor: .clear,
+                font: .system(size: 13, weight: .semibold),
+                cornerRadius: 40,
+                horizontalPadding: 18,
+                verticalPadding: 11,
+                action: onProceed
+            )
         }
     }
-     
-     
 
-    // MARK: - Buttons (iPhone)
-    private var buttons: some View {
+    private var iPadButtons: some View {
         HStack(spacing: 16) {
             PillCountingButton(
                 title: L10n.Common.cancel,
@@ -375,11 +295,11 @@ struct RxDetailsSheetContent: View {
                 borderColor: appColors.primary,
                 font: .system(size: 14, weight: .semibold),
                 cornerRadius: 40,
-                horizontalPadding: 22,
-                verticalPadding: 14,
+                horizontalPadding: 40,
+                verticalPadding: 12,
                 action: onCancel
             )
-
+            .fixedSize()
             PillCountingButton(
                 title: L10n.BarcodeScan.proceed,
                 textColor: .white,
@@ -387,16 +307,17 @@ struct RxDetailsSheetContent: View {
                 borderColor: .clear,
                 font: .system(size: 14, weight: .semibold),
                 cornerRadius: 40,
-                horizontalPadding: 22,
-                verticalPadding: 14,
+                horizontalPadding: 40,
+                verticalPadding: 12,
                 action: onProceed
             )
+            .fixedSize()
         }
-        .padding(.horizontal, 36)
+        .frame(maxWidth: .infinity)
     }
 }
 
-// MARK: - Labeled Text (iPad)
+// MARK: - Labeled Text (iPad only)
 
 private struct LabeledText: View {
     @EnvironmentObject private var appColors: AppColors
@@ -416,44 +337,18 @@ private struct LabeledText: View {
     }
 }
 
-// MARK: - Detail Row (iPhone)
-
-private struct DetailRow<Leading: View>: View {
-    @EnvironmentObject private var appColors: AppColors
-
-    let leading: Leading
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            leading
-                .frame(width: 90, height: 90)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 14))
-                    .foregroundColor(appColors.text)
-                Text(value)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundColor(appColors.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-    }
-}
-
 // MARK: - Form Badge
+
 private struct FormBadge: View {
     @EnvironmentObject private var appColors: AppColors
 
+    let isIpad: Bool
+    
+    
     var body: some View {
         VStack(spacing: 10) {
             Text("Form")
-                .font(.system(size: 12))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundColor(appColors.text)
 
             Image("dispense_dashboard_icon")
@@ -461,7 +356,7 @@ private struct FormBadge: View {
                 .resizable()
                 .scaledToFit()
                 .foregroundColor(appColors.secondary)
-                .frame(width: 32, height: 32)
+                .frame(width: isIpad ? 30 : 24, height: isIpad ? 30 : 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(12)
@@ -473,19 +368,20 @@ private struct FormBadge: View {
 }
 
 // MARK: - Value Badge
+
 private struct ValueBadge: View {
     @EnvironmentObject private var appColors: AppColors
-
     let label: String
     let value: String
-
+    let isIpad: Bool
+    
     var body: some View {
         VStack(spacing: 10) {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundColor(appColors.text)
             Text(value)
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: isIpad ? 24 : 16, weight: .semibold))
                 .foregroundColor(appColors.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -496,43 +392,5 @@ private struct ValueBadge: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(appColors.primaryBackground.opacity(0.5))
         )
-    }
-}
-
-
-
-
-
-
-// MARK: - Configurable Landscape Detail Row
-private struct LandscapeDetailRow<Leading: View>: View {
-    @EnvironmentObject private var appColors: AppColors
-
-    let leading: Leading
-    let title: String
-    let value: String
-    let badgeSize: CGFloat          // ← parameter
-    let titleFont: Font             // ← parameter
-    let valueFont: Font             // ← parameter
-    let horizontalPadding: CGFloat  // ← parameter
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            leading
-                .frame(width: badgeSize, height: badgeSize)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(titleFont)
-                    .foregroundColor(appColors.text)
-                Text(value)
-                    .font(valueFont)
-                    .foregroundColor(appColors.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, horizontalPadding)
-        .padding(.vertical, 8)
     }
 }

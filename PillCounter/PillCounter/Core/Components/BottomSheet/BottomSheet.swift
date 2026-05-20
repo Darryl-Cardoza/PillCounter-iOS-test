@@ -18,10 +18,11 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
     let showDim: Bool
     /// Fixed portrait height. Nil = size-to-content (existing default behaviour).
     let portraitHeight: CGFloat?
+    /// Width of the side sheet in landscape. Nil = 380 (existing default behaviour).
+    let landscapeWidth: CGFloat?
     let sheetContent: () -> SheetContent
 
-    /// Width of the side sheet in landscape
-    private let sideSheetWidth: CGFloat = 380
+    private let defaultSideSheetWidth: CGFloat = 380
 
     /// Corner radius of the sheet
     private let cornerRadius: CGFloat = 20
@@ -76,7 +77,7 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
                 sheetContent()
-                    .frame(width: min(sideSheetWidth, size.width * 0.6))
+                    .frame(width: min(landscapeWidth ?? defaultSideSheetWidth, size.width * 0.6))
                     .frame(maxHeight: .infinity)
                     .clipShape(
                         RoundedCorners(radius: cornerRadius,
@@ -138,6 +139,7 @@ extension View {
         dismissOnBackgroundTap: Bool = true,
         showDim: Bool = true,
         portraitHeight: CGFloat? = nil,
+        landscapeWidth: CGFloat? = nil,
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
@@ -148,6 +150,7 @@ extension View {
                 onDismiss: onDismiss,
                 showDim: showDim,
                 portraitHeight: portraitHeight,
+                landscapeWidth: landscapeWidth,
                 sheetContent: content
             )
         )

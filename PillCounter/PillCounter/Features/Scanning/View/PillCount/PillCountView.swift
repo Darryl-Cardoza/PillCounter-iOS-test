@@ -368,6 +368,10 @@ extension OPillCountView {
             onReset: {
                 showDeleteAllTransactionDetailsPopup = true
             },
+            onShowDetailGrid: {
+                pillScanViewModel.isNavigatingToDetailGrid = true
+                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+            },
             onTransactionDetailTapped: { detail in
                 selectedTransactionDetail = detail
                 showTransactionDetailPopup = true

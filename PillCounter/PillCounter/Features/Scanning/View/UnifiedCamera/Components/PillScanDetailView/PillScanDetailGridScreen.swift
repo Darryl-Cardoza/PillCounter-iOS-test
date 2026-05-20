@@ -11,6 +11,7 @@ import SwiftUI
 struct PillScanDetailGridScreen: View {
 
     @Environment(\.isLandscape) private var isLandscape
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
@@ -61,7 +62,8 @@ struct PillScanDetailGridScreen: View {
                 showHamburgerMenu: false,
                 title: isEditing ? L10n.PillScan.deleteTransaction : L10n.PillScan.totalCount,
                 headerActionsBackground: appColors.primaryBackground,
-                backgroundColor: appColors.primaryBackground
+                backgroundColor: appColors.primaryBackground,
+                onBack: { dismiss() },
             )
             .onAppear {
                 if countType == .FIXED { return }

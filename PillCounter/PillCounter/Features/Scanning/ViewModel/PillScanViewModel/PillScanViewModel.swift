@@ -669,6 +669,7 @@ class PillScanViewModel: ObservableObject {
         self.currentTransactionTransactionDetails = nil
         self.ndcNumber = ""
         self.targetCount = ["", "", "", ""]
+        self.isCheckingNdc = false
     }
     
     @MainActor

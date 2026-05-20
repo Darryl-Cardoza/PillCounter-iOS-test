@@ -52,6 +52,8 @@ final class CameraService: NSObject, ObservableObject {
     @Published var isAuthorized = false
     @Published var error: String?
     @Published private(set) var isPausedDueToInactivity = false
+    /// When false, ML inference is skipped every frame — model stays loaded, camera keeps running.
+    @Published private(set) var isCountingEnabled: Bool = true
     @Published private(set) var currentCameraOrientation: UIDeviceOrientation = .portrait
     @Published var zoomFactor: CGFloat = 1.0
 
@@ -269,6 +271,22 @@ final class CameraService: NSObject, ObservableObject {
         isPausedDueToInactivity = false
     }
 
+    // MARK: - COUNTING PAUSE / RESUME
+    func pauseCounting() {
+        guard isCountingEnabled else { return }
+        isCountingEnabled = false
+        DispatchQueue.main.async {
+            self.stableCount = 0
+            self.detections = []
+            self.trayDetections = []
+        }
+    }
+
+    func resumeCounting() {
+        guard !isCountingEnabled else { return }
+        isCountingEnabled = true
+    }
+
     // MARK: - ORIENTATION
     /// STARTS LISTENING TO DEVICE ORIENTATION CHANGES
     func startObservingOrientation() {
@@ -372,6 +390,7 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         guard !isPausedDueToInactivity,
+              isCountingEnabled,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
         else { return }
 
@@ -397,9 +416,11 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             }
 
             DispatchQueue.main.async {
+                guard self.isCountingEnabled else { return }
                 self.detections     = filtered
                 self.stableCount    = filtered.count
                 self.trayDetections = trays
+
             }
         }
     }

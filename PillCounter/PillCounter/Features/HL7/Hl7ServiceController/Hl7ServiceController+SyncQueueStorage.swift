@@ -38,7 +38,7 @@ extension Hl7ServiceController {
     
 //    // MARK: - Observer For completion of batch
     func observeBatchCompletion() {
-        pillDataLocalStorage.transactionsDidChange
+        batchDAO.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 self?.batchSyncQueue?.enqueueUnsynced()
@@ -46,16 +46,15 @@ extension Hl7ServiceController {
             .store(in: &cancellables)
     }
 
-    
     func sendBatchInventory(batchId: Int64) {
         guard
-            let batch = pillDataLocalStorage.fetchBatchById(batchId),
+            let batch = batchDAO.fetchById(batchId),
             batch.status == CountStatus.COMPLETED.rawValue,
             batch.is_synced == false,
             batch.req_id_from_pms != nil
         else { return }
 
-        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
+        let txns = transactionDAO.fetchByBatch(batchId: batchId)
 
         guard
             !txns.isEmpty,
@@ -66,6 +65,6 @@ extension Hl7ServiceController {
         hl7Manager?.sendClientHL7(hl7)
 
         batch.is_synced = true
-        try? pillDataLocalStorage.mainThreadContext.save()
+        try? CoreDataManager.shared.context.save()
     }
 }

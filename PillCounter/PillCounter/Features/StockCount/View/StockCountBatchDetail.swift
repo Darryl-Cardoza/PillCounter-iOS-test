@@ -273,7 +273,7 @@ struct StockCountBatchDetail: View {
                             to: .authentication(
                                 .login(
                                     .dashboard(
-                                        .pillCount(.barcodeScanning(.stockCount))
+                                        .pillCount(.scan(.stockCount))
                                     )
                                 )
                             )

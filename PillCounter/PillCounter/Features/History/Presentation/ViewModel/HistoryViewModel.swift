@@ -13,8 +13,10 @@ import CoreData
 class HistoryViewModel: ObservableObject {
 
     // MARK: - Dependencies
-    private let pillLocalDB = PillsDataLocalStorage.shared
-    private let userLocalDB = UserLocalDataSource.shared
+    private let transactionDAO = TransactionDAO.shared
+    private let transactionDetailDAO = TransactionDetailDAO.shared
+    private let batchDAO = BatchDAO.shared
+    private let userLocalDB = UserDAO.shared
 
     // MARK: - AppStorage
     @AppStorage(AppStorageManager.AppStorageKeys.userId) private var userID: String = ""
@@ -53,7 +55,7 @@ class HistoryViewModel: ObservableObject {
         endDate: Date,
         filter: HistoryFilterType
     ) async {
-        guard let user = userLocalDB.getUserByUserId(by: userID) else {
+        guard let user = userLocalDB.fetchByUserId(userID) else {
             filteredTransactionsOfUserByDate = []
             return
         }
@@ -67,7 +69,7 @@ class HistoryViewModel: ObservableObject {
         let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
         let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)
 
-        let allTransactions = userLocalDB.getTransactionsForUserFilteredByDate(
+        let allTransactions = userLocalDB.fetchTransactionsByDateRange(
             for: user,
             startDateTs: startTs,
             endDateTs: endTs
@@ -98,10 +100,7 @@ class HistoryViewModel: ObservableObject {
         let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
         let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)
 
-        filteredBatchesOfUserByDate = pillLocalDB.getBatchesForUserFilteredByDate(
-            startDateTs: startTs,
-            endDateTs: endTs
-        )
+        filteredBatchesOfUserByDate = batchDAO.fetchByDateRange(startTs: startTs, endTs: endTs)
     }
 
     // MARK: - Apply Filters (status + search)
@@ -126,7 +125,7 @@ class HistoryViewModel: ObservableObject {
         }
 
         transactionRows = txns.map { txn in
-               let counted = PillsDataLocalStorage.shared.getTotalCountForStep(
+               let counted = transactionDetailDAO.totalCountForStep(
                    txnId: txn.txn_id,
                    step: .targetVerification
                )
@@ -153,7 +152,7 @@ class HistoryViewModel: ObservableObject {
         }
 
         batchRows = batches.map { batch in
-            let count = pillLocalDB.getTransactionCount(for: batch.batch_id)
+            let count = batchDAO.getTransactionCount(for: batch.batch_id)
             return batch.toStockData(ndcCount: count)
         }
     }
@@ -188,7 +187,7 @@ class HistoryViewModel: ObservableObject {
             }
             guard !toDelete.isEmpty else { return }
             for txn in toDelete {
-                pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
+                transactionDAO.softDelete(txnId: txn.txn_id)
             }
             await getTransactionsByDate(startDate: startDate, endDate: endDate, filter: filter)
 
@@ -199,8 +198,8 @@ class HistoryViewModel: ObservableObject {
             }
             guard !toDelete.isEmpty else { return }
 
-            // deleteBatches soft-deletes both the batch AND its child transactions in one call
-            pillLocalDB.deleteBatches(ids: Set(toDelete.map { $0.batch_id }))
+            // softDelete soft-deletes both the batch AND its child transactions in one call
+            batchDAO.softDelete(ids: Set(toDelete.map { $0.batch_id }))
 
             await getBatchesByDate(startDate: startDate, endDate: endDate)
         }
@@ -210,7 +209,7 @@ class HistoryViewModel: ObservableObject {
 
     // MARK: - Soft Delete Single Transaction (used from detail view)
     func softDeleteTransaction(txnId: Int64) async {
-        pillLocalDB.softDeleteTransaction(txnId: txnId)
+        transactionDAO.softDelete(txnId: txnId)
     }
 
     // MARK: - Status Counts
@@ -261,7 +260,7 @@ class HistoryViewModel: ObservableObject {
         for transaction: PillCountTransactionEntity,
         step: ControlledStep
     ) -> Int {
-        let count = pillLocalDB.getTotalCountForStep(
+        let count = transactionDetailDAO.totalCountForStep(
             txnId: transaction.txn_id,
             step: step
         )
@@ -276,8 +275,8 @@ class HistoryViewModel: ObservableObject {
 
     // MARK: - Batch Detail: Prepare grouped transactions
     func prepareBatchDetails(for batchId: Int64) {
-        selectedBatch = pillLocalDB.fetchBatchById(batchId)
-        let txns = pillLocalDB.fetchTransactionsByBatch(batchId: batchId)
+        selectedBatch = batchDAO.fetchById(batchId)
+        let txns = transactionDAO.fetchByBatch(batchId: batchId)
         groupedTransactionsForBatch = mapGroupedTransactions(txns: txns)
     }
 
@@ -316,9 +315,9 @@ class HistoryViewModel: ObservableObject {
 
     // MARK: - Batch Detail: Soft delete selected NDCs
     func softDeleteNdcsFromBatch(ndcs: Set<String>, batchId: Int64) {
-        let txns = pillLocalDB.fetchTransactionsByBatch(batchId: batchId)
+        let txns = transactionDAO.fetchByBatch(batchId: batchId)
         for txn in txns where ndcs.contains(txn.drug?.ndc ?? "") {
-            pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
+            transactionDAO.softDelete(txnId: txn.txn_id)
         }
         prepareBatchDetails(for: batchId)
     }

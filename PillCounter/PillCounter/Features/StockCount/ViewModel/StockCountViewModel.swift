@@ -13,8 +13,10 @@ class StockCountViewModel: ObservableObject {
 
     // MARK: - Dependencies
 
-    let pillDataLocalStorage = PillsDataLocalStorage.shared
-    let userDataLocalStorage = UserLocalDataSource.shared
+    let batchDAO             = BatchDAO.shared
+    let transactionDAO       = TransactionDAO.shared
+    let drugMasterDAO        = DrugMasterDAO.shared
+    let userDataLocalStorage = UserDAO.shared
     let decoder              = BarcodeAndQRDecoder()
     let controlledRepo       = ControlledRepository.shared
 
@@ -53,7 +55,7 @@ class StockCountViewModel: ObservableObject {
     /// Single subscription. Any DB write fires transactionsDidChange,
     /// which calls reloadAllState() — no manual reload calls needed anywhere.
     private func observeDataChanges() {
-        pillDataLocalStorage.transactionsDidChange
+        batchDAO.transactionsDidChange
             .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
             .sink { [weak self] in
                 self?.reloadAllState()
@@ -65,9 +67,9 @@ class StockCountViewModel: ObservableObject {
     /// everywhere they were previously called manually.
     private func reloadAllState() {
         Log("State Reloaded")
-        let batches = pillDataLocalStorage.fetchAllBatches()
+        let batches = batchDAO.fetchAllPartial()
         totalBatchCount = batches.count
-        totalCompletedBatchCount = pillDataLocalStorage.fetchCompletedBatches().count
+        totalCompletedBatchCount = batchDAO.fetchAllCompleted().count
 
         guard let batchId = currentBatch?.batch_id else {
             groupedTransactions = []
@@ -75,7 +77,7 @@ class StockCountViewModel: ObservableObject {
             return
         }
 
-        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
+        let txns = transactionDAO.fetchByBatch(batchId: batchId)
         groupedTransactions = mapGroupedTransactions(txns: txns)
         batchNdcSet = Set(txns.compactMap { $0.drug?.ndc })
     }
@@ -83,14 +85,14 @@ class StockCountViewModel: ObservableObject {
     // MARK: - Batch
 
     func createNewBatch(bucketId: String) {
-        if let batch = pillDataLocalStorage.createBatch(bucketId: bucketId) {
+        if let batch = batchDAO.create(bucketId: bucketId) {
             currentBatch = batch
             // reloadAllState() fires automatically via publisher
         }
     }
 
     func continueLastBatch() -> Bool {
-        guard let lastBatch = pillDataLocalStorage.fetchLastCreatedBatch() else {
+        guard let lastBatch = batchDAO.fetchLastCreated() else {
             return false
         }
         currentBatch = lastBatch
@@ -99,7 +101,7 @@ class StockCountViewModel: ObservableObject {
     }
 
     func loadBatches() -> [BatchCountEntity] {
-        pillDataLocalStorage.fetchAllBatches()
+        batchDAO.fetchAllPartial()
     }
 
 //    func completeBatch(batchId: Int64) {
@@ -114,22 +116,19 @@ class StockCountViewModel: ObservableObject {
 //    }
     
     func completeBatch(batchId: Int64) {
-        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
+        let txns = transactionDAO.fetchByBatch(batchId: batchId)
         txns.forEach {
-            pillDataLocalStorage.updateTransactionStatus(txnId: $0.txn_id, newStatus: .COMPLETED)
+            transactionDAO.updateStatus(txnId: $0.txn_id, status: .COMPLETED)
         }
-        
+
         // Save batch status THEN fire publisher — no race condition
-        pillDataLocalStorage.updateBatchStatus(batchId: batchId, status: .COMPLETED) { [weak self] in
+        batchDAO.updateStatus(batchId: batchId, status: .COMPLETED) { [weak self] in
             // This runs on main thread, after Core Data save is confirmed
-            self?.pillDataLocalStorage.transactionsDidChange.send()
+            self?.batchDAO.transactionsDidChange.send()
         }
-        
+
         if !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-               pillDataLocalStorage.updateBatchNote(
-                   batchId: batchId,
-                   note: note
-               )
+               batchDAO.updateNote(batchId: batchId, note: note)
             note = ""
          }
     }
@@ -137,7 +136,8 @@ class StockCountViewModel: ObservableObject {
     // MARK: - Transactions
 
     func updateCounts(txnId: Int64?, bottleQty: Int? = nil, looseQty: Int? = nil) {
-        pillDataLocalStorage.updateCounts(
+        guard let txnId else { return }
+        transactionDAO.updateCounts(
             txnId: txnId,
             bottleQty: bottleQty.map { Int32($0) },
             looseQty:  looseQty.map  { Int32($0) }
@@ -150,17 +150,15 @@ class StockCountViewModel: ObservableObject {
     // MARK: - NDC Requests (unaffected by publisher — different data set)
 
     func getAllPartialTransactions(countType: CountType, userId: String) async {
-        guard let user = userDataLocalStorage.getUserByUserId(by: userId) else {
+        guard let user = userDataLocalStorage.fetchByUserId(userId) else {
             regularCountTransactions = []
             return
         }
-        regularCountTransactions = pillDataLocalStorage
-            .fetchAllTransactionFixedOrRegularPartialFromPms(for: user, countType: countType)
+        regularCountTransactions = transactionDAO.fetchPartialFromPms(for: user, countType: countType)
 
         totalNdcRequests = 0
         for transaction in regularCountTransactions {
-            totalNdcRequests = pillDataLocalStorage
-                .getTheCountedNumberOfPillsForTheTransaction(for: transaction.txn_id)
+            totalNdcRequests = TransactionDetailDAO.shared.totalCount(txnId: transaction.txn_id)
         }
     }
 
@@ -183,7 +181,7 @@ class StockCountViewModel: ObservableObject {
         isLoading = true
 
         // 1. Local DB
-        if let localDrug = pillDataLocalStorage.getPillByGtin(by: gtin) {
+        if let localDrug = drugMasterDAO.fetchByGtin(gtin) {
             let ndc = localDrug.ndc ?? ""
             if currentBatch?.req_id_from_pms != nil, !batchNdcSet.contains(ndc) {
                 isLoading = false

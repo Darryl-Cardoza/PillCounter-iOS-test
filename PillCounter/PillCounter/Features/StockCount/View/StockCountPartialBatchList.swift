@@ -16,7 +16,6 @@
 
         @State private var selectedBatchId: Int64?
         @State private var pendingAction: TransactionAction?
-        @State private var showMenuOptions: Bool = false
         @State private var selectedTransactionDetailOption: TransactionDetailOption = .resume
         @State private var batchCounts: [Int64: Int] = [:]
         @State private var batches: [BatchCountEntity] = []
@@ -87,8 +86,8 @@
 
                 // ROW TAP
                 onRowTap: { batch in
-                    guard let freshBatch = stockCountViewMoel.pillDataLocalStorage
-                        .fetchBatchById(batch.batch_id) else {
+                    guard let freshBatch = stockCountViewMoel.batchDAO
+                        .fetchById(batch.batch_id) else {
                         return
                     }
                     selectedBatchId = freshBatch.batch_id
@@ -126,7 +125,7 @@
             .onAppear {
                 reloadBatches()
             }
-            .onReceive(stockCountViewMoel.pillDataLocalStorage.transactionsDidChange
+            .onReceive(stockCountViewMoel.batchDAO.transactionsDidChange
                 .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
             ) { _ in
                 reloadBatches()
@@ -141,9 +140,7 @@
                     commonConfirmationDialog
                 }
             }
-            .customPopup(isPresented: $showMenuOptions) {
-                menuOptions
-            }
+        
         }
 
         // MARK: - Batch Row
@@ -217,7 +214,7 @@
             batchCounts = Dictionary(
                 uniqueKeysWithValues: batches.map { batch in
                     return (key: batch.batch_id,
-                            value: stockCountViewMoel.pillDataLocalStorage
+                            value: stockCountViewMoel.batchDAO
                                 .getTransactionCount(for: batch.batch_id))
                 }
             )
@@ -243,40 +240,6 @@
     // MARK: - Popups
     extension StockCountPartialBatchListScreen {
 
-        private var menuOptions: some View {
-            MenuOption(
-                options: TransactionDetailOption.allCases,
-                selectedOption: $selectedTransactionDetailOption,
-                isPresented: $showMenuOptions,
-                label: { $0.rawValue },
-                onSelect: { option in
-                    switch option {
-                    case .resume:
-                        if let batch = batches.first(where: { $0.batch_id == selectedBatchId }) {
-                            stockCountViewMoel.currentBatch = batch
-                        }
-                        showMenuOptions = false
-                        router.navigate(
-                            to: .authentication(
-                                .login(
-                                    .dashboard(
-                                        .pillCount(.stockCount(.stockCountBatchDetail))
-                                    )
-                                )
-                            )
-                        )
-                    case .delete:
-                        if let id = selectedBatchId {
-                            showMenuOptions = false
-                            pendingAction = .delete(id)
-                        }
-                    case .forceComplete:
-                       return
-                    }
-                }
-            )
-        }
-
         private var commonConfirmationDialog: some View {
             ConfirmationDialogue(
                 title: dialogTitle,
@@ -299,7 +262,7 @@
             case .delete(let id):
                 deletingIds.insert(id)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    stockCountViewMoel.pillDataLocalStorage.deleteBatches(ids: [id])
+                    stockCountViewMoel.batchDAO.softDelete(ids: [id])
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
                         batches.removeAll { $0.batch_id == id }
                     }
@@ -311,7 +274,7 @@
             case .multiDelete(let ids):
                 deletingIds.formUnion(ids)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    stockCountViewMoel.pillDataLocalStorage.deleteBatches(ids: ids)
+                    stockCountViewMoel.batchDAO.softDelete(ids: ids)
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
                         batches.removeAll { ids.contains($0.batch_id) }
                     }

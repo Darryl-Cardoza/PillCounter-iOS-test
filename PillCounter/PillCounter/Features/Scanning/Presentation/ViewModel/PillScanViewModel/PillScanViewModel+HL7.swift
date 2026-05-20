@@ -16,9 +16,7 @@ extension PillScanViewModel {
         guard let inboundType = classifyInboundMessage(message) else {
             return
         }
-        
-        // Notify user about incoming order
-  
+          
         buildNotification(message: message, messageType: inboundType)
 
         Task(priority: .background) {
@@ -135,7 +133,7 @@ extension PillScanViewModel {
         var drugIdToUse: Int64 = 0
         var resolvedName: String = drugName
 
-        if let existing = pillDataLocalStorage.getPillByNdc(by: ndc),
+        if let existing = drugMasterDAO.fetchByNdc(ndc),
            let localName = existing.drug_name,
            !localName.isEmpty {
 
@@ -168,7 +166,7 @@ extension PillScanViewModel {
                     // lookups (which also use the HL7 ndc) find this record.
                     // packageNdc from the API may differ, which would orphan the saved
                     // drug and break the transaction's drug relationship.
-                    pillDataLocalStorage.saveManualPill(
+                    drugMasterDAO.saveManual(
                         ndc: ndc,
                         drugId: newId,
                         drugName: lookup,

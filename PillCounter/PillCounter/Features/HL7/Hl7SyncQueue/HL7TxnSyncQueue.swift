@@ -24,7 +24,7 @@ private struct TxnSyncQueueItem {
 // MARK: - HL7TxnSyncQueue
 final class HL7TxnSyncQueue {
 
-    private let storage: PillsDataLocalStorage
+    private let transactionDAO = TransactionDAO.shared
     private let hl7Builder: HL7CompletionBuilder
     private weak var hl7Manager: Hl7ServiceManager?
 
@@ -37,11 +37,9 @@ final class HL7TxnSyncQueue {
     private let processingQueue = DispatchQueue(label: "hl7.txn.sync.queue", qos: .utility)
 
     init(
-        storage: PillsDataLocalStorage,
         hl7Builder: HL7CompletionBuilder,
         hl7Manager: Hl7ServiceManager?
     ) {
-        self.storage     = storage
         self.hl7Builder  = hl7Builder
         self.hl7Manager  = hl7Manager
     }
@@ -64,7 +62,7 @@ final class HL7TxnSyncQueue {
     // MARK: - LOAD
 
     private func loadAndEnqueuePending() {
-        let txns = storage.fetchCompletedUnsyncedTransactions()
+        let txns = transactionDAO.fetchCompletedUnsynced()
         print("📦 [TxnQueue] Found pending txns:", txns.count)
 
         for txn in txns {
@@ -94,7 +92,7 @@ final class HL7TxnSyncQueue {
         guard !isSending, let item = queue.first else { return }
 
         guard
-            let txn = storage.fetchPillCountTransactionByTransactionId(txnId: item.txnId),
+            let txn = transactionDAO.fetchById(item.txnId),
             txn.is_synced == false,
             txn.status == CountStatus.COMPLETED.rawValue
         else {
@@ -149,7 +147,7 @@ final class HL7TxnSyncQueue {
         guard let item = queue.first else { return }
 
         DispatchQueue.main.async {
-            self.storage.updateTransactionSynced(txnId: item.txnId)
+            TransactionDAO.shared.updateSynced(txnId: item.txnId)
         }
     }
 

@@ -183,8 +183,7 @@ final class HL7CompletionBuilder {
         let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
         let orderId = batch.bucket_id ?? ""
 
-        let txns = PillsDataLocalStorage.shared
-            .fetchTransactionsByBatch(batchId: batch.batch_id)
+        let txns = TransactionDAO.shared.fetchByBatch(batchId: batch.batch_id)
 
         // MARK: GROUPING
         struct Key: Hashable {

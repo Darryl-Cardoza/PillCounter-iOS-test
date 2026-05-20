@@ -29,8 +29,9 @@ private struct SyncQueueItem {
 
 final class HL7BatchSyncQueue {
 
-    // MARK: Dependencies (injected — no singletons assumed)
-    private let storage: PillsDataLocalStorage
+    // MARK: Dependencies
+    private let batchDAO = BatchDAO.shared
+    private let transactionDAO = TransactionDAO.shared
     private let hl7Builder: HL7CompletionBuilder
     private weak var hl7Manager: Hl7ServiceManager?           // your existing socket manager
 
@@ -46,11 +47,9 @@ final class HL7BatchSyncQueue {
 
     // MARK: Init
     init(
-        storage: PillsDataLocalStorage,
         hl7Builder: HL7CompletionBuilder,
         hl7Manager: Hl7ServiceManager?
     ) {
-        self.storage    = storage
         self.hl7Builder = hl7Builder
         self.hl7Manager = hl7Manager
     }
@@ -76,7 +75,7 @@ final class HL7BatchSyncQueue {
     // MARK: - Private: Queue Management
 
     private func loadAndEnqueuePending() {
-        let batches = storage.fetchCompletedUnsyncedBatches()
+        let batches = batchDAO.fetchCompletedUnsynced()
         print("📦 [Queue] Found pending batches:", batches.count)
 
         for batch in batches {
@@ -115,7 +114,7 @@ final class HL7BatchSyncQueue {
               "| requestId:", item.requestId)
 
         guard
-            let batch = storage.fetchBatchById(item.batchId),
+            let batch = batchDAO.fetchById(item.batchId),
             batch.status == CountStatus.COMPLETED.rawValue,
             batch.is_synced == false
         else {
@@ -125,7 +124,7 @@ final class HL7BatchSyncQueue {
             return
         }
 
-        let txns = storage.fetchTransactionsByBatch(batchId: item.batchId)
+        let txns = transactionDAO.fetchByBatch(batchId: item.batchId)
 
         print("📊 [Queue] Transactions count:", txns.count)
         
@@ -184,12 +183,11 @@ final class HL7BatchSyncQueue {
 
     private func markCurrentBatchSynced() {
         guard let item = queue.first,
-              let batch = storage.fetchBatchById(item.batchId) else { return }
+              let batch = batchDAO.fetchById(item.batchId) else { return }
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+        DispatchQueue.main.async {
             batch.is_synced = true
-            try? self.storage.mainThreadContext.save()
+            try? CoreDataManager.shared.context.save()
         }
     }
 
@@ -254,10 +252,9 @@ final class HL7BatchSyncQueue {
     }
 
     private func persistGeneratedRequestId(_ requestId: String, for batch: BatchCountEntity) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+        DispatchQueue.main.async {
             batch.req_id_from_pms = "REQ\(String(batch.batch_id))"
-            try? self.storage.mainThreadContext.save()
+            try? CoreDataManager.shared.context.save()
         }
     }
 }

@@ -25,14 +25,16 @@ final class UnsyncedViewModel: ObservableObject {
 
     // MARK: - Private
 
-    private let localStorage = PillsDataLocalStorage.shared
+    private let batchDAO = BatchDAO.shared
+    private let transactionDAO = TransactionDAO.shared
+    private let transactionDetailDAO = TransactionDetailDAO.shared
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Init
 
     init() {
         // Re-load whenever CoreData writes fire
-        localStorage.transactionsDidChange
+        batchDAO.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 self?.loadAll()
@@ -50,19 +52,19 @@ final class UnsyncedViewModel: ObservableObject {
     }
 
     private func loadBatches() {
-        let rawBatches = localStorage.fetchCompletedUnsyncedBatches()
+        let rawBatches = batchDAO.fetchCompletedUnsynced()
 
         batches = rawBatches.map { batch in
-            let ndcCount = localStorage.getTransactionCount(for: batch.batch_id)
+            let ndcCount = batchDAO.getTransactionCount(for: batch.batch_id)
             return batch.toStockData(ndcCount: ndcCount)
         }
     }
-    
+
     private func loadTransactions() {
-        let txns = localStorage.fetchCompletedUnsyncedTransactions()
-       
+        let txns = transactionDAO.fetchCompletedUnsynced()
+
         transactions = txns.map { txn in
-               let counted = PillsDataLocalStorage.shared.getTotalCountForStep(
+               let counted = transactionDetailDAO.totalCountForStep(
                    txnId: txn.txn_id,
                    step: .targetVerification
                )

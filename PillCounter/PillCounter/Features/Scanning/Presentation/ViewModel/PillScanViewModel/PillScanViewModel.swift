@@ -13,11 +13,14 @@ import Combine
 @MainActor
 class PillScanViewModel: ObservableObject {
 
-    // local storage // db
-    let pillDataLocalStorage = PillsDataLocalStorage.shared
+    // DAO instances
+    let drugMasterDAO = DrugMasterDAO.shared
+    let transactionDAO = TransactionDAO.shared
+    let transactionDetailDAO = TransactionDetailDAO.shared
+    let batchDAO = BatchDAO.shared
 
     // user storage // db
-    let userDataLocalStorage = UserLocalDataSource.shared
+    let userDataLocalStorage = UserDAO.shared
 
     // decode the values of the barcode or qr, calling the api, processing it, storing it in database
     // decoder
@@ -123,7 +126,7 @@ class PillScanViewModel: ObservableObject {
         var drugIdToUse = generateUniqueDrugId()
 
         // 1. Check local DB
-        if let localDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+        if let localDrug = drugMasterDAO.fetchByNdc(ndc) {
 
             drugName = localDrug.drug_name ?? ""
             drugIdToUse = localDrug.drug_id
@@ -146,11 +149,7 @@ class PillScanViewModel: ObservableObject {
 
                 drugName = data.genericName ?? fallbackDrugName ?? ""
 
-                pillDataLocalStorage.savePill(
-                    from: result,
-                    ndc: ndc,
-                    drugId: drugIdToUse
-                )
+                drugMasterDAO.saveFromResponse(result, ndc: ndc, drugId: drugIdToUse)
 
             } else {
                 // fallback for manual entry
@@ -161,7 +160,7 @@ class PillScanViewModel: ObservableObject {
 
                 drugName = fallbackDrugName
 
-                pillDataLocalStorage.saveManualPill(
+                drugMasterDAO.saveManual(
                     ndc: ndc,
                     drugId: drugIdToUse,
                     drugName: fallbackDrugName
@@ -212,7 +211,7 @@ class PillScanViewModel: ObservableObject {
         // Generate potential ID
         var drugIdToUse = generateUniqueDrugId()
 
-        if let drugFoundInLocalStorage = pillDataLocalStorage.getPillByNdc(by: gtin) {
+        if let drugFoundInLocalStorage = drugMasterDAO.fetchByNdc(gtin) {
 
 
             drugName = drugFoundInLocalStorage.drug_name ?? ""
@@ -310,7 +309,7 @@ class PillScanViewModel: ObservableObject {
         var drugIdToUse: Int64
 
         // Check if drug already exists in DB
-        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: trimmedNdc) {
+        if let existingDrug = drugMasterDAO.fetchByNdc(trimmedNdc) {
 
             // Use existing drug
             drugIdToUse = existingDrug.drug_id
@@ -321,7 +320,7 @@ class PillScanViewModel: ObservableObject {
             //  Create new drug entry
             drugIdToUse = generateUniqueDrugId()
 
-            pillDataLocalStorage.saveManualPill(
+            drugMasterDAO.saveManual(
                 ndc: trimmedNdc,
                 drugId: drugIdToUse,
                 drugName: trimmedDrugName
@@ -367,7 +366,7 @@ class PillScanViewModel: ObservableObject {
         // step1: get the user.
         guard
             !userId.isEmpty,
-            let user = userDataLocalStorage.getUserByUserId(by: userId)
+            let user = userDataLocalStorage.fetchByUserId(userId)
         else {
             return
         }
@@ -389,27 +388,25 @@ class PillScanViewModel: ObservableObject {
 
         // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
         // we now call the db function to create the transaction.
-        pillDataLocalStorage.createTransaction(
+        transactionDAO.create(
             for: user,
             drugId: drugId,
             countType: countType,
             batchId: batchId ?? 0,
             barcodeImagePath: savedPath,
-            isComingFromPms: isComingFromPms,
+            isFromPms: isComingFromPms,
             drugName: drugName,
-            targetCount: targetCount,
+            targetCount: targetCount ?? 0,
             isControlled: isControlled,
             expirationDate: expirationDate,
             lotNumber: lotNumber,
             rxNo: rxNo,
             bucketId: bucketId
         )
-    
+
 
         // step 3: set the latest transaction as current transaction.
-        if let latest = pillDataLocalStorage.fetechLatestTransactionOfUser(
-            for: user)
-        {
+        if let latest = transactionDAO.fetchLatest(for: user) {
             self.currentTransaction = latest
         }
     }
@@ -427,7 +424,7 @@ class PillScanViewModel: ObservableObject {
         // step1: get the user.
         guard
             !userId.isEmpty,
-            let user = userDataLocalStorage.getUserByUserId(by: userId)
+            let user = userDataLocalStorage.fetchByUserId(userId)
         else {
             return
         }
@@ -449,7 +446,7 @@ class PillScanViewModel: ObservableObject {
 
         // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
         // we now call the db function to create the transaction.
-        pillDataLocalStorage.updateTransaction(
+        transactionDAO.update(
             txnId: txnId,
             drugId: drugId,
             countType: countType,
@@ -458,9 +455,7 @@ class PillScanViewModel: ObservableObject {
         )
 
         // step 3: set the latest transaction as current transaction.
-        if let latest = pillDataLocalStorage.fetechLatestTransactionOfUser(
-            for: user)
-        {
+        if let latest = transactionDAO.fetchLatest(for: user) {
             self.currentTransaction = latest
         }
 
@@ -477,11 +472,10 @@ class PillScanViewModel: ObservableObject {
     func getAllTransactionDetailsOfTheCurrentTransaction() {
         guard let txnId = currentTransaction?.txn_id else { return }
         currentTransactionTransactionDetails =
-            PillsDataLocalStorage.shared
-                .getTransactionDetailsForStep(
-                    txnId: txnId,
-                    step: currentControlledStep
-                )
+            transactionDetailDAO.fetchForStep(
+                txnId: txnId,
+                step: currentControlledStep
+            )
     }
     
     func addOrReplaceVialTransactionDetail(imagePath: String?) {
@@ -489,10 +483,7 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        pillDataLocalStorage.addOrReplaceVialTransactionDetail(
-            txnId: txnId,
-            imagePath: imagePath
-        )
+        transactionDetailDAO.addOrReplaceVial(txnId: txnId, imagePath: imagePath)
     }
     
     // function to add transaction detail to the current transaction.
@@ -509,7 +500,7 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        pillDataLocalStorage.addTransactionDetail(
+        transactionDetailDAO.add(
             txnId: txnId,
             pillCount: pillCount,
             imagePath: imagePath,
@@ -542,14 +533,10 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        pillDataLocalStorage.updateTargetCount(
-            txnId: txnId, targetCount: targetValue)
+        transactionDAO.updateTargetCount(txnId: txnId, targetCount: targetValue)
 
         // update the current transaction for updating the ui.
-        if let updatedTxn =
-            pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
-                txnId: txnId)
-        {
+        if let updatedTxn = transactionDAO.fetchById(txnId) {
             self.currentTransaction = updatedTxn
         }
     }
@@ -593,7 +580,7 @@ class PillScanViewModel: ObservableObject {
     }
 
     func updateNoteForCurrentTransaction(txn_id: Int64, note: String) {
-        pillDataLocalStorage.updateNote(txnId: txn_id, note: note)
+        transactionDAO.updateNote(txnId: txn_id, note: note)
     }
 
     // func to get the current transaction
@@ -618,10 +605,7 @@ class PillScanViewModel: ObservableObject {
 
     func getCurrentTransaction(txnId: Int64) async {
         // Fetch transaction
-        currentTransaction =
-            pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
-                txnId: txnId
-            )
+        currentTransaction = transactionDAO.fetchById(txnId)
 
         // Set drug name
         drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
@@ -641,9 +625,7 @@ class PillScanViewModel: ObservableObject {
     func softDeleteCurrentTransactionSelectedTransactionDetail(
         txnDetailId: Int64
     ) {
-        pillDataLocalStorage.updatePillCountTransactionDetailById(
-            txnDetailId: txnDetailId
-        ) { transactionDetails in
+        transactionDetailDAO.update(detailId: txnDetailId) { transactionDetails in
             transactionDetails.is_deleted = true
         }
 
@@ -656,7 +638,7 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        pillDataLocalStorage.softDeleteTransactionDetailsForStep(txnId: txnId, step: currentControlledStep)
+        transactionDetailDAO.softDeleteForStep(txnId: txnId, step: currentControlledStep)
 
         // Refresh in-memory state to update UI
         getAllTransactionDetailsOfTheCurrentTransaction()
@@ -676,9 +658,7 @@ class PillScanViewModel: ObservableObject {
     func autofillDrugNameIfAvailable(for ndc: String) {
         guard ndc.count >= 20 else { return }
 
-        let storage = PillsDataLocalStorage.shared
-
-        if let drug = storage.getPillByNdc(by: ndc),
+        if let drug = drugMasterDAO.fetchByNdc(ndc),
            let drugName = drug.drug_name,
            !drugName.isEmpty {
 
@@ -728,9 +708,5 @@ class PillScanViewModel: ObservableObject {
         isCheckingNdc = false
         isNdcEquivalent = false
         ndcComparisonResponse = nil
-
     }
-
 }
-
-

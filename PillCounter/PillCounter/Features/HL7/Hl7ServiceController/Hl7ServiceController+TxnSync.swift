@@ -19,7 +19,6 @@ extension Hl7ServiceController {
             return
         }
         let queue = HL7TxnSyncQueue(
-            storage: pillDataLocalStorage,
             hl7Builder: HL7CompletionBuilder(),
             hl7Manager: hl7Manager
         )

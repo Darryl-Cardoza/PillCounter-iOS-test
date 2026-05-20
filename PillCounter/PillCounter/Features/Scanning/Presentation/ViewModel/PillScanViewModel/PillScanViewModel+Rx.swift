@@ -103,11 +103,11 @@ extension PillScanViewModel {
 
         // MARK: 1️⃣ Get or create drug
         var drugIdToUse = generateUniqueDrugId()
-        if let existing = pillDataLocalStorage.getPillByNdc(by: ndc) {
+        if let existing = drugMasterDAO.fetchByNdc(ndc) {
             print("[RxScan] Drug found in local DB → id: \(existing.drug_id)")
             drugIdToUse = existing.drug_id
         } else {
-            pillDataLocalStorage.saveManualPill(
+            drugMasterDAO.saveManual(
                 ndc: ndc,
                 drugId: drugIdToUse,
                 drugName: name
@@ -214,7 +214,7 @@ extension PillScanViewModel {
         }
 
         // STEP 1 — LOCAL DB
-        if let localDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+        if let localDrug = drugMasterDAO.fetchByNdc(ndc) {
             let localName = localDrug.drug_name ?? ""
             print("[RxScan] Drug found in local DB → '\(localName)'")
             // Return even if localName is empty string — avoids unnecessary API call
@@ -239,7 +239,7 @@ extension PillScanViewModel {
 
             // STEP 3 — SAVE FULL DATA LOCALLY
             let drugId = generateUniqueDrugId()
-            pillDataLocalStorage.saveManualPill(
+            drugMasterDAO.saveManual(
                 ndc:        ndc,
                 drugId:     drugId,
                 drugName:   resolvedName,

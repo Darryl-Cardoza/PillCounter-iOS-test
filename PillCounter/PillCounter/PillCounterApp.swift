@@ -23,6 +23,7 @@ struct PillCounterApp: App {
     @ObservedObject private var appColors = AppColors.shared
     @ObservedObject private var confirmationDialogueManager = ConfirmationDialogueManager()
     @StateObject private var pillScanViewModel = PillScanViewModel()
+    
     @StateObject private var userViewModel = UserViewModel()
     @StateObject private var stockCountViewModel = StockCountViewModel()
     @StateObject private var historyViewModel = HistoryViewModel()
@@ -90,8 +91,7 @@ struct PillCounterApp: App {
 
                                 Task.detached(priority: .background) {
                                     await MainActor.run {
-                                        PillsDataLocalStorage.shared
-                                            .cleanUpOldHistory()
+                                        HistoryCleanupDAO.shared.cleanUpOldHistory()
                                     }
                                 }
 

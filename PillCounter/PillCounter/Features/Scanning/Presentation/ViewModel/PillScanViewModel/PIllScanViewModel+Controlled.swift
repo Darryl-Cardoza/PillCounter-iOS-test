@@ -46,7 +46,7 @@ extension PillScanViewModel{
 
         case .containerPending:
             let containerCount =
-            pillDataLocalStorage.getTotalCountForStep(
+            transactionDetailDAO.totalCountForStep(
                 txnId: txnId,
                 step: .containerInitiate
             )
@@ -80,7 +80,7 @@ extension PillScanViewModel{
 
         case .containerPending:
             let containerCount =
-            pillDataLocalStorage.getTotalCountForStep(
+            transactionDetailDAO.totalCountForStep(
                 txnId: txn.txn_id,
                 step: .containerInitiate
             )
@@ -102,7 +102,7 @@ extension PillScanViewModel{
         let target = Int(txn.target_count)
 
         let containerCount =
-        pillDataLocalStorage.getTotalCountForStep(
+        transactionDetailDAO.totalCountForStep(
             txnId: txn.txn_id,
             step: .containerInitiate
         )
@@ -112,12 +112,13 @@ extension PillScanViewModel{
         return currentControlledStep == .containerPending && expected == 0
     }
     
+    
     func getTotalCuntForCurrentStep() -> Int32 {
         guard let txnId = currentTransaction?.txn_id else {
             return 0
         }
 
-        let total = pillDataLocalStorage.getTotalCountForStep(
+        let total = transactionDetailDAO.totalCountForStep(
             txnId: txnId,
             step: currentControlledStep
         )
@@ -129,7 +130,7 @@ extension PillScanViewModel{
     // Get Last saved Controlled Step
     func getLastSavedControlledStep() -> ControlledStep? {
         guard let txn = selectedTransaction else { return nil }
-        return pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id)
+        return transactionDetailDAO.lastCompletedStep(txnId: txn.txn_id)
     }
     
     
@@ -140,7 +141,7 @@ extension PillScanViewModel{
         }
 
         // Fetch last saved step
-        guard let lastStep = pillDataLocalStorage.getLastCompletedStep(txnId: txn.txn_id) else {
+        guard let lastStep = transactionDetailDAO.lastCompletedStep(txnId: txn.txn_id) else {
             if let type = txn.drug?.drug_type, !type.trimmingCharacters(in: .whitespaces).isEmpty {
                 currentControlledStep = .containerInitiate
             } else {
@@ -186,11 +187,11 @@ extension PillScanViewModel{
         // create new drug
         let drugId = generateUniqueDrugId()
 
-        pillDataLocalStorage.saveManualPill(
+        drugMasterDAO.saveManual(
             ndc: ndcComparisonResponse?.data?.scannedNdc?.packageNdc ?? "",
             drugId: drugId,
             drugName: ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
-            drugType: ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? "",
+            drugType: ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? ""
         )
 
         var savedPath = ""
@@ -201,9 +202,8 @@ extension PillScanViewModel{
             }
         }
 
-        pillDataLocalStorage.updateTransaction(
+        transactionDAO.update(
             txnId: txnId,
-            substituedDrugId: drugId,
             drugId: drugId,
             countType: countType,
             targetCount: nil,

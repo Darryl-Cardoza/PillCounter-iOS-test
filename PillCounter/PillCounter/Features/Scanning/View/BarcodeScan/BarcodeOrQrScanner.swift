@@ -425,7 +425,7 @@ extension QRBarcodeScannerView {
         case true:
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.pillCountView)))
+                    .login(.dashboard(.pillCount(.scan(.barcode))))
                 )
             )
             pillScanViewModel.isDrugFound = nil
@@ -442,7 +442,7 @@ extension QRBarcodeScannerView {
         case true:
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.pillCountView)))
+                    .login(.dashboard(.pillCount(.scan(.barcode))))
                 )
             )
             pillScanViewModel.isDrugFound = nil

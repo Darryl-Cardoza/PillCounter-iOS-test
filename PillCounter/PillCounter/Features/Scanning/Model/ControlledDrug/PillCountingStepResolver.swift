@@ -14,8 +14,7 @@ struct PillCountingStepResolver {
         txn: PillCountTransactionEntity? = nil
     ) -> [ControlledStep] {
         
-        let pillLocalDB = PillsDataLocalStorage.shared
-        let drugType = pillLocalDB.fetchDrugById(txn?.drug_id ?? 0)?.drug_type
+        let drugType = DrugMasterDAO.shared.fetchById(txn?.drug_id ?? 0)?.drug_type
         
         
         let drugSchedule = DrugSchedule(rawValue: drugType ?? "")

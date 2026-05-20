@@ -28,8 +28,8 @@ extension PillScanViewModel {
     
 
         // MARK: 1️⃣ Check existing txn
-        let existingTxn = pillDataLocalStorage
-            .fetchTransactionsByBatch(batchId: batchId)
+        let existingTxn = transactionDAO
+            .fetchByBatch(batchId: batchId)
             .first {
                 $0.drug?.ndc == ndc &&
                 $0.drug?.package_qty == quantity &&
@@ -43,15 +43,14 @@ extension PillScanViewModel {
             print("Existing txn found → merging")
 
             // MARK: 2️⃣ Update counts
-            pillDataLocalStorage.updateCounts(
+            transactionDAO.updateCounts(
                 txnId: txn.txn_id,
                 bottleQty: containerStatus == .sealed ? 1 : nil,
                 looseQty: containerStatus == .opened ? 0 : nil
             )
 
             // MARK: 3️⃣ Update current transaction (IMPORTANT FIX)
-            if let updatedTxn = pillDataLocalStorage
-                .fetchPillCountTransactionByTransactionId(txnId: txn.txn_id) {
+            if let updatedTxn = transactionDAO.fetchById(txn.txn_id) {
                 self.currentTransaction = updatedTxn
             }
 
@@ -66,11 +65,11 @@ extension PillScanViewModel {
         var drugIdToUse: Int64
 
         // MARK: Check by NDC
-        if let existingDrug = pillDataLocalStorage.getPillByNdc(by: ndc) {
+        if let existingDrug = drugMasterDAO.fetchByNdc(ndc) {
 
             if (existingDrug.gtin ?? "").isEmpty, !gtin.isEmpty {
                 existingDrug.gtin = gtin
-                CoreDataManager.shared.save(context: pillDataLocalStorage.mainThreadContext)
+                CoreDataManager.shared.save(context: CoreDataManager.shared.context)
                 Log("Updated GTIN for existing drug → \(ndc)")
             }
 
@@ -79,7 +78,7 @@ extension PillScanViewModel {
 
         // MARK: Check by GTIN
         else if !gtin.isEmpty,
-                let existingByGtin = pillDataLocalStorage.getPillByGtin(by: gtin) {
+                let existingByGtin = drugMasterDAO.fetchByGtin(gtin) {
 
             drugIdToUse = existingByGtin.drug_id
         }
@@ -98,7 +97,7 @@ extension PillScanViewModel {
 
                     let newId = generateUniqueDrugId()
 
-                    pillDataLocalStorage.saveManualPill(
+                    drugMasterDAO.saveManual(
                         ndc: response.data?.scannedNdc?.packageNdc ?? ndc,
                         gtin: gtin,
                         drugId: newId,
@@ -118,7 +117,7 @@ extension PillScanViewModel {
 
                 let newId = generateUniqueDrugId()
 
-                pillDataLocalStorage.saveManualPill(
+                drugMasterDAO.saveManual(
                     ndc: ndc,
                     gtin: gtin,
                     drugId: newId,
@@ -142,8 +141,8 @@ extension PillScanViewModel {
         )
 
         // MARK: 7️⃣ Fetch newly created txn
-        let allTxns = pillDataLocalStorage
-            .fetchTransactionsByBatch(batchId: batchId)
+        let allTxns = transactionDAO
+            .fetchByBatch(batchId: batchId)
             .filter { $0.is_deleted == false }
 
         // pick latest using txn_id (reliable)
@@ -153,15 +152,14 @@ extension PillScanViewModel {
         }
 
         // MARK: 8️⃣ Set initial counts
-        pillDataLocalStorage.updateCounts(
+        transactionDAO.updateCounts(
             txnId: latestTxn.txn_id,
             bottleQty: containerStatus == .sealed ? 1 : nil,
             looseQty: containerStatus == .opened ? 0 : nil
         )
 
         // MARK: 9️⃣ Update current txn
-        if let updatedTxn = pillDataLocalStorage
-            .fetchPillCountTransactionByTransactionId(txnId: latestTxn.txn_id) {
+        if let updatedTxn = transactionDAO.fetchById(latestTxn.txn_id) {
             self.currentTransaction = updatedTxn
 
             print("New txn set:", updatedTxn.txn_id)
@@ -205,20 +203,20 @@ extension PillScanViewModel {
         switch containerStatus {
             
         case .sealed:
-            pillDataLocalStorage.updateCounts(
+            transactionDAO.updateCounts(
                 txnId: txn.txn_id,
                 bottleQty: Int32(currentBottle + 1),
                 looseQty: Int32(currentLoose)
             )
-            
+
             handlePostScanUI(containerStatus: containerStatus)
 
-            
+
         case .opened:
-            pillDataLocalStorage.updateCounts(
+            transactionDAO.updateCounts(
                 txnId: txn.txn_id,
                 bottleQty: Int32(currentBottle),
-                looseQty:Int32(currentLoose + scannedQty)
+                looseQty: Int32(currentLoose + scannedQty)
             )
             handlePostScanUI(containerStatus: containerStatus)
         }
@@ -259,7 +257,7 @@ extension PillScanViewModel {
             guard !ndc.isEmpty else { continue }
 
             // MARK: Local DB check
-            if let existing = pillDataLocalStorage.getPillByNdc(by: ndc) {
+            if let existing = drugMasterDAO.fetchByNdc(ndc) {
                 guard let localName = existing.drug_name, !localName.isEmpty else {
                     continue
                 }
@@ -292,7 +290,7 @@ extension PillScanViewModel {
 
                 let newId = generateUniqueDrugId()
 
-                pillDataLocalStorage.saveManualPill(
+                drugMasterDAO.saveManual(
                     ndc: response.data?.scannedNdc?.packageNdc ?? "",
                     drugId: newId,
                     drugName: lookup,
@@ -319,7 +317,7 @@ extension PillScanViewModel {
         guard !resolvedItems.isEmpty else { return }
 
         // MARK: Create Batch
-        guard let batch = pillDataLocalStorage.createBatch(
+        guard let batch = batchDAO.create(
             bucketId: bucketId ?? "",
             requestId: requestId
         ) else { return }

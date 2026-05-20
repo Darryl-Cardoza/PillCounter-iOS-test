@@ -151,7 +151,7 @@ struct DispenseCountPartialTxnList: View {
                 transactions = userViewModel.historyCountTransactions
                 pillCounts = Dictionary(
                     uniqueKeysWithValues: transactions.map { txn in
-                        let counted = PillsDataLocalStorage.shared.getTotalCountForStep(
+                        let counted = TransactionDetailDAO.shared.totalCountForStep(
                             txnId: txn.txn_id,
                             step: .targetVerification
                         )
@@ -179,13 +179,13 @@ extension DispenseCountPartialTxnList {
         if lastStep == nil && txn.is_ndc_verfied == false {
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.barcodeScanning(.barcode))))
+                    .login(.dashboard(.pillCount(.scan(.barcode))))
                 )
             )
         } else {
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.pillCountView)))
+                    .login(.dashboard(.pillCount(.scan(.barcode))))
                 )
             )
         }

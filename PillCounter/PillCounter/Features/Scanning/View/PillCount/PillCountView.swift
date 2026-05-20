@@ -370,7 +370,7 @@ extension OPillCountView {
             },
             onShowDetailGrid: {
                 pillScanViewModel.isNavigatingToDetailGrid = true
-                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.pillCountHistoryView)))))
+                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.barcode))))))
             },
             onTransactionDetailTapped: { detail in
                 selectedTransactionDetail = detail

@@ -74,10 +74,7 @@ extension PillScanViewModel {
     
     func markNdcVerified() {
         if let txnId = selectedTransaction?.txn_id {
-            PillsDataLocalStorage.shared.updateNdcVerified(
-                txnId: txnId,
-                verified: true
-            )
+            transactionDAO.updateNdcVerified(txnId: txnId, verified: true)
         }
     }
     

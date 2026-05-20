@@ -34,7 +34,8 @@ final class Hl7ServiceController: ObservableObject {
 
     // MARK: - Dependencies
 
-    let pillDataLocalStorage = PillsDataLocalStorage.shared
+    let transactionDAO = TransactionDAO.shared
+    let batchDAO = BatchDAO.shared
     var cancellables = Set<AnyCancellable>()
 
     // MARK: - HL7 Layer
@@ -120,7 +121,7 @@ final class Hl7ServiceController: ObservableObject {
     private var isObservingPending = false
 
     private func observeTxnChanges() {
-        pillDataLocalStorage.transactionsDidChange
+        batchDAO.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 print("🔄 [TxnObserver] Detected change → enqueue txn sync")
@@ -156,7 +157,7 @@ final class Hl7ServiceController: ObservableObject {
     private func resendPendingHl7Transactions() {
         print("🔄 [HL7] Resend Pending Transactions START")
 
-        let pending = pillDataLocalStorage.fetchCompletedUnsyncedTransactions()
+        let pending = transactionDAO.fetchCompletedUnsynced()
         print("📦 [HL7] Pending Count:", pending.count)
         print("📦 [HL7] Pending Txns:", pending.map { $0.txn_id })
 

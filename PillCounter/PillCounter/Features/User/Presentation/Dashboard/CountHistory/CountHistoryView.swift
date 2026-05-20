@@ -332,8 +332,8 @@ struct CountHistoryView: View {
                     ForEach(filteredTransactions, id: \.txn_id) {
                         (txn: PillCountTransactionEntity) in
 
-                        let counted = PillsDataLocalStorage.shared
-                            .getTotalCountForStep(
+                        let counted = TransactionDetailDAO.shared
+                            .totalCountForStep(
                                 txnId: txn.txn_id,
                                 step: .targetVerification
                             )
@@ -609,13 +609,13 @@ struct CountHistoryView: View {
         if lastStep == nil && txn.is_ndc_verfied == false {
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.barcodeScanning(.barcode))))
+                    .login(.dashboard(.pillCount(.scan(.barcode))))
                 )
             )
         } else {
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.pillCountView)))
+                    .login(.dashboard(.pillCount(.scan(.barcode))))
                 )
             )
         }

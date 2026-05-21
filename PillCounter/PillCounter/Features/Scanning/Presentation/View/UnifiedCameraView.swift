@@ -78,6 +78,12 @@ struct UnifiedCameraView: View {
     @State var scanTimeoutTask: Task<Void, Never>?
     let scanTimeoutSeconds: UInt64 = 6
 
+    /// After a rejection (API fail / no match), the same barcode is ignored
+    /// until this date passes. Prevents continuous flickering while the user
+    /// hasn't moved the camera, but still allows a retry after the cooldown.
+    @State private var rejectedBarcodes: [String: Date] = [:]
+    let barcodeCooldownSeconds: TimeInterval = 4
+
     @StateObject private var locationService = LocationService.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.isLandscape) var isLandscape
@@ -215,6 +221,7 @@ struct UnifiedCameraView: View {
         .onChange(of: pillScanViewModel.rxScanFailed) { _, failed in
             if failed {
                 pillScanViewModel.rxScanFailed = false
+                if let barcode = scannedRawValue { markBarcodeRejected(barcode) }
                 restartFlow()
             }
         }
@@ -232,9 +239,6 @@ struct UnifiedCameraView: View {
                 cameraService.resumeCounting()
             }
         }
-        .onChange(of: scanType) { _, newType in
-            if newType != .resumeCount { handleStepVoice() }
-        }
         .onChange(of: pillScanViewModel.showScannedDrugInfoPopoup) { _, isShowing in
             if isShowing && scanType == .barcode {
                 pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.qrScannedSuccessfully)
@@ -244,6 +248,7 @@ struct UnifiedCameraView: View {
         .onChange(of: pillScanViewModel.ndcMismatchRestartFlow) { _, triggered in
             if triggered && currentScanType != .resumeCount {
                 pillScanViewModel.ndcMismatchRestartFlow = false
+                if let barcode = scannedRawValue { markBarcodeRejected(barcode) }
                 restartFlow()
             }
         }
@@ -307,7 +312,14 @@ extension UnifiedCameraView {
         hasInitializedStep = false
         scanType = currentScanType
 
-        if currentScanType != .resumeCount {
+        // Only clear transaction state for a truly fresh scan.
+        // When resuming with .barcode (NDC not yet verified), selectedTransaction
+        // is already set by the caller and must be preserved for NDC matching.
+        let isResumingWithBarcode = currentScanType == .barcode
+            && pillScanViewModel.selectedTransaction != nil
+            && userViewModel.currentTransactionTxnId != nil
+
+        if currentScanType != .resumeCount && !isResumingWithBarcode {
             pillScanViewModel.selectedTransaction = nil
             pillScanViewModel.currentTransaction = nil
             pillScanViewModel.scannedRxData = nil
@@ -316,6 +328,8 @@ extension UnifiedCameraView {
 
         cameraService.configureInitialOrientation()
         cameraService.startObservingOrientation()
+
+        speakOnAppear()
 
         if currentScanType == .resumeCount {
             if let selected = pillScanViewModel.selectedTransaction {
@@ -370,6 +384,19 @@ extension UnifiedCameraView {
         SpeechManager.shared.speak(scanType.instructionText)
     }
 
+    func speakOnAppear() {
+        switch currentScanType {
+        case .resumeCount:
+            SpeechManager.shared.speak(pillScanViewModel.currentControlledStep.displayText)
+        default:
+            SpeechManager.shared.speak(currentScanType.instructionText)
+        }
+    }
+
+
+    func markBarcodeRejected(_ barcode: String) {
+        rejectedBarcodes[barcode] = Date().addingTimeInterval(barcodeCooldownSeconds)
+    }
 
     func handleScannedCode(_ newValue: String) {
         guard !newValue.isEmpty,
@@ -380,6 +407,14 @@ extension UnifiedCameraView {
             return
         }
 
+        // If this barcode was recently rejected, silently skip it until the cooldown expires.
+        if let retryAfter = rejectedBarcodes[newValue], Date() < retryAfter {
+            cameraService.resetBarcodeScanState()
+            cameraService.enableBarcodeScanning()
+            return
+        }
+        rejectedBarcodes.removeValue(forKey: newValue)
+
         cameraService.disableBarcodeScanning()
         cameraService.pauseCounting()
 
@@ -388,7 +423,6 @@ extension UnifiedCameraView {
 
         Task { @MainActor in
             
-//            guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
 
             if router.selectedPillScanningType == .FIXED
 //                && pillScanViewModel.selectedTransaction?.target_count == nil
@@ -459,6 +493,9 @@ extension UnifiedCameraView {
         scannedRawValue = nil
         capturedImage = nil
         pillScanViewModel.isCheckingNdc = false
+        // Prune expired entries so the dict doesn't grow unbounded.
+        let now = Date()
+        rejectedBarcodes = rejectedBarcodes.filter { $0.value > now }
         cameraService.resetBarcodeScanState()
         cameraService.enableBarcodeScanning()
         cameraService.resumeCounting()

@@ -184,21 +184,27 @@ extension PillScanViewModel{
 
         guard !gtin.isEmpty else { return }
 
-        // create new drug
-        let scannedNdc = ndcComparisonResponse?.data?.scannedNdc?.packageNdc ?? ""
-        let newDrugId = generateUniqueDrugId()
-        
-        
-        drugMasterDAO.saveManual(
-            ndc: scannedNdc,
-            drugId: newDrugId,
-            drugName: ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
-            drugType: ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? ""
-        )
-
-        
-        // Resolve actual drug_id (fetchOrCreateDrug may return existing entity)
-        let actualDrugId = drugMasterDAO.fetchByNdc(scannedNdc)?.drug_id ?? newDrugId
+        // Resolve drug info — prefer API response, fall back to local drug master
+        // (local path is taken when getControlledDrugInfo resolved from cache and
+        // never populated ndcComparisonResponse).
+        let actualDrugId: Int64
+        if let apiNdc = ndcComparisonResponse?.data?.scannedNdc?.packageNdc, !apiNdc.isEmpty {
+            let newDrugId = generateUniqueDrugId()
+            drugMasterDAO.saveManual(
+                ndc: apiNdc,
+                gtin: gtin,
+                drugId: newDrugId,
+                drugName: ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
+                drugType: ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? "",
+                packageQty: ndcComparisonResponse?.data?.scannedNdc?.safeQuantity ?? 0
+            )
+            actualDrugId = drugMasterDAO.fetchByNdc(apiNdc)?.drug_id ?? newDrugId
+        } else if let localDrug = drugMasterDAO.fetchByGtin(gtin), let localNdc = localDrug.ndc, !localNdc.isEmpty {
+            // Already in drug master from a previous API call — reuse the existing record.
+            actualDrugId = localDrug.drug_id
+        } else {
+            return
+        }
         
         var savedPath = ""
 

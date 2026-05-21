@@ -87,6 +87,7 @@ enum L10n {
         static let invalidCount = NSLocalizedString("pillCount.invalidCount", comment: "")
         static let zeroPillsMessage = NSLocalizedString("pillCount.zeroPillsMessage", comment: "")
         static let confirmCompletionTitle = NSLocalizedString("pillCount.confirmCompletionTitle", comment: "")
+        static let confirmCompletionMessage = NSLocalizedString("pillCount.confirmCompletionMessage", comment: "")
         static let countMismatchTitle = NSLocalizedString("pillCount.countMismatchTitle", comment: "")
         static let countMismatchMessage = NSLocalizedString("pillCount.countMismatchMessage", comment: "")
         static let confirmStepCompletionTitle = NSLocalizedString("pillCount.confirmStepCompletionTitle", comment: "")

@@ -48,16 +48,9 @@ extension UnifiedCameraView {
     }
 
     var showConfirmCompletion: some View {
-        let isCompleted = pillScanViewModel.currentTransaction?.is_from_pms == true
-            || router.selectedPillScanningType == .REGULAR
-        let status = isCompleted ? "COMPLETED" : "PENDING"
-        let message = isCompleted
-            ? "Are you sure you want to mark this transaction as \(status)"
-            : "Target not reached. This transaction will be marked as \(status)."
-
-        return ConfirmationDialogue(
+        ConfirmationDialogue(
             title: L10n.PillCount.confirmCompletionTitle,
-            message: message,
+            message: L10n.PillCount.confirmCompletionMessage,
             cancelButtonText: L10n.Common.cancel,
             confirmButtonText: L10n.Common.ok,
             onCancel: {
@@ -79,13 +72,11 @@ extension UnifiedCameraView {
                         to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail)))))
                     )
                 }
-                if isCompleted {
-                    Task(priority: .background) {
-                        await userViewModel.completeTheSelectedTransaction(
-                            txnId: pillScanViewModel.currentTransaction?.txn_id ?? 0,
-                            countType: router.selectedPillScanningType ?? .FIXED
-                        )
-                    }
+                Task(priority: .background) {
+                    await userViewModel.completeTheSelectedTransaction(
+                        txnId: pillScanViewModel.currentTransaction?.txn_id ?? 0,
+                        countType: router.selectedPillScanningType ?? .FIXED
+                    )
                 }
             }
         )

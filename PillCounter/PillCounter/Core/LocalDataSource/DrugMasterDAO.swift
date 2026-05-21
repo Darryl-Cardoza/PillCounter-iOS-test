@@ -23,13 +23,14 @@ final class DrugMasterDAO {
         packageQty: Int32 = 0
     ) {
         let entity = fetchOrCreate(ndc: ndc, drugId: drugId)
-        if entity.drug_name == nil || entity.drug_name!.isEmpty { entity.drug_name = drugName }
+        if !drugName.isEmpty { entity.drug_name = drugName }
         if !gtin.isEmpty { entity.gtin = gtin }
-        if let drugType { entity.drug_type = drugType }
+        if let drugType, !drugType.isEmpty { entity.drug_type = drugType }
         if packageQty > 0 { entity.package_qty = packageQty }
         entity.ndc = ndc
         CoreDataManager.shared.save(context: context)
         print("💊 [DrugMasterDAO] SAVED — ndc: \(ndc), drugId: \(drugId), drugName: \(drugName)")
+        _ = fetchAll()
     }
 
     @discardableResult
@@ -55,6 +56,7 @@ final class DrugMasterDAO {
         let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
         request.predicate = NSPredicate(format: "gtin == %@", gtin)
         request.fetchLimit = 1
+        print("Gtin\(try? context.fetch(request).first)")
         return try? context.fetch(request).first
     }
 

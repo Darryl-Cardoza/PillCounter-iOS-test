@@ -65,6 +65,7 @@
 "pillCount.invalidCount" = "अमान्य गिनती";
 "pillCount.zeroPillsMessage" = "0 गोलियों के साथ बैच नहीं जोड़ा जा सकता।\nकृपया सुनिश्चित करें कि कैमरा गोलियों का पता लगा रहा है।";
 "pillCount.confirmCompletionTitle" = "पूर्णता की पुष्टि करें";
+"pillCount.confirmCompletionMessage" = "क्या आप वाकई इस लेनदेन को पूर्ण के रूप में चिह्नित करना चाहते हैं?";
 "pillCount.countMismatchTitle" = "गिनती मेल नहीं खाती";
 "pillCount.countMismatchMessage" = "गिनी गई मात्रा लक्ष्य संख्या से मेल नहीं खाती। क्या आप आगे बढ़ना चाहते हैं?";
 "pillCount.confirmStepCompletionTitle" = "चरण पूर्णता की पुष्टि करें";

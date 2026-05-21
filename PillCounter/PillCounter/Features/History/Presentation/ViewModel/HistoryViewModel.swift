@@ -124,6 +124,8 @@ class HistoryViewModel: ObservableObject {
             }
         }
 
+        txns.sort { $0.created_at > $1.created_at }
+
         transactionRows = txns.map { txn in
                let counted = transactionDetailDAO.totalCountForStep(
                    txnId: txn.txn_id,
@@ -150,6 +152,8 @@ class HistoryViewModel: ObservableObject {
                 || String($0.batch_id).contains(q)
             }
         }
+
+        batches.sort { $0.start_date_time > $1.start_date_time }
 
         batchRows = batches.map { batch in
             let count = batchDAO.getTransactionCount(for: batch.batch_id)

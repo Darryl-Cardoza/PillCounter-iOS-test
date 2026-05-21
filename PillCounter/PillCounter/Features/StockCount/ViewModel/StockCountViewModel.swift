@@ -103,6 +103,19 @@ class StockCountViewModel: ObservableObject {
     func loadBatches() -> [BatchCountEntity] {
         batchDAO.fetchAllPartial()
     }
+    
+    func generateUniqueDrugId() -> Int64 {
+        let defaults = UserDefaults.standard
+
+        let current = defaults.integer(
+            forKey: AppStorageManager.AppStorageKeys.drugIdCounter)
+        let newId = current + 1
+
+        defaults.set(
+            newId, forKey: AppStorageManager.AppStorageKeys.drugIdCounter)
+
+        return Int64(newId)
+    }
 
 //    func completeBatch(batchId: Int64) {
 //        let txns = pillDataLocalStorage.fetchTransactionsByBatch(batchId: batchId)
@@ -180,8 +193,8 @@ class StockCountViewModel: ObservableObject {
         showScanError = false
         isLoading = true
 
-        // 1. Local DB
-        if let localDrug = drugMasterDAO.fetchByGtin(gtin) {
+        // 1. Local DB — only use if quantity is known; otherwise fall through to API to backfill it
+        if let localDrug = drugMasterDAO.fetchByGtin(gtin), localDrug.package_qty > 0 {
             let ndc = localDrug.ndc ?? ""
             if currentBatch?.req_id_from_pms != nil, !batchNdcSet.contains(ndc) {
                 isLoading = false
@@ -212,11 +225,26 @@ class StockCountViewModel: ObservableObject {
                 print("❌ NDC not part of PMS batch: \(ndc) — set: \(batchNdcSet)")
                 return
             }
+            let drugName = response.data?.scannedNdc?.lookupName ?? ""
+            let qty      = response.data?.scannedNdc?.safeQuantity ?? 0
+            let drugType = response.data?.scannedNdc?.deaSchedule
+
+            // Backfill drug master so future scans resolve locally with full data
+            let newDrugId = generateUniqueDrugId()
+            drugMasterDAO.saveManual(
+                ndc:        ndc,
+                gtin:       gtin,
+                drugId:     newDrugId,
+                drugName:   drugName,
+                drugType:   drugType,
+                packageQty: qty
+            )
+
             scannedDrugData = ScannedDrugData(
-                drugName: response.data?.scannedNdc?.lookupName ?? "",
+                drugName: drugName,
                 ndc:      ndc,
-                gtin:     ndc,
-                quantity: response.data?.scannedNdc?.safeQuantity ?? 0
+                gtin:     gtin,
+                quantity: qty
             )
             isLoading = false
             showStockCountScannedDetails = true

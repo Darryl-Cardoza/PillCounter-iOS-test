@@ -134,7 +134,7 @@ struct UnifiedCameraLayout: View {
                         currentStep: pillScanViewModel.currentControlledStep
                     )
                     .padding(.bottom, 8)
-                    Spacer().frame(width: 260)
+                    Spacer().frame(width: 300)
                 }
             } else {
                 Spacer()

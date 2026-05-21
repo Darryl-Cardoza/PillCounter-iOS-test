@@ -12,28 +12,44 @@ extension PillScanViewModel {
         }
 
         getControlledDrugInfo(
-            targetNdc: expectedNdc,
-            scannedNdc: scannedNdc
+            targetNdc: expectedNdc, // NDC
+            scannedNdc: scannedNdc  // Gtin
         )
         
         return false
     }
-//    
-//    func manualEnterdControlledDrug(scannedNdc: String){
-//        let expectedNdc = getExpectedNdc() ?? ""
-//        getControlledDrugInfo(
-//            targetNdc: expectedNdc,
-//            scannedNdc: scannedNdc
-//        )
-//    }
-//    
+
     func getControlledDrugInfo(targetNdc: String, scannedNdc: String) {
+        isCheckingNdc = true
+
+        // Check drug master first — if the scanned GTIN is already cached locally,
+        // resolve same/equivalent synchronously and skip the network round-trip.
+        if let localDrug = drugMasterDAO.fetchByGtin(scannedNdc),
+           let localNdc = localDrug.ndc, !localNdc.isEmpty,
+           let localName = localDrug.drug_name, !localName.isEmpty {
+            print("LocalName \(localName)")
+            let isSame = localNdc == targetNdc
+            isNdcEquivalent = false
+            updateScannedDrugData(drugName: localName, ndcNo: localNdc)
+            if isSame {
+                isCheckingNdc = false
+                showScannedDrugInfoPopoup = true
+            } else {
+                // NDCs differ locally — fall through to API for equivalence check.
+                isCheckingNdc = false
+                callControlledDrugInfoAPI(targetNdc: targetNdc, scannedNdc: scannedNdc)
+            }
+            return
+        }
+
+        callControlledDrugInfoAPI(targetNdc: targetNdc, scannedNdc: scannedNdc)
+    }
+
+    private func callControlledDrugInfoAPI(targetNdc: String, scannedNdc: String) {
         let request = NdcValidationRequest(
             targetNdc: targetNdc,
             scannedNdc: scannedNdc
         )
-
-        isCheckingNdc = true
 
         Task {
             do {
@@ -47,10 +63,16 @@ extension PillScanViewModel {
 
                 isNdcEquivalent = isEquivalent
                 updateScannedDrugData(drugName: response.data?.scannedNdc?.lookupName ?? "", ndcNo: response.data?.scannedNdc?.packageNdc ?? "")
-                
+
                 if isEquivalent && !isSame {
                     showNdcEquivalencePopup = true
-                } else if !isEquivalent && isSame{
+                } else if !isEquivalent && isSame {
+                    // Backfill GTIN in drug master if not stored yet, so future scans resolve locally.
+                    if let localDrug = drugMasterDAO.fetchByNdc(targetNdc),
+                       (localDrug.gtin == nil || localDrug.gtin!.isEmpty),
+                       !scannedNdc.isEmpty {
+                        drugMasterDAO.update(drugId: localDrug.drug_id,drugName: localDrug.drug_name, gtin: scannedNdc)
+                    }
                     self.showScannedDrugInfoPopoup = true
                 } else {
                     isNdcEquivalent = false

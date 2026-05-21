@@ -17,8 +17,8 @@ struct UserProfileScreen: View {
 
     @State private var showDeleteConfirmation: Bool = false
 
-    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
-        Bool = true
+//    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
+//        Bool = true
 
     @State private var firstName: String = ""
     
@@ -275,7 +275,7 @@ struct UserProfileScreen: View {
             await userViewModel.updateUserProfile()
             toastManager.show(message: "Profile updated successfully.")
             if userViewModel.isProfileUpdated {
-                isNewUser = false
+                AppStorageManager.shared.isNewUser = false
                 userViewModel.isProfileUpdated = false
                 router.navigateBack()
             }else {

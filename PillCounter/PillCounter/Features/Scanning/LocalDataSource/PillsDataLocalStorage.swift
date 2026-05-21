@@ -21,7 +21,7 @@ final class PillsDataLocalStorage {
 
     // MARK: DRUG MASTER
     // context that we need to save the operations or find something.
-    let mainThreadContext = CoreDataManager.shared.context
+    lazy var mainThreadContext = CoreDataManager.shared.context
 
     // background context
     //    private let backgroundContext = CoreDataManager.shared.backgroundContext

@@ -8,7 +8,6 @@ import ComposeApp
 import Network
 import Combine
 
-
 final class Hl7ServiceManager {
 
     // MARK: - Configuration
@@ -18,41 +17,29 @@ final class Hl7ServiceManager {
     private let pmsServiceType: String
 
     // MARK: - Server
-
     private let server: HL7TLSServer
     private let parser = Hl7Parser()
     var imageServer: ImageWebServer?
 
     // MARK: - Client
-
     private var clientConnection: NWConnection?
     private let clientQueue = DispatchQueue(label: "com.pillcounter.hl7.client")
 
     private(set) var isClientConnected = false
     private var heartbeatTimer: DispatchSourceTimer?
-
-    // REQUIRED for streaming ACK parsing
     private var receiveBuffer = Data()
 
     // MARK: - Network / Discovery
-
     private let monitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "com.pillcounter.NetworkMonitor")
 
-    /// Browser is started once on WiFi-up and kept alive until WiFi is lost.
-    /// It is NEVER cancelled on PMS disconnect — only on WiFi loss.
     private var browser: NWBrowser?
-
-    /// Prevents duplicate connection attempts while a connection is already
-    /// being established or is ready.
     private var isConnectingOrConnected = false
     private var isServerRunning = false
-    
     private var currentInterface: NWInterface?
     private var currentServiceName: String?
 
     // MARK: - Events
-
     weak var listener: Hl7EventListener?
 
     // MARK: - Init
@@ -64,16 +51,16 @@ final class Hl7ServiceManager {
         pmsServiceType: String,
         listener: Hl7EventListener
     ) {
-        self.port = port
-        self.serviceName = serviceName
-        self.serviceType = serviceType
+        self.port           = port
+        self.serviceName    = serviceName
+        self.serviceType    = serviceType
         self.pmsServiceType = pmsServiceType
-        self.server = HL7TLSServer(port: port)
-        self.listener = listener
+        self.server         = HL7TLSServer(port: port)
+        self.listener       = listener
         startMonitoringNetwork()
     }
 
-    // MARK: - Service Stop (full teardown)
+    // MARK: - Stop
 
     func stop() {
         print("[HL7][SERVER] Stopping all services")
@@ -82,35 +69,26 @@ final class Hl7ServiceManager {
         stopServerIfRunning()
     }
 
-    // MARK: - Client Disconnect (external call — e.g. from controller)
-
     func disconnectClient() {
         print("[HL7][CLIENT] External disconnect requested")
         disconnectClientInternal(notifyListener: true)
-        // NOTE: browser is intentionally NOT stopped here.
-        // It will rediscover PMS automatically.
     }
 
-    // MARK: - Private Client Disconnect
-
-    /// Central method for all client teardown. Browser is never touched here.
     private func disconnectClientInternal(notifyListener: Bool) {
         heartbeatTimer?.cancel()
         heartbeatTimer = nil
 
-        clientConnection?.stateUpdateHandler = nil   // prevent re-entrant callbacks
+        clientConnection?.stateUpdateHandler = nil
         clientConnection?.cancel()
         clientConnection = nil
 
-        isClientConnected = false
+        isClientConnected       = false
         isConnectingOrConnected = false
         receiveBuffer.removeAll()
 
         stopServerIfRunning()
 
-        if notifyListener {
-            listener?.onClientDisconnected()
-        }
+        if notifyListener { listener?.onClientDisconnected() }
 
         print("[HL7][CLIENT] Disconnected. Browser keeps running.")
     }
@@ -119,7 +97,7 @@ final class Hl7ServiceManager {
         guard isServerRunning else { return }
         server.stop()
         imageServer?.stop()
-        imageServer = nil
+        imageServer    = nil
         isServerRunning = false
         print("[HL7][SERVER] Stopped")
     }
@@ -131,18 +109,16 @@ final class Hl7ServiceManager {
             guard let self else { return }
 
             if path.status == .satisfied && path.usesInterfaceType(.wifi) {
-                // Detect interface change (AP switch, e.g. home → office WiFi)
                 let activeInterface = path.availableInterfaces.first(where: { $0.type == .wifi })
 
                 if activeInterface?.name != self.currentInterface?.name {
-                    // Interface changed — restart browser so Bonjour re-resolves on new network
                     print("[HL7][NETWORK] WiFi interface changed → restarting browser")
                     self.currentInterface = activeInterface
                     self.stopBrowsing()
                     self.disconnectClientInternal(notifyListener: true)
                 }
 
-                self.startBrowsing()   // guard inside prevents duplicate starts
+                self.startBrowsing()
             } else {
                 print("[HL7][NETWORK] WiFi lost — stopping everything")
                 self.currentInterface = nil
@@ -155,9 +131,16 @@ final class Hl7ServiceManager {
 
     // MARK: - Bonjour Browsing
 
-    /// Starts a permanent NWBrowser. Called only when WiFi becomes available.
-    /// Safe to call multiple times — guard prevents duplicate browsers.
     private func startBrowsing() {
+        // FIX: Do not start the browser if pmsServiceType is empty.
+        // NWBrowser passes the type directly to DNSServiceBrowse, which
+        // returns BadParam(-65540) for an empty string, triggering an
+        // infinite restart loop (failed → restart in 3s → failed → ...).
+        guard !pmsServiceType.isEmpty else {
+            print("[HL7][BROWSER] pmsServiceType is empty — browse skipped until settings load")
+            return
+        }
+
         guard browser == nil else {
             print("[HL7][BROWSER] Already running, skipping start")
             return
@@ -177,17 +160,26 @@ final class Hl7ServiceManager {
             guard let self else { return }
             print("[HL7][BROWSER] State: \(state)")
 
-            // NEW: if the browser itself fails, restart it after a short delay
             if case .failed(let error) = state {
+                // BadParam means the service type is invalid — no point retrying.
+                // Any other error is transient; restart after a short delay.
+                let nsError = error as NSError
+                let isBadParam = nsError.code == -65540
+                if isBadParam {
+                    print("[HL7][BROWSER] BadParam — invalid service type '\(self.pmsServiceType)', not retrying")
+                    self.browser?.cancel()
+                    self.browser = nil
+                    return
+                }
+
                 print("[HL7][BROWSER] Failed: \(error) — restarting in 3s")
                 self.browser?.cancel()
                 self.browser = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    // Only restart if we're still on WiFi
-                    if self.monitor.currentPath.status == .satisfied &&
-                       self.monitor.currentPath.usesInterfaceType(.wifi) {
-                        self.startBrowsing()
-                    }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                    guard let self else { return }
+                    guard self.monitor.currentPath.status == .satisfied,
+                          self.monitor.currentPath.usesInterfaceType(.wifi) else { return }
+                    self.startBrowsing()
                 }
             }
         }
@@ -203,7 +195,7 @@ final class Hl7ServiceManager {
 
             guard let result = results.first else {
                 print("[HL7][BROWSER] PMS not visible yet — waiting")
-                return  // browser stays alive — will fire again when PMS appears
+                return
             }
 
             self.connectToResult(result)
@@ -213,7 +205,6 @@ final class Hl7ServiceManager {
         browser = b
     }
 
-    /// Called only when WiFi is lost.
     private func stopBrowsing() {
         guard browser != nil else { return }
         print("[HL7][BROWSER] Stopping browser (WiFi lost)")
@@ -221,31 +212,35 @@ final class Hl7ServiceManager {
         browser = nil
     }
 
+    // MARK: - Restart browsing (called by Hl7ServiceController after settings load)
+
+    /// Call this after mobile settings have been fetched and pmsHostName is populated.
+    /// Cancels any existing browser so startBrowsing() creates a fresh one with the
+    /// correct service type.
+    func restartBrowsingIfNeeded() {
+        guard !pmsServiceType.isEmpty else { return }
+        stopBrowsing()
+        startBrowsing()
+    }
+
     // MARK: - Connect to Discovered PMS
 
     private func connectToResult(_ result: NWBrowser.Result) {
-        
-        // Double-check guard — browseResultsChangedHandler can fire rapidly
         guard !isConnectingOrConnected else {
             print("[HL7][CLIENT] Connect guard hit — already in progress")
             return
         }
 
-        guard case let .service(name, _, _, _) = result.endpoint else {
-            return
-        }
-        self.currentServiceName = name
-        print("[HL7][CLIENT] Connecting to PMS service: \(name)")
+        guard case let .service(name, _, _, _) = result.endpoint else { return }
+        currentServiceName      = name
         isConnectingOrConnected = true
+        print("[HL7][CLIENT] Connecting to PMS service: \(name)")
 
         let tlsOptions = NWProtocolTLS.Options()
-
         sec_protocol_options_set_min_tls_protocol_version(
-            tlsOptions.securityProtocolOptions,
-            .TLSv12
+            tlsOptions.securityProtocolOptions, .TLSv12
         )
-
-        // DEV: accept self-signed cert
+        // DEV: accept self-signed cert from PMS
         sec_protocol_options_set_verify_block(
             tlsOptions.securityProtocolOptions,
             { _, _, completion in completion(true) },
@@ -257,11 +252,7 @@ final class Hl7ServiceManager {
 
         let connection = NWConnection(to: result.endpoint, using: parameters)
         clientConnection = connection
-
-        connection.stateUpdateHandler = { [weak self] state in
-            self?.handleClientStateChange(state)
-        }
-
+        connection.stateUpdateHandler = { [weak self] state in self?.handleClientStateChange(state) }
         connection.start(queue: clientQueue)
     }
 
@@ -271,7 +262,6 @@ final class Hl7ServiceManager {
         print("[HL7][CLIENT] State → \(state)")
 
         switch state {
-
         case .ready:
             isClientConnected = true
             listener?.onClientConnected(serviceName: currentServiceName ?? "")
@@ -281,28 +271,22 @@ final class Hl7ServiceManager {
 
         case .failed(let error):
             print("[HL7][CLIENT] Failed: \(error)")
-            // Clear state, keep browser running
             disconnectClientInternal(notifyListener: true)
 
         case .waiting(let error):
-            // .waiting means Network Framework is retrying internally.
-            // We cancel and let the browser rediscover — avoids zombie connections.
             print("[HL7][CLIENT] Waiting (unreachable): \(error) — cancelling")
             disconnectClientInternal(notifyListener: false)
 
         case .cancelled:
             print("[HL7][CLIENT] Cancelled")
-            // Only clear if we weren't already cleared by disconnectClientInternal
-            if isConnectingOrConnected {
-                disconnectClientInternal(notifyListener: true)
-            }
+            if isConnectingOrConnected { disconnectClientInternal(notifyListener: true) }
 
         default:
             break
         }
     }
 
-    // MARK: - Server Startup (after client is ready)
+    // MARK: - Server Startup
 
     private func startServerIfNeeded() {
         guard !isServerRunning else {
@@ -319,9 +303,7 @@ final class Hl7ServiceManager {
                 onMessage: { [weak self] raw, messageId in
                     guard let self else { return }
                     let parsed = self.parser.parse(hl7Message: raw)
-                    self.listener?.onMessageReceived(
-                        message: parsed
-                    )
+                    self.listener?.onMessageReceived(message: parsed)
                 },
                 onAckSent: { [weak self] messageId in
                     self?.listener?.onAckSent(messageId: messageId)
@@ -330,11 +312,9 @@ final class Hl7ServiceManager {
 
             imageServer = ImageWebServer()
             imageServer?.start()
-
             isServerRunning = true
 
             listener?.onBonjourRegistered(serviceName: serviceName)
-
             print("[HL7][SERVER] Started on port \(port)")
 
         } catch {
@@ -350,48 +330,29 @@ final class Hl7ServiceManager {
             return
         }
 
-        print("[HL7][CLIENT] Sending HL7 message")
         let framed = MLLP.frame(hl7)
-
-        connection.send(
-            content: framed,
-            completion: .contentProcessed { error in
-                if let error {
-                    print("[HL7][CLIENT] Send FAILED: \(error)")
-                } else {
-                    print("[HL7][CLIENT] Send SUCCESS")
-                }
-            }
-        )
+        connection.send(content: framed, completion: .contentProcessed { error in
+            if let error { print("[HL7][CLIENT] Send FAILED: \(error)") }
+            else         { print("[HL7][CLIENT] Send SUCCESS") }
+        })
     }
 
     // MARK: - Heartbeat
 
     private func startHeartbeat() {
         heartbeatTimer?.cancel()
-
         let timer = DispatchSource.makeTimerSource(queue: clientQueue)
         timer.schedule(deadline: .now() + 10, repeating: 10)
         timer.setEventHandler { [weak self] in self?.sendHeartbeat() }
         timer.resume()
         heartbeatTimer = timer
-
         print("[HL7][CLIENT] Heartbeat started")
-    }
-
-    private func stopHeartbeat() {
-        heartbeatTimer?.cancel()
-        heartbeatTimer = nil
-        print("[HL7][CLIENT] Heartbeat stopped")
     }
 
     private func sendHeartbeat() {
         guard let connection = clientConnection else { return }
-
-        let framed = MLLP.frame("MSH\r")
-
         connection.send(
-            content: framed,
+            content: MLLP.frame("MSH\r"),
             contentContext: .defaultMessage,
             isComplete: true,
             completion: .contentProcessed { [weak self] error in
@@ -405,7 +366,7 @@ final class Hl7ServiceManager {
         )
     }
 
-    // MARK: - Receiving (Stream-safe)
+    // MARK: - Receiving
 
     private func startReceiving() {
         clientConnection?.receive(
@@ -414,32 +375,26 @@ final class Hl7ServiceManager {
         ) { [weak self] data, _, isComplete, error in
             guard let self else { return }
 
-            if let error {
-                print("[HL7][CLIENT] Receive error: \(error)")
-                return
-            }
+            if let error { print("[HL7][CLIENT] Receive error: \(error)"); return }
 
             if let data, !data.isEmpty {
-                self.receiveBuffer.append(data)
-                self.processReceiveBuffer()
+                receiveBuffer.append(data)
+                processReceiveBuffer()
             }
 
-            if !isComplete {
-                self.startReceiving()
-            }
+            if !isComplete { startReceiving() }
         }
     }
 
-    // MARK: - MLLP Frame Parsing
     private func processReceiveBuffer() {
         let start: UInt8 = 0x0B
-        let end1: UInt8 = 0x1C
-        let end2: UInt8 = 0x0D
+        let end1:  UInt8 = 0x1C
+        let end2:  UInt8 = 0x0D
 
         while true {
             guard
                 let startIndex = receiveBuffer.firstIndex(of: start),
-                let endIndex = receiveBuffer.firstIndex(where: { $0 == end1 }),
+                let endIndex   = receiveBuffer.firstIndex(where: { $0 == end1 }),
                 endIndex + 1 < receiveBuffer.count,
                 receiveBuffer[endIndex + 1] == end2
             else { return }
@@ -451,7 +406,6 @@ final class Hl7ServiceManager {
                 print("[HL7][CLIENT] Failed to decode MLLP frame")
                 continue
             }
-
             handleIncomingHL7(hl7)
         }
     }
@@ -463,15 +417,11 @@ final class Hl7ServiceManager {
             return
         }
 
-        let fields = msa.components(separatedBy: "|")
-        guard fields.count >= 2 else {
-            print("[HL7][CLIENT] Invalid MSA segment")
-            return
-        }
+        let fields  = msa.components(separatedBy: "|")
+        guard fields.count >= 2 else { print("[HL7][CLIENT] Invalid MSA"); return }
 
-        let ackCode = fields[safe: 1] ?? ""
-        let messageId = fields[safe: 2]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let ackCode   = fields[safe: 1] ?? ""
+        let messageId = fields[safe: 2]?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         print("[HL7][CLIENT] ACK received code=\(ackCode) messageId=\(messageId ?? "nil")")
 

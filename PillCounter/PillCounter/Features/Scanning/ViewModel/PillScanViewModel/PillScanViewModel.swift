@@ -51,7 +51,7 @@ class PillScanViewModel: ObservableObject {
     @Published var selectedTransaction: PillCountTransactionEntity?
 
     // get the user id
-    @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
+    var userId: String { AppStorageManager.shared.userId ?? "" }
         
 
     private var cancellables = Set<AnyCancellable>()

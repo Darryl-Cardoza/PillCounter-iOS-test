@@ -31,6 +31,8 @@ struct PillCounterApp: App {
     private let isCompromised: Bool
 
     init() {
+        _ = CoreDataManager.shared
+        
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised
 

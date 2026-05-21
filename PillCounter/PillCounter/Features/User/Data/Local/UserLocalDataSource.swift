@@ -34,7 +34,7 @@ final class UserLocalDataSource {
     // background context // this is used to store the values in the db in background.
 //    private let context = CoreDataManager.shared.backgroundContext
     
-    private let mainThreadContext = CoreDataManager.shared.context
+    private lazy var mainThreadContext = CoreDataManager.shared.context
     
     // init function since singleton instance.
     private init() {}

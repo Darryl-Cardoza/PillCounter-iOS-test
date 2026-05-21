@@ -2,8 +2,6 @@
 //  Hl7ServiceController.swift
 //  PillCounter
 //
-//  Created by Bhushan Patil on 04/02/26.
-//
 
 import Foundation
 import SwiftUI
@@ -15,32 +13,15 @@ final class Hl7ServiceController: ObservableObject {
 
     static let shared = Hl7ServiceController()
 
-    // MARK: - App Storage
-
-    @AppStorage(AppStorageManager.AppStorageKeys.isLoggedIn)
-    private var isLoggedIn: Bool = false
-
-    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable)
-    private var isHl7Enabled: Bool = false
-
-    @AppStorage(AppStorageManager.AppStorageKeys.pmsHostName)
-    private var pmsHostName: String = ""
-
-    @AppStorage(AppStorageManager.AppStorageKeys.pillCounterHostName)
-    private var pillCounterHostName: String = ""
-
     // MARK: - Dependencies
-
     let pillDataLocalStorage = PillsDataLocalStorage.shared
     var cancellables = Set<AnyCancellable>()
 
     // MARK: - HL7 Layer
-
     var hl7Manager: Hl7ServiceManager?
     private var hl7Handler: Hl7EventHandler?
 
-    // MARK: - Legacy Send Queue (kept for reference — superseded by queues below)
-
+    // MARK: - Legacy Send Queue
     private var sendingQueue: [PillCountTransactionEntity] = []
     private var currentTxn: PillCountTransactionEntity?
     private var currentMessageId: String?
@@ -48,13 +29,8 @@ final class Hl7ServiceController: ObservableObject {
     private let maxRetries = 3
 
     // MARK: - Bind (called once from SwiftUI root)
-
-    func bind(
-        pillScanViewModel: PillScanViewModel,
-        userViewModel: UserViewModel
-    ) {
+    func bind(pillScanViewModel: PillScanViewModel, userViewModel: UserViewModel) {
         guard hl7Handler == nil else { return }
-
         hl7Handler = Hl7EventHandler(
             pillScanViewModel: pillScanViewModel,
             userViewModel: userViewModel
@@ -62,8 +38,6 @@ final class Hl7ServiceController: ObservableObject {
     }
 
     // MARK: - Entry Point
-
-    /// Called whenever app state changes (login, HL7 toggle, etc.)
     func evaluate() {
         guard shouldStartService else {
             stopService()
@@ -77,7 +51,9 @@ final class Hl7ServiceController: ObservableObject {
     }
 
     private var shouldStartService: Bool {
-        isLoggedIn && isHl7Enabled && !SecurityManager.isDeviceCompromised()
+        AppStorageManager.shared.isLoggedIn
+            && AppStorageManager.shared.isHl7Enabled
+            && !SecurityManager.isDeviceCompromised()
     }
 
     // MARK: - Start / Stop
@@ -85,13 +61,38 @@ final class Hl7ServiceController: ObservableObject {
     private func startHl7Services() {
         guard hl7Manager == nil, let handler = hl7Handler else { return }
 
+        // FIX: pmsHostName may be empty here if mobile settings haven't loaded yet.
+        // Hl7ServiceManager now guards against browsing with an empty service type,
+        // so it's safe to create the manager — it will start browsing automatically
+        // once notifySettingsUpdated() is called after settings fetch completes.
         hl7Manager = Hl7ServiceManager(
             port: 2575,
             serviceName: "PillCounter",
-            serviceType: pillCounterHostName,
-            pmsServiceType: pmsHostName,
+            serviceType: AppStorageManager.shared.pillCounterHostName,
+            pmsServiceType: AppStorageManager.shared.pmsHostName,
             listener: handler
         )
+    }
+
+    /// Call this after loadMobileThemeSettings() successfully writes
+    /// pmsHostName and pillCounterHostName to AppStorageManager.
+    /// If the manager was created before settings arrived (empty service type),
+    /// this triggers the first real Bonjour browse.
+    func notifySettingsUpdated() {
+        guard shouldStartService else { return }
+
+        if hl7Manager == nil {
+            // Manager wasn't created yet at all — start fresh now
+            startHl7Services()
+            setupBatchSyncQueue()
+            setupTxnSyncQueue()
+            observeTxnChanges()
+            observeBatchCompletion()
+        } else {
+            // Manager exists but may have been stuck with an empty pmsServiceType —
+            // restart the browser now that we have a valid value.
+            hl7Manager?.restartBrowsingIfNeeded()
+        }
     }
 
     private func stopService() {
@@ -102,119 +103,91 @@ final class Hl7ServiceController: ObservableObject {
 
     // MARK: - Observe Pending Transactions
 
-    private var isObservingPending = false
-
     private func observeTxnChanges() {
         pillDataLocalStorage.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
-                print("🔄 [TxnObserver] Detected change → enqueue txn sync")
+                Log("🔄 [TxnObserver] Detected change → enqueue txn sync")
                 self?.txnSyncQueue?.enqueueUnsynced()
             }
             .store(in: &cancellables)
     }
-    
-    
+
     // MARK: - Events from Hl7EventHandler
 
-    /// PMS client connection is ready — start both queues.
     func onClientConnected() {
-        print("📡 [HL7] onClientConnected — starting batch + txn queues")
-        batchSyncQueue?.enqueueUnsynced()   // batch queue (StockSync)
-        txnSyncQueue?.enqueueUnsynced()     // txn queue   (TxnSync)
+        Log("📡 [HL7] onClientConnected — starting batch + txn queues")
+        batchSyncQueue?.enqueueUnsynced()
+        txnSyncQueue?.enqueueUnsynced()
     }
 
-    /// ACK received from PMS — route to both queues.
-    /// Each queue checks its own pendingId and ignores ACKs it didn't send.
     func onAckReceived(messageId: String?, ackCode: String, hl7: String) {
         batchSyncQueue?.handleAck(hl7)
         txnSyncQueue?.handleAck(hl7)
     }
 
-    /// ACK timeout — let each queue's internal timeout handle retries.
     func onAckTimeout() {
         handleSendFailure()
     }
 
-    // MARK: - Legacy Queue Logic (kept intact)
+    // MARK: - Legacy Queue Logic
 
     private func resendPendingHl7Transactions() {
-        print("🔄 [HL7] Resend Pending Transactions START")
-
+        Log("🔄 [HL7] Resend Pending Transactions START")
         let pending = pillDataLocalStorage.fetchCompletedUnsyncedTransactions()
-        print("📦 [HL7] Pending Count:", pending.count)
-        print("📦 [HL7] Pending Txns:", pending.map { $0.txn_id })
-
+        Log("📦 [HL7] Pending Count: \(pending.count)")
         guard !pending.isEmpty else {
-            print("⚠️ [HL7] No pending transactions found")
+            Log("⚠️ [HL7] No pending transactions found")
             return
         }
-
-        sendingQueue = pending
-        currentTxn = nil
+        sendingQueue   = pending
+        currentTxn     = nil
         currentMessageId = nil
-        retryCount = 0
-
+        retryCount     = 0
         sendNextIfPossible()
     }
 
     private func sendNextIfPossible() {
-        guard currentTxn == nil else { return }
-        guard !sendingQueue.isEmpty else { return }
-
-        let txn = sendingQueue.first!
-        sendTransaction(txn)
+        guard currentTxn == nil, !sendingQueue.isEmpty else { return }
+        sendTransaction(sendingQueue.first!)
     }
 
     func sendTransaction(_ txn: PillCountTransactionEntity) {
         currentTxn = txn
         retryCount += 1
-
         let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
         currentMessageId = messageId
-
-        let hl7 = buildHl7Message(txn: txn)
-        hl7Manager?.sendClientHL7(hl7)
+        hl7Manager?.sendClientHL7(buildHl7Message(txn: txn))
     }
 
     private func handleSendFailure() {
         guard let txn = currentTxn else { return }
-
         if retryCount < maxRetries {
             sendTransaction(txn)
             return
         }
-
         sendingQueue.removeFirst()
         sendingQueue.append(txn)
-
-        currentTxn = nil
+        currentTxn       = nil
         currentMessageId = nil
-        retryCount = 0
-
+        retryCount       = 0
         sendNextIfPossible()
     }
 
     private func resetQueueState() {
         sendingQueue.removeAll()
-        currentTxn = nil
+        currentTxn       = nil
         currentMessageId = nil
-        retryCount = 0
+        retryCount       = 0
     }
 
     // MARK: - HL7 Message Builder
 
     private func buildHl7Message(txn: PillCountTransactionEntity) -> String {
         guard let user = txn.user else {
-            print("❌ [HL7] Missing user for txn:", txn.txn_id)
+            Log("❌ [HL7] Missing user for txn: \(txn.txn_id)")
             return ""
         }
         return HL7CompletionBuilder().buildCompletionMessage(txn: txn, user: user)
-    }
-
-    private func hl7Timestamp() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMddHHmmss"
-        return formatter.string(from: Date())
     }
 }

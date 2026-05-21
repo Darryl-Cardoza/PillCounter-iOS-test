@@ -2,22 +2,24 @@
 //  DatabaseKeyManager.swift
 //  PillCounter
 //
-//  Created by Ritesh Parekh on 15/05/26.
+//  Generates and stores the SQLCipher database encryption key in the Keychain.
+//
+//  Key format: plain base64 string passed directly to sqlite3_key().
+//  sqlite3_key() accepts the passphrase as raw bytes — no SQL quoting needed.
+//  Base64 gives 256 bits of entropy and is safe to store as a UTF-8 string.
 //
 
 import Foundation
 import Security
+import CryptoKit
 
 enum DatabaseKeyManager {
 
     private static let service = "com.ritetechnologies.PillCounting"
-    private static let account = "db_encryption_key_v1"
+    private static let account = "db_encryption_key_v2"
 
     // MARK: - Public API
 
-    /// Returns the existing database key, or generates and stores a new one
-    /// on first call. This is the ONLY entry point — all of CoreDataManager
-    /// should call this once during init.
     static func getOrCreatePassphrase() -> String {
         if let existing = loadKey() { return existing }
         let newKey = generateKey()
@@ -26,15 +28,11 @@ enum DatabaseKeyManager {
     }
 
     // MARK: - Key generation
-
+    // 32 random bytes (256 bits) encoded as base64.
+    // Passed directly to sqlite3_key() as a UTF-8 string.
     private static func generateKey() -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
-        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        guard status == errSecSuccess else {
-            fatalError("SecRandomCopyBytes failed with status \(status)")
-        }
-     
-        return "x'" + bytes.map { String(format: "%02x", $0) }.joined() + "'"
+        let key = SymmetricKey(size: .bits256)
+        return key.withUnsafeBytes { Data($0).base64EncodedString() }
     }
 
     // MARK: - Keychain read
@@ -70,10 +68,10 @@ enum DatabaseKeyManager {
         SecItemDelete(attributes as CFDictionary)
         let status = SecItemAdd(attributes as CFDictionary, nil)
 
+        #if DEBUG
         if status != errSecSuccess {
-            #if DEBUG
-            Log("⚠️  DatabaseKeyManager: Keychain write failed with status \(status)")
-            #endif
+            Log("⚠️ DatabaseKeyManager: Keychain write failed with status \(status)")
         }
+        #endif
     }
 }

@@ -14,7 +14,7 @@ protocol ControlledRepositoryProtocol {
 
 final class ControlledRepository: ControlledRepositoryProtocol, BaseRepositoryProtocol {
     
-    static let shared = ControlledRepository() // singleton instance.
+    static let shared = ControlledRepository()
 
     func getControlledDrugInfo(ndcValidationRequest: NdcValidationRequest) async throws -> NdcComparisonResponse {
         

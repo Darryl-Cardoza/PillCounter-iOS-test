@@ -18,25 +18,13 @@ class PillScanViewModel: ObservableObject {
     let transactionDAO = TransactionDAO.shared
     let transactionDetailDAO = TransactionDetailDAO.shared
     let batchDAO = BatchDAO.shared
-
-    // user storage // db
     let userDataLocalStorage = UserDAO.shared
 
     // decode the values of the barcode or qr, calling the api, processing it, storing it in database
-    // decoder
     let decoder = BarcodeAndQRDecoder()
     let userRepo = UserRepository.shared
 
-    // published properties.
-    @Published var drugName: String? = nil
-
-    @Published var drugNameMannuallyEntered: String = ""
     @Published var isDrugFound: Bool?
-
-    @Published var mannualDrugCreated: Bool?
-
-    // now when user mannually enters the ndc number.
-    @Published var ndcNumber: String = ""
 
     // set the target count for fixed or dispense count
     @Published var targetCount: [String] = Array(repeating: "", count: 4)
@@ -56,9 +44,7 @@ class PillScanViewModel: ObservableObject {
     // get the user id
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
         
-
     private var cancellables = Set<AnyCancellable>()
-    
     
     //Controlled Drug Repository
     let controlledRepo  = ControlledRepository.shared
@@ -94,94 +80,6 @@ class PillScanViewModel: ObservableObject {
     @Published var selectedBucket: String = ""
     @Published var showScannedDrugInfoPopoup: Bool = false
     
-    // func to get the value from the barcode and check in the db
-    // if there in the db get the drug from there other wise call the api.
-    // func to get the value from the barcode and check in the db
-    // if there in the db get the drug from there other wise call the api.
-    func scannedPill(
-        rawValueFromBarcodeOrQr: String,
-        countType: CountType,
-        image: UIImage? = nil
-    ) async {
-
-        let decoded = decoder.decode(rawValueFromBarcodeOrQr)
-        let gtin = decoded.gtin ?? ""
-
-        await handleDrugFlow(
-            ndc: gtin,
-            countType: countType,
-            image: image
-        )
-    }
-    
-    private func handleDrugFlow(
-        ndc: String,
-        countType: CountType,
-        image: UIImage? = nil,
-        fallbackDrugName: String? = nil
-    ) async {
-
-        guard !ndc.isEmpty else { return }
-
-        var drugIdToUse = generateUniqueDrugId()
-
-        // 1. Check local DB
-        if let localDrug = drugMasterDAO.fetchByNdc(ndc) {
-
-            drugName = localDrug.drug_name ?? ""
-            drugIdToUse = localDrug.drug_id
-
-            await createTransaction(
-                drugId: drugIdToUse,
-                countType: countType,
-                barcodeImage: image
-            )
-
-            postTransactionUIUpdate(countType: countType)
-            return
-        }
-
-        // 2. API call
-        do {
-            let result = try await userRepo.getDrug(ndc: ndc)
-
-            if result.isSuccess ?? false, let data = result.data {
-
-                drugName = data.genericName ?? fallbackDrugName ?? ""
-
-                drugMasterDAO.saveFromResponse(result, ndc: ndc, drugId: drugIdToUse)
-
-            } else {
-                // fallback for manual entry
-                guard let fallbackDrugName else {
-                    isDrugFound = false
-                    return
-                }
-
-                drugName = fallbackDrugName
-
-                drugMasterDAO.saveManual(
-                    ndc: ndc,
-                    drugId: drugIdToUse,
-                    drugName: fallbackDrugName
-                )
-            }
-
-            // 3. Create transaction
-            await createTransaction(
-                drugId: drugIdToUse,
-                countType: countType,
-                barcodeImage: image
-            )
-
-            postTransactionUIUpdate(countType: countType)
-
-        } catch {
-            print("❌ API error:", error)
-            isDrugFound = false
-        }
-    }
-    
     
     private func postTransactionUIUpdate(countType: CountType) {
         getAllTransactionDetailsOfTheCurrentTransaction()
@@ -192,69 +90,7 @@ class PillScanViewModel: ObservableObject {
 
         isDrugFound = true
     }
-    
-    
-    func scnnedPmsPill(
-        rawValueFromBarcodeOrQr: String,
-        countType: CountType,
-        image: UIImage? = nil
-    ) {
-        
-        let decodedGs1Value = decoder.decode(rawValueFromBarcodeOrQr)
-        let gtin = decodedGs1Value.gtin ?? ""
-
-
-        if gtin.isEmpty {
-            return
-        }
-
-        // Generate potential ID
-        var drugIdToUse = generateUniqueDrugId()
-
-        if let drugFoundInLocalStorage = drugMasterDAO.fetchByNdc(gtin) {
-
-
-            drugName = drugFoundInLocalStorage.drug_name ?? ""
-
-            // Use existing ID
-            drugIdToUse = drugFoundInLocalStorage.drug_id
-
-            Task(priority: .background) {
-                await updaetTransaction(
-                    drugId: drugIdToUse,
-                    countType: countType,
-                    txnId: selectedTransaction?.txn_id ?? 0,
-                    barcodeImage: image
-                )
-            }
-
-            getAllTransactionDetailsOfTheCurrentTransaction()
-
-            isDrugFound = true
-
-            if countType == .FIXED {
-                updateTargetCountForCurrentTransaction()
-            }
-
-            return
-        }
-
-        isDrugFound = true
-    }
-    
-
-    func getFixedCount() -> Int32? {
-        guard let txn = selectedTransaction else {
-            return nil
-        }
-
-        guard txn.is_from_pms else {
-            return nil
-        }
-        return txn.target_count
-    }
-
-
+ 
     func generateUniqueDrugId() -> Int64 {
         let defaults = UserDefaults.standard
 
@@ -268,85 +104,6 @@ class PillScanViewModel: ObservableObject {
         return Int64(newId)
     }
     
-    func log(_ message: String) {
-        print("🧪 [ManualPillFlow] \(message)")
-    }
-    
-//    func manualEntryDirectUpsert(
-//        ndc: String,
-//        drugName: String,
-//        countType: CountType
-//    ) async {
-//
-//        let trimmedNdc = ndc.trimmingCharacters(in: .whitespaces)
-//        let trimmedDrugName = drugName.trimmingCharacters(in: .whitespaces)
-//
-//        guard !trimmedNdc.isEmpty else { return }
-//
-//        await handleDrugFlow(
-//            ndc: trimmedNdc,
-//            countType: countType,
-//            fallbackDrugName: trimmedDrugName
-//        )
-//
-//        self.mannualDrugCreated = true
-//    }
-
-    
-    func manualEntryDirectUpsert(
-        ndc: String,
-        drugName: String,
-        countType: CountType
-    ) async {
-
-        let trimmedNdc = ndc.trimmingCharacters(in: .whitespaces)
-        let trimmedDrugName = drugName.trimmingCharacters(in: .whitespaces)
-
-        guard !trimmedNdc.isEmpty else {
-            return
-        }
-
-        var drugIdToUse: Int64
-
-        // Check if drug already exists in DB
-        if let existingDrug = drugMasterDAO.fetchByNdc(trimmedNdc) {
-
-            // Use existing drug
-            drugIdToUse = existingDrug.drug_id
-            self.drugName = existingDrug.drug_name ?? ""
-
-        } else {
-
-            //  Create new drug entry
-            drugIdToUse = generateUniqueDrugId()
-
-            drugMasterDAO.saveManual(
-                ndc: trimmedNdc,
-                drugId: drugIdToUse,
-                drugName: trimmedDrugName
-            )
-
-            self.drugName = trimmedDrugName
-        }
-
-        // Create transaction (ONLY for selected drug)
-        await createTransaction(
-            drugId: drugIdToUse,
-            countType: countType
-        )
-
-        //  Update target if FIXED
-        if countType == .FIXED {
-            updateTargetCountForCurrentTransaction()
-        }
-
-        //  Refresh details
-        getAllTransactionDetailsOfTheCurrentTransaction()
-
-        // Trigger navigation state
-        self.isDrugFound = true
-        self.mannualDrugCreated = true
-    }
     
     // create transaction for every new transaction that user scans the barcode or enters the ndc or the gtin number manually.
     func createTransaction(
@@ -461,13 +218,6 @@ class PillScanViewModel: ObservableObject {
 
     }
 
-    // create a func to get all the transactions of the current transaction.
-//    func getAllTransactionDetailsOfTheCurrentTransaction() {
-//        currentTransactionTransactionDetails =
-//            pillDataLocalStorage.getTransactionDetailsByTransactionId(
-//                txnId: currentTransaction?.txn_id ?? 0)
-//    }
-//
     
     func getAllTransactionDetailsOfTheCurrentTransaction() {
         guard let txnId = currentTransaction?.txn_id else { return }
@@ -560,7 +310,6 @@ class PillScanViewModel: ObservableObject {
         return total
     }
     
-    
     func getTotalPillCountOfCurrentTransactionByType(
         type: ControlledStep,
         details: [PillCountTransactionDetailsEntity]? = nil
@@ -583,34 +332,11 @@ class PillScanViewModel: ObservableObject {
         transactionDAO.updateNote(txnId: txn_id, note: note)
     }
 
-    // func to get the current transaction
-//    func getCurrentTransaction(txnId: Int64) async {
-//        // Fetch transaction
-//        currentTransaction =
-//            pillDataLocalStorage.fetchPillCountTransactionByTransactionId(
-//                txnId: txnId)
-//
-//        // Set drug name
-//        drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
-//
-//        // Fetch details
-//        getAllTransactionDetailsOfTheCurrentTransaction()
-//
-//        let count = currentTransactionTransactionDetails?.count ?? 0
-//
-//        if count > 0 {
-//            let totalPills = getTotalPillCountOfCurrentTransaction()
-//        }
-//    }
 
     func getCurrentTransaction(txnId: Int64) async {
         // Fetch transaction
         currentTransaction = transactionDAO.fetchById(txnId)
 
-        // Set drug name
-        drugName = currentTransaction?.drug?.drug_name ?? "Unknown"
-
-        // Fetch details
         getAllTransactionDetailsOfTheCurrentTransaction()
 
         let count = currentTransactionTransactionDetails?.count ?? 0
@@ -646,29 +372,12 @@ class PillScanViewModel: ObservableObject {
 
     func resetScanningState() {
         self.isDrugFound = nil
-        self.drugName = nil
         self.currentTransaction = nil
         self.currentTransactionTransactionDetails = nil
-        self.ndcNumber = ""
         self.targetCount = ["", "", "", ""]
         self.isCheckingNdc = false
     }
-    
-    @MainActor
-    func autofillDrugNameIfAvailable(for ndc: String) {
-        guard ndc.count >= 20 else { return }
-
-        if let drug = drugMasterDAO.fetchByNdc(ndc),
-           let drugName = drug.drug_name,
-           !drugName.isEmpty {
-
-            // Auto-fill ONLY if user has not typed anything
-            if drugNameMannuallyEntered.isEmpty {
-                drugNameMannuallyEntered = drugName
-            }
-        }
-    }
-
+ 
     
     // Message handling for transaction coming from pms
     typealias HL7SimpleCallback = (Bool) -> Void
@@ -688,22 +397,13 @@ class PillScanViewModel: ObservableObject {
     // MARK: - HARD LOGOUT RESET
     @MainActor
     func resetState() {
-
         cancellables.removeAll()
-
-        drugName = nil
-        drugNameMannuallyEntered = ""
         isDrugFound = nil
-        mannualDrugCreated = nil
-
-        // Counting
         targetCount = ["", "", "", ""]
         note = ""
-        // Transactions
         currentTransaction = nil
         currentTransactionTransactionDetails = nil
         selectedTransaction = nil
-        
         showNdcEquivalencePopup = false
         isCheckingNdc = false
         isNdcEquivalent = false

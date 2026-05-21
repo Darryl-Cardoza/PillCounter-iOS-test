@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+enum InputField: Hashable {
+    case drugName
+    case ndcNumber
+}
+
 struct PillCounterInputField: View {
     @EnvironmentObject private var appColors: AppColors
     let imageName: String?

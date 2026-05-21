@@ -16,14 +16,14 @@ final class DrugMasterDAO {
 
     // MARK: - Create / Upsert
 
-    func saveFromResponse(_ response: GetDrugResponse, ndc: String, drugId: Int64) {
-        guard let pillData = response.data else { return }
-        let entity = fetchOrCreate(ndc: ndc, drugId: drugId)
-        entity.drug_name = pillData.genericName
-        entity.drug_type = ""
-        entity.ndc = ndc
-        CoreDataManager.shared.save(context: context)
-    }
+//    func saveFromResponse(_ response: GetDrugResponse, ndc: String, drugId: Int64) {
+//        guard let pillData = response.data else { return }
+//        let entity = fetchOrCreate(ndc: ndc, drugId: drugId)
+//        entity.drug_name = pillData.genericName
+//        entity.drug_type = ""
+//        entity.ndc = ndc
+//        CoreDataManager.shared.save(context: context)
+//    }
 
     func saveManual(
         ndc: String,

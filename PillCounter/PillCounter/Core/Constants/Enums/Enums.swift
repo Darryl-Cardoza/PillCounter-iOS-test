@@ -197,6 +197,7 @@ enum PmsFilter: Hashable {
 }
 
 
+// MARK: - Controlled Step
 
 enum ControlledStep: String, CaseIterable {
     case scan = "SCAN"
@@ -222,9 +223,47 @@ enum ControlledStep: String, CaseIterable {
             return L10n.Controlled.containerPending
         }
     }
-    
-
 }
+
+extension ControlledStep {
+    func next(orderedSteps: [ControlledStep]) -> ControlledStep? {
+        guard let index = orderedSteps.firstIndex(of: self),
+              index + 1 < orderedSteps.count
+        else { return nil }
+
+        return orderedSteps[index + 1]
+    }
+}
+
+
+// MARK: - ASSET NAME MAPPING
+extension ControlledStepRow {
+
+func assetName(for step: ControlledStep) -> String {
+
+    switch step {
+        
+    case .scan:
+        return "scan_step1"
+        
+    case .containerInitiate:
+        return "parent_count_step2"
+        
+    case .targetVerification:
+        return "target_count_step3"
+        
+    case .targetReverification:
+        return "double_count_step4"
+        
+    case .vial:
+        return "vial_step5"
+        
+    case .containerPending:
+        return "parent_count_step2"
+    }
+}
+}
+
 
 public enum StockCountOption: Hashable {
     case newBatch

@@ -17,6 +17,7 @@ struct APIConstants {
     
     /// resend otp
     static let resendOTP = "\(baseURL)/auth/resend/otp"
+    
     /// Refersh access token
     static let refreshToken = "\(baseURL)/auth/refresh"
     /// Logout
@@ -25,6 +26,7 @@ struct APIConstants {
     
     // MARK: - USER
     static let getMe = "\(baseURL)/auth/me"
+    
     /// Services
     static let updateProfile = "\(baseURL)/users/update/profile"
     static let deleteProfile = "\(baseURL)/users/delete/profile"
@@ -37,12 +39,8 @@ struct APIConstants {
     static func updateTerminal(terminalId: String) -> String {
         "\(baseURL)/terminals/update/\(terminalId)"
     }
-
-    // MARK: - DRUG SERVICE
-    static let getDrugInfo = "\(baseURL)/drugs/ndc"
     
-    
-    //MARK:- CONTROLLED DRUG
+    // MARK: - DRUG
     static let getControlledDrugInfo = "\(baseURL)/drugs/ndc/new"
     
 }

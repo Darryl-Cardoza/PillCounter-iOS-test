@@ -308,10 +308,10 @@ extension UnifiedCameraView {
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.barcodeNotFound = false
         stockCountViewModel.showScannedNdcDoesNotMatch = false
-        pillScanViewModel.ndcNumber = ""
+//        pillScanViewModel.ndcNumber = ""
         pillScanViewModel.selectedTransaction = nil
         pillScanViewModel.targetCount = ["", "", "", ""]
-        pillScanViewModel.drugNameMannuallyEntered = ""
+//        pillScanViewModel.drugNameMannuallyEntered = ""
         pillScanViewModel.currentTransaction = nil
         pillScanViewModel.currentTransactionTransactionDetails = nil
         pillScanViewModel.note = ""
@@ -417,9 +417,9 @@ extension UnifiedCameraView {
         pillScanViewModel.ndcComparisonResponse = nil
         pillScanViewModel.isNdcEquivalent = false
         pillScanViewModel.showNdcEquivalencePopup = false
-        pillScanViewModel.ndcNumber = ""
-        pillScanViewModel.drugName = ""
-        pillScanViewModel.drugNameMannuallyEntered = ""
+//        pillScanViewModel.ndcNumber = ""
+//        pillScanViewModel.drugName = ""
+//        pillScanViewModel.drugNameMannuallyEntered = ""
         stockCountViewModel.reset()
     }
 
@@ -578,7 +578,8 @@ extension UnifiedCameraView {
     }
 
     func handleSubstitute() {
-        let value = (scannedRawValue?.isEmpty ?? true) ? pillScanViewModel.ndcNumber : scannedRawValue!
+//        let value = (scannedRawValue?.isEmpty ?? true) ? pillScanViewModel.ndcNumber : scannedRawValue!
+        let value = (scannedRawValue?.isEmpty ?? true) ? scannedRawValue! : scannedRawValue!
         Task { @MainActor in
             guard let txnId = pillScanViewModel.selectedTransaction?.txn_id else { return }
             await pillScanViewModel.updateSubstitutedDrug(

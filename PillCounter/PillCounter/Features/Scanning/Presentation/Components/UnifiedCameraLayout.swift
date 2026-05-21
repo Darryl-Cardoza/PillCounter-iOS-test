@@ -29,7 +29,7 @@ struct UnifiedCameraLayout: View {
                     .ignoresSafeArea()
             } else {
                 Color.black.ignoresSafeArea()
-                CameraPermissionView()
+                NoCameraPermissionView()
             }
 
             DetectionOverlay(cameraService: cameraService)

@@ -115,7 +115,7 @@ extension PillScanViewModel {
             print("🆕 [RxScan] New drug saved → id: \(drugIdToUse)")
         }
 
-        self.drugName = name
+//        self.drugName = name
 
         // MARK: 2️⃣ Create transaction
         await createTransaction(

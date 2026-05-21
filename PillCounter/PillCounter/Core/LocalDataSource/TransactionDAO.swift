@@ -29,7 +29,8 @@ final class TransactionDAO {
         expirationDate: String? = nil,
         lotNumber: String? = nil,
         rxNo: String? = nil,
-        bucketId: String? = nil
+        bucketId: String? = nil,
+
     ) -> PillCountTransactionEntity {
         let entity = PillCountTransactionEntity(context: context)
         entity.txn_id = generateUniqueId()
@@ -58,8 +59,11 @@ final class TransactionDAO {
             entity.drug = drug
             drug.addToTransactions(entity)
         }
+        
+    
 
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), countType: \(countType.rawValue), batchId: \(batchId), isFromPms: \(isFromPms)")
         return entity
     }
 
@@ -152,6 +156,7 @@ final class TransactionDAO {
         if let looseQty { txn.loose_qty += looseQty }
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED counts — txnId: \(txnId), bottleQty: \(bottleQty.map { "+\($0)" } ?? "-"), looseQty: \(looseQty.map { "+\($0)" } ?? "-")")
     }
 
     func countTransactions(for user: UserEntity, countType: CountType, status: CountStatus) -> Int {
@@ -173,6 +178,7 @@ final class TransactionDAO {
         txn.drug = drug
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED drug — txnId: \(txnId), drugId: \(drugId)")
     }
 
     func updateTargetCount(txnId: Int64, targetCount: Int32) {
@@ -180,6 +186,7 @@ final class TransactionDAO {
         txn.target_count = targetCount
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED targetCount — txnId: \(txnId), targetCount: \(targetCount)")
     }
 
     func updateNote(txnId: Int64, note: String) {
@@ -187,6 +194,7 @@ final class TransactionDAO {
         txn.note = note
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED note — txnId: \(txnId)")
     }
 
     func updateStatus(txnId: Int64, status: CountStatus) {
@@ -194,6 +202,7 @@ final class TransactionDAO {
         txn.status = status.rawValue
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED status — txnId: \(txnId), status: \(status.rawValue)")
     }
 
     func updateNdcVerified(txnId: Int64, verified: Bool) {
@@ -201,6 +210,7 @@ final class TransactionDAO {
         txn.is_ndc_verfied = verified
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED ndcVerified — txnId: \(txnId), verified: \(verified)")
     }
 
     func updateSynced(txnId: Int64) {
@@ -208,6 +218,7 @@ final class TransactionDAO {
         txn.is_synced = true
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED synced — txnId: \(txnId)")
     }
 
     func update(
@@ -215,19 +226,31 @@ final class TransactionDAO {
         drugId: Int64?,
         countType: CountType,
         targetCount: Int32?,
-        barcodeImagePath: String?
+        barcodeImagePath: String?,
+        substituedDrugId: Int64? = nil,
+        isSubstitue: Bool = false
     ) {
         guard let txn = fetchById(txnId) else { return }
         if let drugId, let drug = DrugMasterDAO.shared.fetchById(drugId) {
             txn.drug_id = drugId
             txn.drug = drug
         }
+        
+       txn.is_substitute = isSubstitue
+       
+       if let substituedDrugId,
+          let substituteDrugEntity = DrugMasterDAO.shared.fetchById(substituedDrugId) {
+           txn.substitute_drug_id = substituedDrugId
+           txn.substitueDrug = substituteDrugEntity
+       }
+        
         txn.count_type = countType.rawValue
         txn.is_synced = false
         if let targetCount { txn.target_count = targetCount }
         if let barcodeImagePath, !barcodeImagePath.isEmpty { txn.barcode_image = barcodeImagePath }
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED — txnId: \(txnId), drugId: \(drugId ?? 0), countType: \(countType.rawValue), targetCount: \(targetCount ?? 0)")
     }
 
     // MARK: - Delete
@@ -237,12 +260,14 @@ final class TransactionDAO {
         txn.is_deleted = true
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] SOFT DELETED — txnId: \(txnId)")
     }
 
     func deleteAll() {
         let request: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionEntity.fetchRequest()
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            print("📋 [TransactionDAO] DELETED ALL — all transactions removed")
         }catch {
             print("Failed to delete DrugMasterEntity: \(error)")
         }

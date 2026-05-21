@@ -13,6 +13,7 @@ struct HistoryBatchDetailView: View {
     @EnvironmentObject private var router: Router
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var historyViewModel: HistoryViewModel
+    @EnvironmentObject private var userViewModel: UserViewModel
     
     @State private var showDeleteConfirmation: Bool = false
     @State private var expandedNdc: String? = nil
@@ -37,12 +38,20 @@ struct HistoryBatchDetailView: View {
                 headerActions: {
                     HStack(spacing: 16) {
                         Button {
-                            let batch = historyViewModel.selectedBatch
-                            let txns  = historyViewModel.groupedTransactionsForBatch
-                            let note  = batch?.note
+                            let batch    = historyViewModel.selectedBatch
+                            let txns     = historyViewModel.groupedTransactionsForBatch
+                            let note     = batch?.note
+                            let fname    = userViewModel.firstName
+                            let lname    = userViewModel.lastName
+                            let userName = [fname, lname].filter { !$0.isEmpty }.joined(separator: " ")
                             isGeneratingPDF = true
                             DispatchQueue.global(qos: .userInitiated).async {
-                                let url = StockCountPDFExporter.export(batch: batch, transactions: txns, note: note)
+                                let url = StockCountPDFExporter.export(
+                                   batch: batch,
+                                   transactions: txns,
+                                   note: note,
+                                   userName: userName.isEmpty ? nil : userName
+                               )
                                 DispatchQueue.main.async {
                                     isGeneratingPDF = false
                                     if let url {
@@ -63,6 +72,21 @@ struct HistoryBatchDetailView: View {
                                         .scaledToFit()
                                 )
                         }
+                        
+                        Button {
+                           showDeleteConfirmation = true
+                       } label: {
+                           Image("delete")
+                               .resizable()
+                               .scaledToFit()
+                               .frame(width: 26, height: 26)
+                               .overlay { appColors.primary }
+                               .mask(
+                                   Image("delete")
+                                       .resizable()
+                                       .scaledToFit()
+                               )
+                       }
                     }
                     .padding(.trailing)
                 },
@@ -289,7 +313,12 @@ extension HistoryBatchDetailView {
                 showDeleteConfirmation = false
             },
             onConfirm: {
-              
+                showDeleteConfirmation = false
+                  guard let batchId = historyViewModel.selectedBatch?.batch_id else { return }
+                  Task {
+                      await historyViewModel.softDeleteBatch(batchId: batchId)
+                      router.navigateBack()
+                  }
             }
         )
     }

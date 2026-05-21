@@ -15,7 +15,7 @@
 //  PillCountRingView            animated count ring shown before pill-count panel opens
 //  UnifiedCameraBarcodePopups   NDC / barcode / stock-count popup content (extension)
 //  UnifiedCameraPillCountPopups pill-count-phase popup content (extension)
-//
+
 
 import AVFoundation
 import SwiftUI
@@ -52,7 +52,13 @@ struct UnifiedCameraView: View {
     @State var scannedBottleContainerStatus: StockCountOptionContainerStatus = .sealed
 
     // ── Pill count panel ──────────────────────────────────────────────────────
-    @State var showPillCountPanel: Bool = false
+    @State var showPillCountPanel: Bool
+
+    init(currentScanType: ScanType) {
+        self.currentScanType = currentScanType
+        self._showPillCountPanel = State(initialValue: currentScanType == .resumeCount)
+    }
+    @State var hasInitializedStep: Bool = false
     @State var isAddDisabled: Bool = false
     @State var showSuccessAnimation: Bool = false
     @State var lastAddedCount: Int = 0
@@ -67,9 +73,6 @@ struct UnifiedCameraView: View {
     @State var showTransactionHistory: Bool = true
     @State var isPaused: Bool = false
     @State var errorMessageOfNote: String?
-    @State var capturedVialImage: UIImage? = nil
-    @State var vialCapturedImagePath: String? = nil
-    @State var showCaptureFlash: Bool = false
     @State var addNoteSettings: Bool = AppStorageManager.shared.isPillCountingEnabled
     @State var showDetailGrid: Bool = false
 
@@ -214,15 +217,37 @@ struct UnifiedCameraView: View {
         }
         .onChange(of: pillScanViewModel.currentControlledStep) { _, newStep in
             if showPillCountPanel {
-                SpeechManager.shared.speak(newStep.displayText)
+                if hasInitializedStep || currentScanType != .resumeCount {
+                    SpeechManager.shared.speak(newStep.displayText)
+                }
+                hasInitializedStep = true
                 pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
             }
+            if newStep == .vial {
+                cameraService.pauseCounting()
+            } else {
+                cameraService.resumeCounting()
+            }
         }
-        .onChange(of: scanType) { _, _ in handleStepVoice() }
+        .onChange(of: scanType) { _, newType in
+            if newType != .resumeCount { handleStepVoice() }
+        }
         .onChange(of: pillScanViewModel.showScannedDrugInfoPopoup) { _, isShowing in
             if isShowing && scanType == .barcode {
                 pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.qrScannedSuccessfully)
                 handleSubstitute()
+            }
+        }
+        .onChange(of: pillScanViewModel.ndcMismatchRestartFlow) { _, triggered in
+            if triggered && currentScanType != .resumeCount {
+                pillScanViewModel.ndcMismatchRestartFlow = false
+                restartFlow()
+            }
+        }
+        .onChange(of: pillScanViewModel.vialDoneTriggered) { _, triggered in
+            if triggered {
+                pillScanViewModel.vialDoneTriggered = false
+                handleVialDone()
             }
         }
     }
@@ -258,13 +283,8 @@ struct UnifiedCameraView: View {
     }
 
     private var vialControlBottomView: some View {
-        VialBottomContentView(
-            appColors: appColors,
-            isCaptured: capturedVialImage != nil,
-            onRedo: { handleVialRedo() },
-            onCapture: { handleVialCapture() },
-            onDone: { handleVialDone() }
-        )
+        VialBottomContentView()
+            .environmentObject(cameraService)
     }
 }
 
@@ -285,16 +305,31 @@ extension UnifiedCameraView {
         cameraState = .scanning
         scannedRawValue = nil
         capturedImage = nil
+        hasInitializedStep = false
         scanType = currentScanType
 
         cameraService.configureInitialOrientation()
         cameraService.startObservingOrientation()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            cameraService.start()
-            cameraService.cancelInactivityTimer()
-            cameraService.enableBarcodeScanning()
-            startScanTimeout()
+        if currentScanType == .resumeCount {
+            if let selected = pillScanViewModel.selectedTransaction {
+                pillScanViewModel.currentTransaction = selected
+                pillScanViewModel.getControlledStep(pillCountTxn: selected)
+                pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                cameraService.start()
+                cameraService.cancelInactivityTimer()
+                initializeTransaction()
+                cameraService.resumeCounting()
+            }
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                cameraService.start()
+                cameraService.cancelInactivityTimer()
+                cameraService.enableBarcodeScanning()
+                startScanTimeout()
+            }
         }
     }
 
@@ -308,15 +343,16 @@ extension UnifiedCameraView {
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.barcodeNotFound = false
         stockCountViewModel.showScannedNdcDoesNotMatch = false
-//        pillScanViewModel.ndcNumber = ""
         pillScanViewModel.selectedTransaction = nil
         pillScanViewModel.targetCount = ["", "", "", ""]
-//        pillScanViewModel.drugNameMannuallyEntered = ""
         pillScanViewModel.currentTransaction = nil
         pillScanViewModel.currentTransactionTransactionDetails = nil
         pillScanViewModel.note = ""
         pillScanViewModel.currentControlledStep = .scan
         pillScanViewModel.currentControlledTargetCount = nil
+        pillScanViewModel.capturedVialImage = nil
+        pillScanViewModel.vialCapturedImagePath = nil
+        pillScanViewModel.vialDoneTriggered = false
         pillScanViewModel.reset()
     }
 }
@@ -330,7 +366,8 @@ extension UnifiedCameraView {
 
     func handleScannedCode(_ newValue: String) {
         guard !newValue.isEmpty,
-              pillScanViewModel.isDrugFound == nil
+              pillScanViewModel.isDrugFound == nil,
+              !pillScanViewModel.isCheckingNdc
         else { return }
 
         cameraService.disableBarcodeScanning()
@@ -351,14 +388,15 @@ extension UnifiedCameraView {
                         cameraState = .rxDetected
                         pillScanViewModel.parseScanData(actualValue: newValue)
                     } else {
-                        pillScanViewModel.isNdcEquivalent = false
-                        pillScanViewModel.showNdcEquivalencePopup = true
                         pillScanViewModel.showToastMessage(text: "Invalid RX Barcode")
+                        restartFlow()
                     }
                 case .barcode:
                     handleSubstitute()
                 case .stockCount:
                     await stockCountViewModel.getScannedDrugData(rawValue: newValue)
+                case .resumeCount:
+                    break;
                 }
             } else {
                 await stockCountViewModel.getScannedDrugData(rawValue: newValue)
@@ -409,17 +447,14 @@ extension UnifiedCameraView {
         cameraState = .scanning
         scannedRawValue = nil
         capturedImage = nil
+        pillScanViewModel.isCheckingNdc = false
         cameraService.resetBarcodeScanState()
         cameraService.enableBarcodeScanning()
         cameraService.resumeCounting()
         startScanTimeout()
-        pillScanViewModel.isCheckingNdc = false
         pillScanViewModel.ndcComparisonResponse = nil
         pillScanViewModel.isNdcEquivalent = false
         pillScanViewModel.showNdcEquivalencePopup = false
-//        pillScanViewModel.ndcNumber = ""
-//        pillScanViewModel.drugName = ""
-//        pillScanViewModel.drugNameMannuallyEntered = ""
         stockCountViewModel.reset()
     }
 
@@ -521,37 +556,10 @@ extension UnifiedCameraView {
         showStepCompletionPopup = true
     }
 
-    func handleVialCapture() {
-        guard capturedVialImage == nil else {
-            pillScanViewModel.showToastMessage(text: L10n.PillCount.imageAlreadyCaptured)
-            return
-        }
-        guard let image = cameraService.captureSnapshot() else { return }
-        cameraService.stop()
-        let normalized = image.normalized()
-        capturedVialImage = normalized
-        showCaptureFlash = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { showCaptureFlash = false }
-        cameraService.stop()
-        if let path = PhotoFileManager.shared.saveImage(normalized) {
-            vialCapturedImagePath = path
-        }
-    }
-
-    func handleVialRedo() {
-        capturedVialImage = nil
-        vialCapturedImagePath = nil
-        cameraService.start()
-        cameraService.rebindPreviewLayer()
-        cameraService.resetInactivityTimer()
-    }
-
     func handleVialDone() {
         let isPmsTxn = pillScanViewModel.currentTransaction?.is_from_pms ?? false
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
-        guard let imagePath = vialCapturedImagePath else { return }
-        pillScanViewModel.addOrReplaceVialTransactionDetail(imagePath: imagePath)
         if addNoteSettings && !isPmsTxn {
             showNoteOption = true
         } else if nextStep == nil {

@@ -168,13 +168,13 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     func resetBarcodeScanState() {
+        // Clear published values synchronously — caller is always on main thread.
+        // Doing this async allowed scannedCode onChange to re-fire with the stale
+        // value before the clear landed, causing repeated API calls on NDC mismatch.
+        scannedCode = ""
+        scannedCodeType = ""
         sessionQueue.async { [weak self] in
-            guard let self else { return }
-            self.hasScanned = false
-        }
-        DispatchQueue.main.async {
-            self.scannedCode = ""
-            self.scannedCodeType = ""
+            self?.hasScanned = false
         }
     }
 

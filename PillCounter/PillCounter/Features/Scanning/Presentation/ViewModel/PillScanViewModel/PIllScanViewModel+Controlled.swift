@@ -185,15 +185,21 @@ extension PillScanViewModel{
         guard !gtin.isEmpty else { return }
 
         // create new drug
-        let drugId = generateUniqueDrugId()
-
+        let scannedNdc = ndcComparisonResponse?.data?.scannedNdc?.packageNdc ?? ""
+        let newDrugId = generateUniqueDrugId()
+        
+        
         drugMasterDAO.saveManual(
-            ndc: ndcComparisonResponse?.data?.scannedNdc?.packageNdc ?? "",
-            drugId: drugId,
+            ndc: scannedNdc,
+            drugId: newDrugId,
             drugName: ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
             drugType: ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? ""
         )
 
+        
+        // Resolve actual drug_id (fetchOrCreateDrug may return existing entity)
+        let actualDrugId = drugMasterDAO.fetchByNdc(scannedNdc)?.drug_id ?? newDrugId
+        
         var savedPath = ""
 
         if let img = image {
@@ -204,10 +210,12 @@ extension PillScanViewModel{
 
         transactionDAO.update(
             txnId: txnId,
-            drugId: drugId,
+            drugId: isNdcEquivalent ? actualDrugId : nil,
             countType: countType,
             targetCount: nil,
-            barcodeImagePath: savedPath
+            barcodeImagePath: savedPath,
+            substituedDrugId: isNdcEquivalent ? nil : actualDrugId,
+            isSubstitue: isNdcEquivalent
         )
 
         isDrugFound = true

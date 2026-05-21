@@ -63,6 +63,7 @@ class PillScanViewModel: ObservableObject {
     @Published var ndcComparisonResponse: NdcComparisonResponse?
     @Published var isNdcEquivalent: Bool = false
     @Published var showNdcEquivalencePopup = false
+    @Published var ndcMismatchRestartFlow = false
     @Published var shouldAutoProceedToCount = false
     @Published var isNdcAdded: Bool = false
     
@@ -72,6 +73,11 @@ class PillScanViewModel: ObservableObject {
     // Set to true before pushing to PillScanDetailGridScreen so onDisappear
     // in PillCountView knows not to clear transaction data mid-push.
     var isNavigatingToDetailGrid: Bool = false
+
+    // MARK: Vial Step State
+    @Published var capturedVialImage: UIImage? = nil
+    @Published var vialCapturedImagePath: String? = nil
+    @Published var vialDoneTriggered: Bool = false
 
     //MARK: RX FLow
     @Published var showRxFlowPopup: Bool = false

@@ -211,6 +211,10 @@ class HistoryViewModel: ObservableObject {
     func softDeleteTransaction(txnId: Int64) async {
         transactionDAO.softDelete(txnId: txnId)
     }
+    
+    func softDeleteBatch(batchId: Int64) async {
+        batchDAO.softDelete(ids: [batchId])
+    }
 
     // MARK: - Status Counts
     func getStatusCounts(for type: HistoryFilterType) -> (all: Int, completed: Int, pending: Int) {

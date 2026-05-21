@@ -7,13 +7,13 @@ import SwiftUI
 
 struct VialBottomContentView: View {
 
-    let appColors: AppColors
-    let isCaptured: Bool
-    var onRedo: () -> Void
-    var onCapture: () -> Void
-    var onDone: () -> Void
+    @EnvironmentObject var appColors: AppColors
+    @EnvironmentObject var pillScanViewModel: PillScanViewModel
+    @EnvironmentObject var cameraService: CameraService
 
     @Environment(\.isLandscape) private var isLandscape
+
+    private var isCaptured: Bool { pillScanViewModel.capturedVialImage != nil }
 
     var body: some View {
         let layout = isLandscape
@@ -32,13 +32,20 @@ struct VialBottomContentView: View {
                     .font(.caption)
                     .foregroundColor(appColors.text)
             }
-            .onTapGesture { guard isCaptured else { return }; onRedo() }
+            .onTapGesture {
+                guard isCaptured else { return }
+                pillScanViewModel.capturedVialImage = nil
+                pillScanViewModel.vialCapturedImagePath = nil
+                cameraService.start()
+                cameraService.rebindPreviewLayer()
+                cameraService.resetInactivityTimer()
+            }
 
             ZStack {
                 Circle().fill(appColors.primary).frame(width: 70, height: 70)
                 Image(systemName: "camera").font(.system(size: 28, weight: .medium)).foregroundColor(.white)
             }
-            .onTapGesture { onCapture() }
+            .onTapGesture { captureVial() }
 
             VStack(spacing: 10) {
                 Image("done_icon").foregroundColor(isCaptured ? appColors.primary : .gray)
@@ -46,9 +53,32 @@ struct VialBottomContentView: View {
                     .font(.caption)
                     .foregroundColor(isCaptured ? appColors.text : .gray)
             }
-            .onTapGesture { guard isCaptured else { return }; onDone() }
+            .onTapGesture {
+                guard isCaptured else { return }
+                doneVial()
+            }
         }
         .padding(.vertical, 25)
         .padding(.horizontal)
+    }
+
+    private func captureVial() {
+        guard pillScanViewModel.capturedVialImage == nil else {
+            pillScanViewModel.showToastMessage(text: L10n.PillCount.imageAlreadyCaptured)
+            return
+        }
+        guard let image = cameraService.captureSnapshot() else { return }
+        cameraService.stop()
+        let normalized = image.normalized()
+        pillScanViewModel.capturedVialImage = normalized
+        if let path = PhotoFileManager.shared.saveImage(normalized) {
+            pillScanViewModel.vialCapturedImagePath = path
+        }
+    }
+
+    private func doneVial() {
+        guard let imagePath = pillScanViewModel.vialCapturedImagePath else { return }
+        pillScanViewModel.addOrReplaceVialTransactionDetail(imagePath: imagePath)
+        pillScanViewModel.vialDoneTriggered = true
     }
 }

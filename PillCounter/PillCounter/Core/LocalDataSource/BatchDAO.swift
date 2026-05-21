@@ -33,6 +33,7 @@ final class BatchDAO {
         batch.is_synced = false
         CoreDataManager.shared.save(context: context)
         transactionsDidChange.send()
+        print("📦 [BatchDAO] CREATED — batchId: \(batchId), bucketId: \(bucketId), requestId: \(requestId ?? "-")")
         return batch
     }
 
@@ -121,6 +122,7 @@ final class BatchDAO {
         do {
             try context.save()
             transactionsDidChange.send()
+            print("📦 [BatchDAO] UPDATED status — batchId: \(batchId), status: \(status.rawValue)")
             completion?()
         } catch {
             print("❌ BatchDAO.updateStatus save failed:", error)
@@ -131,6 +133,7 @@ final class BatchDAO {
         guard let batch = fetchById(batchId) else { return }
         batch.note = note
         CoreDataManager.shared.save(context: context)
+        print("📦 [BatchDAO] UPDATED note — batchId: \(batchId)")
     }
 
     // MARK: - Delete
@@ -149,6 +152,7 @@ final class BatchDAO {
             transactions.forEach { $0.is_deleted = true }
             try context.save()
             transactionsDidChange.send()
+            print("📦 [BatchDAO] SOFT DELETED — batchIds: \(ids), batches: \(batches.count), transactions: \(transactions.count)")
         } catch {
             print("❌ BatchDAO.softDelete failed:", error)
         }
@@ -159,6 +163,7 @@ final class BatchDAO {
 
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            print("📦 [BatchDAO] DELETED ALL — all batch records removed")
         } catch {
             print("Failed to delete BatchCountEntity: \(error)")
         }

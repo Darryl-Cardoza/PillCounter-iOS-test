@@ -14,16 +14,6 @@ final class DrugMasterDAO {
         CoreDataManager.shared.context
     }
 
-    // MARK: - Create / Upsert
-
-//    func saveFromResponse(_ response: GetDrugResponse, ndc: String, drugId: Int64) {
-//        guard let pillData = response.data else { return }
-//        let entity = fetchOrCreate(ndc: ndc, drugId: drugId)
-//        entity.drug_name = pillData.genericName
-//        entity.drug_type = ""
-//        entity.ndc = ndc
-//        CoreDataManager.shared.save(context: context)
-//    }
 
     func saveManual(
         ndc: String,
@@ -40,6 +30,7 @@ final class DrugMasterDAO {
         if packageQty > 0 { entity.package_qty = packageQty }
         entity.ndc = ndc
         CoreDataManager.shared.save(context: context)
+        print("💊 [DrugMasterDAO] SAVED — ndc: \(ndc), drugId: \(drugId), drugName: \(drugName)")
     }
 
     @discardableResult
@@ -48,6 +39,7 @@ final class DrugMasterDAO {
         let entity = DrugMasterEntity(context: context)
         entity.drug_id = drugId
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
+        print("💊 [DrugMasterDAO] CREATED — ndc: \(ndc), drugId: \(drugId)")
         return entity
     }
 
@@ -96,10 +88,10 @@ final class DrugMasterDAO {
         if let drugType { drug.drug_type = drugType }
         if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
         CoreDataManager.shared.save(context: context)
+        print("💊 [DrugMasterDAO] UPDATED — drugId: \(drugId), drugName: \(drugName ?? "-"), ndc: \(ndc ?? "-"), gtin: \(gtin ?? "-")")
     }
 
     // MARK: - Delete
-
     func deduplicate() {
         var seen: [String: DrugMasterEntity] = [:]
         for drug in fetchAll() {
@@ -117,6 +109,7 @@ final class DrugMasterDAO {
             }
         }
         CoreDataManager.shared.save(context: context)
+        print("💊 [DrugMasterDAO] DEDUPLICATED — removed duplicates, kept \(seen.count) unique NDC entries")
     }
 
     func deleteAll() {
@@ -124,6 +117,7 @@ final class DrugMasterDAO {
 
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            print("💊 [DrugMasterDAO] DELETED ALL — all DrugMaster records removed")
         } catch {
             print("Failed to delete DrugMasterEntity: \(error)")
         }

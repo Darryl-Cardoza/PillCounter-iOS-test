@@ -155,9 +155,9 @@ extension UnifiedCameraView {
             onCancel: { showStepCompletionPopup = false },
             onConfirm: {
                 showStepCompletionPopup = false
-                if capturedVialImage != nil {
-                    capturedVialImage = nil
-                    vialCapturedImagePath = nil
+                if pillScanViewModel.capturedVialImage != nil {
+                    pillScanViewModel.capturedVialImage = nil
+                    pillScanViewModel.vialCapturedImagePath = nil
                     cameraService.start()
                     cameraService.rebindPreviewLayer()
                     cameraService.resetInactivityTimer()

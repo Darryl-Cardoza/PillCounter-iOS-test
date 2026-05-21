@@ -54,6 +54,7 @@ final class UserDAO {
         }
         entity.created_at = Date()
         CoreDataManager.shared.save(context: context)
+        print("👤 [UserDAO] CREATED — userId: \(entity.user_id), email: \(entity.email ?? "-"), name: \((entity.fname ?? "") + " " + (entity.lname ?? ""))")
     }
 
     // MARK: - Read
@@ -87,12 +88,14 @@ final class UserDAO {
         guard let user = fetchByUserId(userId) else { return }
         user.setValue(value, forKey: field.rawValue)
         CoreDataManager.shared.save(context: context)
+        print("👤 [UserDAO] UPDATED — userId: \(userId), field: \(field.rawValue), value: \(value ?? "nil")")
     }
 
     func updateField(_ field: String, value: Any, for userId: String) {
         guard let user = fetchByUserId(userId) else { return }
         user.setValue(value, forKey: field)
         CoreDataManager.shared.save(context: context)
+        print("👤 [UserDAO] UPDATED field — userId: \(userId), field: \(field), value: \(value)")
     }
 
     // MARK: - Delete
@@ -101,12 +104,14 @@ final class UserDAO {
         guard let user = fetchByUserId(userId) else { return }
         context.delete(user)
         CoreDataManager.shared.save(context: context)
+        print("👤 [UserDAO] DELETED — userId: \(userId)")
     }
 
     func deleteAll() {
         let request: NSFetchRequest<NSFetchRequestResult> = UserEntity.fetchRequest()
         do{
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            print("👤 [UserDAO] DELETED ALL — all user records removed")
         }catch {
             print("Failed to delete all")
         }

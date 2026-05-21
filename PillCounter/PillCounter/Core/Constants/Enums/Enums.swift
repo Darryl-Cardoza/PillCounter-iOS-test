@@ -58,6 +58,7 @@ public enum ScanType: Codable, Hashable {
     case barcode
     case stockCount
     case rx_label
+    case resumeCount
 
     var instructionText: String {
         switch self {
@@ -67,6 +68,8 @@ public enum ScanType: Codable, Hashable {
             return L10n.Controlled.scanStockCountBarcode
         case .rx_label:
             return L10n.Controlled.scanRxLabelBarcode
+        case .resumeCount:
+            return L10n.Controlled.scanBarcode
         }
     }
 }

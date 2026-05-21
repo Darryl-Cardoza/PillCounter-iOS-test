@@ -28,17 +28,18 @@ enum StockCountPDFExporter {
         batch: BatchCountEntity?,
         transactions: [GroupedTransaction]
     ) -> URL? {
-        BatchPDFRenderer(batch: batch, transactions: transactions, note: nil).render()
+        BatchPDFRenderer(batch: batch, transactions: transactions, note: nil, userName: nil).render()
     }
 
     @discardableResult
-    static func export(
-        batch: BatchCountEntity?,
-        transactions: [GroupedTransaction],
-        note: String?
-    ) -> URL? {
-        BatchPDFRenderer(batch: batch, transactions: transactions, note: note).render()
-    }
+       static func export(
+           batch: BatchCountEntity?,
+           transactions: [GroupedTransaction],
+           note: String?,
+           userName: String?
+       ) -> URL? {
+           BatchPDFRenderer(batch: batch, transactions: transactions, note: note, userName: userName).render()
+       }
 }
 
 // MARK: - Layout Constants
@@ -71,14 +72,16 @@ private final class BatchPDFRenderer {
     let batch:        BatchCountEntity?
     let transactions: [GroupedTransaction]
     let note:         String?
+    let userName:     String?
 
     private var pageNumber = 0
     private var ctx: UIGraphicsPDFRendererContext!
 
-    init(batch: BatchCountEntity?, transactions: [GroupedTransaction], note: String?) {
+    init(batch: BatchCountEntity?, transactions: [GroupedTransaction], note: String?, userName: String?) {
         self.batch        = batch
         self.transactions = transactions
         self.note         = note
+        self.userName     = userName
     }
 
     // MARK: - Entry
@@ -545,6 +548,524 @@ private final class BatchPDFRenderer {
 
     private func tempURL() -> URL {
         let name = "StockCount_Batch\(batch?.batch_id ?? 0)_\(Int(Date().timeIntervalSince1970)).pdf"
+        return FileManager.default.temporaryDirectory.appendingPathComponent(name)
+    }
+}
+
+
+// MARK: - Drug History PDF
+
+struct DrugHistoryPDFInput {
+    let drugName: String
+    let ndc: String
+    let expiry: String
+    let lotNo: String
+    let date: String
+    let time: String
+    let note: String?
+    let userName: String?
+    let targetCount: Int32
+    let countType: String?
+
+    // Substituted drug (optional)
+    let substituteNdc: String?
+    let substituteDrugName: String?
+
+    // Step details: step → list of (pill_count, created_at)
+    let detailsByStep: [ControlledStep: [(count: Int32, createdAt: Int64)]]
+}
+
+enum DrugHistoryPDFExporter {
+    @discardableResult
+    static func export(input: DrugHistoryPDFInput) -> URL? {
+        DrugHistoryPDFRenderer(input: input).render()
+    }
+}
+
+private final class DrugHistoryPDFRenderer {
+    
+    let input: DrugHistoryPDFInput
+    private var pageNumber = 0
+    private var ctx: UIGraphicsPDFRendererContext!
+    
+    init(input: DrugHistoryPDFInput) {
+        self.input = input
+    }
+    
+    func render() -> URL? {
+        let format = UIGraphicsPDFRendererFormat()
+        format.documentInfo = [
+            kCGPDFContextTitle   as String: "Drug History Report",
+            kCGPDFContextCreator as String: "PillCounter"
+        ]
+        let renderer = UIGraphicsPDFRenderer(
+            bounds: CGRect(x: 0, y: 0, width: PDF.pageWidth, height: PDF.pageHeight),
+            format: format
+        )
+        let url = tempURL()
+        do {
+            try renderer.writePDF(to: url) { ctx in
+                self.ctx = ctx
+                self.renderAll()
+            }
+            return url
+        } catch {
+            print("DrugHistoryPDF export error: \(error)")
+            return nil
+        }
+    }
+    
+    private func renderAll() {
+        beginPage()
+        var y = drawPageHeader()
+        
+        y = drawDrugInfoCard(at: y)
+        
+        if let subNdc = input.substituteNdc, !subNdc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            y = drawSubstituteDrugCard(at: y)
+        }
+        
+        let stepSections: [(ControlledStep, String)] = [
+            (.containerInitiate,    "Initial Container Count"),
+            (.targetVerification,   "Pill Count"),
+            (.targetReverification, "Pill Recount"),
+            (.vial,                 "Dispensed Vial"),
+            (.containerPending,     "Remaining Container Count"),
+        ]
+        
+        for (step, title) in stepSections {
+            guard let details = input.detailsByStep[step], !details.isEmpty else { continue }
+            y = drawStepCard(title: title, step: step, details: details, at: y)
+        }
+        
+        if let note = input.note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            y = drawNoteSection(note, at: y)
+        }
+        
+        drawFooter()
+    }
+    
+    // MARK: - Page
+    
+    private func beginPage() {
+        ctx.beginPage()
+        pageNumber += 1
+    }
+    
+    private func checkPageBreak(neededHeight: CGFloat, currentY: CGFloat) -> CGFloat {
+        if currentY + neededHeight > PDF.pageHeight - 50 {
+            drawFooter()
+            beginPage()
+            return drawContinuationHeader()
+        }
+        return currentY
+    }
+    
+    // MARK: - Header
+    
+    private func drawPageHeader() -> CGFloat {
+        let bandH: CGFloat = 80
+        fill(CGRect(x: 0, y: 0, width: PDF.pageWidth, height: bandH), color: PDF.brand)
+        
+        draw("PillCounter",
+             at: CGPoint(x: PDF.margin, y: 10),
+             font: PDF.font(18, weight: .bold), color: .white)
+        
+        if let name = input.userName, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draw(name,
+                 at: CGPoint(x: PDF.margin, y: 34),
+                 font: PDF.font(11, weight: .medium), color: UIColor.white.withAlphaComponent(0.90))
+        }
+        
+        let titleText = "Drug History Report"
+        let tSize = textSize(titleText, font: PDF.font(13, weight: .semibold))
+        draw(titleText,
+             at: CGPoint(x: PDF.pageWidth - PDF.margin - tSize.width, y: 10),
+             font: PDF.font(13, weight: .semibold), color: .white)
+        
+        let genText = "Generated: \(formattedNow())"
+        let gSize = textSize(genText, font: PDF.font(10))
+        draw(genText,
+             at: CGPoint(x: PDF.pageWidth - PDF.margin - gSize.width, y: 32),
+             font: PDF.font(10), color: UIColor.white.withAlphaComponent(0.80))
+        
+        return bandH + 18
+    }
+    
+    private func drawContinuationHeader() -> CGFloat {
+        let bandH: CGFloat = 44
+        fill(CGRect(x: 0, y: 0, width: PDF.pageWidth, height: bandH), color: PDF.brand)
+        draw("PillCounter — Drug History (cont.)",
+             at: CGPoint(x: PDF.margin, y: 14),
+             font: PDF.font(12, weight: .semibold), color: .white)
+        return bandH + 14
+    }
+    
+    // MARK: - Drug Info Card
+    
+    private func drawDrugInfoCard(at startY: CGFloat) -> CGFloat {
+        let hasSubstitute = (input.substituteNdc ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let dispensedLabel = hasSubstitute ? "Substituted Drug Details" : "Dispensed Drug Details"
+        
+        let rows: [(String, String)] = [
+            ("Drug Name",     input.drugName),
+            ("NDC / GTIN 14", input.ndc),
+            ("Expiry",        input.expiry.isEmpty ? "N/A" : input.expiry),
+            ("Lot No",        input.lotNo.isEmpty  ? "N/A" : input.lotNo),
+            ("Date",          input.date),
+            ("Time",          input.time),
+            ("Count Type",    formatCountType(input.countType)),
+        ]
+        
+        return drawInfoCard(title: dispensedLabel, rows: rows, at: startY)
+    }
+    
+    private func drawSubstituteDrugCard(at startY: CGFloat) -> CGFloat {
+        let rows: [(String, String)] = [
+            ("Drug Name", input.substituteDrugName ?? "N/A"),
+            ("NDC",       input.substituteNdc      ?? "N/A"),
+        ]
+        return drawInfoCard(title: "Requested Drug Details", rows: rows, at: startY)
+    }
+    
+    private func drawInfoCard(title: String, rows: [(String, String)], at startY: CGFloat) -> CGFloat {
+        let rowH: CGFloat = 28
+        let headerH: CGFloat = 34
+        let cardH = headerH + CGFloat(rows.count) * rowH + 10
+        
+        var y = checkPageBreak(neededHeight: cardH + 10, currentY: startY)
+        
+        drawRoundedRect(CGRect(x: PDF.margin, y: y, width: PDF.contentWidth, height: cardH),
+                        fill: PDF.cardBg, stroke: PDF.divider, radius: 10)
+        
+        // Header band
+        let headerPath = UIBezierPath(
+            roundedRect: CGRect(x: PDF.margin, y: y, width: PDF.contentWidth, height: headerH),
+            byRoundingCorners: [.topLeft, .topRight],
+            cornerRadii: CGSize(width: 10, height: 10)
+        )
+        PDF.brand.withAlphaComponent(0.08).setFill()
+        headerPath.fill()
+        
+        draw(title.uppercased(),
+             at: CGPoint(x: PDF.margin + 14, y: y + 10),
+             font: PDF.font(11, weight: .semibold), color: PDF.brand)
+        
+        y += headerH
+        drawHLine(x: PDF.margin + 10, y: y, width: PDF.contentWidth - 20, color: PDF.divider)
+        
+        let labelW = PDF.contentWidth * 0.40
+        let valueW = PDF.contentWidth * 0.60 - 28
+        
+        for (label, value) in rows {
+            draw(label,
+                 in: CGRect(x: PDF.margin + 14, y: y + 7, width: labelW, height: rowH - 4),
+                 font: PDF.font(11), color: PDF.mutedText)
+            draw(value,
+                 in: CGRect(x: PDF.margin + 14 + labelW, y: y + 7, width: valueW, height: rowH - 4),
+                 font: PDF.font(11, weight: .medium), color: PDF.bodyText)
+            y += rowH
+            drawHLine(x: PDF.margin + 10, y: y, width: PDF.contentWidth - 20, color: PDF.divider.withAlphaComponent(0.5))
+        }
+        
+        return y + 14
+    }
+    
+    // MARK: - Step Card
+    
+    private func drawStepCard(
+        title: String,
+        step: ControlledStep,
+        details: [(count: Int32, createdAt: Int64)],
+        at startY: CGFloat
+    ) -> CGFloat {
+        if step == .vial {
+            return drawVialCard(title: title, details: details, at: startY)
+        }
+        
+        let showTarget = (step == .targetVerification || step == .targetReverification)
+        let rowH: CGFloat = 26
+        let headerH: CGFloat = 44
+        let subHeaderH: CGFloat = 20
+        // header + summary row + column header + detail rows
+        let cardH = headerH + 36 + subHeaderH + CGFloat(details.count) * rowH + 10
+        
+        var y = checkPageBreak(neededHeight: cardH + 10, currentY: startY)
+        
+        let total = details.reduce(0) { $0 + Int($1.count) }
+        let cardX = PDF.margin
+        let cardW = PDF.contentWidth
+        
+        drawRoundedRect(CGRect(x: cardX, y: y, width: cardW, height: cardH),
+                        fill: PDF.cardBg, stroke: PDF.divider, radius: 10)
+        
+        // Header
+        let headerPath = UIBezierPath(
+            roundedRect: CGRect(x: cardX, y: y, width: cardW, height: headerH),
+            byRoundingCorners: [.topLeft, .topRight],
+            cornerRadii: CGSize(width: 10, height: 10)
+        )
+        PDF.brand.withAlphaComponent(0.08).setFill()
+        headerPath.fill()
+        
+        draw(title.uppercased(),
+             at: CGPoint(x: cardX + 14, y: y + 10),
+             font: PDF.font(11, weight: .semibold), color: PDF.brand)
+        
+        if showTarget && input.targetCount > 0 {
+            draw("Target: \(input.targetCount)",
+                 at: CGPoint(x: cardX + 14, y: y + 26),
+                 font: PDF.font(10), color: PDF.mutedText)
+        }
+        
+        let totalStr = "\(total)"
+        let totalStrW = textSize(totalStr, font: PDF.font(16, weight: .bold)).width
+        draw(totalStr,
+             at: CGPoint(x: cardX + cardW - totalStrW - 14, y: y + 14),
+             font: PDF.font(16, weight: .bold), color: PDF.accent)
+        
+        y += headerH
+        drawHLine(x: cardX + 10, y: y, width: cardW - 20, color: PDF.divider)
+        y += 1
+        
+        // Column header
+        fill(CGRect(x: cardX, y: y, width: cardW, height: subHeaderH), color: PDF.sectionBg)
+        let batchW = cardW * 0.15
+        let countW = cardW * 0.20
+        let dateW  = cardW * 0.35
+        let timeW  = cardW * 0.30
+        let inset: CGFloat = 14
+        draw("#",
+             in: CGRect(x: cardX + inset, y: y + 4, width: batchW, height: 14),
+             font: PDF.font(10, weight: .semibold), color: PDF.mutedText)
+        draw("COUNT",
+             in: CGRect(x: cardX + inset + batchW, y: y + 4, width: countW, height: 14),
+             font: PDF.font(10, weight: .semibold), color: PDF.mutedText)
+        draw("DATE",
+             in: CGRect(x: cardX + inset + batchW + countW, y: y + 4, width: dateW, height: 14),
+             font: PDF.font(10, weight: .semibold), color: PDF.mutedText)
+        draw("TIME",
+             in: CGRect(x: cardX + inset + batchW + countW + dateW, y: y + 4, width: timeW, height: 14),
+             font: PDF.font(10, weight: .semibold), color: PDF.mutedText)
+        y += subHeaderH
+        
+        for (index, detail) in details.enumerated() {
+            drawHLine(x: cardX + 10, y: y, width: cardW - 20, color: PDF.divider)
+            y += 1
+            let dateStr = Formatter.getDateString(from: detail.createdAt)
+            let timeStr = Formatter.getTimeString(from: detail.createdAt)
+            draw("\(index + 1)",
+                 in: CGRect(x: cardX + inset, y: y + 4, width: batchW, height: rowH - 8),
+                 font: PDF.font(11), color: PDF.mutedText)
+            draw("\(detail.count)",
+                 in: CGRect(x: cardX + inset + batchW, y: y + 4, width: countW, height: rowH - 8),
+                 font: PDF.font(11, weight: .medium), color: PDF.bodyText)
+            draw(dateStr,
+                 in: CGRect(x: cardX + inset + batchW + countW, y: y + 4, width: dateW, height: rowH - 8),
+                 font: PDF.font(11), color: PDF.bodyText)
+            draw(timeStr,
+                 in: CGRect(x: cardX + inset + batchW + countW + dateW, y: y + 4, width: timeW, height: rowH - 8),
+                 font: PDF.font(11), color: PDF.bodyText)
+            y += rowH
+        }
+        
+        // Total row
+        drawHLine(x: cardX + 10, y: y, width: cardW - 20, color: PDF.divider)
+        y += 1
+        fill(CGRect(x: cardX, y: y, width: cardW, height: rowH), color: PDF.sectionBg)
+        draw("Total",
+             in: CGRect(x: cardX + inset, y: y + 5, width: batchW + countW, height: 14),
+             font: PDF.font(11, weight: .semibold), color: PDF.bodyText)
+        draw("\(total)",
+             in: CGRect(x: cardX + inset + batchW + countW, y: y + 5, width: dateW + timeW, height: 14),
+             font: PDF.font(11, weight: .semibold), color: PDF.bodyText,
+             alignment: .right)
+        y += rowH
+        
+        return y + 14
+    }
+    
+    private func drawVialCard(
+        title: String,
+        details: [(count: Int32, createdAt: Int64)],
+        at startY: CGFloat
+    ) -> CGFloat {
+        let headerH: CGFloat = 34
+        let subHeaderH: CGFloat = 20
+        let rowH: CGFloat = 26
+        let cardH = headerH + subHeaderH + CGFloat(details.count) * rowH + 10
+        
+        var y = checkPageBreak(neededHeight: cardH + 10, currentY: startY)
+        
+        let cardX = PDF.margin
+        let cardW = PDF.contentWidth
+        
+        drawRoundedRect(CGRect(x: cardX, y: y, width: cardW, height: cardH),
+                        fill: PDF.cardBg, stroke: PDF.divider, radius: 10)
+        
+        let headerPath = UIBezierPath(
+            roundedRect: CGRect(x: cardX, y: y, width: cardW, height: headerH),
+            byRoundingCorners: [.topLeft, .topRight],
+            cornerRadii: CGSize(width: 10, height: 10)
+        )
+        PDF.brand.withAlphaComponent(0.08).setFill()
+        headerPath.fill()
+        
+        draw(title.uppercased(),
+             at: CGPoint(x: cardX + 14, y: y + 11),
+             font: PDF.font(11, weight: .semibold), color: PDF.brand)
+        
+        y += headerH
+        drawHLine(x: cardX + 10, y: y, width: cardW - 20, color: PDF.divider)
+        y += 1
+        
+        let inset: CGFloat = 14
+        let batchW = cardW * 0.20
+        let dateW  = cardW * 0.45
+        let timeW  = cardW * 0.35
+        
+        fill(CGRect(x: cardX, y: y, width: cardW, height: subHeaderH), color: PDF.sectionBg)
+        draw("#",
+             in: CGRect(x: cardX + inset, y: y + 4, width: batchW, height: 14),
+             font: PDF.font(10, weight: .semibold), color: PDF.mutedText)
+        draw("DATE",
+             in: CGRect(x: cardX + inset + batchW, y: y + 4, width: dateW, height: 14),
+             font: PDF.font(10, weight: .semibold), color: PDF.mutedText)
+        draw("TIME",
+             in: CGRect(x: cardX + inset + batchW + dateW, y: y + 4, width: timeW, height: 14),
+             font: PDF.font(10, weight: .semibold), color: PDF.mutedText)
+        y += subHeaderH
+        
+        for (index, detail) in details.enumerated() {
+            drawHLine(x: cardX + 10, y: y, width: cardW - 20, color: PDF.divider)
+            y += 1
+            let dateStr = Formatter.getDateString(from: detail.createdAt)
+            let timeStr = Formatter.getTimeString(from: detail.createdAt)
+            draw("\(index + 1)",
+                 in: CGRect(x: cardX + inset, y: y + 4, width: batchW, height: rowH - 8),
+                 font: PDF.font(11), color: PDF.mutedText)
+            draw(dateStr,
+                 in: CGRect(x: cardX + inset + batchW, y: y + 4, width: dateW, height: rowH - 8),
+                 font: PDF.font(11), color: PDF.bodyText)
+            draw(timeStr,
+                 in: CGRect(x: cardX + inset + batchW + dateW, y: y + 4, width: timeW, height: rowH - 8),
+                 font: PDF.font(11), color: PDF.bodyText)
+            y += rowH
+        }
+        
+        return y + 14
+    }
+    
+    // MARK: - Note Section
+    
+    private func drawNoteSection(_ note: String, at startY: CGFloat) -> CGFloat {
+        let textWidth  = PDF.contentWidth - 28
+        let textHeight = estimateTextHeight(note, font: PDF.font(11), width: textWidth)
+        let sectionH   = textHeight + 36
+        
+        var y = checkPageBreak(neededHeight: sectionH + 8, currentY: startY)
+        
+        drawRoundedRect(CGRect(x: PDF.margin, y: y, width: PDF.contentWidth, height: sectionH),
+                        fill: PDF.sectionBg, stroke: PDF.divider, radius: 8)
+        
+        draw("NOTE",
+             at: CGPoint(x: PDF.margin + 14, y: y + 10),
+             font: PDF.font(10, weight: .semibold), color: PDF.mutedText)
+        
+        drawWrapped(note,
+                    in: CGRect(x: PDF.margin + 14, y: y + 26, width: textWidth, height: textHeight),
+                    font: PDF.font(11), color: PDF.bodyText)
+        
+        return y + sectionH + 14
+    }
+    
+    // MARK: - Footer
+    
+    private func drawFooter() {
+        let footerY = PDF.pageHeight - 30
+        drawHLine(x: PDF.margin, y: footerY - 10, width: PDF.contentWidth, color: PDF.divider)
+        draw("PillCounter — Drug History Report",
+             at: CGPoint(x: PDF.margin, y: footerY),
+             font: PDF.font(9), color: PDF.mutedText)
+        let pageText = "Page \(pageNumber)"
+        let pw = textSize(pageText, font: PDF.font(9)).width
+        draw(pageText,
+             at: CGPoint(x: PDF.pageWidth - PDF.margin - pw, y: footerY),
+             font: PDF.font(9), color: PDF.mutedText)
+    }
+    
+    // MARK: - Helpers
+    
+    private func formatCountType(_ value: String?) -> String {
+        switch value?.uppercased() {
+        case "FIXED":   return "Fixed"
+        case "REGULAR": return "Regular"
+        default:        return value ?? "N/A"
+        }
+    }
+    
+    private func estimateTextHeight(_ text: String, font: UIFont, width: CGFloat) -> CGFloat {
+        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+        let rect = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attrs, context: nil
+        )
+        return ceil(rect.height)
+    }
+    
+    private func fill(_ rect: CGRect, color: UIColor) {
+        color.setFill()
+        UIBezierPath(rect: rect).fill()
+    }
+    
+    private func drawRoundedRect(_ rect: CGRect, fill fillColor: UIColor, stroke strokeColor: UIColor, radius: CGFloat) {
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: radius)
+        fillColor.setFill(); path.fill()
+        strokeColor.setStroke(); path.lineWidth = 0.5; path.stroke()
+    }
+    
+    private func drawHLine(x: CGFloat, y: CGFloat, width: CGFloat, color: UIColor) {
+        color.setStroke()
+        let p = UIBezierPath()
+        p.move(to: CGPoint(x: x, y: y))
+        p.addLine(to: CGPoint(x: x + width, y: y))
+        p.lineWidth = 0.5; p.stroke()
+    }
+    
+    private func draw(_ text: String, at point: CGPoint, font: UIFont, color: UIColor) {
+        (text as NSString).draw(at: point, withAttributes: [.font: font, .foregroundColor: color])
+    }
+    
+    private func draw(_ text: String, in rect: CGRect, font: UIFont, color: UIColor,
+                      alignment: NSTextAlignment = .left) {
+        let para = NSMutableParagraphStyle()
+        para.alignment = alignment; para.lineBreakMode = .byTruncatingTail
+        (text as NSString).draw(in: rect, withAttributes: [
+            .font: font, .foregroundColor: color, .paragraphStyle: para
+        ])
+    }
+    
+    private func drawWrapped(_ text: String, in rect: CGRect, font: UIFont, color: UIColor) {
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byWordWrapping
+        (text as NSString).draw(in: rect, withAttributes: [
+            .font: font, .foregroundColor: color, .paragraphStyle: para
+        ])
+    }
+    
+    private func textSize(_ text: String, font: UIFont) -> CGSize {
+        (text as NSString).size(withAttributes: [.font: font])
+    }
+    
+    private func formattedNow() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "dd MMM yyyy, HH:mm"
+        return f.string(from: Date())
+    }
+    
+    private func tempURL() -> URL {
+        let name = "DrugHistory_\(Int(Date().timeIntervalSince1970)).pdf"
         return FileManager.default.temporaryDirectory.appendingPathComponent(name)
     }
 }

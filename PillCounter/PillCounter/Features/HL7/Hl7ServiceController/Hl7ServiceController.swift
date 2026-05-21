@@ -89,7 +89,7 @@ final class Hl7ServiceController: ObservableObject {
     private func startHl7Services() {
         guard hl7Manager == nil, let handler = hl7Handler else { return }
 
-        let serviceName = selectedTerminalName.isEmpty ? "PillCounter" : selectedTerminalName
+        let serviceName = selectedTerminalName.isEmpty ? "Terminal-1" : selectedTerminalName
         hl7Manager = Hl7ServiceManager(
             port: 2575,
             serviceName: serviceName,

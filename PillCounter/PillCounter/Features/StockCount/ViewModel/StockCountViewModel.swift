@@ -279,7 +279,7 @@ class StockCountViewModel: ObservableObject {
                 drugName:     drugName,
                 total:        totalSealed + totalOpen,
                 sealedBottles: totalSealed,
-                sealedBottleQty: txnList.first?.bottle_qty ?? 0,
+                sealedBottleQty: txnList.reduce(0) { $0 + $1.bottle_qty },
                 openPills:    totalOpen,
                 lotDetails:   lotDetails
             )

@@ -55,13 +55,15 @@ extension PillScanViewModel {
                 } else if !isEquivalent && isSame{
                     self.showScannedDrugInfoPopoup = true
                 } else {
-                    showNdcEquivalencePopup = true
                     isNdcEquivalent = false
+                    showToastMessage(text: L10n.BarcodeScan.ndcDoesNotMatch)
+                    ndcMismatchRestartFlow = true
                 }
 
             } catch {
-                showNdcEquivalencePopup = true
                 isNdcEquivalent = false
+                showToastMessage(text: L10n.BarcodeScan.ndcDoesNotMatch)
+                ndcMismatchRestartFlow = true
             }
 
             isCheckingNdc = false

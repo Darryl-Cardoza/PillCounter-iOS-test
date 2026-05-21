@@ -42,6 +42,7 @@ final class TransactionDetailDAO {
         parent.addToPillCountTransactionDetails(detail)
 
         CoreDataManager.shared.save(context: context)
+        print("🔍 [TransactionDetailDAO] CREATED — detailId: \(detail.txn_details_id), txnId: \(txnId), pillCount: \(pillCount), type: \(type ?? "-"), isManual: \(isManual)")
     }
 
     func addOrReplaceVial(txnId: Int64, imagePath: String?) {
@@ -108,6 +109,7 @@ final class TransactionDetailDAO {
         block(detail)
         detail.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("🔍 [TransactionDetailDAO] UPDATED — detailId: \(detailId), txnId: \(detail.txn_id)")
     }
 
     // MARK: - Delete
@@ -117,6 +119,7 @@ final class TransactionDetailDAO {
         detail.is_deleted = true
         detail.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        print("🔍 [TransactionDetailDAO] SOFT DELETED — detailId: \(detailId), txnId: \(detail.txn_id)")
     }
 
     func softDeleteAll(txnId: Int64) {
@@ -126,6 +129,7 @@ final class TransactionDetailDAO {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         details.forEach { $0.is_deleted = true; $0.updated_at = now }
         CoreDataManager.shared.save(context: context)
+        print("🔍 [TransactionDetailDAO] SOFT DELETED ALL — txnId: \(txnId), count: \(details.count)")
     }
 
     func softDeleteForStep(txnId: Int64, step: ControlledStep) {
@@ -138,12 +142,14 @@ final class TransactionDetailDAO {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         details.forEach { $0.is_deleted = true; $0.updated_at = now }
         CoreDataManager.shared.save(context: context)
+        print("🔍 [TransactionDetailDAO] SOFT DELETED step — txnId: \(txnId), step: \(step.rawValue), count: \(details.count)")
     }
 
     func deleteAll() {
         let request: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
         do{
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            print("🔍 [TransactionDetailDAO] DELETED ALL — all transaction details removed")
         }catch{
             print("Failed do delete all")
         }

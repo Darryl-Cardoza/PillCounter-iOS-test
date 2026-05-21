@@ -22,11 +22,13 @@ struct HistoryTransactionDetailView: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var historyViewModel: HistoryViewModel
+    @EnvironmentObject private var userViewModel: UserViewModel
 
     // MARK: - Local State
     @StateObject private var pdfService = PDFShareService.shared
     @State private var fullScreenImage: Image?
-
+    @State private var showDeleteConfirmation: Bool = false
+    
     /// Resolved once in .onAppear, kept locally so the view doesn't re-resolve on every render.
     @State private var transaction: PillCountTransactionEntity? = nil
     
@@ -42,14 +44,31 @@ struct HistoryTransactionDetailView: View {
                 },
                 bottomContent: { EmptyView() },
                 headerActions: {
-                    Button { generateAndSharePDF() } label: {
-                        Image("pdf")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 30, height: 30)
-                            .overlay { appColors.primary }
-                            .mask(Image("pdf").resizable().scaledToFit())
-                            .padding(.trailing)
+                    HStack(spacing:16){
+                        Button {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Image("delete")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 30, height: 30)
+                                .overlay { appColors.primary }
+                                .mask(
+                                    Image("delete")
+                                        .resizable()
+                                        .scaledToFit()
+                                )
+                        }
+                        
+                        Button { generateAndSharePDF() } label: {
+                            Image("pdf")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 30, height: 30)
+                                .overlay { appColors.primary }
+                                .mask(Image("pdf").resizable().scaledToFit())
+                                .padding(.trailing)
+                        }
                     }
                 },
                 showBackButton: true,
@@ -64,6 +83,25 @@ struct HistoryTransactionDetailView: View {
                     PillCountingLoader()
                 }
             }
+        }
+        .customPopup(isPresented: $showDeleteConfirmation) {
+            ConfirmationDialogue(
+                title: NSLocalizedString("CONFIRM_DELETE", comment: ""),
+                message: nil,
+                cancelButtonText: "NO",
+                confirmButtonText: "YES",
+                onCancel: {
+                    showDeleteConfirmation = false
+                },
+                onConfirm: {
+                    showDeleteConfirmation = false
+                    guard let txnId = transaction?.txn_id else { return }
+                    Task {
+                        await historyViewModel.softDeleteTransaction(txnId: txnId)
+                        router.navigateBack()
+                    }
+                }
+            )
         }
         .fullScreenCover(
             isPresented: Binding(
@@ -115,28 +153,28 @@ struct HistoryTransactionDetailView: View {
                 .background(appColors.primaryBackground)
             }
 
-            HStack {
-                Spacer()
-
-                DeleteOkButtons(
-                    appColors: appColors,
-                    onDelete: {
-                        Task {
-                            await historyViewModel.softDeleteTransaction(
-                                txnId: transaction?.txn_id ?? 0
-                            )
-                            router.navigateBack()
-                        }
-                    },
-                    onOk: {
-                        router.navigateBack()
-                    }
-                )
-
-                Spacer()
-            }
-            .padding(.vertical, 16)
-            .background(appColors.primaryBackground)
+//            HStack {
+//                Spacer()
+//
+//                DeleteOkButtons(
+//                    appColors: appColors,
+//                    onDelete: {
+//                        Task {
+//                            await historyViewModel.softDeleteTransaction(
+//                                txnId: transaction?.txn_id ?? 0
+//                            )
+//                            router.navigateBack()
+//                        }
+//                    },
+//                    onOk: {
+//                        router.navigateBack()
+//                    }
+//                )
+//
+//                Spacer()
+//            }
+//            .padding(.vertical, 16)
+//            .background(appColors.primaryBackground)
         }
         .padding(.top, 64)
     }
@@ -147,18 +185,50 @@ struct HistoryTransactionDetailView: View {
               let vc = UIApplication.shared.topMostViewController()
         else { return }
 
-        PDFShareService.shared.generateAndShareDrugHistoryPDF(
-            drugName: txn.drug?.drug_name ?? "",
-            totalCount: historyViewModel.getTotalPillCount(for: txn, step: .targetVerification),
-            ndc: txn.drug?.ndc ?? "N/A",
-            expiry: txn.expiry ?? "N/A",
-            lotNo: txn.lot_no ?? "N/A",
-            date: Formatter.getDateString(from: txn.created_at),
-            time: Formatter.getTimeString(from: txn.created_at),
-            note: txn.note,
-            presentingVC: vc
-        )
-    }
+        let fname    = userViewModel.firstName
+               let lname    = userViewModel.lastName
+               let userName = [fname, lname].filter { !$0.isEmpty }.joined(separator: " ")
+
+               let detailsByStep = historyViewModel.detailsByStep.mapValues { details in
+                   details.map { (count: $0.pill_count, createdAt: $0.created_at) }
+               }
+
+               let input = DrugHistoryPDFInput(
+                   drugName:          txn.drug?.drug_name ?? "",
+                   ndc:               txn.drug?.ndc ?? "N/A",
+                   expiry:            txn.expiry ?? "",
+                   lotNo:             txn.lot_no ?? "",
+                   date:              Formatter.getDateString(from: txn.created_at),
+                   time:              Formatter.getTimeString(from: txn.created_at),
+                   note:              txn.note,
+                   userName:          userName.isEmpty ? nil : userName,
+                   targetCount:       txn.target_count,
+                   countType:         txn.count_type,
+                   substituteNdc:     txn.substitueDrug?.ndc,
+                   substituteDrugName: txn.substitueDrug?.drug_name,
+                   detailsByStep:     detailsByStep
+               )
+
+               pdfService.isLoading = true
+               DispatchQueue.global(qos: .userInitiated).async {
+                   let url = DrugHistoryPDFExporter.export(input: input)
+                   DispatchQueue.main.async {
+                       pdfService.isLoading = false
+                       guard let url else { return }
+                       let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                       if let popover = activityVC.popoverPresentationController {
+                           popover.sourceView = vc.view
+                           popover.sourceRect = CGRect(x: vc.view.bounds.midX, y: vc.view.bounds.midY, width: 0, height: 0)
+                           popover.permittedArrowDirections = []
+                       }
+                       activityVC.completionWithItemsHandler = { _, _, _, _ in
+                           try? FileManager.default.removeItem(at: url)
+                       }
+                       vc.present(activityVC, animated: true)
+                   }
+               }
+           }
+       
 }
 
 
@@ -168,8 +238,7 @@ extension HistoryTransactionDetailView {
     private var collapsibleSections: some View {
         VStack(spacing: 10) {
             var drugDetailsTitle: String {
-                if let ndc = transaction?.substitueDrug?.ndc,
-                   !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if transaction?.is_substitute == true {
                     return L10n.History.substitutedDrugDetails
                 } else {
                     return L10n.History.dispensedDrugDetails
@@ -200,8 +269,7 @@ extension HistoryTransactionDetailView {
                 }
             }
             
-            if let ndc = transaction?.substitueDrug?.ndc,
-               !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty  {
+            if transaction?.is_substitute == true {
                 CollapsibleBox(
                     title: L10n.History.requestedDrugDetails,
                     bgColor: appColors.secondaryBackground
@@ -269,7 +337,11 @@ extension HistoryTransactionDetailView {
         showVialInfo: Bool = false
     ) -> some View {
         VStack(spacing: 20) {
-            if !showVialInfo {
+            if showVialInfo{
+                ScrollView(.horizontal, showsIndicators: false) {
+                      batchesGrid(step: step)
+                  }
+            } else {
                 HStack(spacing: 20) {
                     ThumbnailImageView(
                         imagePath: transaction?.barcode_image,
@@ -287,32 +359,70 @@ extension HistoryTransactionDetailView {
                     }
                     .environmentObject(appColors)
 
-                    Spacer()
-
-                    VStack {
+                    VStack(alignment: .center, spacing: 4) {
+                       Spacer()
                         if showTargetCount {
                             // Counted / Target
-                            Text("\(historyViewModel.getTotalCount(step: step))")
-                                .foregroundStyle(appColors.secondary)
-                                .font(.system(size: 25, weight: .bold))
-                                .padding(.bottom, -6)
+//                            Text("\(historyViewModel.getTotalCount(step: step))")
+//                                .foregroundStyle(appColors.secondary)
+//                                .font(.system(size: 25, weight: .bold))
+//                                .padding(.bottom, -6)
+//
+//                            Rectangle()
+//                                .fill(appColors.secondary)
+//                                .frame(width: 50, height: 2)
+//
+//                            Text("\(transaction?.target_count ?? 0)")
+//                                .foregroundStyle(appColors.secondary)
+//                                .font(.system(size: 25, weight: .bold))
+//                                .padding(.top, -6)
+//                                .padding(.bottom, 3)
+                            
+                            let totalCount = historyViewModel.getTotalCount(step: step)
+                             if totalCount > 0 {
+                                 Text("\(totalCount)")
+                                     .foregroundStyle(appColors.secondary)
+                                     .font(.system(size: 25, weight: .bold))
+                                     .padding(.bottom, 3)
+                                     .minimumScaleFactor(0.6)
+                                     .lineLimit(1)
+                                     .padding(.bottom, -6)
 
-                            Rectangle()
-                                .fill(appColors.secondary)
-                                .frame(width: 50, height: 2)
+                                 Rectangle()
+                                     .fill(appColors.secondary)
+                                     .frame(width: 50, height: 2)
 
-                            Text("\(transaction?.target_count ?? 0)")
-                                .foregroundStyle(appColors.secondary)
-                                .font(.system(size: 25, weight: .bold))
-                                .padding(.top, -6)
-                                .padding(.bottom, 3)
-                        } else {
-                            // Container steps — just total, no fraction
+                                 Text("\(transaction?.target_count ?? 0)")
+                                     .foregroundStyle(appColors.secondary)
+                                     .font(.system(size: 25, weight: .bold))
+                                     .minimumScaleFactor(0.6)
+                                     .lineLimit(1)
+                                     .padding(.top, -6)
+
+                                 Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
+                                     .foregroundStyle(appColors.text)
+                                     .font(.system(size: 14))
+                                     .fontWeight(.semibold)
+                                     .multilineTextAlignment(.center)
+                                     .lineLimit(2)
+                             }
+                        }  else {
                             if let txn = transaction {
-                                Text("\(historyViewModel.getTotalPillCount(for: txn, step: step))")
-                                    .foregroundStyle(appColors.secondary)
-                                    .font(.system(size: 25, weight: .bold))
-                                    .padding(.bottom, 3)
+                                let pillCount = historyViewModel.getTotalPillCount(for: txn, step: step)
+                                if pillCount > 0 {
+                                    Text("\(pillCount)")
+                                        .foregroundStyle(appColors.secondary)
+                                        .font(.system(size: 25, weight: .bold))
+                                        .minimumScaleFactor(0.6)
+                                        .lineLimit(1)
+                                    
+                                    Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
+                                        .foregroundStyle(appColors.text)
+                                        .font(.system(size: 14))
+                                        .fontWeight(.semibold)
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                }
                             }
                         }
 
@@ -321,7 +431,10 @@ extension HistoryTransactionDetailView {
                             .font(.system(size: 14))
                             .fontWeight(.semibold)
                             .multilineTextAlignment(.center)
+                    
+                        Spacer()
                     }
+                    .frame(width: 120, height: 100)
 
                     Spacer()
                 }
@@ -480,44 +593,44 @@ extension HistoryTransactionDetailView {
     }
 }
 
-struct DeleteOkButtons: View {
-    // MARK: - Inputs
-    let appColors: AppColors
-    let onDelete: () -> Void
-    let onOk: () -> Void
-
-    var body: some View {
-        EqualWidthHStackButtons(spacing: 16) {
-
-            // DELETE
-            PillCountingButton(
-                iconName: nil,
-                title: L10n.History.deleteButton,
-                textColor: appColors.primary,
-                backgroundColor: .clear,
-                borderColor: appColors.primary,
-                font: .system(size: 14, weight: .semibold),
-                cornerRadius: 30,
-                horizontalPadding: 32,
-                verticalPadding: 14,
-                iconSize: 0,
-                action: onDelete
-            )
-
-            // OK
-            PillCountingButton(
-                iconName: nil,
-                title: L10n.History.okButton,
-                textColor: Color.white,
-                backgroundColor: appColors.primary,
-                borderColor: .clear,
-                font: .system(size: 14, weight: .semibold),
-                cornerRadius: 30,
-                horizontalPadding: 32,
-                verticalPadding: 14,
-                iconSize: 0,
-                action: onOk
-            )
-        }
-    }
-}
+//struct DeleteOkButtons: View {
+//    // MARK: - Inputs
+//    let appColors: AppColors
+//    let onDelete: () -> Void
+//    let onOk: () -> Void
+//
+//    var body: some View {
+//        EqualWidthHStackButtons(spacing: 16) {
+//
+//            // DELETE
+//            PillCountingButton(
+//                iconName: nil,
+//                title: L10n.History.deleteButton,
+//                textColor: appColors.primary,
+//                backgroundColor: .clear,
+//                borderColor: appColors.primary,
+//                font: .system(size: 14, weight: .semibold),
+//                cornerRadius: 30,
+//                horizontalPadding: 32,
+//                verticalPadding: 14,
+//                iconSize: 0,
+//                action: onDelete
+//            )
+//
+//            // OK
+//            PillCountingButton(
+//                iconName: nil,
+//                title: L10n.History.okButton,
+//                textColor: Color.white,
+//                backgroundColor: appColors.primary,
+//                borderColor: .clear,
+//                font: .system(size: 14, weight: .semibold),
+//                cornerRadius: 30,
+//                horizontalPadding: 32,
+//                verticalPadding: 14,
+//                iconSize: 0,
+//                action: onOk
+//            )
+//        }
+//    }
+//}

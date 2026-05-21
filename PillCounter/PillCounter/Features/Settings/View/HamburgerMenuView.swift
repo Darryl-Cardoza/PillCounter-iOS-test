@@ -17,6 +17,7 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    @StateObject private var unsyncedViewModel = UnsyncedViewModel()
 
     @State private var showLogoutPopup: Bool = false
     @State private var showStockCountPopup: Bool = false
@@ -205,7 +206,7 @@ struct HamburgerMenuView: View {
                 .padding(.horizontal, isLandscape ? 10 : 0)
 
         case .UnsyncedTransaction:
-            Text("\(userViewModel.unsyncedTransactions.count)")
+            Text("\(unsyncedViewModel.batches.count + unsyncedViewModel.transactions.count)")
                 .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
               

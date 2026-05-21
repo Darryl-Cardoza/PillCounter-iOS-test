@@ -62,6 +62,7 @@ struct ConfirmationDialogue: View {
                     iconSize: 0,
                     action: onConfirm
                 )
+                .padding(.top, 10)
 
             } else {
 
@@ -96,6 +97,7 @@ struct ConfirmationDialogue: View {
                         action: onConfirm
                     )
                 }
+                .padding(.top, 10)
             }
         }
         .frame(width: 275)

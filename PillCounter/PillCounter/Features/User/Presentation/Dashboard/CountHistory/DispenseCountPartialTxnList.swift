@@ -148,7 +148,7 @@ struct DispenseCountPartialTxnList: View {
         Task {
             await userViewModel.getAllPartialTransactions(countType: countType)
             await MainActor.run {
-                transactions = userViewModel.historyCountTransactions
+                transactions = userViewModel.historyCountTransactions.sorted { $0.created_at > $1.created_at }
                 pillCounts = Dictionary(
                     uniqueKeysWithValues: transactions.map { txn in
                         let counted = TransactionDetailDAO.shared.totalCountForStep(
@@ -174,21 +174,14 @@ extension DispenseCountPartialTxnList {
         userViewModel.currentTransactionTxnId = txnId
         pillScanViewmodel.selectedTransaction = txn
 
-        let lastStep = pillScanViewmodel.getLastSavedControlledStep()
 
-        if lastStep == nil && txn.is_ndc_verfied == false {
-            router.navigate(
-                to: .authentication(
-                    .login(.dashboard(.pillCount(.scan(.barcode))))
-                )
+        let scanType: ScanType = txn.is_ndc_verfied == true ? .resumeCount : .barcode
+        
+        router.navigate(
+            to: .authentication(
+                .login(.dashboard(.pillCount(.scan(scanType))))
             )
-        } else {
-            router.navigate(
-                to: .authentication(
-                    .login(.dashboard(.pillCount(.scan(.barcode))))
-                )
-            )
-        }
+        )
     }
 }
 

@@ -147,10 +147,10 @@ final class TransactionDetailDAO {
 
     func deleteAll() {
         let request: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
-        do{
+        do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
             print("🔍 [TransactionDetailDAO] DELETED ALL — all transaction details removed")
-        }catch{
+        } catch {
             print("Failed do delete all")
         }
     }
@@ -165,4 +165,3 @@ final class TransactionDetailDAO {
         return Int64(newId)
     }
 }
-

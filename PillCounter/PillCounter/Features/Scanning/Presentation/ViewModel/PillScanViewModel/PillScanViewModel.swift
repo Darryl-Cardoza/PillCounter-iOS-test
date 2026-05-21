@@ -81,6 +81,7 @@ class PillScanViewModel: ObservableObject {
 
     //MARK: RX FLow
     @Published var showRxFlowPopup: Bool = false
+    @Published var rxScanFailed: Bool = false
     @Published var scannedRxData: ParsedScanData? = nil
     @Published var bucketOptions: [String] = []
     @Published var selectedBucket: String = ""
@@ -393,7 +394,7 @@ class PillScanViewModel: ObservableObject {
         toastMessage = text
         showToast = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
             self.showToast = false
         }
     }

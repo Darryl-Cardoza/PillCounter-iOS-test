@@ -109,10 +109,10 @@ final class UserDAO {
 
     func deleteAll() {
         let request: NSFetchRequest<NSFetchRequestResult> = UserEntity.fetchRequest()
-        do{
+        do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
             print("👤 [UserDAO] DELETED ALL — all user records removed")
-        }catch {
+        } catch {
             print("Failed to delete all")
         }
     }

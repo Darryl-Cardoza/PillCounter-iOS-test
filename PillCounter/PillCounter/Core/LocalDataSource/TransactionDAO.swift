@@ -29,8 +29,7 @@ final class TransactionDAO {
         expirationDate: String? = nil,
         lotNumber: String? = nil,
         rxNo: String? = nil,
-        bucketId: String? = nil,
-
+        bucketId: String? = nil
     ) -> PillCountTransactionEntity {
         let entity = PillCountTransactionEntity(context: context)
         entity.txn_id = generateUniqueId()
@@ -59,8 +58,6 @@ final class TransactionDAO {
             entity.drug = drug
             drug.addToTransactions(entity)
         }
-        
-    
 
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), countType: \(countType.rawValue), batchId: \(batchId), isFromPms: \(isFromPms)")
@@ -142,6 +139,28 @@ final class TransactionDAO {
         )
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
         return (try? context.fetch(request)) ?? []
+    }
+
+    func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity] {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        let results = (try? context.fetch(request)) ?? []
+        DAOLogger.log(
+            dao: "TransactionDAO", op: "fetchAll",
+            columns: ["txn_id", "drug_id", "count_type", "status", "batch_id", "target_count", "is_from_pms", "is_synced"],
+            rows: results.map { [
+                "\($0.txn_id)",
+                "\($0.drug_id)",
+                $0.count_type ?? "-",
+                $0.status ?? "-",
+                "\($0.batch_id)",
+                "\($0.target_count)",
+                "\($0.is_from_pms)",
+                "\($0.is_synced)"
+            ]}
+        )
+        return results
     }
 
     func getContainerPendingTarget(txnId: Int64) -> Int32 {
@@ -235,15 +254,15 @@ final class TransactionDAO {
             txn.drug_id = drugId
             txn.drug = drug
         }
-        
-       txn.is_substitute = isSubstitue
-       
-       if let substituedDrugId,
-          let substituteDrugEntity = DrugMasterDAO.shared.fetchById(substituedDrugId) {
-           txn.substitute_drug_id = substituedDrugId
-           txn.substitueDrug = substituteDrugEntity
-       }
-        
+
+        txn.is_substitute = isSubstitue
+
+        if let substituedDrugId,
+           let substituteDrugEntity = DrugMasterDAO.shared.fetchById(substituedDrugId) {
+            txn.substitute_drug_id = substituedDrugId
+            txn.substitueDrug = substituteDrugEntity
+        }
+
         txn.count_type = countType.rawValue
         txn.is_synced = false
         if let targetCount { txn.target_count = targetCount }
@@ -268,7 +287,7 @@ final class TransactionDAO {
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
             print("📋 [TransactionDAO] DELETED ALL — all transactions removed")
-        }catch {
+        } catch {
             print("Failed to delete DrugMasterEntity: \(error)")
         }
     }

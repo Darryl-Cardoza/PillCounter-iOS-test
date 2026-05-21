@@ -62,13 +62,12 @@ struct UnifiedCameraView: View {
     @State var isAddDisabled: Bool = false
     @State var showSuccessAnimation: Bool = false
     @State var lastAddedCount: Int = 0
-    @State var showZeroCountPopup: Bool = false
+
     @State var showNoteOption: Bool = false
     @State var showConfirmCompletionPopup: Bool = false
     @State var showDeleteAllTransactionDetailsPopup: Bool = false
     @State var showStepCompletionPopup: Bool = false
     @State var showCountMismatchPopup: Bool = false
-    @State var showTransactionDetailPopup: Bool = false
     @State var selectedTransactionDetail: PillCountTransactionDetailsEntity?
     @State var showTransactionHistory: Bool = true
     @State var isPaused: Bool = false
@@ -102,13 +101,11 @@ struct UnifiedCameraView: View {
             .onChange(of: showDetailGrid) { _, isShowing in
                 if isShowing { cameraService.pauseCounting() }
             }
-            .customPopup(isPresented: $showZeroCountPopup) { zeroCountPopupContent }
             .customPopup(isPresented: $showNoteOption) { showNoteOptionPopup }
             .customPopup(isPresented: $showConfirmCompletionPopup) { showConfirmCompletion }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
             .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
-            .customPopup(isPresented: $showTransactionDetailPopup) { showTransactionDetail }
             .overlay {
                 if showSuccessAnimation {
                     SuccessAnimationView(count: lastAddedCount, color: appColors.secondary)
@@ -215,6 +212,12 @@ struct UnifiedCameraView: View {
         .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
             if show { showConfirmCompletionPopup = true }
         }
+        .onChange(of: pillScanViewModel.rxScanFailed) { _, failed in
+            if failed {
+                pillScanViewModel.rxScanFailed = false
+                restartFlow()
+            }
+        }
         .onChange(of: pillScanViewModel.currentControlledStep) { _, newStep in
             if showPillCountPanel {
                 if hasInitializedStep || currentScanType != .resumeCount {
@@ -273,10 +276,6 @@ struct UnifiedCameraView: View {
             onComplete: { handleComplete() },
             onReset: { showDeleteAllTransactionDetailsPopup = true },
             onShowDetailGrid: { showDetailGrid = true },
-            onTransactionDetailTapped: { detail in
-                selectedTransactionDetail = detail
-                showTransactionDetailPopup = true
-            },
             showTransactionDetails: $showTransactionHistory,
             isPaused: $isPaused
         )
@@ -307,6 +306,13 @@ extension UnifiedCameraView {
         capturedImage = nil
         hasInitializedStep = false
         scanType = currentScanType
+
+        if currentScanType != .resumeCount {
+            pillScanViewModel.selectedTransaction = nil
+            pillScanViewModel.currentTransaction = nil
+            pillScanViewModel.scannedRxData = nil
+            pillScanViewModel.selectedBucket = ""
+        }
 
         cameraService.configureInitialOrientation()
         cameraService.startObservingOrientation()
@@ -364,11 +370,15 @@ extension UnifiedCameraView {
         SpeechManager.shared.speak(scanType.instructionText)
     }
 
+
     func handleScannedCode(_ newValue: String) {
         guard !newValue.isEmpty,
-              pillScanViewModel.isDrugFound == nil,
+//              pillScanViewModel.isDrugFound == nil,
               !pillScanViewModel.isCheckingNdc
-        else { return }
+        else {
+            print("SCANN STOP PPPPP")
+            return
+        }
 
         cameraService.disableBarcodeScanning()
         cameraService.pauseCounting()
@@ -377,12 +387,13 @@ extension UnifiedCameraView {
         scannedRawValue = newValue
 
         Task { @MainActor in
-            guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
+            
+//            guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
 
             if router.selectedPillScanningType == .FIXED
-                && pillScanViewModel.selectedTransaction?.target_count == nil
+//                && pillScanViewModel.selectedTransaction?.target_count == nil
             {
-                switch currentScanType {
+                switch scanType {
                 case .rx_label:
                     if pillScanViewModel.matchesBarcodeFormat(newValue) {
                         cameraState = .rxDetected
@@ -392,7 +403,7 @@ extension UnifiedCameraView {
                         restartFlow()
                     }
                 case .barcode:
-                    handleSubstitute()
+                    guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
                 case .stockCount:
                     await stockCountViewModel.getScannedDrugData(rawValue: newValue)
                 case .resumeCount:
@@ -464,7 +475,7 @@ extension UnifiedCameraView {
         cameraService.resumeIfPaused()
 
         guard cameraService.stableCount > 0 else {
-            showZeroCountPopup = true
+            pillScanViewModel.showToastMessage(text: L10n.PillCount.zeroPillsMessage)
             return
         }
 

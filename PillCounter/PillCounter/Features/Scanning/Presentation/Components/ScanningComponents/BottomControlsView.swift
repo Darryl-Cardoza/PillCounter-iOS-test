@@ -18,7 +18,6 @@ struct BottomControlsView: View {
     let onComplete: () -> Void
     let onReset: () -> Void
     let onShowDetailGrid: () -> Void
-    let onTransactionDetailTapped: (PillCountTransactionDetailsEntity) -> Void
     @Binding var showTransactionDetails: Bool
     @Binding var isPaused: Bool
 

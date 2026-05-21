@@ -48,7 +48,21 @@ final class BatchDAO {
 
     func fetchAll() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        DAOLogger.log(
+            dao: "BatchDAO", op: "fetchAll",
+            columns: ["batch_id", "bucket_id", "status", "is_synced", "is_deleted", "start_date_time", "end_date_time"],
+            rows: results.map { [
+                "\($0.batch_id)",
+                $0.bucket_id ?? "-",
+                $0.status ?? "-",
+                "\($0.is_synced)",
+                "\($0.is_deleted)",
+                "\($0.start_date_time)",
+                "\($0.end_date_time)"
+            ]}
+        )
+        return results
     }
 
     func fetchAllPartial() -> [BatchCountEntity] {
@@ -160,7 +174,6 @@ final class BatchDAO {
 
     func deleteAll() {
         let request: NSFetchRequest<NSFetchRequestResult> = BatchCountEntity.fetchRequest()
-
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
             print("📦 [BatchDAO] DELETED ALL — all batch records removed")

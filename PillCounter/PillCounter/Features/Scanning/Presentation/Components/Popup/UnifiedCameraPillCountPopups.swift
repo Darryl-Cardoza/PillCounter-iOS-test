@@ -11,33 +11,6 @@ import SwiftUI
 
 extension UnifiedCameraView {
 
-    var zeroCountPopupContent: some View {
-        VStack(spacing: 25) {
-            HStack {
-                Text(L10n.PillCount.invalidCount)
-                    .foregroundStyle(appColors.text)
-                    .font(.headline)
-                Spacer()
-                Button { showZeroCountPopup = false } label: {
-                    Image(systemName: "xmark")
-                        .resizable().scaledToFit().frame(width: 16, height: 16)
-                        .foregroundStyle(appColors.text)
-                }
-            }
-            Text(L10n.PillCount.zeroPillsMessage)
-                .foregroundStyle(appColors.text)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            PillCountingButton(
-                iconName: nil, title: L10n.Common.ok,
-                textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
-                font: .system(size: 14, weight: .semibold),
-                cornerRadius: 30, horizontalPadding: 40, verticalPadding: 14, iconSize: 0,
-                action: { showZeroCountPopup = false }
-            )
-        }
-    }
-
     var showNoteOptionPopup: some View {
         NotePopupView(
             title: L10n.PillCount.addNote,
@@ -181,69 +154,69 @@ extension UnifiedCameraView {
         )
     }
 
-    var showTransactionDetail: some View {
-        VStack(spacing: 35) {
-            HStack {
-                Text(String(format: L10n.PillCount.transactionDetail, selectedTransactionDetail?.txn_details_id ?? 0))
-                Spacer()
-                Button {
-                    showTransactionDetailPopup = false
-                    selectedTransactionDetail = nil
-                } label: {
-                    Image(systemName: "xmark")
-                        .resizable().scaledToFit().frame(width: 16, height: 16)
-                        .foregroundStyle(appColors.text)
-                }
-            }
-            HStack(spacing: 30) {
-                if let image = selectedTransactionDetail?.image_path,
-                   let loadedImage = PhotoFileManager.shared.loadImage(from: image) {
-                    loadedImage.resizable().scaledToFill()
-                        .frame(width: 140, height: 120).clipped().cornerRadius(12)
-                } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(appColors.text.opacity(0.5), lineWidth: 1)
-                        .frame(width: 100, height: 80)
-                }
-                VStack(spacing: 10) {
-                    Text(L10n.PillCount.header).foregroundStyle(appColors.primary)
-                    CircleBadge(
-                        size: 50, strokeWidth: 0, outerColor: .clear,
-                        innerColor: appColors.secondary,
-                        text: "\(selectedTransactionDetail?.pill_count ?? 0)",
-                        textColor: .white,
-                        font: .system(size: 18, weight: .bold),
-                        isAnimated: false
-                    )
-                    Text(
-                        "\(Formatter.getDateString(from: selectedTransactionDetail?.created_at ?? 0)) "
-                            + "\(Formatter.getTimeString(from: selectedTransactionDetail?.created_at ?? 0))"
-                    )
-                    .foregroundStyle(appColors.text).font(.system(size: 14))
-                }
-            }
-            HStack {
-                PillCountingButton(
-                    iconName: nil, title: L10n.Common.delete,
-                    textColor: appColors.primary, backgroundColor: .clear, borderColor: appColors.primary,
-                    font: .system(size: 12, weight: .semibold),
-                    cornerRadius: 30, horizontalPadding: 32, verticalPadding: 18, iconSize: 0,
-                    action: {
-                        showTransactionDetailPopup = false
-                        pillScanViewModel.softDeleteCurrentTransactionSelectedTransactionDetail(
-                            txnDetailId: selectedTransactionDetail?.txn_details_id ?? 0
-                        )
-                    }
-                )
-                PillCountingButton(
-                    iconName: nil, title: L10n.Common.ok,
-                    textColor: .white, backgroundColor: appColors.primary, borderColor: appColors.primary,
-                    font: .system(size: 12, weight: .semibold),
-                    cornerRadius: 30, horizontalPadding: 32, verticalPadding: 18, iconSize: 0,
-                    action: { showTransactionDetailPopup = false }
-                )
-            }
-        }
-        .frame(width: 300)
-    }
+//    var showTransactionDetail: some View {
+//        VStack(spacing: 35) {
+//            HStack {
+//                Text(String(format: L10n.PillCount.transactionDetail, selectedTransactionDetail?.txn_details_id ?? 0))
+//                Spacer()
+//                Button {
+//                    showTransactionDetailPopup = false
+//                    selectedTransactionDetail = nil
+//                } label: {
+//                    Image(systemName: "xmark")
+//                        .resizable().scaledToFit().frame(width: 16, height: 16)
+//                        .foregroundStyle(appColors.text)
+//                }
+//            }
+//            HStack(spacing: 30) {
+//                if let image = selectedTransactionDetail?.image_path,
+//                   let loadedImage = PhotoFileManager.shared.loadImage(from: image) {
+//                    loadedImage.resizable().scaledToFill()
+//                        .frame(width: 140, height: 120).clipped().cornerRadius(12)
+//                } else {
+//                    RoundedRectangle(cornerRadius: 12)
+//                        .stroke(appColors.text.opacity(0.5), lineWidth: 1)
+//                        .frame(width: 100, height: 80)
+//                }
+//                VStack(spacing: 10) {
+//                    Text(L10n.PillCount.header).foregroundStyle(appColors.primary)
+//                    CircleBadge(
+//                        size: 50, strokeWidth: 0, outerColor: .clear,
+//                        innerColor: appColors.secondary,
+//                        text: "\(selectedTransactionDetail?.pill_count ?? 0)",
+//                        textColor: .white,
+//                        font: .system(size: 18, weight: .bold),
+//                        isAnimated: false
+//                    )
+//                    Text(
+//                        "\(Formatter.getDateString(from: selectedTransactionDetail?.created_at ?? 0)) "
+//                            + "\(Formatter.getTimeString(from: selectedTransactionDetail?.created_at ?? 0))"
+//                    )
+//                    .foregroundStyle(appColors.text).font(.system(size: 14))
+//                }
+//            }
+//            HStack {
+//                PillCountingButton(
+//                    iconName: nil, title: L10n.Common.delete,
+//                    textColor: appColors.primary, backgroundColor: .clear, borderColor: appColors.primary,
+//                    font: .system(size: 12, weight: .semibold),
+//                    cornerRadius: 30, horizontalPadding: 32, verticalPadding: 18, iconSize: 0,
+//                    action: {
+//                        showTransactionDetailPopup = false
+//                        pillScanViewModel.softDeleteCurrentTransactionSelectedTransactionDetail(
+//                            txnDetailId: selectedTransactionDetail?.txn_details_id ?? 0
+//                        )
+//                    }
+//                )
+//                PillCountingButton(
+//                    iconName: nil, title: L10n.Common.ok,
+//                    textColor: .white, backgroundColor: appColors.primary, borderColor: appColors.primary,
+//                    font: .system(size: 12, weight: .semibold),
+//                    cornerRadius: 30, horizontalPadding: 32, verticalPadding: 18, iconSize: 0,
+//                    action: { showTransactionDetailPopup = false }
+//                )
+//            }
+//        }
+//        .frame(width: 300)
+//    }
 }

@@ -3,13 +3,11 @@ import SwiftUI
 extension PillScanViewModel {
     
     func checkIsNdcMatch(rawValueFromBarcodeOrQr: String) -> Bool {
-
-
+        
         let decoded = decoder.decode(rawValueFromBarcodeOrQr)
         let scannedNdc = decoded.gtin ?? ""
 
-
-        guard let expectedNdc = getExpectedPmsNdc() else {
+        guard let expectedNdc = getExpectedNdc() else {
             return true
         }
 
@@ -20,15 +18,15 @@ extension PillScanViewModel {
         
         return false
     }
-    
-    func manualEnterdControlledDrug(scannedNdc: String){
-        let expectedNdc = getExpectedPmsNdc() ?? ""
-        getControlledDrugInfo(
-            targetNdc: expectedNdc,
-            scannedNdc: scannedNdc
-        )
-    }
-    
+//    
+//    func manualEnterdControlledDrug(scannedNdc: String){
+//        let expectedNdc = getExpectedNdc() ?? ""
+//        getControlledDrugInfo(
+//            targetNdc: expectedNdc,
+//            scannedNdc: scannedNdc
+//        )
+//    }
+//    
     func getControlledDrugInfo(targetNdc: String, scannedNdc: String) {
         let request = NdcValidationRequest(
             targetNdc: targetNdc,
@@ -81,9 +79,8 @@ extension PillScanViewModel {
     }
     
     // Get Only PMS transaction
-    func getExpectedPmsNdc() -> String? {
+    func getExpectedNdc() -> String? {
         guard let txn = selectedTransaction else {
-            print("[NDC] No selected transaction")
             return nil
         }
 
@@ -92,11 +89,9 @@ extension PillScanViewModel {
               !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               txn.count_type == CountType.FIXED.rawValue
         else {
-            print("[NDC] Conditions not met → skipping PMS NDC")
             return nil
         }
 
-        print("[NDC] Using PMS NDC:", ndc)
         return ndc
     }
 }

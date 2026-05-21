@@ -14,7 +14,6 @@ final class DrugMasterDAO {
         CoreDataManager.shared.context
     }
 
-
     func saveManual(
         ndc: String,
         gtin: String = "",
@@ -68,7 +67,20 @@ final class DrugMasterDAO {
 
     func fetchAll() -> [DrugMasterEntity] {
         let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        DAOLogger.log(
+            dao: "DrugMasterDAO", op: "fetchAll",
+            columns: ["drug_id", "ndc", "drug_name", "gtin", "drug_type", "pkg_qty"],
+            rows: results.map { [
+                "\($0.drug_id)",
+                $0.ndc ?? "-",
+                $0.drug_name ?? "-",
+                $0.gtin ?? "-",
+                $0.drug_type ?? "-",
+                "\($0.package_qty)"
+            ]}
+        )
+        return results
     }
 
     // MARK: - Update
@@ -92,6 +104,7 @@ final class DrugMasterDAO {
     }
 
     // MARK: - Delete
+
     func deduplicate() {
         var seen: [String: DrugMasterEntity] = [:]
         for drug in fetchAll() {
@@ -114,7 +127,6 @@ final class DrugMasterDAO {
 
     func deleteAll() {
         let request: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
-
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
             print("💊 [DrugMasterDAO] DELETED ALL — all DrugMaster records removed")

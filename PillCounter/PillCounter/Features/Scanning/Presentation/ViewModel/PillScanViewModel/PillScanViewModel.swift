@@ -14,11 +14,11 @@ import Combine
 class PillScanViewModel: ObservableObject {
 
     // DAO instances
-    let drugMasterDAO = DrugMasterDAO.shared
-    let transactionDAO = TransactionDAO.shared
-    let transactionDetailDAO = TransactionDetailDAO.shared
-    let batchDAO = BatchDAO.shared
-    let userDataLocalStorage = UserDAO.shared
+    let drugMasterDAO = DrugCatalogStore.shared
+    let transactionDAO = TransactionStore.shared
+    let transactionDetailDAO = TransactionDetailStore.shared
+    let batchDAO = BatchStore.shared
+    let userDataLocalStorage = UserStore.shared
 
     // decode the values of the barcode or qr, calling the api, processing it, storing it in database
     let decoder = BarcodeAndQRDecoder()

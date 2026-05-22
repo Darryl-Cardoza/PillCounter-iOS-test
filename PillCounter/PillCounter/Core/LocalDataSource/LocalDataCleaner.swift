@@ -20,10 +20,10 @@ final class LocalDataCleaner {
         do {
             print("Clearing ALL local data...")
 
-            TransactionDetailDAO.shared.deleteAll()
-            TransactionDAO.shared.deleteAll()
-            BatchDAO.shared.deleteAll()
-            DrugMasterDAO.shared.deleteAll()
+            TransactionDetailStore.shared.deleteAll()
+            TransactionStore.shared.deleteAll()
+            BatchStore.shared.deleteAll()
+            DrugCatalogStore.shared.deleteAll()
 
             // Delete all images
             if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {

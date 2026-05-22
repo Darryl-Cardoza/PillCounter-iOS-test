@@ -6,9 +6,9 @@
 import CoreData
 import Combine
 
-final class BatchDAO {
+final class BatchStore {
 
-    static let shared = BatchDAO()
+    static let shared = BatchStore()
     private init() {}
 
     private var context: NSManagedObjectContext {
@@ -49,7 +49,7 @@ final class BatchDAO {
     func fetchAll() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         let results = (try? context.fetch(request)) ?? []
-        DAOLogger.log(
+        StoreLogger.log(
             dao: "BatchDAO", op: "fetchAll",
             columns: ["batch_id", "bucket_id", "status", "is_synced", "is_deleted", "start_date_time", "end_date_time"],
             rows: results.map { [

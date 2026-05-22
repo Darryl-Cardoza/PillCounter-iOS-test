@@ -6,9 +6,9 @@
 import CoreData
 import Combine
 
-final class TransactionDAO {
+final class TransactionStore {
 
-    static let shared = TransactionDAO()
+    static let shared = TransactionStore()
     private init() {}
 
     let transactionsDidChange = PassthroughSubject<Void, Never>()
@@ -59,7 +59,7 @@ final class TransactionDAO {
         entity.created_at = now
         entity.updated_at = now
 
-        if let drugId, let drug = DrugMasterDAO.shared.fetchById(drugId) {
+        if let drugId, let drug = DrugCatalogStore.shared.fetchById(drugId) {
             entity.drug = drug
             drug.addToTransactions(entity)
         }
@@ -158,7 +158,7 @@ final class TransactionDAO {
         request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let results = (try? context.fetch(request)) ?? []
-        DAOLogger.log(
+        StoreLogger.log(
             dao: "TransactionDAO", op: "fetchAll",
             columns: ["txn_id", "drug_id", "count_type", "status", "batch_id", "target_count", "is_from_pms", "is_synced"],
             rows: results.map { [
@@ -177,7 +177,7 @@ final class TransactionDAO {
 
     func getContainerPendingTarget(txnId: Int64) -> Int32 {
         guard let txn = fetchById(txnId) else { return 0 }
-        let containerCount = TransactionDetailDAO.shared.totalCountForStep(txnId: txnId, step: .containerInitiate)
+        let containerCount = TransactionDetailStore.shared.totalCountForStep(txnId: txnId, step: .containerInitiate)
         return max(containerCount - txn.target_count, 0)
     }
 
@@ -204,7 +204,7 @@ final class TransactionDAO {
 
     func updateDrug(txnId: Int64, drugId: Int64) {
         guard let txn = fetchById(txnId),
-              let drug = DrugMasterDAO.shared.fetchById(drugId) else { return }
+              let drug = DrugCatalogStore.shared.fetchById(drugId) else { return }
         txn.drug_id = drugId
         txn.drug = drug
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
@@ -264,7 +264,7 @@ final class TransactionDAO {
         isSubstitue: Bool = false
     ) {
         guard let txn = fetchById(txnId) else { return }
-        if let drugId, let drug = DrugMasterDAO.shared.fetchById(drugId) {
+        if let drugId, let drug = DrugCatalogStore.shared.fetchById(drugId) {
             txn.drug_id = drugId
             txn.drug = drug
         }
@@ -272,7 +272,7 @@ final class TransactionDAO {
         txn.is_substitute = isSubstitue
 
         if let substituedDrugId,
-           let substituteDrugEntity = DrugMasterDAO.shared.fetchById(substituedDrugId) {
+           let substituteDrugEntity = DrugCatalogStore.shared.fetchById(substituedDrugId) {
             txn.substitute_drug_id = substituedDrugId
             txn.substitueDrug = substituteDrugEntity
         }

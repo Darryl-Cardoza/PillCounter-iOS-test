@@ -130,7 +130,7 @@ struct DispenseCountPartialTxnList: View {
         .onAppear {
             reloadTransactions()
         }
-        .onReceive(TransactionDAO.shared.transactionsDidChange.receive(on: DispatchQueue.main)) {
+        .onReceive(TransactionStore.shared.transactionsDidChange.receive(on: DispatchQueue.main)) {
             reloadTransactions()
         }
         .customPopup(
@@ -176,7 +176,7 @@ struct DispenseCountPartialTxnList: View {
 
                 pillCounts = Dictionary(
                     uniqueKeysWithValues: fresh.map { txn in
-                        let counted = TransactionDetailDAO.shared.totalCountForStep(
+                        let counted = TransactionDetailStore.shared.totalCountForStep(
                             txnId: txn.txn_id,
                             step: .targetVerification
                         )

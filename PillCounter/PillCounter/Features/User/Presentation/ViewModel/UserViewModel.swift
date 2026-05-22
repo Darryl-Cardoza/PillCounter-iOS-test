@@ -111,13 +111,13 @@ class UserViewModel: ObservableObject {
 
 
     // MARK: DATABASE
-    let userLocalDB = UserDAO.shared
+    let userLocalDB = UserStore.shared
 
     // DAO instances
-    let transactionDAO = TransactionDAO.shared
-    let transactionDetailDAO = TransactionDetailDAO.shared
-    let drugMasterDAO = DrugMasterDAO.shared
-    let batchDAO = BatchDAO.shared
+    let transactionDAO = TransactionStore.shared
+    let transactionDetailDAO = TransactionDetailStore.shared
+    let drugMasterDAO = DrugCatalogStore.shared
+    let batchDAO = BatchStore.shared
 
     // user repo
     let userRepo = UserRepository.shared

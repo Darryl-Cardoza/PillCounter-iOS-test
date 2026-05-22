@@ -19,7 +19,7 @@ final class DBDebugLogger {
     // MARK: - Users
 
     static func printUsers() {
-        let rows = UserDAO.shared.fetchAll()
+        let rows = UserStore.shared.fetchAll()
         let header = "| user_id | fname | lname | email | phone | pharmacy | npi | verified | lang | timezone | notifications | created_at |"
         let sep    = String(repeating: "-", count: header.count)
         print("\n👤 USERS (\(rows.count) rows)")
@@ -36,7 +36,7 @@ final class DBDebugLogger {
     // MARK: - DrugMaster
 
     static func printDrugMaster() {
-        let rows = DrugMasterDAO.shared.fetchAll()
+        let rows = DrugCatalogStore.shared.fetchAll()
         let header = "| drug_id | ndc | gtin | drug_name | drug_type | package_qty | created_at |"
         let sep    = String(repeating: "-", count: header.count)
         print("\n💊 DRUG MASTER (\(rows.count) rows)")
@@ -53,7 +53,7 @@ final class DBDebugLogger {
     // MARK: - Batches
 
     static func printBatches() {
-        let rows = BatchDAO.shared.fetchAll()
+        let rows = BatchStore.shared.fetchAll()
         let header = "| batch_id | bucket_id | req_id_from_pms | status | is_deleted | is_synced | note | start_date_time | end_date_time |"
         let sep    = String(repeating: "-", count: header.count)
         print("\n📦 BATCHES (\(rows.count) rows)")

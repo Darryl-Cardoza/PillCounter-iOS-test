@@ -222,7 +222,6 @@ extension PillScanViewModel {
         }
     }
 
-    
     @MainActor
     func createBatchAndTxnsFromHL7Request(
         medications: [MedicationData],

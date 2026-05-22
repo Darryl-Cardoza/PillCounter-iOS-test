@@ -5,9 +5,9 @@
 
 import CoreData
 
-final class TransactionDetailDAO {
+final class TransactionDetailStore {
 
-    static let shared = TransactionDetailDAO()
+    static let shared = TransactionDetailStore()
     private init() {}
 
     private var context: NSManagedObjectContext {
@@ -23,7 +23,7 @@ final class TransactionDetailDAO {
         type: String? = nil,
         isManual: Bool = false
     ) {
-        guard let parent = TransactionDAO.shared.fetchById(txnId) else { return }
+        guard let parent = TransactionStore.shared.fetchById(txnId) else { return }
 
         let detail = PillCountTransactionDetailsEntity(context: context)
         detail.txn_details_id = generateUniqueId()

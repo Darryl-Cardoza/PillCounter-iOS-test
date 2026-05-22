@@ -25,9 +25,9 @@ final class UnsyncedViewModel: ObservableObject {
 
     // MARK: - Private
 
-    private let batchDAO = BatchDAO.shared
-    private let transactionDAO = TransactionDAO.shared
-    private let transactionDetailDAO = TransactionDetailDAO.shared
+    private let batchDAO = BatchStore.shared
+    private let transactionDAO = TransactionStore.shared
+    private let transactionDetailDAO = TransactionDetailStore.shared
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Init

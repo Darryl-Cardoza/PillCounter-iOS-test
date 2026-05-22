@@ -5,7 +5,7 @@
 
 import CoreData
 
-final class UserDAO {
+final class UserStore {
 
     enum UserField: String {
         case fname         = "fname"
@@ -23,7 +23,7 @@ final class UserDAO {
         case createdAt     = "created_at"
     }
 
-    static let shared = UserDAO()
+    static let shared = UserStore()
     private init() {}
 
     private var context: NSManagedObjectContext {

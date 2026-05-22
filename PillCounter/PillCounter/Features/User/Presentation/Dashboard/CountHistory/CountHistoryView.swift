@@ -332,7 +332,7 @@ struct CountHistoryView: View {
                     ForEach(filteredTransactions, id: \.txn_id) {
                         (txn: PillCountTransactionEntity) in
 
-                        let counted = TransactionDetailDAO.shared
+                        let counted = TransactionDetailStore.shared
                             .totalCountForStep(
                                 txnId: txn.txn_id,
                                 step: .targetVerification

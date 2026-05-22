@@ -306,9 +306,6 @@ enum L10n {
          static let deleteSelectedTitle = NSLocalizedString("stockCountBatchList.deleteSelectedTitle", comment: "")
          static let deleteBatchMessage = NSLocalizedString("stockCountBatchList.deleteBatchMessage", comment: "")
          static let deleteSelectedBatchesMessage = NSLocalizedString("stockCountBatchList.deleteSelectedBatchesMessage", comment: "")
-//         static let cancel = NSLocalizedString("stockCountBatchList.cancel", comment: "")
-//         static let delete = NSLocalizedString("stockCountBatchList.delete", comment: "")
-  
          static func batchPrefix(_ id: String) -> String {
              String(format: NSLocalizedString("stockCountBatchList.batchPrefix", comment: ""), id)
          }
@@ -327,8 +324,6 @@ enum L10n {
          static let confirmExport = NSLocalizedString("stockCountBatchDetail.confirmExport", comment: "")
          static let addNoteQuestion = NSLocalizedString("stockCountBatchDetail.addNoteQuestion", comment: "")
          static let pleaseAddNote = NSLocalizedString("stockCountBatchDetail.pleaseAddNote", comment: "")
-//         static let yes = NSLocalizedString("stockCountBatchDetail.yes", comment: "")
-//         static let no = NSLocalizedString("stockCountBatchDetail.no", comment: "")
          static let skip = NSLocalizedString("stockCountBatchDetail.skip", comment: "")
   
          static func batchIdTitle(_ id: Int64) -> String {
@@ -351,9 +346,6 @@ enum L10n {
 
             static let deleteTransactionMessage = NSLocalizedString("dispensePartial.dialog.deleteTransactionMessage", comment: "")
             static let deleteSelectedTransactionsMessage = NSLocalizedString("dispensePartial.dialog.deleteSelectedTransactionsMessage", comment: "")
-
-//            static let deleteButton = NSLocalizedString("dispensePartial.dialog.deleteButton", comment: "")
-//            static let cancelButton = NSLocalizedString("dispensePartial.dialog.cancelButton", comment: "")
         }
     }
     

@@ -5,9 +5,9 @@
 
 import CoreData
 
-final class HistoryCleanupDAO {
+final class HistoryCleanupStore {
 
-    static let shared = HistoryCleanupDAO()
+    static let shared = HistoryCleanupStore()
     private init() {}
 
     private var context: NSManagedObjectContext {

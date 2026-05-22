@@ -91,7 +91,7 @@ struct PillCounterApp: App {
 
                                 Task.detached(priority: .background) {
                                     await MainActor.run {
-                                        HistoryCleanupDAO.shared.cleanUpOldHistory()
+                                        HistoryCleanupStore.shared.cleanUpOldHistory()
                                     }
                                 }
 

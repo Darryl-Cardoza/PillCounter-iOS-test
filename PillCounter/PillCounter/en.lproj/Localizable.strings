@@ -176,11 +176,6 @@
 "genericEquivalent.doYouWantSubstitute" = "Do you want to substitute?";
 
 
-// MARK: - CAMERA PERMISSION
-"camera.accessRequired" = "कैमरा एक्सेस आवश्यक है";
-"camera.accessMessage" = "बारकोड स्कैन करने के लिए कृपया सेटिंग्स में कैमरा एक्सेस सक्षम करें।";
-"camera.openSettings" = "सेटिंग्स खोलें";
-
 
 // MARK: - HISTORY SCREEN
 "history.pillCount" = "PILL COUNT";

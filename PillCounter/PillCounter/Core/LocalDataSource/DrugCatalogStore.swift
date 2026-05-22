@@ -5,9 +5,9 @@
 
 import CoreData
 
-final class DrugMasterDAO {
+final class DrugCatalogStore {
 
-    static let shared = DrugMasterDAO()
+    static let shared = DrugCatalogStore()
     private init() {}
 
     private var context: NSManagedObjectContext {
@@ -70,7 +70,7 @@ final class DrugMasterDAO {
     func fetchAll() -> [DrugMasterEntity] {
         let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
         let results = (try? context.fetch(request)) ?? []
-        DAOLogger.log(
+        StoreLogger.log(
             dao: "DrugMasterDAO", op: "fetchAll",
             columns: ["drug_id", "ndc", "drug_name", "gtin", "drug_type", "pkg_qty"],
             rows: results.map { [

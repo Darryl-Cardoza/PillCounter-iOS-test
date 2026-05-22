@@ -13,10 +13,10 @@ import CoreData
 class HistoryViewModel: ObservableObject {
 
     // MARK: - Dependencies
-    private let transactionDAO = TransactionDAO.shared
-    private let transactionDetailDAO = TransactionDetailDAO.shared
-    private let batchDAO = BatchDAO.shared
-    private let userLocalDB = UserDAO.shared
+    private let transactionDAO = TransactionStore.shared
+    private let transactionDetailDAO = TransactionDetailStore.shared
+    private let batchDAO = BatchStore.shared
+    private let userLocalDB = UserStore.shared
 
     // MARK: - AppStorage
     @AppStorage(AppStorageManager.AppStorageKeys.userId) private var userID: String = ""

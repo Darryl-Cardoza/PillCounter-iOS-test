@@ -24,7 +24,7 @@ private struct TxnSyncQueueItem {
 // MARK: - HL7TxnSyncQueue
 final class HL7TxnSyncQueue {
 
-    private let transactionDAO = TransactionDAO.shared
+    private let transactionDAO = TransactionStore.shared
     private let hl7Builder: HL7CompletionBuilder
     private weak var hl7Manager: Hl7ServiceManager?
 
@@ -147,7 +147,7 @@ final class HL7TxnSyncQueue {
         guard let item = queue.first else { return }
 
         DispatchQueue.main.async {
-            TransactionDAO.shared.updateSynced(txnId: item.txnId)
+            TransactionStore.shared.updateSynced(txnId: item.txnId)
         }
     }
 

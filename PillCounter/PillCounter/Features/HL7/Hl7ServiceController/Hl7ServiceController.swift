@@ -34,8 +34,8 @@ final class Hl7ServiceController: ObservableObject {
 
     // MARK: - Dependencies
 
-    let transactionDAO = TransactionDAO.shared
-    let batchDAO = BatchDAO.shared
+    let transactionDAO = TransactionStore.shared
+    let batchDAO = BatchStore.shared
     var cancellables = Set<AnyCancellable>()
 
     // MARK: - HL7 Layer

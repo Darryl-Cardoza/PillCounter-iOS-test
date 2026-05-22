@@ -30,8 +30,8 @@ private struct SyncQueueItem {
 final class HL7BatchSyncQueue {
 
     // MARK: Dependencies
-    private let batchDAO = BatchDAO.shared
-    private let transactionDAO = TransactionDAO.shared
+    private let batchDAO = BatchStore.shared
+    private let transactionDAO = TransactionStore.shared
     private let hl7Builder: HL7CompletionBuilder
     private weak var hl7Manager: Hl7ServiceManager?           // your existing socket manager
 

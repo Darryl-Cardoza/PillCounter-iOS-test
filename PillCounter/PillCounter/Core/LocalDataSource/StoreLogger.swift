@@ -6,7 +6,7 @@
 
 import Foundation
 
-enum DAOLogger {
+enum StoreLogger {
 
     // MARK: - Public entry points
 

@@ -13,10 +13,10 @@ class StockCountViewModel: ObservableObject {
 
     // MARK: - Dependencies
 
-    let batchDAO             = BatchDAO.shared
-    let transactionDAO       = TransactionDAO.shared
-    let drugMasterDAO        = DrugMasterDAO.shared
-    let userDataLocalStorage = UserDAO.shared
+    let batchDAO             = BatchStore.shared
+    let transactionDAO       = TransactionStore.shared
+    let drugMasterDAO        = DrugCatalogStore.shared
+    let userDataLocalStorage = UserStore.shared
     let decoder              = BarcodeAndQRDecoder()
     let controlledRepo       = ControlledRepository.shared
 
@@ -171,7 +171,7 @@ class StockCountViewModel: ObservableObject {
 
         totalNdcRequests = 0
         for transaction in regularCountTransactions {
-            totalNdcRequests = TransactionDetailDAO.shared.totalCount(txnId: transaction.txn_id)
+            totalNdcRequests = TransactionDetailStore.shared.totalCount(txnId: transaction.txn_id)
         }
     }
 

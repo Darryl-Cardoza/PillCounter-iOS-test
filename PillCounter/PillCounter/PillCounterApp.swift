@@ -5,6 +5,7 @@
 
 import SwiftUI
 import Firebase
+import CoreData
 
 @main
 struct PillCounterApp: App {
@@ -32,6 +33,7 @@ struct PillCounterApp: App {
 
     init() {
         _ = CoreDataManager.shared
+        NSManagedObject.installEncryptionHooks()
         
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised

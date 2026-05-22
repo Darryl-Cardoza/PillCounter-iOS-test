@@ -341,7 +341,9 @@ extension UnifiedCameraView {
                 cameraService.start()
                 cameraService.cancelInactivityTimer()
                 initializeTransaction()
-                cameraService.resumeCounting()
+                if pillScanViewModel.currentControlledStep != .vial {
+                    cameraService.resumeCounting()
+                }
             }
         } else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
@@ -455,9 +457,8 @@ extension UnifiedCameraView {
             pillScanViewModel.isDrugFound = nil
             cameraService.disableBarcodeScanning()
             scanTimeoutTask?.cancel()
-            initializeTransaction()
             showPillCountPanel = true
-            cameraService.resumeCounting()
+            initializeTransaction()
         case false:
             showManualEntryPopup = true
         default:
@@ -474,6 +475,11 @@ extension UnifiedCameraView {
             await MainActor.run {
                 pillScanViewModel.getControlledStep(pillCountTxn: pillScanViewModel.currentTransaction)
                 pillScanViewModel.addCurrentOpenPillCount = 0
+                if pillScanViewModel.currentControlledStep == .vial {
+                    cameraService.pauseCounting()
+                } else {
+                    cameraService.resumeCounting()
+                }
             }
         }
     }

@@ -390,11 +390,12 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         guard !isPausedDueToInactivity,
-              isCountingEnabled,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
         else { return }
 
         lastPixelBuffer = pixelBuffer
+
+        guard isCountingEnabled else { return }
 
         // 1. Run tray detection FIRST (synchronous — no completion needed)
         let trays = trayDetector.detect(pixelBuffer: pixelBuffer)

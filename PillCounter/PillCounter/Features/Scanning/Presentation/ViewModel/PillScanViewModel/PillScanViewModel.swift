@@ -125,7 +125,8 @@ class PillScanViewModel: ObservableObject {
         lotNumber: String? = nil,
         rxNo:String? = nil,
         bucketId: String? = nil,
-        priority: String? = nil
+        priority: String? = nil,
+        workFlowStep: String? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.
@@ -167,7 +168,8 @@ class PillScanViewModel: ObservableObject {
             lotNumber: lotNumber,
             rxNo: rxNo,
             bucketId: bucketId,
-            priority: priority
+            priority: priority,
+            workFlowStep: workFlowStep
         )
 
 

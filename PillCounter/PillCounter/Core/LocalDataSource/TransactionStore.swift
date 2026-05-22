@@ -33,7 +33,8 @@ final class TransactionStore {
         lotNumber: String? = nil,
         rxNo: String? = nil,
         bucketId: String? = nil,
-        priority: String? = nil
+        priority: String? = nil,
+        workFlowStep: String? = nil
     ) -> PillCountTransactionEntity {
         let entity = PillCountTransactionEntity(context: context)
         entity.txn_id = generateUniqueId()
@@ -53,6 +54,7 @@ final class TransactionStore {
         entity.expiry = expirationDate
         entity.lot_no = lotNumber
         entity.bucket_id = bucketId
+        entity.workflow_step = workFlowStep
         entity.user = user
 
         let now = Int64(Date().timeIntervalSince1970 * 1000)
@@ -173,6 +175,23 @@ final class TransactionStore {
             ]}
         )
         return results
+    }
+
+    func getWorkflowStep(txn: PillCountTransactionEntity) -> ControlledStep? {
+        guard
+            let stepValue = txn.workflow_step,
+            let step = ControlledStep(rawValue: stepValue)
+        else {
+            return nil
+        }
+        return step
+    }
+
+    func updateWorkflowStep(txnId: Int64, step: ControlledStep) {
+        guard let txn = fetchById(txnId) else { return }
+        txn.workflow_step = step.rawValue
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: context)
     }
 
     func getContainerPendingTarget(txnId: Int64) -> Int32 {

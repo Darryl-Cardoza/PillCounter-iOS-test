@@ -113,6 +113,13 @@ extension PillScanViewModel {
 
         print("[RxScan] Creating transaction → NDC: \(ndc), Name: \(name.isEmpty ? "UNKNOWN" : name), Qty: \(targetQty), RxNo: \(rxNo ?? "nil"), Bucket: \(selectedBucket)")
 
+        let workFlowStep: String
+        if let type = drug.drug_type, !type.trimmingCharacters(in: .whitespaces).isEmpty {
+            workFlowStep = ControlledStep.containerInitiate.rawValue
+        } else {
+            workFlowStep = ControlledStep.targetVerification.rawValue
+        }
+
         await createTransaction(
             drugId:          drug.drug_id,
             countType:       countType,
@@ -121,7 +128,8 @@ extension PillScanViewModel {
             targetCount:     targetQty > 0 ? targetQty : nil,
             drugName:        name,
             rxNo:            rxNo,
-            bucketId:        selectedBucket
+            bucketId:        selectedBucket,
+            workFlowStep:    workFlowStep
         )
 
         await MainActor.run {

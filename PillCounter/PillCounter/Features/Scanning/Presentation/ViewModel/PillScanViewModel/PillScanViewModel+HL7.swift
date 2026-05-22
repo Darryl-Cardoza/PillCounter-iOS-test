@@ -112,7 +112,7 @@ extension PillScanViewModel {
 
         let priority = message.priority == .unknown ? nil : message.priority.name
 
-        for medication in message.medications {
+        for (index, medication) in message.medications.enumerated() {
 
             // RXE-2.1
             let ndc = medication.drugCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,13 +131,20 @@ extension PillScanViewModel {
                 break
             }
 
+            // ZIN|<setId>|EXPECTED_ON_HAND|<qty>|| — setId is 1-based medication index
+            let medicationSetId = Int32(index + 1)
+            let inventoryCount: Int32? = message.zinSegments
+                .first(where: { $0.setId == medicationSetId && $0.dispenseType == "EXPECTED_ON_HAND" })
+                .map { $0.quantity }
+
             await processHl7DrugAndCreateTransaction(
                 ndc: ndc,
                 drugName: drugName,
                 countType: inboundType,
                 targetCount: targetCount,
                 rxNo: orderId,
-                priority: priority
+                priority: priority,
+                inventoryCount: inventoryCount
             )
         }
 
@@ -186,8 +193,11 @@ extension PillScanViewModel {
         countType: CountType,
         targetCount: Int32? = nil,
         rxNo: String? = nil,
-        priority: String? = nil
+        priority: String? = nil,
+        inventoryCount: Int32? = nil
     ) async {
+
+        var drugType: String? = nil
 
         guard !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             Log("HL7: Missing NDC")
@@ -201,6 +211,7 @@ extension PillScanViewModel {
            let localName = existing.drug_name,
            !localName.isEmpty {
 
+            drugType = existing.drug_type
             drugIdToUse = existing.drug_id
             resolvedName = localName
 
@@ -238,6 +249,8 @@ extension PillScanViewModel {
                         packageQty: response.data?.scannedNdc?.safeQuantity ?? 0
                     )
 
+                    drugType = response.data?.scannedNdc?.deaSchedule
+
                     Log("HL7: Drug created via API → \(lookup)")
                 } else {
                     Log("HL7: API returned empty drug name")
@@ -250,7 +263,14 @@ extension PillScanViewModel {
             }
         }
 
-        // MARK: 3️⃣ Create Transaction
+        let isControlled = !(drugType?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
+        let hasInventory = (inventoryCount ?? 0) > 0
+
+        let initialWorkFlowStep: String = isControlled
+            ? ControlledStep.containerInitiate.rawValue
+            : ControlledStep.targetVerification.rawValue
+
+        // MARK: 3 Create Transaction
         await createTransaction(
             drugId: drugIdToUse,
             countType: countType,
@@ -259,10 +279,27 @@ extension PillScanViewModel {
             targetCount: targetCount,
             drugName: resolvedName,
             rxNo: rxNo,
-            priority: priority
+            priority: priority,
+            workFlowStep: initialWorkFlowStep
         )
 
-        // MARK: 4️⃣ Refresh UI / State
+        if isControlled, hasInventory, let invCount = inventoryCount,
+           let txnId = currentTransaction?.txn_id {
+
+            transactionDetailDAO.add(
+                txnId: txnId,
+                pillCount: invCount,
+                imagePath: nil,
+                type: ControlledStep.containerInitiate.rawValue,
+                isManual: true
+            )
+
+            transactionDAO.updateWorkflowStep(txnId: txnId, step: .targetVerification)
+
+            Log("HL7: Pre-filled CONTAINER_INITIATE with \(invCount) from PMS; advanced to targetVerification")
+        }
+
+        // MARK: 4 Refresh UI / State
         getAllTransactionDetailsOfTheCurrentTransaction()
 
         if countType == .FIXED {

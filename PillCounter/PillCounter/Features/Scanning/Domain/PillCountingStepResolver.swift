@@ -63,3 +63,17 @@ struct PillCountingStepResolver {
         return steps
     }
 }
+
+
+extension PillCountingStepResolver {
+
+    static func canProceedToDoubleCount(txn: PillCountTransactionEntity?) -> Bool {
+        let steps = getActiveSteps(txn: txn)
+        return steps.contains(.targetReverification)
+    }
+
+    static func canProceedToBackCount(txn: PillCountTransactionEntity?) -> Bool {
+        let steps = getActiveSteps(txn: txn)
+        return steps.contains(.containerPending)
+    }
+}

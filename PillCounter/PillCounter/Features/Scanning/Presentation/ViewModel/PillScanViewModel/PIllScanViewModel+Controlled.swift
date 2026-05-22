@@ -140,8 +140,8 @@ extension PillScanViewModel{
             return
         }
 
-        // Fetch last saved step
-        guard let lastStep = transactionDetailDAO.lastCompletedStep(txnId: txn.txn_id) else {
+        // Fetch active step
+        guard let lastStep = transactionDAO.getWorkflowStep(txn: txn) else {
             if let type = txn.drug?.drug_type, !type.trimmingCharacters(in: .whitespaces).isEmpty {
                 currentControlledStep = .containerInitiate
             } else {
@@ -150,8 +150,16 @@ extension PillScanViewModel{
             updateControlledTargetCount()
             return
         }
-        print("Last controlled step \(lastStep)")
-        currentControlledStep = lastStep
+        let activeSteps = PillCountingStepResolver.getActiveSteps(txn: txn)
+
+        // If the stored step is no longer in the active steps (e.g. double-count or
+        // back-count step was removed because settings changed), advance to vial.
+        if !activeSteps.contains(lastStep) {
+            currentControlledStep = .vial
+            transactionDAO.updateWorkflowStep(txnId: txn.txn_id, step: .vial)
+        } else {
+            currentControlledStep = lastStep
+        }
         updateControlledTargetCount()
     }
     
@@ -168,6 +176,7 @@ extension PillScanViewModel{
         }
         let next = steps[currentIndex + 1]
         currentControlledStep = next
+        transactionDAO.updateWorkflowStep(txnId: txn.txn_id, step: next)
         updateControlledTargetCount()
     }
     

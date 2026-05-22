@@ -182,12 +182,9 @@ final class HL7BatchSyncQueue {
     }
 
     private func markCurrentBatchSynced() {
-        guard let item = queue.first,
-              let batch = batchDAO.fetchById(item.batchId) else { return }
-
+        guard let item = queue.first else { return }
         DispatchQueue.main.async {
-            batch.is_synced = true
-            try? CoreDataManager.shared.context.save()
+            self.batchDAO.markSynced(batchId: item.batchId)
         }
     }
 

@@ -33,12 +33,14 @@ final class UnsyncedViewModel: ObservableObject {
     // MARK: - Init
 
     init() {
-        // Re-load whenever CoreData writes fire
         batchDAO.transactionsDidChange
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                self?.loadAll()
-            }
+            .sink { [weak self] in self?.loadAll() }
+            .store(in: &cancellables)
+
+        transactionDAO.transactionsDidChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.loadAll() }
             .store(in: &cancellables)
 
         loadAll()

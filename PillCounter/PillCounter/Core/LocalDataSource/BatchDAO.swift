@@ -152,6 +152,14 @@ final class BatchDAO {
 
     // MARK: - Delete
 
+    func markSynced(batchId: Int64) {
+        guard let batch = fetchById(batchId) else { return }
+        batch.is_synced = true
+        try? context.save()
+        transactionsDidChange.send()
+        print("📦 [BatchDAO] SYNCED — batchId: \(batchId)")
+    }
+
     func softDelete(ids: Set<Int64>) {
         let batchReq: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         batchReq.predicate = NSPredicate(format: "batch_id IN %@", ids)

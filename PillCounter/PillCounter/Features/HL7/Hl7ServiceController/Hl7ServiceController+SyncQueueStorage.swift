@@ -64,7 +64,6 @@ extension Hl7ServiceController {
         let hl7 = HL7CompletionBuilder().buildInventoryMessage(batch: batch, user: user)
         hl7Manager?.sendClientHL7(hl7)
 
-        batch.is_synced = true
-        try? CoreDataManager.shared.context.save()
+        batchDAO.markSynced(batchId: batchId)
     }
 }

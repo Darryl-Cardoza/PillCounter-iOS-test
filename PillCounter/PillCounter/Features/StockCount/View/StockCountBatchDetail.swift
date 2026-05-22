@@ -286,7 +286,7 @@ struct StockCountBatchDetail: View {
             }
             .padding(.bottom, 20)
         }
-        .padding(.top, 55)
+        .padding(.top, 64)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }

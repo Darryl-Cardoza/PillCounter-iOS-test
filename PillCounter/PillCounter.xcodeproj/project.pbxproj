@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7967E1462FA33F00009E2B99 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 7967E1452FA33F00009E2B99 /* ComposeApp */; };
+		797D55B42FC0558B00EA9A17 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 797D55B32FC0558B00EA9A17 /* ComposeApp */; };
 		79963B792F8543920053241C /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 79963B782F8543920053241C /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
@@ -72,7 +72,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				79963B792F8543920053241C /* FirebaseMessaging in Frameworks */,
-				7967E1462FA33F00009E2B99 /* ComposeApp in Frameworks */,
+				797D55B42FC0558B00EA9A17 /* ComposeApp in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -142,7 +142,7 @@
 			name = PillCounter;
 			packageProductDependencies = (
 				79963B782F8543920053241C /* FirebaseMessaging */,
-				7967E1452FA33F00009E2B99 /* ComposeApp */,
+				797D55B32FC0558B00EA9A17 /* ComposeApp */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -234,7 +234,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				79963B772F8543920053241C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				7967E1472FA33FAB009E2B99 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
+				797D55B22FC0558B00EA9A17 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -676,7 +676,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		7967E1472FA33FAB009E2B99 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
+		797D55B22FC0558B00EA9A17 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage";
 		};
@@ -694,7 +694,7 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		7967E1452FA33F00009E2B99 /* ComposeApp */ = {
+		797D55B32FC0558B00EA9A17 /* ComposeApp */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ComposeApp;
 		};

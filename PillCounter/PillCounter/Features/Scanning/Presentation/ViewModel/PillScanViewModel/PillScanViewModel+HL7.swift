@@ -12,23 +12,83 @@ extension PillScanViewModel {
     func handleReceivedMessage(
         message: CompleteHL7Message,
         callback: HL7SimpleCallback? = nil
-    ){
-        guard let inboundType = classifyInboundMessage(message) else {
+    ) {
+
+        guard let msgType = classifyInboundMessage(message) else {
+            print("Unknown HL7 message")
             return
         }
-          
-        buildNotification(message: message, messageType: inboundType)
+
+        let countType: CountType =
+            (msgType == .dispenseOrder) ? .FIXED : .REGULAR
+
+        if msgType == .dispenseOrder ||
+            msgType == .inventoryRequest {
+
+            buildNotification(
+                message: message,
+                messageType: countType
+            )
+        }
+
+        print("MSG Type \(msgType)")
 
         Task(priority: .background) {
-            switch inboundType {
-            case .FIXED:
-                 await createFixedHl7Transaction(message:message, inboundType: .FIXED, callback: callback)
-            case .REGULAR:
-                 await createRegularHl7Transaction(message:message, inboundType: .REGULAR, callback: callback)
+
+            if msgType == .dispenseOrder {
+
+                await createFixedHl7Transaction(
+                    message: message,
+                    inboundType: .FIXED,
+                    callback: callback
+                )
+
+            } else if msgType == .inventoryRequest {
+
+                await createRegularHl7Transaction(
+                    message: message,
+                    inboundType: .REGULAR,
+                    callback: callback
+                )
+
+            } else if msgType == .cancelOrder {
+
+                await cancelOrderTransactions(
+                    message: message,
+                    callback: callback
+                )
             }
         }
     }
     
+    func classifyInboundMessage(
+        _ message: CompleteHL7Message
+    ) -> Hl7MessageType? {
+
+        // Cancel Order
+        if message.order?.orderControl == "CA",
+           !(message.order?.placerOrderId.isEmpty ?? true) {
+            return .cancelOrder
+        }
+
+        // Dispense Request
+        if message.messageType == "RDE",
+           message.triggerEvent == "O11",
+           !message.medications.isEmpty {
+
+            return .dispenseOrder
+        }
+
+        // Inventory Request
+        if message.messageType == "INR",
+           message.triggerEvent == "U04",
+           !message.medications.isEmpty {
+
+            return .inventoryRequest
+        }
+
+        return nil
+    }
     
     @MainActor
     private func createFixedHl7Transaction(
@@ -50,6 +110,8 @@ extension PillScanViewModel {
             return
         }
 
+        let priority = message.priority == .unknown ? nil : message.priority.name
+
         for medication in message.medications {
 
             // RXE-2.1
@@ -63,18 +125,19 @@ extension PillScanViewModel {
             let targetCount = Int32(medication.requestedQty ?? "0") ?? 0
 
             let orderId = order.placerOrderId
-            
-            if ndc.isEmpty ||   qty == nil {
+
+            if ndc.isEmpty || qty == nil {
                 hasError = true
                 break
             }
-            
+
             await processHl7DrugAndCreateTransaction(
                 ndc: ndc,
                 drugName: drugName,
                 countType: inboundType,
                 targetCount: targetCount,
-                rxNo: orderId
+                rxNo: orderId,
+                priority: priority
             )
         }
 
@@ -98,22 +161,22 @@ extension PillScanViewModel {
     }
 
     
-    private func classifyInboundMessage(
-        _ message: CompleteHL7Message
-    ) -> CountType? {
-        if message.messageType == "RDE",
-           message.triggerEvent == "O11",
-           !message.medications.isEmpty {
-            return .FIXED
-        }
-
-        if message.messageType == "INR",
-           message.triggerEvent == "U04",
-           !message.medications.isEmpty {
-            return .REGULAR
-        }
-        return nil
-    }
+//    private func classifyInboundMessage(
+//        _ message: CompleteHL7Message
+//    ) -> CountType? {
+//        if message.messageType == "RDE",
+//           message.triggerEvent == "O11",
+//           !message.medications.isEmpty {
+//            return .FIXED
+//        }
+//
+//        if message.messageType == "INR",
+//           message.triggerEvent == "U04",
+//           !message.medications.isEmpty {
+//            return .REGULAR
+//        }
+//        return nil
+//    }
 
     
     @MainActor
@@ -122,7 +185,8 @@ extension PillScanViewModel {
         drugName: String,
         countType: CountType,
         targetCount: Int32? = nil,
-        rxNo: String? = nil
+        rxNo: String? = nil,
+        priority: String? = nil
     ) async {
 
         guard !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -194,7 +258,8 @@ extension PillScanViewModel {
             isControlled: true,
             targetCount: targetCount,
             drugName: resolvedName,
-            rxNo: rxNo
+            rxNo: rxNo,
+            priority: priority
         )
 
         // MARK: 4️⃣ Refresh UI / State
@@ -206,6 +271,33 @@ extension PillScanViewModel {
     }
     
     
+    @MainActor
+    private func cancelOrderTransactions(
+        message: CompleteHL7Message,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+        guard let rxNo = message.order?.placerOrderId, !rxNo.isEmpty else {
+            callback?(false)
+            return
+        }
+
+        let txns = transactionDAO.fetchByRxNo(rxNo)
+        guard !txns.isEmpty else {
+            Log("HL7: Cancel order — no transactions found for Rx \(rxNo)")
+            callback?(false)
+            return
+        }
+
+        for txn in txns {
+            transactionDAO.softDelete(txnId: txn.txn_id)
+        }
+
+        Log("HL7: Cancelled \(txns.count) transaction(s) for Rx \(rxNo)")
+        getAllTransactionDetailsOfTheCurrentTransaction()
+        callback?(true)
+    }
+
+
     func buildNotification(
         message: CompleteHL7Message,
         messageType: CountType

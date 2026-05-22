@@ -124,7 +124,8 @@ class PillScanViewModel: ObservableObject {
         expirationDate: String? = nil,
         lotNumber: String? = nil,
         rxNo:String? = nil,
-        bucketId: String? = nil
+        bucketId: String? = nil,
+        priority: String? = nil
     ) async {
         // creating the transaction for the pill.
         // step1: get the user.
@@ -165,7 +166,8 @@ class PillScanViewModel: ObservableObject {
             expirationDate: expirationDate,
             lotNumber: lotNumber,
             rxNo: rxNo,
-            bucketId: bucketId
+            bucketId: bucketId,
+            priority: priority
         )
 
 

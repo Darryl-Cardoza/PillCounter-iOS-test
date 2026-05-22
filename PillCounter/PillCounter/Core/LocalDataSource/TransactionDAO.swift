@@ -4,11 +4,14 @@
 //
 
 import CoreData
+import Combine
 
 final class TransactionDAO {
 
     static let shared = TransactionDAO()
     private init() {}
+
+    let transactionsDidChange = PassthroughSubject<Void, Never>()
 
     private var context: NSManagedObjectContext {
         CoreDataManager.shared.context
@@ -29,7 +32,8 @@ final class TransactionDAO {
         expirationDate: String? = nil,
         lotNumber: String? = nil,
         rxNo: String? = nil,
-        bucketId: String? = nil
+        bucketId: String? = nil,
+        priority: String? = nil
     ) -> PillCountTransactionEntity {
         let entity = PillCountTransactionEntity(context: context)
         entity.txn_id = generateUniqueId()
@@ -37,6 +41,7 @@ final class TransactionDAO {
         entity.drug_id = drugId ?? 0
         entity.batch_id = batchId
         entity.rx_no = rxNo
+        entity.txn_priority = priority
         entity.count_type = countType.rawValue
         entity.status = CountStatus.PARTIAL.rawValue
         entity.is_deleted = false
@@ -61,6 +66,7 @@ final class TransactionDAO {
 
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), countType: \(countType.rawValue), batchId: \(batchId), isFromPms: \(isFromPms)")
+        transactionsDidChange.send()
         return entity
     }
 
@@ -108,6 +114,12 @@ final class TransactionDAO {
             user, startTime, endTime
         )
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        return (try? context.fetch(request)) ?? []
+    }
+
+    func fetchByRxNo(_ rxNo: String) -> [PillCountTransactionEntity] {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "rx_no == %@ AND is_deleted == false", rxNo)
         return (try? context.fetch(request)) ?? []
     }
 
@@ -222,6 +234,7 @@ final class TransactionDAO {
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] UPDATED status — txnId: \(txnId), status: \(status.rawValue)")
+        transactionsDidChange.send()
     }
 
     func updateNdcVerified(txnId: Int64, verified: Bool) {
@@ -238,6 +251,7 @@ final class TransactionDAO {
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] UPDATED synced — txnId: \(txnId)")
+        transactionsDidChange.send()
     }
 
     func update(
@@ -280,6 +294,7 @@ final class TransactionDAO {
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] SOFT DELETED — txnId: \(txnId)")
+        transactionsDidChange.send()
     }
 
     func deleteAll() {

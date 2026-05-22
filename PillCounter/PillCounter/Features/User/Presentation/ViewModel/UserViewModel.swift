@@ -548,6 +548,9 @@ class UserViewModel: ObservableObject {
             inventory: nil,
             acknowledgment: nil,
             notes: [],
+            inventoryResponseItems: [],
+            zinSegments: [],
+            priority: .unknown,
             customSegments: [],
             obxSegments: [],
             errors: []
@@ -1059,3 +1062,5 @@ class UserViewModel: ObservableObject {
         regularCountTransactionPartialCount = 0
     }
 }
+
+

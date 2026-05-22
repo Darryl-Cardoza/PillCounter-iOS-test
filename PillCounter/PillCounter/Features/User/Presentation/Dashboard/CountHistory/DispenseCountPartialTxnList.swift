@@ -130,6 +130,9 @@ struct DispenseCountPartialTxnList: View {
         .onAppear {
             reloadTransactions()
         }
+        .onReceive(TransactionDAO.shared.transactionsDidChange.receive(on: DispatchQueue.main)) {
+            reloadTransactions()
+        }
         .customPopup(
             isPresented: Binding(
                 get: { pendingAction != nil },
@@ -148,9 +151,31 @@ struct DispenseCountPartialTxnList: View {
         Task {
             await userViewModel.getAllPartialTransactions(countType: countType)
             await MainActor.run {
-                transactions = userViewModel.historyCountTransactions.sorted { $0.created_at > $1.created_at }
+                let fresh = userViewModel.historyCountTransactions.sorted { $0.created_at > $1.created_at }
+                let freshIds = Set(fresh.map { $0.txn_id })
+                let removedIds = Set(transactions.map { $0.txn_id }).subtracting(freshIds)
+
+                if !removedIds.isEmpty {
+                    deletingIds.formUnion(removedIds)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            transactions.removeAll { removedIds.contains($0.txn_id) }
+                        }
+                        deletingIds.subtract(removedIds)
+                        resetList.toggle()
+                    }
+                }
+
+                let added = fresh.filter { !Set(transactions.map { $0.txn_id }).contains($0.txn_id) }
+                if !added.isEmpty {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
+                        transactions = fresh
+                    }
+                    resetList.toggle()
+                }
+
                 pillCounts = Dictionary(
-                    uniqueKeysWithValues: transactions.map { txn in
+                    uniqueKeysWithValues: fresh.map { txn in
                         let counted = TransactionDetailDAO.shared.totalCountForStep(
                             txnId: txn.txn_id,
                             step: .targetVerification

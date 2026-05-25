@@ -14,6 +14,7 @@ struct StockCountBatchDetail: View {
     @EnvironmentObject private var router: Router
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var stockCountVieModel: StockCountViewModel
+    @EnvironmentObject private var userViewModel: UserViewModel
 
     // delete state
     @State private var isEditing: Bool = false
@@ -170,6 +171,8 @@ struct StockCountBatchDetail: View {
         } else {
 
             // NORMAL MODE
+            let userName = [userViewModel.firstName, userViewModel.lastName].filter { !$0.isEmpty }.joined(separator: " ")
+
 
             HStack(spacing: 16) {
 
@@ -180,7 +183,7 @@ struct StockCountBatchDetail: View {
                     let note  = stockCountVieModel.note.isEmpty ? nil : stockCountVieModel.note
                     isGeneratingPDF = true
                     DispatchQueue.global(qos: .userInitiated).async {
-                        let url = StockCountPDFExporter.export(batch: batch, transactions: txns, note: note)
+                        let url = StockCountPDFExporter.export(batch: batch, transactions: txns, note: note, userName: userName)
                         DispatchQueue.main.async {
                             isGeneratingPDF = false
                             if let url {
@@ -273,7 +276,7 @@ struct StockCountBatchDetail: View {
                             to: .authentication(
                                 .login(
                                     .dashboard(
-                                        .pillCount(.barcodeScanning(.stockCount))
+                                        .pillCount(.scan(.stockCount))
                                     )
                                 )
                             )
@@ -283,7 +286,7 @@ struct StockCountBatchDetail: View {
             }
             .padding(.bottom, 20)
         }
-        .padding(.top, 55)
+        .padding(.top, 64)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }

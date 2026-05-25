@@ -32,6 +32,11 @@ final class CoreDataManager {
             if let error = error {
                 print("Failed to load Core Data: \(error.localizedDescription)")
             }
+            #if DEBUG
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                DBDebugLogger.printAll()
+            }
+            #endif
         }
     }
     

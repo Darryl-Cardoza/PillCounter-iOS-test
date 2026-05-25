@@ -391,7 +391,7 @@ struct UserHistoryView: View {
                 endDate: $historyViewModel.selectedEndDate,
                 monthsToShow: $historyViewModel.calendarMonthsToShow
             )
-            .padding(.top,  50)
+            .padding(.top,  52)
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -407,6 +407,7 @@ struct UserHistoryView: View {
                         .foregroundStyle(appColors.primary)
                 }
                 .padding(.top, 10)
+                .frame(height: 52, alignment: .center)
                 .padding(.trailing, 16)
             }
         }

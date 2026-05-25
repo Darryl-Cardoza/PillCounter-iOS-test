@@ -37,6 +37,7 @@ final class PDFShareService: ObservableObject {
         date: String,
         time: String,
         note: String?,
+        userName: String? = nil,
         presentingVC: UIViewController
     ) {
 
@@ -56,7 +57,8 @@ final class PDFShareService: ObservableObject {
                 lotNo: lotNo,
                 date: date,
                 time: time,
-                note: note
+                note: note,
+                userName: userName
             )
 
             let tempURL = FileManager.default.temporaryDirectory
@@ -119,7 +121,8 @@ extension PDFShareService {
         lotNo: String,
         date: String,
         time: String,
-        note: String?
+        note: String?,
+        userName: String? = nil
     ) -> Data {
 
         let pageRect = CGRect(x: 0, y: 0, width: 595, height: 842)  // A4
@@ -138,6 +141,17 @@ extension PDFShareService {
                 y: &y,
                 centerX: centerX
             )
+
+            // User name
+             if let name = userName, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                 y += 8
+                 drawCenteredText(
+                     name,
+                     font: .systemFont(ofSize: 13, weight: .medium),
+                     y: &y,
+                     centerX: centerX
+                 )
+             }
 
             y += 20
 

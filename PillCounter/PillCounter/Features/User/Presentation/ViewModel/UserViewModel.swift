@@ -13,7 +13,6 @@ import ComposeApp
 @MainActor  // decalaring this as an main actor since we will change the colors on the app launch.
 class UserViewModel: ObservableObject {
     // MARK: - APP STORAGE
-    let pillDataLocalStorage = PillsDataLocalStorage.shared
     
      
     // get the access token from the app storage
@@ -112,11 +111,13 @@ class UserViewModel: ObservableObject {
 
 
     // MARK: DATABASE
-    // get the user db
-    let userLocalDB = UserLocalDataSource.shared
+    let userLocalDB = UserStore.shared
 
-    // get the pill db
-    let pillLocalDB = PillsDataLocalStorage.shared
+    // DAO instances
+    let transactionDAO = TransactionStore.shared
+    let transactionDetailDAO = TransactionDetailStore.shared
+    let drugMasterDAO = DrugCatalogStore.shared
+    let batchDAO = BatchStore.shared
 
     // user repo
     let userRepo = UserRepository.shared
@@ -180,7 +181,7 @@ class UserViewModel: ObservableObject {
         }
 
         if !userID.isEmpty,
-           let localUser = userLocalDB.getUserByUserId(by: userID) {
+           let localUser = userLocalDB.fetchByUserId( userID) {
 
 
             let name = Formatter.segregateName(from: localUser.fname ?? "")
@@ -240,8 +241,8 @@ class UserViewModel: ObservableObject {
                 userID = getUserResult.data?.profile?.userId ?? ""
 
                 if let userId = userProfileDetails?.userId,
-                   userLocalDB.getUserByUserId(by: userId) == nil {
-                    userLocalDB.saveUser(from: getUserResult)
+                   userLocalDB.fetchByUserId( userId) == nil {
+                    userLocalDB.save(from: getUserResult)
                 }
 
             } else {
@@ -317,11 +318,11 @@ class UserViewModel: ObservableObject {
                     ?? previousUserProfileDetails
                 
                 if !userID.isEmpty {
-                    userLocalDB.updateUser(userId: userID, field: .fname, value: combinedName)
-                    userLocalDB.updateUser(userId: userID, field: .email, value: email)
-                    userLocalDB.updateUser(userId: userID, field: .pharmacyName, value: pharmacyName)
-                    userLocalDB.updateUser(userId: userID, field: .phoneNumber, value: phoneNumber)
-                    userLocalDB.updateUser(userId: userID, field: .npiId, value: npiID)
+                    userLocalDB.update(userId: userID, field: .fname, value: combinedName)
+                    userLocalDB.update(userId: userID, field: .email, value: email)
+                    userLocalDB.update(userId: userID, field: .pharmacyName, value: pharmacyName)
+                    userLocalDB.update(userId: userID, field: .phoneNumber, value: phoneNumber)
+                    userLocalDB.update(userId: userID, field: .npiId, value: npiID)
                 }
             } else {
             }
@@ -355,7 +356,7 @@ class UserViewModel: ObservableObject {
     func getAllTransactionsAndFilterByCountType() {
 
         // Get the user
-        guard let user = userLocalDB.getUserByUserId(by: userID) else {
+        guard let user = userLocalDB.fetchByUserId( userID) else {
             print(
                 """
                 ❌ [TransactionCount]
@@ -367,17 +368,17 @@ class UserViewModel: ObservableObject {
 
         // Fixed count calculations
         fixedCountTransactionPartialCount =
-            pillLocalDB.getAllFixedPartialTransactionsCount(for: user)
+            transactionDAO.countTransactions(for: user, countType: .FIXED, status: .PARTIAL)
 
         fixedCountTransactionCompletedCount =
-            pillLocalDB.getAllFixedCompletedTransactionsCount(for: user)
+            transactionDAO.countTransactions(for: user, countType: .FIXED, status: .COMPLETED)
 
         // Regular count calculations
         regularCountTransactionPartialCount =
-            pillLocalDB.getAllRegularPartialTransactionsCount(for: user)
+            transactionDAO.countTransactions(for: user, countType: .REGULAR, status: .PARTIAL)
 
         regularCountTransactionCompletedCount =
-            pillLocalDB.getAllRegularCompletedTransactionsCount(for: user)
+            transactionDAO.countTransactions(for: user, countType: .REGULAR, status: .COMPLETED)
     }
 
     // MARK: TRANSACTION BY DATE
@@ -389,7 +390,7 @@ class UserViewModel: ObservableObject {
     ) async {
         
 
-        guard let user = userLocalDB.getUserByUserId(by: userID) else {
+        guard let user = userLocalDB.fetchByUserId( userID) else {
             self.filteredTransactionsOfUserByDate = []
             return
         }
@@ -407,7 +408,7 @@ class UserViewModel: ObservableObject {
 
         // STEP 1: Get all transactions of that date
         let allTransactions =
-            userLocalDB.getTransactionsForUserFilteredByDate(
+            userLocalDB.fetchTransactionsByDateRange(
                 for: user,
                 startDateTs: startTimestamp,
                 endDateTs: endTimestamp
@@ -449,19 +450,17 @@ class UserViewModel: ObservableObject {
     // MARK: ALL PARTIAL TRANSACTIONS
     // get user's fixed count partial transactoins
     func getAllPartialTransactions(countType: CountType) async {
-        guard let user = userLocalDB.getUserByUserId(by: userID) else {
+        guard let user = userLocalDB.fetchByUserId( userID) else {
             self.historyCountTransactions = []
             return
         }
         self.historyCountTransactions =
-            pillLocalDB.fetchAllTransactionFixedOrRegularPartial(
-                for: user, countType: countType)
+            transactionDAO.fetchPartial(for: user, countType: countType)
 
         self.actualCountedPillsForTheTransactions = [:]
 
         for transaction in historyCountTransactions {
-            let total = pillLocalDB.getTheCountedNumberOfPillsForTheTransaction(
-                for: transaction.txn_id)
+            let total = transactionDetailDAO.totalCount(txnId: transaction.txn_id)
             self.actualCountedPillsForTheTransactions[transaction.txn_id] =
                 total
         }
@@ -473,7 +472,7 @@ class UserViewModel: ObservableObject {
     func softDeleteTheSelectedTransaction(
         transactionId: Int64, countType: CountType
     ) async {
-        pillLocalDB.softDeleteTransaction(txnId: transactionId)
+        transactionDAO.softDelete(txnId: transactionId)
 
         if countType == .FIXED {
             await getAllPartialTransactions(countType: .FIXED)
@@ -487,7 +486,7 @@ class UserViewModel: ObservableObject {
     // Send HL7 message
     private func sendCompletionHL7(txnId: Int64) async {
 
-        guard let txn = pillLocalDB.fetchPillCountTransactionByTransactionId(txnId: txnId) else {
+        guard let txn = transactionDAO.fetchById(txnId) else {
             print("[HL7] Txn not found")
             return
         }
@@ -549,6 +548,9 @@ class UserViewModel: ObservableObject {
             inventory: nil,
             acknowledgment: nil,
             notes: [],
+            inventoryResponseItems: [],
+            zinSegments: [],
+            priority: .unknown,
             customSegments: [],
             obxSegments: [],
             errors: []
@@ -572,7 +574,7 @@ class UserViewModel: ObservableObject {
 
         
         for txn in transactionsToDelete {
-            pillLocalDB.softDeleteTransaction(txnId: txn.txn_id)
+            transactionDAO.softDelete(txnId: txn.txn_id)
         }
 
         // Refresh UI after deletion
@@ -584,9 +586,7 @@ class UserViewModel: ObservableObject {
     func forceCompleteTheSelectedTransaction(txnId: Int64, countType: CountType)
         async
     {
-        pillLocalDB.updateTransactionStatus(
-            txnId: txnId, newStatus: .FORCE_COMPLETED
-        )
+        transactionDAO.updateStatus(txnId: txnId, status: .FORCE_COMPLETED)
 
         if countType == .FIXED {
             await getAllPartialTransactions(countType: .FIXED)
@@ -601,10 +601,7 @@ class UserViewModel: ObservableObject {
         countType: CountType
     ) async {
         // update the statuse
-        pillLocalDB.updateTransactionStatus(
-            txnId: txnId,
-            newStatus: .COMPLETED
-        )
+        transactionDAO.updateStatus(txnId: txnId, status: .COMPLETED)
         //  Refresh Partial Transactions
         if countType == .FIXED {
             await sendCompletionHL7(txnId: txnId)
@@ -623,7 +620,7 @@ class UserViewModel: ObservableObject {
 
         // Fetch from Local DB
         let transactions =
-            pillLocalDB.getTransactionsForUserFilteredByTimeRange(
+            transactionDAO.fetchByTimeRange(
                 for: user,
                 startTime: startTs,
                 endTime: endTs
@@ -691,7 +688,7 @@ class UserViewModel: ObservableObject {
 
         // Iterate through the set of IDs and soft delete them
         for id in txnIds {
-            pillLocalDB.softDeleteTransaction(txnId: id)
+            transactionDAO.softDelete(txnId: id)
         }
 
         // Refresh the list based on the current context
@@ -707,7 +704,7 @@ class UserViewModel: ObservableObject {
         let context = CoreDataManager.shared.context
 
         // 1. Check for Existing User OR Create Dummy User
-        var user = userLocalDB.getUserByUserId(by: userID)
+        var user = userLocalDB.fetchByUserId( userID)
 
         if user == nil {
 
@@ -865,7 +862,7 @@ class UserViewModel: ObservableObject {
     
     func getTransactionEntity(by txnId: Int64) -> PillCountTransactionEntity? {
         guard txnId > 0 else { return nil }
-        return pillDataLocalStorage.fetchPillCountTransactionByTransactionId(txnId: txnId)
+        return transactionDAO.fetchById(txnId)
     }
     
 
@@ -875,11 +872,11 @@ class UserViewModel: ObservableObject {
     }
     
     func clearLocalData() {
-        pillDataLocalStorage.clearAllLocalData()
+        LocalDataCleaner.shared.clearAll()
     }
     
     func getBatchesByDate(startDate: Date, endDate: Date) async {
-//        guard let user = userLocalDB.getUserByUserId(by: userID) else {
+//        guard let user = userLocalDB.fetchByUserId( userID) else {
 //            await MainActor.run { self.filteredBatchesOfUserByDate = [] }
 //            return
 //        }
@@ -893,10 +890,7 @@ class UserViewModel: ObservableObject {
         let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
         let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)
 
-        let batches = pillLocalDB.getBatchesForUserFilteredByDate(
-            startDateTs: startTs,
-            endDateTs: endTs
-        )
+        let batches = batchDAO.fetchByDateRange(startTs: startTs, endTs: endTs)
 
         await MainActor.run {
             self.filteredBatchesOfUserByDate = batches
@@ -967,7 +961,7 @@ class UserViewModel: ObservableObject {
         
         print("Batches \(filteredBatchesOfUserByDate)")
         self.batchRows = batches.map {
-        let count = pillDataLocalStorage.getTransactionCount(for: $0.batch_id)
+        let count = batchDAO.getTransactionCount(for: $0.batch_id)
         return StockData(
                 id: $0.batch_id,
                 batchId: $0.batch_id,
@@ -1068,3 +1062,5 @@ class UserViewModel: ObservableObject {
         regularCountTransactionPartialCount = 0
     }
 }
+
+

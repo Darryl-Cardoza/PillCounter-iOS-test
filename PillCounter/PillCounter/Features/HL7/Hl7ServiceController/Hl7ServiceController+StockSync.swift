@@ -23,7 +23,6 @@ extension Hl7ServiceController {
 
     func setupBatchSyncQueue() {
         let queue = HL7BatchSyncQueue(
-            storage: pillDataLocalStorage,
             hl7Builder: HL7CompletionBuilder(),
             hl7Manager: hl7Manager
         )
@@ -31,7 +30,7 @@ extension Hl7ServiceController {
         observeStorageChanges()
         print("🔧 [HL7] BatchSyncQueue setup complete, queue:", queue)  // temp
     }
- 
+
 
     // MARK: - Called from completeBatch() after confirmed Core Data save
 
@@ -42,7 +41,7 @@ extension Hl7ServiceController {
     // MARK: - Private
 
     private func observeStorageChanges() {
-        pillDataLocalStorage.transactionsDidChange
+        batchDAO.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 self?.batchSyncQueue?.enqueueUnsynced()

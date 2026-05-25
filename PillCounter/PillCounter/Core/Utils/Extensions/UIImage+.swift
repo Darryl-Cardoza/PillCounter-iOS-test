@@ -72,7 +72,7 @@ extension UIImage {
         }
 
         add("NDC",    ndc)
-        add("SubNDC", substituteNdc)
+        add("ReqNDC", substituteNdc)
         add("Step",   workflowStep)
 
         if let target = targetCount {

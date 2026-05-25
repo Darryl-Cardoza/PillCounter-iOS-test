@@ -37,9 +37,7 @@ public enum DashboardFlow: Hashable, Codable {
 }
 
 public enum ScanningFlow: Codable, Hashable {
-    case barcodeScanning(ScanType)
-    case pillCountView
-    case pillCountHistoryView
+    case scan(ScanType)
     case stockCount(StockCountFlow)
 }
 
@@ -60,6 +58,7 @@ public enum ScanType: Codable, Hashable {
     case barcode
     case stockCount
     case rx_label
+    case resumeCount
 
     var instructionText: String {
         switch self {
@@ -69,6 +68,8 @@ public enum ScanType: Codable, Hashable {
             return L10n.Controlled.scanStockCountBarcode
         case .rx_label:
             return L10n.Controlled.scanRxLabelBarcode
+        case .resumeCount:
+            return L10n.Controlled.scanBarcode
         }
     }
 }
@@ -199,6 +200,7 @@ enum PmsFilter: Hashable {
 }
 
 
+// MARK: - Controlled Step
 
 enum ControlledStep: String, CaseIterable {
     case scan = "SCAN"
@@ -224,9 +226,47 @@ enum ControlledStep: String, CaseIterable {
             return L10n.Controlled.containerPending
         }
     }
-    
-
 }
+
+extension ControlledStep {
+    func next(orderedSteps: [ControlledStep]) -> ControlledStep? {
+        guard let index = orderedSteps.firstIndex(of: self),
+              index + 1 < orderedSteps.count
+        else { return nil }
+
+        return orderedSteps[index + 1]
+    }
+}
+
+
+// MARK: - ASSET NAME MAPPING
+extension ControlledStepRow {
+
+func assetName(for step: ControlledStep) -> String {
+
+    switch step {
+        
+    case .scan:
+        return "scan_step1"
+        
+    case .containerInitiate:
+        return "parent_count_step2"
+        
+    case .targetVerification:
+        return "target_count_step3"
+        
+    case .targetReverification:
+        return "double_count_step4"
+        
+    case .vial:
+        return "vial_step5"
+        
+    case .containerPending:
+        return "parent_count_step2"
+    }
+}
+}
+
 
 public enum StockCountOption: Hashable {
     case newBatch

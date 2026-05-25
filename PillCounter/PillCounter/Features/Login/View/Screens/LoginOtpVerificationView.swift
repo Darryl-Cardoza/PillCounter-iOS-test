@@ -64,7 +64,7 @@ struct OtpVerification: View {
     var body: some View {
         VStack(spacing: 35) {
             VStack(spacing: 0) {
-                Text("CODE_SENT_TEXT")
+                Text(L10n.OTP.codeSentText)
                     .foregroundStyle(appColors.text)
                     .font(.system(size: 18))
 
@@ -82,7 +82,7 @@ struct OtpVerification: View {
             }
 
             HStack(spacing: 6) {
-                Text("RESEND_CODE")
+                Text(L10n.OTP.resendCode)
                     .foregroundStyle(
                         loginViewModel.isResendDisabled
                         ? Color.gray
@@ -121,7 +121,7 @@ struct OtpVerification: View {
                 }
                 
             } label: {
-                Text("VERIFY_BUTTON")
+                Text(L10n.OTP.verifyButton)
                     .foregroundColor(appColors.text)
                     .fontWeight(.semibold)
                     .padding(18)

@@ -59,7 +59,9 @@
         <attribute name="substitute_drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="target_count" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="txn_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="txn_priority" optional="YES" attributeType="String"/>
         <attribute name="updated_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="workflow_step" optional="YES" attributeType="String"/>
         <relationship name="drug" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DrugMasterEntity"/>
         <relationship name="pillCountTransactionDetails" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PillCountTransactionDetailsEntity" inverseName="pillCountTransaction" inverseEntity="PillCountTransactionDetailsEntity"/>
         <relationship name="substitueDrug" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DrugMasterEntity" inverseName="transactions" inverseEntity="DrugMasterEntity"/>

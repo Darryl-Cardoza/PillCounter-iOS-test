@@ -29,8 +29,7 @@ struct LoginEmailView: View {
                     // Email
                     PillCounterInputField(
                         imageName: "profile_icon",
-                        placeholder: NSLocalizedString(
-                            "EMAIL_INPUT_FIELD_PLACEHOLDER", comment: ""),
+                        placeholder: L10n.Login.emailPlaceholder,
                         disabled: false,
                         text: $loginViewModel.userEmail,
                         keyboardType: .emailAddress,
@@ -43,8 +42,7 @@ struct LoginEmailView: View {
                                     Validation.isValidEmail(
                                         loginViewModel.userEmail)
                                 else {
-                                    errorMessage = NSLocalizedString(
-                                        "EMAIL_ERROR_MESSAGE", comment: "")
+                                    errorMessage = L10n.Login.emailErrorInvalid
                                     return
                                 }
 
@@ -73,7 +71,7 @@ struct LoginEmailView: View {
                     // checkbox
                     PillCounterCheckbox(
                         isChecked: $loginViewModel.isChecked,
-                        label: NSLocalizedString("REMEMBER_ME", comment: "")
+                        label: L10n.Login.rememberMe
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -93,7 +91,7 @@ struct LoginEmailView: View {
                             }
                         }
                     }) {
-                        Text("LOGIN_BUTTON")
+                        Text(L10n.Login.button)
                             .foregroundColor(.white)
                             .fontWeight(.semibold)
                             .frame(

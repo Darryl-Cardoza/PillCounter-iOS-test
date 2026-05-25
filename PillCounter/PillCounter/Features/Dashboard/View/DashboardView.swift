@@ -102,7 +102,7 @@ struct DashboardView: View {
                                 to: .authentication(
                                     .login(
                                         .dashboard(
-                                            .pillCount(.barcodeScanning(.rx_label))))))
+                                            .pillCount(.scan(.rx_label))))))
                         }
 
                         if isIpad{
@@ -386,7 +386,7 @@ struct DashboardView: View {
                                 if stockCountViewModel.continueLastBatch() {
                                     print("Fetch data")
                                     router.selectedPillScanningType = .REGULAR
-                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
+                                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.stockCount))))))
                                     resetStockCountSelection()
                                 }else{
                                     print("show toast")
@@ -496,7 +496,7 @@ struct DashboardView: View {
     private func handleStockCountSelectedOption() {
         stockCountViewModel.createNewBatch(bucketId: pillScanViewModel.selectedBucket)
         router.selectedPillScanningType = .REGULAR
-        router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
+        router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.stockCount))))))
         resetStockCountSelection()
     }
     

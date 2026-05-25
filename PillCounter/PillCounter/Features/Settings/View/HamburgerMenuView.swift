@@ -17,6 +17,7 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    @StateObject private var unsyncedViewModel = UnsyncedViewModel()
 
     @State private var showLogoutPopup: Bool = false
     @State private var showStockCountPopup: Bool = false
@@ -205,7 +206,7 @@ struct HamburgerMenuView: View {
                 .padding(.horizontal, isLandscape ? 10 : 0)
 
         case .UnsyncedTransaction:
-            Text("\(userViewModel.unsyncedTransactions.count)")
+            Text("\(unsyncedViewModel.batches.count + unsyncedViewModel.transactions.count)")
                 .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
               
@@ -380,7 +381,7 @@ struct HamburgerMenuView: View {
                             showStockCountPopup = false
                         case .existingBatch:
                             if stockCountViewModel.continueLastBatch() {
-                                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
+                                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.stockCount))))))
                             } else {
                                 pillScanViewModel.showToastMessage(text: L10n.Menu.noLastBatchFound)
                             }
@@ -449,7 +450,7 @@ struct HamburgerMenuView: View {
                     iconSize: 0,
                     action: {
                         stockCountViewModel.createNewBatch(bucketId: pillScanViewModel.selectedBucket)
-                        router.navigate(to: .authentication(.login(.dashboard(.pillCount(.barcodeScanning(.stockCount))))))
+                        router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.stockCount))))))
                         showSelectBucketIdPopup = false
                     }
                 )
@@ -466,7 +467,7 @@ struct HamburgerMenuView: View {
             router.selectedPillScanningType = .FIXED
             router.navigate(
                 to: .authentication(
-                    .login(.dashboard(.pillCount(.barcodeScanning(.rx_label))))))
+                    .login(.dashboard(.pillCount(.scan(.rx_label))))))
             
         case .UnsyncedTransaction:
             router.navigate(

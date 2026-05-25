@@ -74,15 +74,15 @@ final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
     }
 
     // Adding the drug service over here only, if the drug module increases separately make the repo for drugs.
-    func getDrug(ndc: String) async throws -> GetDrugResponse {
-
-        return try await Self.performRequest(
-            url: "\(APIConstants.getDrugInfo)/\(ndc)",
-            method: .get,
-            responseType: GetDrugResponse.self
-        )
-    }
-    
+//    func getDrug(ndc: String) async throws -> GetDrugResponse {
+//
+//        return try await Self.performRequest(
+//            url: "\(APIConstants.getDrugInfo)/\(ndc)",
+//            method: .get,
+//            responseType: GetDrugResponse.self
+//        )
+//    }
+//    
     func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, accessToken: String) async throws -> UpdateTerminalResponse {
         let body: [String: Any] = [
             "terminal_name": terminalName,

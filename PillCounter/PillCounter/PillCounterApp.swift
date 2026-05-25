@@ -23,6 +23,7 @@ struct PillCounterApp: App {
     @ObservedObject private var appColors = AppColors.shared
     @ObservedObject private var confirmationDialogueManager = ConfirmationDialogueManager()
     @StateObject private var pillScanViewModel = PillScanViewModel()
+    
     @StateObject private var userViewModel = UserViewModel()
     @StateObject private var stockCountViewModel = StockCountViewModel()
     @StateObject private var historyViewModel = HistoryViewModel()
@@ -87,12 +88,18 @@ struct PillCounterApp: App {
                             }
                             .task {
                                 userViewModel.loadMobileThemeSettings()
-                                
+
                                 Task.detached(priority: .background) {
                                     await MainActor.run {
-                                        PillsDataLocalStorage.shared
-                                            .cleanUpOldHistory()
+                                        HistoryCleanupStore.shared.cleanUpOldHistory()
                                     }
+                                }
+
+                                // Pre-warm CoreML models at launch so the first
+                                // navigation to the camera screen doesn't hang.
+                                Task.detached(priority: .background) {
+                                    _ = PillDetector.shared
+                                    _ = TrayDetectionService.shared
                                 }
                             }
                         //show toast when succefully updated profile date

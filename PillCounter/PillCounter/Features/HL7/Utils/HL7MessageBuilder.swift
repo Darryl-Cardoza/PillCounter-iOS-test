@@ -114,14 +114,12 @@ final class HL7CompletionBuilder {
             triggerEvent: "O13",
             timestamp: now,
             sendingFacility: "ROBOT",
-
             header: buildHeaderStyle(
                 type: "RDS",
                 trigger: "O13",
                 time: now,
                 messageId: messageId
             ),
-
             patient: patient,
             visit: nil,
             order: order,
@@ -134,6 +132,9 @@ final class HL7CompletionBuilder {
             inventory: nil,
             acknowledgment: nil,
             notes: buildCommonNotes(txn: txn, totalCount: totalCount),
+            inventoryResponseItems: [],
+            zinSegments: [],
+            priority: .unknown,
             customSegments: [],
             obxSegments: buildImageOBX(
                 txn: txn,
@@ -172,6 +173,87 @@ final class HL7CompletionBuilder {
     }
 
   
+//    func buildInventoryMessage(
+//        batch: BatchCountEntity,
+//        user: UserEntity?
+//    ) -> String {
+//
+//        let now = DateUtils.currentTimestamp()
+//        let messageId = "RES\(Int(Date().timeIntervalSince1970))"
+//
+//        let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
+//        let orderId = batch.bucket_id ?? ""
+//
+//        let txns = TransactionDAO.shared.fetchByBatch(batchId: batch.batch_id)
+//
+//        // MARK: GROUPING
+//        struct Key: Hashable {
+//            let ndc: String
+//            let name: String
+//            let lot: String
+//            let expiry: String
+//        }
+//
+//        var grouped: [Key: (opened: Int32, sealed: Int32)] = [:]
+//
+//        for txn in txns {
+//
+//            guard let drug = txn.drug else { continue }
+//
+//            let ndc = drug.ndc ?? ""
+//            let name = drug.drug_name ?? ""
+//            let lot = txn.lot_no ?? ""
+//            let expiry = txn.expiry ?? ""
+//            let packageQty = drug.package_qty
+//
+//            let opened = txn.loose_qty
+//            let sealed = txn.bottle_qty * packageQty
+//
+//            let key = Key(ndc: ndc, name: name, lot: lot, expiry: expiry)
+//
+//            var existing = grouped[key] ?? (0, 0)
+//            existing.opened += opened
+//            existing.sealed += sealed
+//            grouped[key] = existing
+//        }
+//
+//        // MARK: BUILD HL7 STRING
+//
+//        var hl7 = ""
+//
+//        //  HEADER
+//        hl7 += "MSH|^~\\&|PILLCOUNTER|STORE|PMS|PHARMACY|\(now)||INR^U05|\(messageId)|P|2.5\n"
+//        hl7 += "MSA|AA|\(requestId)\n"
+//        hl7 += "ORC|RE|\(orderId)\n\n"
+//
+//        var index = 1
+//
+//        for (key, value) in grouped {
+//
+//            let total = value.opened + value.sealed
+//
+//            // INV
+//            hl7 += "INV|\(index)|\(key.ndc)^\(key.name)||||||||||\(total)|||||\n"
+//
+//            //  ZIN
+//            if value.opened == 0 && value.sealed == 0 {
+//                hl7 += "ZIN|\(index)|NA|0||\n"
+//            } else {
+//                if value.opened > 0 {
+//                    hl7 += "ZIN|\(index)|OPENED|\(value.opened)|\(key.lot)|\(key.expiry)\n"
+//                }
+//                if value.sealed > 0 {
+//                    hl7 += "ZIN|\(index)|SEALED|\(value.sealed)|\(key.lot)|\(key.expiry)\n"
+//                }
+//            }
+//
+//            hl7 += "\n"
+//            index += 1
+//        }
+//
+//        return hl7
+//    }
+    
     func buildInventoryMessage(
         batch: BatchCountEntity,
         user: UserEntity?
@@ -179,79 +261,137 @@ final class HL7CompletionBuilder {
 
         let now = DateUtils.currentTimestamp()
         let messageId = "RES\(Int(Date().timeIntervalSince1970))"
-
         let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
         let orderId = batch.bucket_id ?? ""
 
-        let txns = PillsDataLocalStorage.shared
-            .fetchTransactionsByBatch(batchId: batch.batch_id)
+        let txns = TransactionStore.shared.fetchByBatch(batchId: batch.batch_id)
 
         // MARK: GROUPING
         struct Key: Hashable {
-            let ndc: String
-            let name: String
-            let lot: String
-            let expiry: String
+            let ndc: String; let name: String; let lot: String; let expiry: String
         }
-
         var grouped: [Key: (opened: Int32, sealed: Int32)] = [:]
 
         for txn in txns {
-
             guard let drug = txn.drug else { continue }
-
-            let ndc = drug.ndc ?? ""
-            let name = drug.drug_name ?? ""
-            let lot = txn.lot_no ?? ""
-            let expiry = txn.expiry ?? ""
-            let packageQty = drug.package_qty
-
-            let opened = txn.loose_qty
-            let sealed = txn.bottle_qty * packageQty
-
-            let key = Key(ndc: ndc, name: name, lot: lot, expiry: expiry)
-
-            var existing = grouped[key] ?? (0, 0)
-            existing.opened += opened
-            existing.sealed += sealed
-            grouped[key] = existing
+            let key = Key(
+                ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
+                lot: txn.lot_no ?? "", expiry: txn.expiry ?? ""
+            )
+            var e = grouped[key] ?? (0, 0)
+            e.opened += txn.loose_qty
+            e.sealed += txn.bottle_qty * drug.package_qty
+            grouped[key] = e
         }
 
-        // MARK: BUILD HL7 STRING
-
-        var hl7 = ""
-
-        //  HEADER
-        hl7 += "MSH|^~\\&|PILLCOUNTER|STORE|PMS|PHARMACY|\(now)||INR^U05|\(messageId)|P|2.5\n"
-        hl7 += "MSA|AA|\(requestId)\n"
-        hl7 += "ORC|RE|\(orderId)\n\n"
-
-        var index = 1
+        // MARK: BUILD LIBRARY MODELS
+        var responseItems: [InventoryResponseItem] = []
+        var index: Int32 = 1
 
         for (key, value) in grouped {
-
             let total = value.opened + value.sealed
 
-            // INV
-            hl7 += "INV|\(index)|\(key.ndc)^\(key.name)||||||||||\(total)|||||\n"
+            var zinRows: [ZinData] = []
 
-            //  ZIN
             if value.opened == 0 && value.sealed == 0 {
-                hl7 += "ZIN|\(index)|NA|0||\n"
+                zinRows.append(ZinData(
+                    setId: index,
+                    dispenseType: "NA",
+                    quantity: 0,
+                    lotNumber: nil,
+                    expiry: nil
+                ))
             } else {
                 if value.opened > 0 {
-                    hl7 += "ZIN|\(index)|OPENED|\(value.opened)|\(key.lot)|\(key.expiry)\n"
+                    zinRows.append(ZinData(
+                        setId: index,
+                        dispenseType: "OPENED",
+                        quantity: value.opened,
+                        lotNumber: key.lot.isEmpty ? nil : key.lot,
+                        expiry: key.expiry.isEmpty ? nil : key.expiry
+                    ))
                 }
                 if value.sealed > 0 {
-                    hl7 += "ZIN|\(index)|SEALED|\(value.sealed)|\(key.lot)|\(key.expiry)\n"
+                    zinRows.append(ZinData(
+                        setId: index,
+                        dispenseType: "SEALED",
+                        quantity: value.sealed,
+                        lotNumber: key.lot.isEmpty ? nil : key.lot,
+                        expiry: key.expiry.isEmpty ? nil : key.expiry
+                    ))
                 }
             }
 
-            hl7 += "\n"
+            responseItems.append(InventoryResponseItem(
+                setId: index,
+                ndc: key.ndc,
+                drugName: key.name.isEmpty ? nil : key.name,
+                totalQuantity: total,
+                zinRows: zinRows
+            ))
             index += 1
         }
 
-        return hl7
+        // MARK: ASSEMBLE & SERIALIZE
+        let message = CompleteHL7Message(
+            messageId: messageId,
+            messageType: "INR",
+            triggerEvent: "U05",
+            timestamp: now,
+            sendingFacility: "STORE",
+            header: MessageHeaderData(
+                fieldSeparator: "|",
+                encodingCharacters: "^~\\&",
+                sendingApplication: "PILLCOUNTER",
+                sendingFacility: "STORE",
+                receivingApplication: "PMS",
+                receivingFacility: "PHARMACY",
+                messageDateTime: now,
+                messageType: "INR",
+                triggerEvent: "U05",
+                messageControlId: messageId,
+                processingId: "P",
+                versionId: "2.5",
+                countryCode: nil          // ← was missing
+            ),
+            patient: nil,
+            visit: nil,
+            order: OrderData(
+                orderControl: "RE",
+                placerOrderId: orderId,
+                placerOrderNamespace: nil,
+                fillerOrderId: nil,
+                fillerOrderNamespace: nil,
+                orderStatus: nil,
+                orderDateTime: nil,
+                orderingProviderId: nil,
+                orderingProviderFamilyName: nil,
+                orderingProviderGivenName: nil,
+                orderingFacility: nil
+            ),
+            medications: [],
+            routes: [],
+            components: [],
+            dispenses: [],
+            equipment: nil,
+            inventoryItems: [],
+            inventory: nil,
+            acknowledgment: AcknowledgmentData(
+                acknowledgmentCode: "AA",
+                messageControlId: requestId,
+                textMessage: nil,          // ← was missing
+                errorCondition: nil        // ← was missing
+            ),
+            notes: [],
+            inventoryResponseItems: responseItems,
+            zinSegments: [],
+            priority: .unknown,
+            customSegments: [],
+            obxSegments: [],
+            errors: []
+        )
+
+        return message.toHL7String()
     }
 }
 
@@ -308,14 +448,12 @@ private extension HL7CompletionBuilder {
             
             let observationValue = "count=\(count)|type=\(type)|image=\(fileName)"
             
-            let obx = ObservationData(
+            let obx = ObservationData.make(
                 setId: "\(index + 1)",
-                valueType: "ST",
                 observationId: observationId,
                 observationText: "\(label) \(index + 1)",
                 codingSystem: "",
-                observationValue: observationValue,
-                resultStatus: "F"
+                observationValue: observationValue
             )
             
             obxList.append(obx)
@@ -333,8 +471,22 @@ private extension HL7CompletionBuilder {
                 observationId: observationId,
                 observationText: "Barcode Image",
                 codingSystem: "",
+                subId: nil,
                 observationValue: "count=0|type=SCAN|image=\(fileName)",
-                resultStatus: "F"
+                units: nil,
+                referenceRange: nil,
+                abnormalFlags: nil,
+                probability: nil,
+                natureOfAbnormalTest: nil,
+                resultStatus: "F",
+                effectiveDateOfReferenceRange: nil,
+                userDefinedAccessChecks: nil,
+                dateTimeOfObservation: nil,
+                producerId: nil,
+                responsibleObserver: nil,
+                observationMethod: nil,
+                equipmentInstanceIdentifier: nil,
+                dateTimeOfAnalysis: nil
             )
             
             obxList.append(barcodeObx)
@@ -488,3 +640,38 @@ private extension HL7CompletionBuilder {
 
 
 
+extension ObservationData {
+    static func make(
+        setId: String,
+        valueType: String = "ST",
+        observationId: String,
+        observationText: String? = nil,
+        codingSystem: String? = nil,
+        observationValue: String,
+        resultStatus: String = "F"
+    ) -> ObservationData {
+        return ObservationData(
+            setId: setId,
+            valueType: valueType,
+            observationId: observationId,
+            observationText: observationText,
+            codingSystem: codingSystem,
+            subId: nil,
+            observationValue: observationValue,
+            units: nil,
+            referenceRange: nil,
+            abnormalFlags: nil,
+            probability: nil,
+            natureOfAbnormalTest: nil,
+            resultStatus: resultStatus,
+            effectiveDateOfReferenceRange: nil,
+            userDefinedAccessChecks: nil,
+            dateTimeOfObservation: nil,
+            producerId: nil,
+            responsibleObserver: nil,
+            observationMethod: nil,
+            equipmentInstanceIdentifier: nil,
+            dateTimeOfAnalysis: nil
+        )
+    }
+}

@@ -68,6 +68,7 @@
 "pillCount.invalidCount" = "INVALID COUNT";
 "pillCount.zeroPillsMessage" = "Cannot add a batch with 0 pills.\nPlease ensure pills are detected by the camera.";
 "pillCount.confirmCompletionTitle" = "Confirm Completion";
+"pillCount.confirmCompletionMessage" = "Are you sure you want to mark this transaction as COMPLETED?";
 "pillCount.countMismatchTitle" = "Count Mismatch";
 "pillCount.countMismatchMessage" = "The counted quantity does not match the target count. Do you want to proceed?";
 "pillCount.confirmStepCompletionTitle" = "Confirm Step Completion";
@@ -175,41 +176,6 @@
 "genericEquivalent.doYouWantSubstitute" = "Do you want to substitute?";
 
 
-// MARK: - CAMERA PERMISSION
-"camera.accessRequired" = "कैमरा एक्सेस आवश्यक है";
-"camera.accessMessage" = "बारकोड स्कैन करने के लिए कृपया सेटिंग्स में कैमरा एक्सेस सक्षम करें।";
-"camera.openSettings" = "सेटिंग्स खोलें";
-
-
-// MARK: - BARCODE / QR SCANNER
-"barcodeScan.batchOverlay" = "बैच %d";
-"barcodeScan.pillsRequired" = "आवश्यक गोलियाँ";
-"barcodeScan.copy" = "कॉपी करें";
-"barcodeScan.rescanRequired" = "पुनः स्कैन आवश्यक";
-"barcodeScan.ndcDoesNotMatch" = "स्कैन किया गया एनडीसी मेल नहीं खाता";
-"barcodeScan.substitute" = "प्रतिस्थापित करें";
-"barcodeScan.rescan" = "पुनः स्कैन करें";
-"barcodeScan.qrScannedSuccessfully" = "स्टॉक बोतल विवरण सत्यापित करें";
-"barcodeScan.labelScannedSuccessfully" = "Rx विवरण सत्यापित करें";
-"barcodeScan.ndcNumber" = "एनडीसी नंबर";
-"barcodeScan.drugName" = "दवा का नाम";
-"barcodeScan.quantity" = "मात्रा";
-"barcodeScan.rxNumber" = "Rx नंबर";
-"barcodeScan.bucket" = "बकेट";
-"barcodeScan.selectContainerStatus" = "कंटेनर स्थिति चुनें";
-"barcodeScan.sealed" = "सीलबंद";
-"barcodeScan.opened" = "खुला";
-"barcodeScan.drugNotFound" = "दवा नहीं मिली";
-"barcodeScan.drugNotFoundMessage" = "स्कैन किया गया बारकोड पहचाना नहीं गया। कृपया पुनः प्रयास करें।";
-"barcodeScan.incorrectNdc" = "गलत एनडीसी";
-"barcodeScan.incorrectNdcMessage" = "आपने गलत एनडीसी स्कैन किया है। यह आइटम PMS बैच से मेल नहीं खाता।";
-"barcodeScan.proceed" = "आगे बढ़ें";
-
-
-// MARK: - GENERIC EQUIVALENT POPUP
-"genericEquivalent.scanned" = "जेनेरिक समकक्ष स्कैन किया गया";
-"genericEquivalent.subtitle" = "स्कैन किया गया आइटम निर्दिष्ट दवा का जेनेरिक समकक्ष है";
-"genericEquivalent.doYouWantSubstitute" = "क्या आप प्रतिस्थापित करना चाहते हैं?";
 
 // MARK: - HISTORY SCREEN
 "history.pillCount" = "PILL COUNT";

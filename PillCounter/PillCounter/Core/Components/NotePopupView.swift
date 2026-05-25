@@ -93,14 +93,12 @@ struct NotePopupView: View {
 
             // ── HEADER ──────────────────────────────────────────────
             HStack {
-                // Center title when no close button; left-align when close is visible
-                if !showClose {
-                    Spacer()
-                }
+              
 
                 Text(title)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(appColors.text)
+                    .frame(maxWidth:.infinity, alignment: .leading)
 
                 Spacer()
 
@@ -139,7 +137,7 @@ struct NotePopupView: View {
                     PillCountingButton(
                         iconName: nil,
                         title: secondaryTitle,
-                        textColor: appColors.text,
+                        textColor: appColors.primary,
                         backgroundColor: .clear,
                         borderColor: appColors.primary,
                         font: .system(size: 14, weight: .semibold),
@@ -168,98 +166,29 @@ struct NotePopupView: View {
                 }
             } else {
                 // Single-button layout: full width
-                PillCountingButton(
-                    iconName: nil,
-                    title: primaryTitle,
-                    textColor: appColors.secondaryBackground,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 0,
-                    verticalPadding: 14,
-                    iconSize: 0,
-                    action: primaryAction
-                )
-                .frame(maxWidth: .infinity)
+                HStack{
+                    PillCountingButton(
+                        iconName: nil,
+                        title: primaryTitle,
+                        textColor: appColors.text,
+                        backgroundColor: appColors.primary,
+                        borderColor: .clear,
+                        font: .system(size: 14, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 0,
+                        verticalPadding: 14,
+                        iconSize: 0,
+                        action: primaryAction
+                    )
+                    .frame(maxWidth: 120)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .padding(20)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 10)
         .frame(width: 300)
         .background(appColors.primaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 }
-
-// MARK: - Usage examples (replace showNoteOptionPopup in your existing view)
-
-/*
-
- // ── Variant 1: matches the screenshot (centered title, CANCEL + YES) ──
- NotePopupView(
-     title: "Would you like to add a note?",
-     text: $pillScanViewModel.note,
-     errorMessage: errorMessageOfNote,
-     primaryTitle: "YES",
-     primaryAction: {
-         if pillScanViewModel.note.isEmpty {
-             errorMessageOfNote = "Please add a note"
-             return
-         }
-         showNoteOption = false
-         Task {
-             pillScanViewModel.updateNoteForCurrentTransaction(
-                 txn_id: pillScanViewModel.currentTransaction?.txn_id ?? 0,
-                 note: pillScanViewModel.note
-             )
-             await MainActor.run { showConfirmCompletionPopup = true }
-         }
-     },
-     secondaryTitle: "CANCEL",
-     secondaryAction: {
-         showNoteOption = false
-         showConfirmCompletionPopup = false
-     }
- )
-
- // ── Variant 2: matches showNoteOptionPopup (left-aligned title, X close, SKIP + SAVE) ──
- NotePopupView(
-     title: "ADD NOTE",
-     showClose: true,
-     text: $pillScanViewModel.note,
-     errorMessage: errorMessageOfNote,
-     primaryTitle: "SAVE",
-     primaryAction: {
-         if pillScanViewModel.note.isEmpty {
-             errorMessageOfNote = "Please add a note"
-             return
-         }
-         showNoteOption = false
-         Task {
-             pillScanViewModel.updateNoteForCurrentTransaction(
-                 txn_id: pillScanViewModel.currentTransaction?.txn_id ?? 0,
-                 note: pillScanViewModel.note
-             )
-             await MainActor.run { showConfirmCompletionPopup = true }
-         }
-     },
-     secondaryTitle: pillScanViewModel.currentTransaction?.is_from_pms == false ? "SKIP" : nil,
-     secondaryAction: pillScanViewModel.currentTransaction?.is_from_pms == false ? {
-         showNoteOption = false
-         showConfirmCompletionPopup = true
-     } : nil,
-     onClose: {
-         showNoteOption = false
-         showConfirmCompletionPopup = false
-     }
- )
-
- // ── Variant 3: single button only ──
- NotePopupView(
-     title: "Add a note",
-     text: $pillScanViewModel.note,
-     primaryTitle: "DONE",
-     primaryAction: { showNoteOption = false }
- )
-
-*/

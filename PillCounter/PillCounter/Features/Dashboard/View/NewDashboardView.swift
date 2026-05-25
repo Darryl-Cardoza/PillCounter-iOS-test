@@ -819,7 +819,7 @@ struct NewDashboardView: View {
             }
             .padding(.trailing, 4)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, isIpad ? 18 : 10)
         .padding(.horizontal, 12)
         .background(Color.white)
         .cornerRadius(12)
@@ -869,7 +869,7 @@ struct NewDashboardView: View {
             }
             .padding(.trailing, 4)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, isIpad ? 18 : 10)
         .padding(.horizontal, 12)
         .background(Color.white)
         .cornerRadius(12)

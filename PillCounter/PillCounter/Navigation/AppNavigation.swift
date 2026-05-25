@@ -26,7 +26,7 @@ struct AppNavigation: View {
         NavigationStack(path: $router.navigationPath) {
             Group {
                 if isLoggedIn {
-                    DashboardView()
+                    NewDashboardView()
                 } else {
                     LoginEmailView()
 //                    DashboardView()
@@ -45,7 +45,7 @@ struct AppNavigation: View {
                         .navigationBarBackButtonHidden(true)
                 //MARK: DASHBORD
                 case .authentication(.login(.dashboard(.dashboardHome))):
-                    DashboardView()
+                    NewDashboardView()
                         .navigationBarBackButtonHidden(true)
                     
                 case .authentication(.login(.dashboard(.fixedCountPartial))):

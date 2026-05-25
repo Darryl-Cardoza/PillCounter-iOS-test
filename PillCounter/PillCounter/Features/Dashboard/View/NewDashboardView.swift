@@ -422,8 +422,9 @@ struct NewDashboardView: View {
                                 .frame(height: cardHeight)
                         }
                     }
+                    .padding(.horizontal, hPadding)
                     .padding(.vertical, vPadding)
-                    .frame(width: statCardColumnWidth)
+                    .frame(width: statCardColumnWidth + hPadding * 2)
                     .frame(height: panelHeight)
 
                     // Divider

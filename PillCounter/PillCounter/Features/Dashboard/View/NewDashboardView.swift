@@ -71,6 +71,11 @@ struct NewDashboardView: View {
     private let userStore = UserStore.shared
 
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var isLandscape: Bool {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.interfaceOrientation.isLandscape ?? false
+    }
 
     private var mergedQueueItems: [DashboardQueueItem] {
         let dispenseItems = dispensePartial.map {
@@ -156,34 +161,10 @@ struct NewDashboardView: View {
             appColors.primaryBackground
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                headerBar
-                    .padding(.top, safeAreaTop)
-
-                // Fixed section — does not scroll
-                VStack(alignment: .leading, spacing: 0) {
-                    quickActionsSection
-                        .padding(.bottom, 20)
-                    statCardsSection
-                        .padding(.bottom, 24)
-                    Rectangle()
-                        .fill(appColors.text.opacity(0.08))
-                        .frame(height: 0.5)
-                        .padding(.bottom, 24)
-                    queueTabHeaders
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-
-                // Swipeable scrollable queue content
-                TabView(selection: $selectedQueueTab) {
-                    queueScrollContent(items: mergedQueueItems)
-                        .tag(0)
-                    queueScrollContent(items: []) // Recent Activity placeholder
-                        .tag(1)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+            if isIpad && isLandscape {
+                landscapeBody
+            } else {
+                portraitBody
             }
 
             // Toast
@@ -213,6 +194,161 @@ struct NewDashboardView: View {
         .onAppear(perform: onAppear)
         .customPopup(isPresented: $showStockCountPopup) { stockCountPopUp }
         .customPopup(isPresented: $showSelectBucketIdPopup) { selectBucketPopUp }
+    }
+
+    // MARK: - Portrait body
+
+    private var portraitBody: some View {
+        VStack(spacing: 0) {
+            headerBar
+                .padding(.top, safeAreaTop)
+
+            VStack(alignment: .leading, spacing: 0) {
+                quickActionsSection
+                    .padding(.bottom, 20)
+                statCardsSection
+                    .padding(.bottom, 24)
+                Rectangle()
+                    .fill(appColors.text.opacity(0.08))
+                    .frame(height: 0.5)
+                    .padding(.bottom, 24)
+                queueTabHeaders
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+
+            TabView(selection: $selectedQueueTab) {
+                queueScrollContent(items: mergedQueueItems)
+                    .tag(0)
+                queueScrollContent(items: [])
+                    .tag(1)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+        }
+    }
+
+    // MARK: - Landscape body (iPad only)
+
+    private var landscapeBody: some View {
+        GeometryReader { screen in
+            let headerHeight = safeAreaTop + 60.0
+            let panelHeight = screen.size.height - headerHeight
+            let vPadding: CGFloat = 16
+            let hPadding: CGFloat = 16
+            let cardsPanelHeight = panelHeight - vPadding * 2
+            // 6 cards stacked vertically, height divided equally
+            let totalSpacing: CGFloat = 8 * CGFloat(statCards.count - 1)
+            let cardHeight = (cardsPanelHeight - totalSpacing) / CGFloat(statCards.count)
+
+            VStack(spacing: 0) {
+                headerBar
+                    .padding(.top, safeAreaTop)
+                    .frame(height: headerHeight)
+
+                HStack(alignment: .top, spacing: 0) {
+                    // Left panel: quick action cards + stat cards side by side
+                    HStack(alignment: .top, spacing: 12) {
+                        // Quick action cards — fill exact panel height
+                        VStack(spacing: 12) {
+                            landscapeQuickActionCard(
+                                iconName: "dispense_dashboard_icon",
+                                title: "Dispense",
+                                subtitle: "Scan Rx Labels",
+                                action: navigateToDispense
+                            )
+                            landscapeQuickActionCard(
+                                iconName: "placeholder_history",
+                                title: "Inventory",
+                                subtitle: "Start inventory count",
+                                action: { showStockCountPopup = true; resetStockCountSelection() }
+                            )
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: cardsPanelHeight)
+
+                        // 6 stat cards stacked vertically, each card height fills the panel exactly
+                        VStack(spacing: 8) {
+                            ForEach(statCards) { card in
+                                statCardView(card: card)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: cardHeight)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: cardsPanelHeight)
+                    }
+                    .padding(.horizontal, hPadding)
+                    .padding(.vertical, vPadding)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: panelHeight)
+
+                    // Divider
+                    Rectangle()
+                        .fill(appColors.text.opacity(0.08))
+                        .frame(width: 0.5)
+                        .frame(height: panelHeight)
+
+                    // Right panel: queue tabs + list
+                    VStack(alignment: .leading, spacing: 0) {
+                        queueTabHeaders
+                            .padding(.top, 16)
+
+                        TabView(selection: $selectedQueueTab) {
+                            queueScrollContent(items: mergedQueueItems)
+                                .tag(0)
+                            queueScrollContent(items: [])
+                                .tag(1)
+                        }
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                        .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: panelHeight)
+                }
+                .frame(height: panelHeight)
+            }
+        }
+    }
+
+    private func landscapeQuickActionCard(
+        iconName: String,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .stroke(appColors.primary.opacity(0.25), lineWidth: 6)
+                        .blur(radius: 3)
+                    Circle()
+                        .stroke(appColors.primary, lineWidth: 2.5)
+                    Image(iconName)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundColor(appColors.secondary)
+                        .padding(30)
+                }
+                .frame(width: 110, height: 110)
+
+                VStack(spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(appColors.secondary)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(appColors.text.opacity(0.6))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Safe area helper

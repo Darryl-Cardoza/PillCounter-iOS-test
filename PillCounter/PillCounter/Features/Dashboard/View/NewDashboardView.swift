@@ -681,10 +681,9 @@ struct NewDashboardView: View {
                     .foregroundColor(appColors.text.opacity(0.6))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .background(Color.white)
             .cornerRadius(14)
             .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)

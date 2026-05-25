@@ -384,6 +384,11 @@ struct NewDashboardView: View {
                 HStack(alignment: .top, spacing: 0) {
                     // Left panel: quick action cards — fill full height equally
                     VStack(spacing: 12) {
+                        Text("QUICK ACTIONS")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(appColors.text.opacity(0.5))
+                            .tracking(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         landscapeQuickActionCard(
                             iconName: "dispense_dashboard_icon",
                             title: "Dispense",

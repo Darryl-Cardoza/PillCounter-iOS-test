@@ -686,7 +686,7 @@ struct NewDashboardView: View {
                     .foregroundColor(appColors.text.opacity(0.6))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 32, alignment: .topLeading)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -758,8 +758,11 @@ struct NewDashboardView: View {
         case .dispense(let txn, let pillCount):
             let data = txn.toRowData(pillCount: pillCount)
             Button {
-                router.selectedPillScanningType = .FIXED
-                router.navigate(to: .authentication(.login(.dashboard(.fixedCountPartial))))
+                let countType = txn.count_type?.uppercased() == CountType.REGULAR.rawValue ? CountType.REGULAR : CountType.FIXED
+                router.selectedPillScanningType = countType
+                userViewModel.currentTransactionTxnId = txn.txn_id
+                pillScanViewModel.selectedTransaction = txn
+                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.barcode))))))
             } label: {
                 dashboardDispenseRow(data: data)
             }

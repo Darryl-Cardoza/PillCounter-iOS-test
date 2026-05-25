@@ -369,7 +369,7 @@ struct NewDashboardView: View {
             let hPadding: CGFloat = 16
             let cardsPanelHeight = panelHeight - vPadding * 2
             // Stat cards column: squarish cards — use a fixed narrow width
-            let statCardColumnWidth: CGFloat = 175
+            let statCardColumnWidth: CGFloat = 155
             let statCardSpacing: CGFloat = 8
             let totalStatSpacing: CGFloat = statCardSpacing * CGFloat(statCards.count - 1)
             let cardHeight = (cardsPanelHeight - totalStatSpacing) / CGFloat(statCards.count)
@@ -413,7 +413,8 @@ struct NewDashboardView: View {
                         }
                     }
                     .padding(.vertical, vPadding)
-                    .frame(width: statCardColumnWidth)
+                    .padding(.trailing, 8)
+                    .frame(width: statCardColumnWidth + 8)
                     .frame(height: panelHeight)
 
                     // Divider

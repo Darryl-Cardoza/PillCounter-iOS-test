@@ -71,6 +71,7 @@ struct NewDashboardView: View {
     private let userStore = UserStore.shared
 
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
     private var isLandscape: Bool {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
@@ -96,7 +97,7 @@ struct NewDashboardView: View {
                 iconName: "exclamationmark.circle.fill",
                 iconColor: appColors.secondary,
                 count: userViewModel.fixedCountTransactionPartialCount,
-                label: "Disp.\nHigh Priority",
+                label: "High Priority",
                 action: {
                     router.selectedPillScanningType = .FIXED
                     router.navigate(to: .authentication(.login(.dashboard(.fixedCountPartial))))
@@ -107,7 +108,7 @@ struct NewDashboardView: View {
                 iconName: "clock",
                 iconColor: appColors.secondary,
                 count: userViewModel.fixedCountTransactionPartialCount,
-                label: "Disp.\nPending",
+                label: "Disp. Pending",
                 action: {
                     router.selectedPillScanningType = .FIXED
                     router.navigate(to: .authentication(.login(.dashboard(.fixedCountPartial))))
@@ -118,7 +119,7 @@ struct NewDashboardView: View {
                 iconName: "pills.fill",
                 iconColor: appColors.secondary,
                 count: userViewModel.fixedCountTransactionCompletedCount,
-                label: "Disp.\nCont. Drugs",
+                label: "Cont. Drugs",
                 action: {
                     router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .completed)))))
                 }
@@ -128,7 +129,7 @@ struct NewDashboardView: View {
                 iconName: "shield.fill",
                 iconColor: appColors.secondary,
                 count: 3,
-                label: "Disp.\nHazardous",
+                label: "Hazardous",
                 action: {}
             ),
             DashboardStatCard(
@@ -136,7 +137,7 @@ struct NewDashboardView: View {
                 iconName: "arrow.triangle.2.circlepath",
                 iconColor: appColors.primary,
                 count: stockCountViewModel.totalBatchCount,
-                label: "Inv.\nCycle Count",
+                label: "Cycle Count",
                 action: {
                     router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
                 }
@@ -146,7 +147,7 @@ struct NewDashboardView: View {
                 iconName: "tray.full.fill",
                 iconColor: appColors.primary,
                 count: stockCountViewModel.totalCompletedBatchCount,
-                label: "Inv.\nPending Batch",
+                label: "Pending Batch",
                 action: {
                     router.navigate(to: .authentication(.user(.userSettings(.History(.regular, .completed)))))
                 }
@@ -163,6 +164,8 @@ struct NewDashboardView: View {
 
             if isIpad && isLandscape {
                 landscapeBody
+            } else if isPhone && isLandscape {
+                phoneLandscapeBody
             } else {
                 portraitBody
             }
@@ -205,17 +208,17 @@ struct NewDashboardView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 quickActionsSection
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 16)
                 statCardsSection
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 28)
                 Rectangle()
-                    .fill(appColors.text.opacity(0.08))
-                    .frame(height: 0.5)
-                    .padding(.bottom, 24)
+                    .fill(appColors.text.opacity(0.18))
+                    .frame(height: 1)
+                    .padding(.bottom, 20)
                 queueTabHeaders
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.top, 14)
 
             TabView(selection: $selectedQueueTab) {
                 queueScrollContent(items: mergedQueueItems)
@@ -225,6 +228,131 @@ struct NewDashboardView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+        }
+    }
+
+    // MARK: - Phone landscape body
+
+    private var phoneLandscapeBody: some View {
+        GeometryReader { screen in
+            let headerHeight = safeAreaTop + 52.0
+            let panelHeight = screen.size.height - headerHeight
+
+            VStack(spacing: 0) {
+                headerBar
+                    .padding(.top, safeAreaTop)
+                    .frame(height: headerHeight)
+
+                HStack(alignment: .top, spacing: 0) {
+                    // Left panel: quick actions + stat cards
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Quick action cards side by side
+                            HStack(spacing: 10) {
+                                phoneQuickActionCard(
+                                    iconName: "dispense_dashboard_icon",
+                                    title: "Dispense",
+                                    subtitle: "Tap to scan Rx Labels",
+                                    action: navigateToDispense
+                                )
+                                phoneQuickActionCard(
+                                    iconName: "placeholder_history",
+                                    title: "Inventory",
+                                    subtitle: "Start inventory count",
+                                    action: { showStockCountPopup = true; resetStockCountSelection() }
+                                )
+                            }
+                            // Stat cards horizontally scrollable
+                            phoneStatCardsRow
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                    }
+                    .frame(width: screen.size.width * 0.45)
+                    .frame(height: panelHeight)
+
+                    // Divider
+                    Rectangle()
+                        .fill(appColors.text.opacity(0.08))
+                        .frame(width: 0.5)
+                        .frame(height: panelHeight)
+
+                    // Right panel: queue
+                    VStack(alignment: .leading, spacing: 0) {
+                        queueTabHeaders
+                            .padding(.top, 10)
+
+                        TabView(selection: $selectedQueueTab) {
+                            queueScrollContent(items: mergedQueueItems)
+                                .tag(0)
+                            queueScrollContent(items: [])
+                                .tag(1)
+                        }
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                        .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: panelHeight)
+                }
+                .frame(height: panelHeight)
+            }
+        }
+    }
+
+    private func phoneQuickActionCard(
+        iconName: String,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .stroke(appColors.primary.opacity(0.25), lineWidth: 5)
+                        .blur(radius: 3)
+                    Circle()
+                        .stroke(appColors.primary, lineWidth: 2)
+                    Image(iconName)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundColor(appColors.secondary)
+                        .padding(10)
+                }
+                .frame(width: 50, height: 50)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(appColors.secondary)
+                    Text(subtitle)
+                        .font(.system(size: 10))
+                        .foregroundColor(appColors.text.opacity(0.6))
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(Color.white)
+            .cornerRadius(14)
+            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var phoneStatCardsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(statCards) { card in
+                    statCardView(card: card)
+                        .frame(width: 88)
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 4)
         }
     }
 
@@ -433,7 +561,7 @@ struct NewDashboardView: View {
                     )
                 }
             } else {
-                VStack(spacing: 14) {
+                VStack(spacing: 10) {
                     quickActionCard(
                         iconName: "dispense_dashboard_icon",
                         title: "Dispense",
@@ -472,7 +600,7 @@ struct NewDashboardView: View {
                         .foregroundColor(appColors.secondary)
                         .padding(isIpad ? 18 : 14)
                 }
-                .frame(width: isIpad ? 90 : 70, height: isIpad ? 90 : 70)
+                .frame(width: isIpad ? 90 : 60, height: isIpad ? 90 : 60)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -486,7 +614,7 @@ struct NewDashboardView: View {
                 Spacer()
             }
             .padding(.horizontal, isIpad ? 24 : 16)
-            .padding(.vertical, isIpad ? 48 : 40)
+            .padding(.vertical, isIpad ? 48 : 22)
             .frame(maxWidth: .infinity)
             .background(Color.white)
             .cornerRadius(16)

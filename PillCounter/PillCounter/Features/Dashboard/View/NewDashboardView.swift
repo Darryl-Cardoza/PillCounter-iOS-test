@@ -252,24 +252,19 @@ struct NewDashboardView: View {
                             subtitle: "Tap to scan Rx Labels",
                             action: navigateToDispense
                         )
+                        .frame(maxHeight: .infinity)
                         phoneQuickActionCard(
                             iconName: "placeholder_history",
                             title: "Inventory",
                             subtitle: "Start inventory count",
                             action: { showStockCountPopup = true; resetStockCountSelection() }
                         )
-                        Spacer(minLength: 0)
+                        .frame(maxHeight: .infinity)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 12)
                     .frame(width: screen.size.width * 0.28)
                     .frame(height: panelHeight)
-
-                    // Divider
-                    Rectangle()
-                        .fill(appColors.text.opacity(0.18))
-                        .frame(width: 1)
-                        .frame(height: panelHeight)
 
                     // Middle panel: stat cards vertically scrollable
                     ScrollView(.vertical, showsIndicators: false) {
@@ -284,12 +279,6 @@ struct NewDashboardView: View {
                     }
                     .frame(width: screen.size.width * 0.18)
                     .frame(height: panelHeight)
-
-                    // Divider
-                    Rectangle()
-                        .fill(appColors.text.opacity(0.18))
-                        .frame(width: 1)
-                        .frame(height: panelHeight)
 
                     // Right panel: queue
                     VStack(alignment: .leading, spacing: 0) {
@@ -349,7 +338,7 @@ struct NewDashboardView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.white)
             .cornerRadius(14)
             .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
@@ -401,12 +390,14 @@ struct NewDashboardView: View {
                             subtitle: "Scan Rx Labels",
                             action: navigateToDispense
                         )
+                        .frame(maxHeight: .infinity)
                         landscapeQuickActionCard(
                             iconName: "placeholder_history",
                             title: "Inventory",
                             subtitle: "Start inventory count",
                             action: { showStockCountPopup = true; resetStockCountSelection() }
                         )
+                        .frame(maxHeight: .infinity)
                     }
                     .padding(.horizontal, hPadding)
                     .padding(.vertical, vPadding)

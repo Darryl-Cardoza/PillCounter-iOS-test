@@ -327,10 +327,10 @@ struct NewDashboardView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(appColors.secondary)
                     Text(subtitle)
-                        .font(.system(size: 9))
+                        .font(.system(size: 11))
                         .foregroundColor(appColors.text.opacity(0.6))
                         .lineLimit(2)
                 }
@@ -369,7 +369,7 @@ struct NewDashboardView: View {
             let hPadding: CGFloat = 16
             let cardsPanelHeight = panelHeight - vPadding * 2
             // Stat cards column: squarish cards — use a fixed narrow width
-            let statCardColumnWidth: CGFloat = 200
+            let statCardColumnWidth: CGFloat = 175
             let statCardSpacing: CGFloat = 8
             let totalStatSpacing: CGFloat = statCardSpacing * CGFloat(statCards.count - 1)
             let cardHeight = (cardsPanelHeight - totalStatSpacing) / CGFloat(statCards.count)
@@ -469,10 +469,10 @@ struct NewDashboardView: View {
 
                 VStack(spacing: 4) {
                     Text(title)
-                        .font(.system(size: 26, weight: .semibold))
+                        .font(.system(size: 28, weight: .semibold))
                         .foregroundColor(appColors.secondary)
                     Text(subtitle)
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                         .foregroundColor(appColors.text.opacity(0.6))
                 }
             }
@@ -507,11 +507,11 @@ struct NewDashboardView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(userViewModel.pharmacyName.isEmpty ? "Pharmacy" : userViewModel.pharmacyName)
-                        .font(.system(size: isIpad ? 18 : 15, weight: .semibold))
+                        .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
                         .foregroundColor(appColors.text)
                     if !selectedTerminalName.isEmpty {
                         Text("Terminal \(selectedTerminalName)")
-                            .font(.system(size: isIpad ? 13 : 11))
+                            .font(.system(size: isIpad ? 15 : 13))
                             .foregroundColor(appColors.text.opacity(0.6))
                     }
                 }
@@ -528,7 +528,7 @@ struct NewDashboardView: View {
                 router.navigate(to: .authentication(.user(.hamburgerMenu)))
             } label: {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: isIpad ? 26 : 22, weight: .semibold))
+                    .font(.system(size: isIpad ? 28 : 24, weight: .semibold))
                     .foregroundColor(appColors.primary)
                     .padding(8)
             }
@@ -543,7 +543,7 @@ struct NewDashboardView: View {
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("QUICK ACTIONS")
-                .font(.system(size: isIpad ? 13 : 11, weight: .semibold))
+                .font(.system(size: isIpad ? 15 : 13, weight: .semibold))
                 .foregroundColor(appColors.text.opacity(0.5))
                 .tracking(1)
 
@@ -606,10 +606,10 @@ struct NewDashboardView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: isIpad ? 22 : 18, weight: .semibold))
+                        .font(.system(size: isIpad ? 24 : 20, weight: .semibold))
                         .foregroundColor(appColors.secondary)
                     Text(subtitle)
-                        .font(.system(size: isIpad ? 14 : 12))
+                        .font(.system(size: isIpad ? 16 : 14))
                         .foregroundColor(appColors.text.opacity(0.6))
                 }
 
@@ -659,19 +659,19 @@ struct NewDashboardView: View {
                 HStack {
                     Spacer()
                     Image(systemName: card.iconName)
-                        .font(.system(size: 13))
+                        .font(.system(size: 15))
                         .foregroundColor(card.iconColor)
                 }
 
                 // Count
                 Text("\(card.count)")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundColor(appColors.primary)
                     .padding(.top, 4)
 
                 // Label
                 Text(card.label)
-                    .font(.system(size: 10))
+                    .font(.system(size: 12))
                     .foregroundColor(appColors.text.opacity(0.6))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
@@ -703,7 +703,7 @@ struct NewDashboardView: View {
             VStack(spacing: 8) {
                 if items.isEmpty {
                     Text("No pending items")
-                        .font(.system(size: 13))
+                        .font(.system(size: 15))
                         .foregroundColor(appColors.text.opacity(0.4))
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 32)
@@ -728,7 +728,7 @@ struct NewDashboardView: View {
         } label: {
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: isIpad ? 12 : 11, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: isIpad ? 14 : 13, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? appColors.text : appColors.text.opacity(0.45))
                     .tracking(0.8)
 
@@ -782,26 +782,26 @@ struct NewDashboardView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text("NDC \(data.ndc)")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(appColors.primary)
                         .lineLimit(1)
                     if !data.drugType.isEmpty {
                         Text(data.drugType)
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundColor(appColors.text.opacity(0.5))
                     }
                 }
                 Text(data.drugName)
-                    .font(.system(size: 12))
+                    .font(.system(size: 14))
                     .foregroundColor(appColors.text)
                     .lineLimit(1)
                 HStack(spacing: 8) {
                     Text(DateUtils.formatToUSDateTime(data.createdAt))
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundColor(appColors.text.opacity(0.5))
                     if !data.bucketId.isEmpty && data.bucketId != "NORMAL" {
                         Text(data.bucketId)
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundColor(appColors.text.opacity(0.7))
                     }
                 }
@@ -814,7 +814,7 @@ struct NewDashboardView: View {
             VStack(spacing: 4) {
                 DonutProgressView(fraction: fillFraction, appColors: appColors, size: 26)
                 Text("\(data.pillCount)/\(data.targetCount)")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(appColors.secondary)
             }
             .padding(.trailing, 4)
@@ -842,16 +842,16 @@ struct NewDashboardView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(String(data.batchId))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(appColors.primary)
                     .lineLimit(1)
                 HStack(spacing: 8) {
                     Text(DateUtils.formatToUSDateTime(data.createdAt))
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundColor(appColors.text.opacity(0.5))
                     if data.bucketId != "NORMAL" {
                         Text(data.bucketId)
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundColor(appColors.text.opacity(0.7))
                     }
                 }
@@ -861,10 +861,10 @@ struct NewDashboardView: View {
 
             VStack(spacing: 4) {
                 Text(String(data.ndcCount))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(appColors.secondary)
                 Text("NDCs")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(appColors.text.opacity(0.6))
             }
             .padding(.trailing, 4)
@@ -934,7 +934,7 @@ struct NewDashboardView: View {
         VStack(spacing: 35) {
             VStack(alignment: .leading) {
                 Text(L10n.Dashboard.Popup.whatWouldYouDo)
-                    .font(.system(size: 16))
+                    .font(.system(size: 18))
                     .fontWeight(.semibold)
                     .foregroundStyle(appColors.text)
             }
@@ -971,7 +971,7 @@ struct NewDashboardView: View {
                     textColor: appColors.text,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
+                    font: .system(size: 16, weight: .semibold),
                     cornerRadius: 30,
                     horizontalPadding: 32,
                     verticalPadding: 20,
@@ -984,7 +984,7 @@ struct NewDashboardView: View {
                     textColor: .white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
+                    font: .system(size: 16, weight: .semibold),
                     cornerRadius: 30,
                     horizontalPadding: 32,
                     verticalPadding: 20,
@@ -1020,7 +1020,7 @@ struct NewDashboardView: View {
         VStack(spacing: 35) {
             VStack(alignment: .leading) {
                 Text(L10n.Dashboard.Popup.selectBucket)
-                    .font(.system(size: 16))
+                    .font(.system(size: 18))
                     .fontWeight(.semibold)
                     .foregroundStyle(appColors.text)
             }
@@ -1049,7 +1049,7 @@ struct NewDashboardView: View {
                     textColor: appColors.text,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
+                    font: .system(size: 16, weight: .semibold),
                     cornerRadius: 30,
                     horizontalPadding: 32,
                     verticalPadding: 20,
@@ -1062,7 +1062,7 @@ struct NewDashboardView: View {
                     textColor: .white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
+                    font: .system(size: 16, weight: .semibold),
                     cornerRadius: 30,
                     horizontalPadding: 32,
                     verticalPadding: 20,

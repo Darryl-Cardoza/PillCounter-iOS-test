@@ -237,9 +237,13 @@ struct NewDashboardView: View {
             let vPadding: CGFloat = 16
             let hPadding: CGFloat = 16
             let cardsPanelHeight = panelHeight - vPadding * 2
-            // 6 cards stacked vertically, height divided equally
-            let totalSpacing: CGFloat = 8 * CGFloat(statCards.count - 1)
-            let cardHeight = (cardsPanelHeight - totalSpacing) / CGFloat(statCards.count)
+            // Stat cards column: squarish cards — use a fixed narrow width
+            let statCardColumnWidth: CGFloat = 200
+            let statCardSpacing: CGFloat = 8
+            let totalStatSpacing: CGFloat = statCardSpacing * CGFloat(statCards.count - 1)
+            let cardHeight = (cardsPanelHeight - totalStatSpacing) / CGFloat(statCards.count)
+            // Quick action cards column: bigger, fixed width
+            let quickActionColumnWidth: CGFloat = 260
 
             VStack(spacing: 0) {
                 headerBar
@@ -249,7 +253,7 @@ struct NewDashboardView: View {
                 HStack(alignment: .top, spacing: 0) {
                     // Left panel: quick action cards + stat cards side by side
                     HStack(alignment: .top, spacing: 12) {
-                        // Quick action cards — fill exact panel height
+                        // Quick action cards — taller, fixed width
                         VStack(spacing: 12) {
                             landscapeQuickActionCard(
                                 iconName: "dispense_dashboard_icon",
@@ -264,23 +268,22 @@ struct NewDashboardView: View {
                                 action: { showStockCountPopup = true; resetStockCountSelection() }
                             )
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: quickActionColumnWidth)
                         .frame(height: cardsPanelHeight)
 
-                        // 6 stat cards stacked vertically, each card height fills the panel exactly
-                        VStack(spacing: 8) {
+                        // 6 stat cards stacked vertically, squarish
+                        VStack(spacing: statCardSpacing) {
                             ForEach(statCards) { card in
                                 statCardView(card: card)
-                                    .frame(maxWidth: .infinity)
+                                    .frame(width: statCardColumnWidth)
                                     .frame(height: cardHeight)
                             }
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: statCardColumnWidth)
                         .frame(height: cardsPanelHeight)
                     }
                     .padding(.horizontal, hPadding)
                     .padding(.vertical, vPadding)
-                    .frame(maxWidth: .infinity)
                     .frame(height: panelHeight)
 
                     // Divider
@@ -289,7 +292,7 @@ struct NewDashboardView: View {
                         .frame(width: 0.5)
                         .frame(height: panelHeight)
 
-                    // Right panel: queue tabs + list
+                    // Right panel: queue tabs + list — takes remaining width
                     VStack(alignment: .leading, spacing: 0) {
                         queueTabHeaders
                             .padding(.top, 16)
@@ -330,16 +333,16 @@ struct NewDashboardView: View {
                         .resizable()
                         .scaledToFit()
                         .foregroundColor(appColors.secondary)
-                        .padding(30)
+                        .padding(40)
                 }
-                .frame(width: 110, height: 110)
+                .frame(width: 150, height: 150)
 
                 VStack(spacing: 4) {
                     Text(title)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 26, weight: .semibold))
                         .foregroundColor(appColors.secondary)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(size: 14))
                         .foregroundColor(appColors.text.opacity(0.6))
                 }
             }

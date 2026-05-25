@@ -244,37 +244,51 @@ struct NewDashboardView: View {
                     .frame(height: headerHeight)
 
                 HStack(alignment: .top, spacing: 0) {
-                    // Left panel: quick actions + stat cards
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Quick action cards side by side
-                            HStack(spacing: 10) {
-                                phoneQuickActionCard(
-                                    iconName: "dispense_dashboard_icon",
-                                    title: "Dispense",
-                                    subtitle: "Tap to scan Rx Labels",
-                                    action: navigateToDispense
-                                )
-                                phoneQuickActionCard(
-                                    iconName: "placeholder_history",
-                                    title: "Inventory",
-                                    subtitle: "Start inventory count",
-                                    action: { showStockCountPopup = true; resetStockCountSelection() }
-                                )
-                            }
-                            // Stat cards horizontally scrollable
-                            phoneStatCardsRow
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
+                    // Left panel: quick action cards stacked vertically
+                    VStack(spacing: 10) {
+                        phoneQuickActionCard(
+                            iconName: "dispense_dashboard_icon",
+                            title: "Dispense",
+                            subtitle: "Tap to scan Rx Labels",
+                            action: navigateToDispense
+                        )
+                        phoneQuickActionCard(
+                            iconName: "placeholder_history",
+                            title: "Inventory",
+                            subtitle: "Start inventory count",
+                            action: { showStockCountPopup = true; resetStockCountSelection() }
+                        )
+                        Spacer(minLength: 0)
                     }
-                    .frame(width: screen.size.width * 0.45)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    .frame(width: screen.size.width * 0.28)
                     .frame(height: panelHeight)
 
                     // Divider
                     Rectangle()
-                        .fill(appColors.text.opacity(0.08))
-                        .frame(width: 0.5)
+                        .fill(appColors.text.opacity(0.18))
+                        .frame(width: 1)
+                        .frame(height: panelHeight)
+
+                    // Middle panel: stat cards vertically scrollable
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 8) {
+                            ForEach(statCards) { card in
+                                statCardView(card: card)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 12)
+                    }
+                    .frame(width: screen.size.width * 0.18)
+                    .frame(height: panelHeight)
+
+                    // Divider
+                    Rectangle()
+                        .fill(appColors.text.opacity(0.18))
+                        .frame(width: 1)
                         .frame(height: panelHeight)
 
                     // Right panel: queue
@@ -320,14 +334,14 @@ struct NewDashboardView: View {
                         .foregroundColor(appColors.secondary)
                         .padding(10)
                 }
-                .frame(width: 50, height: 50)
+                .frame(width: 44, height: 44)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(appColors.secondary)
                     Text(subtitle)
-                        .font(.system(size: 10))
+                        .font(.system(size: 9))
                         .foregroundColor(appColors.text.opacity(0.6))
                         .lineLimit(2)
                 }
@@ -379,45 +393,42 @@ struct NewDashboardView: View {
                     .frame(height: headerHeight)
 
                 HStack(alignment: .top, spacing: 0) {
-                    // Left panel: quick action cards + stat cards side by side
-                    HStack(alignment: .top, spacing: 12) {
-                        // Quick action cards — taller, fixed width
-                        VStack(spacing: 12) {
-                            landscapeQuickActionCard(
-                                iconName: "dispense_dashboard_icon",
-                                title: "Dispense",
-                                subtitle: "Scan Rx Labels",
-                                action: navigateToDispense
-                            )
-                            landscapeQuickActionCard(
-                                iconName: "placeholder_history",
-                                title: "Inventory",
-                                subtitle: "Start inventory count",
-                                action: { showStockCountPopup = true; resetStockCountSelection() }
-                            )
-                        }
-                        .frame(width: quickActionColumnWidth)
-                        .frame(height: cardsPanelHeight)
-
-                        // 6 stat cards stacked vertically, squarish
-                        VStack(spacing: statCardSpacing) {
-                            ForEach(statCards) { card in
-                                statCardView(card: card)
-                                    .frame(width: statCardColumnWidth)
-                                    .frame(height: cardHeight)
-                            }
-                        }
-                        .frame(width: statCardColumnWidth)
-                        .frame(height: cardsPanelHeight)
+                    // Left panel: quick action cards — fill full height equally
+                    VStack(spacing: 12) {
+                        landscapeQuickActionCard(
+                            iconName: "dispense_dashboard_icon",
+                            title: "Dispense",
+                            subtitle: "Scan Rx Labels",
+                            action: navigateToDispense
+                        )
+                        landscapeQuickActionCard(
+                            iconName: "placeholder_history",
+                            title: "Inventory",
+                            subtitle: "Start inventory count",
+                            action: { showStockCountPopup = true; resetStockCountSelection() }
+                        )
                     }
                     .padding(.horizontal, hPadding)
                     .padding(.vertical, vPadding)
+                    .frame(width: quickActionColumnWidth)
+                    .frame(height: panelHeight)
+
+                    // Middle panel: 6 stat cards stacked vertically, squarish
+                    VStack(spacing: statCardSpacing) {
+                        ForEach(statCards) { card in
+                            statCardView(card: card)
+                                .frame(width: statCardColumnWidth)
+                                .frame(height: cardHeight)
+                        }
+                    }
+                    .padding(.vertical, vPadding)
+                    .frame(width: statCardColumnWidth)
                     .frame(height: panelHeight)
 
                     // Divider
                     Rectangle()
-                        .fill(appColors.text.opacity(0.08))
-                        .frame(width: 0.5)
+                        .fill(appColors.text.opacity(0.18))
+                        .frame(width: 1)
                         .frame(height: panelHeight)
 
                     // Right panel: queue tabs + list — takes remaining width

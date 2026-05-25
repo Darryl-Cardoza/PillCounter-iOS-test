@@ -369,7 +369,7 @@ struct NewDashboardView: View {
             let hPadding: CGFloat = 16
             let cardsPanelHeight = panelHeight - vPadding * 2
             // Stat cards column: squarish cards — use a fixed narrow width
-            let statCardColumnWidth: CGFloat = 155
+            let statCardColumnWidth: CGFloat = 175
             let statCardSpacing: CGFloat = 8
             let totalStatSpacing: CGFloat = statCardSpacing * CGFloat(statCards.count - 1)
             let cardHeight = (cardsPanelHeight - totalStatSpacing) / CGFloat(statCards.count)
@@ -413,20 +413,14 @@ struct NewDashboardView: View {
                         }
                     }
                     .padding(.vertical, vPadding)
-                    .padding(.trailing, 8)
-                    .frame(width: statCardColumnWidth + 8)
+                    .frame(width: statCardColumnWidth)
                     .frame(height: panelHeight)
 
-                    // Divider — aligned to the cards area only
-                    VStack {
-                        Spacer()
-                        Rectangle()
-                            .fill(appColors.text.opacity(0.18))
-                            .frame(width: 1)
-                            .frame(height: cardsPanelHeight)
-                        Spacer()
-                    }
-                    .frame(height: panelHeight)
+                    // Divider
+                    Rectangle()
+                        .fill(appColors.text.opacity(0.18))
+                        .frame(width: 1)
+                        .frame(height: panelHeight)
 
                     // Right panel: queue tabs + list — takes remaining width
                     VStack(alignment: .leading, spacing: 0) {
@@ -649,7 +643,7 @@ struct NewDashboardView: View {
                 HStack(spacing: 10) {
                     ForEach(statCards) { card in
                         statCardView(card: card)
-                            .frame(width: 100, height: 95)
+                            .frame(width: 100)
                     }
                 }
                 .padding(.horizontal, 2)
@@ -681,9 +675,10 @@ struct NewDashboardView: View {
                     .foregroundColor(appColors.text.opacity(0.6))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white)
             .cornerRadius(14)
             .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)

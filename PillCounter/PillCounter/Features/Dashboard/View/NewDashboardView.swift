@@ -411,6 +411,11 @@ struct NewDashboardView: View {
 
                     // Middle panel: 6 stat cards stacked vertically, squarish
                     VStack(spacing: statCardSpacing) {
+                        Text("QUICK ACTIONS")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.clear)
+                            .tracking(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         ForEach(statCards) { card in
                             statCardView(card: card)
                                 .frame(width: statCardColumnWidth)

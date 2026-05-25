@@ -417,11 +417,16 @@ struct NewDashboardView: View {
                     .frame(width: statCardColumnWidth + 8)
                     .frame(height: panelHeight)
 
-                    // Divider
-                    Rectangle()
-                        .fill(appColors.text.opacity(0.18))
-                        .frame(width: 1)
-                        .frame(height: panelHeight)
+                    // Divider — aligned to the cards area only
+                    VStack {
+                        Spacer()
+                        Rectangle()
+                            .fill(appColors.text.opacity(0.18))
+                            .frame(width: 1)
+                            .frame(height: cardsPanelHeight)
+                        Spacer()
+                    }
+                    .frame(height: panelHeight)
 
                     // Right panel: queue tabs + list — takes remaining width
                     VStack(alignment: .leading, spacing: 0) {
@@ -644,7 +649,7 @@ struct NewDashboardView: View {
                 HStack(spacing: 10) {
                     ForEach(statCards) { card in
                         statCardView(card: card)
-                            .frame(width: 100)
+                            .frame(width: 100, height: 95)
                     }
                 }
                 .padding(.horizontal, 2)

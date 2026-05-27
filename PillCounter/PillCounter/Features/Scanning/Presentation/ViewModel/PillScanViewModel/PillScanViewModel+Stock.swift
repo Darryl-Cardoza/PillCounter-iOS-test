@@ -17,6 +17,7 @@ extension PillScanViewModel {
         countType: CountType,
         batchId: Int64,
         containerStatus: StockCountOptionContainerStatus,
+        bottleCount: Int = 1,
         image: UIImage? = nil
     ) async {
                 
@@ -39,13 +40,13 @@ extension PillScanViewModel {
             }
 
         if let txn = existingTxn {
-            
+
             print("Existing txn found → merging")
 
             // MARK: 2️⃣ Update counts
             transactionDAO.updateCounts(
                 txnId: txn.txn_id,
-                bottleQty: containerStatus == .sealed ? 1 : nil,
+                bottleQty: containerStatus == .sealed ? Int32(bottleCount) : nil,
                 looseQty: containerStatus == .opened ? 0 : nil
             )
 
@@ -155,7 +156,7 @@ extension PillScanViewModel {
         // MARK: 8️⃣ Set initial counts
         transactionDAO.updateCounts(
             txnId: latestTxn.txn_id,
-            bottleQty: containerStatus == .sealed ? 1 : nil,
+            bottleQty: containerStatus == .sealed ? Int32(bottleCount) : nil,
             looseQty: containerStatus == .opened ? 0 : nil
         )
 

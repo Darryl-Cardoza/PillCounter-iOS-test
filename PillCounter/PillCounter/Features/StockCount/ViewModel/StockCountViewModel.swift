@@ -36,7 +36,10 @@ class StockCountViewModel: ObservableObject {
     @Published var showScannedNdcDoesNotMatch: Bool = false
     @Published var batchNdcSet: Set<String> = []
     @Published var selectedTransaction: PillCountTransactionEntity? = nil
+    @Published var selectedGroupedTransaction: GroupedTransaction? = nil
     @Published var note: String = ""
+    @Published var pendingBottleCount: Int = 1
+    @Published var existingNdcBottleCount: Int = 0
     
     @AppStorage(AppStorageManager.AppStorageKeys.isPillCountingEnabled) var isNoteEnable: Bool = false
 
@@ -55,12 +58,15 @@ class StockCountViewModel: ObservableObject {
     /// Single subscription. Any DB write fires transactionsDidChange,
     /// which calls reloadAllState() — no manual reload calls needed anywhere.
     private func observeDataChanges() {
-        batchDAO.transactionsDidChange
-            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
-            .sink { [weak self] in
-                self?.reloadAllState()
-            }
-            .store(in: &cancellables)
+        Publishers.Merge(
+            batchDAO.transactionsDidChange,
+            transactionDAO.transactionsDidChange
+        )
+        .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+        .sink { [weak self] in
+            self?.reloadAllState()
+        }
+        .store(in: &cancellables)
     }
 
     /// Central state refresh. Replaces loadTransactions() + updateBatchCount()
@@ -178,11 +184,22 @@ class StockCountViewModel: ObservableObject {
     // MARK: - Scan
 
     func getScannedDrugData(rawValue: String) async {
-        let gtin = decoder.decode(rawValue).gtin ?? ""
-        await fetchDrugDataOnly(gtin: gtin)
+        let decoded = decoder.decode(rawValue)
+        let gtin = decoded.gtin ?? ""
+        let lotNumber = decoded.lotNumber ?? ""
+        let expiryString = formatExpiry(decoded.expirationDate) ?? ""
+        await fetchDrugDataOnly(gtin: gtin, lotNumber: lotNumber, expiry: expiryString)
     }
 
-    private func fetchDrugDataOnly(gtin: String) async {
+    private func formatExpiry(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter.string(from: date)
+    }
+
+    private func fetchDrugDataOnly(gtin: String, lotNumber: String = "", expiry: String = "") async {
         guard !gtin.isEmpty else {
             showScanError = true
             barcodeNotFound = true
@@ -202,11 +219,16 @@ class StockCountViewModel: ObservableObject {
                 return
             }
             scannedDrugData = ScannedDrugData(
-                drugName: localDrug.drug_name ?? "",
-                ndc:      ndc,
-                gtin:     localDrug.gtin ?? "",
-                quantity: localDrug.package_qty
+                drugName:  localDrug.drug_name ?? "",
+                ndc:       ndc,
+                gtin:      localDrug.gtin ?? "",
+                quantity:  localDrug.package_qty,
+                lotNumber: lotNumber,
+                expiry:    expiry
             )
+            let existing = existingBottleCount(for: ndc)
+            existingNdcBottleCount = existing
+            pendingBottleCount = 1
             isLoading = false
             showStockCountScannedDetails = true
             print("Fetched response from Local")
@@ -242,11 +264,16 @@ class StockCountViewModel: ObservableObject {
             )
 
             scannedDrugData = ScannedDrugData(
-                drugName: drugName,
-                ndc:      ndc,
-                gtin:     gtin,
-                quantity: qty
+                drugName:  drugName,
+                ndc:       ndc,
+                gtin:      gtin,
+                quantity:  qty,
+                lotNumber: lotNumber,
+                expiry:    expiry
             )
+            let existingApi = existingBottleCount(for: ndc)
+            existingNdcBottleCount = existingApi
+            pendingBottleCount = 1
             isLoading = false
             showStockCountScannedDetails = true
             print("Fetched response from API: \(response)")
@@ -272,6 +299,31 @@ class StockCountViewModel: ObservableObject {
         barcodeNotFound = false
         showScannedNdcDoesNotMatch = false
         isLoading = false
+        pendingBottleCount = 1
+        existingNdcBottleCount = 0
+    }
+
+    /// Returns the existing sealed bottle count for an NDC already in the current batch.
+    /// Displayed alongside the stepper so the user sees current total + how many they're adding.
+    func existingBottleCount(for ndc: String) -> Int {
+        guard let batchId = currentBatch?.batch_id else { return 0 }
+        let txns = transactionDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
+        return txns.reduce(0) { $0 + Int($1.bottle_qty) }
+    }
+
+    func selectTransaction(_ txn: GroupedTransaction) {
+        let firstLot = txn.lotDetails.first
+        scannedDrugData = ScannedDrugData(
+            drugName:  txn.drugName,
+            ndc:       txn.ndc,
+            gtin:      "",
+            quantity:  txn.packageQty,
+            lotNumber: firstLot?.lot ?? "",
+            expiry:    firstLot?.expiry ?? ""
+        )
+        existingNdcBottleCount = Int(txn.sealedBottleQty)
+        pendingBottleCount = 0
+        selectedGroupedTransaction = txn
     }
 
     // MARK: - Mapper
@@ -309,6 +361,7 @@ class StockCountViewModel: ObservableObject {
                 total:        totalSealed + totalOpen,
                 sealedBottles: totalSealed,
                 sealedBottleQty: txnList.reduce(0) { $0 + $1.bottle_qty },
+                packageQty:   txnList.first?.drug?.package_qty ?? 0,
                 openPills:    totalOpen,
                 lotDetails:   lotDetails
             )
@@ -319,10 +372,12 @@ class StockCountViewModel: ObservableObject {
 // MARK: - Supporting Types
 
 struct ScannedDrugData {
-    let drugName: String
-    let ndc:      String
-    let gtin:     String
-    let quantity: Int32
+    let drugName:  String
+    let ndc:       String
+    let gtin:      String
+    let quantity:  Int32
+    let lotNumber: String
+    let expiry:    String
 }
 
 struct StockTransaction: Identifiable, Hashable {
@@ -342,6 +397,7 @@ struct GroupedTransaction {
     let total:         Int32
     let sealedBottles: Int32
     let sealedBottleQty: Int32
+    let packageQty:    Int32
     let openPills:     Int32
     let lotDetails:    [LotDetail]
 }

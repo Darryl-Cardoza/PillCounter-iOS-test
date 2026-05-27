@@ -54,9 +54,13 @@ struct UnifiedCameraView: View {
     // ── Pill count panel ──────────────────────────────────────────────────────
     @State var showPillCountPanel: Bool
 
+    // ── Stock count panel (always visible when scanType == .stockCount) ───────
+    @State var showStockCountPanel: Bool
+
     init(currentScanType: ScanType) {
         self.currentScanType = currentScanType
         self._showPillCountPanel = State(initialValue: currentScanType == .resumeCount)
+        self._showStockCountPanel = State(initialValue: currentScanType == .stockCount)
     }
     @State var hasInitializedStep: Bool = false
     @State var isAddDisabled: Bool = false
@@ -65,6 +69,10 @@ struct UnifiedCameraView: View {
 
     @State var showNoteOption: Bool = false
     @State var showConfirmCompletionPopup: Bool = false
+    // Stock count end-count popups
+    @State var showStockEndBatchPopUp: Bool = false
+    @State var showStockNoteOptions:   Bool = false
+    @State var stockNoteError: String?
     @State var showDeleteAllTransactionDetailsPopup: Bool = false
     @State var showStepCompletionPopup: Bool = false
     @State var showCountMismatchPopup: Bool = false
@@ -109,6 +117,8 @@ struct UnifiedCameraView: View {
             }
             .customPopup(isPresented: $showNoteOption) { showNoteOptionPopup }
             .customPopup(isPresented: $showConfirmCompletionPopup) { showConfirmCompletion }
+            .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
+            .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
             .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
@@ -123,6 +133,12 @@ struct UnifiedCameraView: View {
     var pillCountSheetHeight: CGFloat {
         UIDevice.current.userInterfaceIdiom == .pad
             ? UIScreen.main.bounds.height * 0.30
+            : UIScreen.main.bounds.height * 0.28
+    }
+
+    var stockCountSheetHeight: CGFloat {
+        UIDevice.current.userInterfaceIdiom == .pad
+            ? UIScreen.main.bounds.height * 0.45
             : UIScreen.main.bounds.height * 0.28
     }
 
@@ -178,7 +194,35 @@ struct UnifiedCameraView: View {
             }
             .customPopup(isPresented: $pillScanViewModel.showNdcEquivalencePopup, dismissOnBackgroundTap: false) { ndcEquivalencePopup }
             .customPopup(isPresented: $stockCountViewModel.barcodeNotFound) { barcodeNotFoundPopup }
-            .customPopup(isPresented: $stockCountViewModel.showStockCountScannedDetails, dismissOnBackgroundTap: false) { stockCountDetailsPopup }
+            .bottomSheet(isPresented: $showStockCountPanel, dismissOnBackgroundTap: false, showDim: false, portraitHeight: stockCountSheetHeight, landscapeWidth: UIScreen.main.bounds.width * 0.35) {
+                StockCountBatchBottomSheet(
+                    containerStatus: $scannedBottleContainerStatus,
+                    onCancel: {
+                        stockCountViewModel.scannedDrugData = nil
+                        stockCountViewModel.reset()
+                        cameraService.resetBarcodeScanState()
+                        cameraService.enableBarcodeScanning()
+                    },
+                    onAdd: {
+                        stockCountViewModel.showStockCountScannedDetails = false
+                        if pillScanViewModel.selectedTransaction?.is_from_pms == true,
+                           let txn = pillScanViewModel.selectedTransaction {
+                            pillScanViewModel.updatePmsTxnCount(
+                                txn: txn,
+                                containerStatus: scannedBottleContainerStatus,
+                                scannedQty: Int(stockCountViewModel.scannedDrugData?.quantity ?? 0)
+                            )
+                        } else {
+                            handleStockCountAdd()
+                        }
+                    },
+                    onEndCount: {
+                        handleStockEndCount()
+                    }
+                )
+                .environmentObject(appColors)
+                .environmentObject(stockCountViewModel)
+            }
             .customPopup(isPresented: $stockCountViewModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false) { ndcMismatchPopup }
     }
 
@@ -212,8 +256,14 @@ struct UnifiedCameraView: View {
         }
         .onChange(of: cameraService.scannedCode) { _, newValue in handleScannedCode(newValue) }
         .onChange(of: pillScanViewModel.isDrugFound) { _, newValue in handleDrugFoundState(newValue) }
-        .onChange(of: pillScanViewModel.isNdcAdded) { _, _ in
-            router.setRoot(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail))))))
+        .onChange(of: pillScanViewModel.isNdcAdded) { _, added in
+            if added && currentScanType == .stockCount {
+                // Stock count: only clear the flag; reset() is called explicitly by autoCommitPendingStockScan
+                // before fetching new drug data. Calling it here would wipe scannedDrugData mid-fetch.
+                pillScanViewModel.isNdcAdded = false
+            } else if added {
+                router.setRoot(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail))))))
+            }
         }
         .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
             if show { showConfirmCompletionPopup = true }
@@ -305,6 +355,7 @@ extension UnifiedCameraView {
         pillScanViewModel.isDrugFound = nil
 
         stockCountViewModel.reset()
+        showStockCountPanel = currentScanType == .stockCount
         pillScanViewModel.resetScanningState()
         cameraState = .scanning
         scannedRawValue = nil
@@ -418,7 +469,7 @@ extension UnifiedCameraView {
         rejectedBarcodes.removeValue(forKey: newValue)
 
         cameraService.disableBarcodeScanning()
-        cameraService.pauseCounting()
+        if currentScanType != .stockCount { cameraService.pauseCounting() }
 
         if let snap = cameraService.captureSnapshot() { self.capturedImage = snap }
         scannedRawValue = newValue
@@ -441,12 +492,12 @@ extension UnifiedCameraView {
                 case .barcode:
                     guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
                 case .stockCount:
-                    await stockCountViewModel.getScannedDrugData(rawValue: newValue)
+                    await handleStockCountScan(newValue)
                 case .resumeCount:
                     break;
                 }
             } else {
-                await stockCountViewModel.getScannedDrugData(rawValue: newValue)
+                await handleStockCountScan(newValue)
             }
         }
     }
@@ -455,6 +506,11 @@ extension UnifiedCameraView {
         switch newValue {
         case true:
             pillScanViewModel.isDrugFound = nil
+            if currentScanType == .stockCount {
+                // Stock count opened-bottle ADD: clear state; scanning already re-enabled
+                stockCountViewModel.reset()
+                return
+            }
             cameraService.disableBarcodeScanning()
             scanTimeoutTask?.cancel()
             showPillCountPanel = true
@@ -504,7 +560,7 @@ extension UnifiedCameraView {
         rejectedBarcodes = rejectedBarcodes.filter { $0.value > now }
         cameraService.resetBarcodeScanState()
         cameraService.enableBarcodeScanning()
-        cameraService.resumeCounting()
+        if currentScanType != .stockCount { cameraService.resumeCounting() }
         startScanTimeout()
         pillScanViewModel.ndcComparisonResponse = nil
         pillScanViewModel.isNdcEquivalent = false
@@ -633,10 +689,135 @@ extension UnifiedCameraView {
                 quantity: Int32(Int(stockCountViewModel.scannedDrugData?.quantity ?? 0)),
                 countType: .REGULAR,
                 batchId: batchId,
-                containerStatus: scannedBottleContainerStatus
+                containerStatus: scannedBottleContainerStatus,
+                bottleCount: stockCountViewModel.pendingBottleCount
             )
             stockCountViewModel.showStockCountScannedDetails = false
+            stockCountViewModel.reset()
+            cameraService.resetBarcodeScanState()
+            cameraService.enableBarcodeScanning()
         }
+    }
+
+    /// Handles a new barcode in stock-count flow:
+    /// - Same barcode as current pending drug → increment bottle count, apply 5s cooldown, no UI flicker
+    /// - Different barcode → auto-commit pending drug first, then show new drug info
+    func handleStockCountScan(_ rawValue: String) async {
+        // Decode to extract GTIN for same-drug detection
+        let decoded = stockCountViewModel.decoder.decode(rawValue)
+        let scannedGtin = decoded.gtin ?? ""
+
+        // Check if this is the same drug already showing
+        let isSameNdc: Bool = {
+            guard let drug = stockCountViewModel.scannedDrugData, !drug.ndc.isEmpty else { return false }
+            if !scannedGtin.isEmpty {
+                return drug.gtin == scannedGtin
+            }
+            // Fallback: compare raw value directly against known NDC
+            return drug.ndc == rawValue
+        }()
+
+        if isSameNdc {
+            // Same barcode held in front — increment count and apply a cooldown so it
+            // doesn't keep firing while the label stays in frame.
+            stockCountViewModel.pendingBottleCount += 1
+            rejectedBarcodes[rawValue] = Date().addingTimeInterval(3)
+        } else {
+            // Different NDC — commit pending first, then fetch new drug info.
+            await autoCommitPendingStockScan()
+            await stockCountViewModel.getScannedDrugData(rawValue: rawValue)
+            // Apply a short cooldown on the new barcode too so the just-scanned label
+            // doesn't immediately re-trigger before the user moves the camera away.
+            rejectedBarcodes[rawValue] = Date().addingTimeInterval(3)
+        }
+
+        // Always re-enable scanning so any barcode (including a new one) can be read.
+        cameraService.resetBarcodeScanState()
+        cameraService.enableBarcodeScanning()
+    }
+
+    /// If there is a pending (not yet added) scanned drug when a new barcode arrives,
+    /// silently commit it with the current stepper count before switching to the new one.
+    func autoCommitPendingStockScan() async {
+        guard let drug = stockCountViewModel.scannedDrugData,
+              let batchId = stockCountViewModel.currentBatch?.batch_id else { return }
+        await pillScanViewModel.createTxnForBatchFromScan(
+            rawValueFromBarcodeOrQr: scannedRawValue,
+            ndc: drug.ndc,
+            drugName: drug.drugName,
+            quantity: Int32(drug.quantity),
+            countType: .REGULAR,
+            batchId: batchId,
+            containerStatus: scannedBottleContainerStatus,
+            bottleCount: stockCountViewModel.pendingBottleCount
+        )
+        stockCountViewModel.reset()
+    }
+
+    // MARK: - Stock count end-count flow
+
+    func handleStockEndCount() {
+        if stockCountViewModel.isNoteEnable {
+            stockCountViewModel.note = ""
+            showStockNoteOptions = true
+        } else {
+            showStockEndBatchPopUp = true
+        }
+    }
+
+    private func confirmStockEndBatch() {
+        showStockEndBatchPopUp = false
+        if let batchId = stockCountViewModel.currentBatch?.batch_id {
+            stockCountViewModel.completeBatch(batchId: batchId)
+        }
+        stockCountViewModel.note = ""
+        router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+    }
+
+    var stockHasNoCount: Bool {
+        stockCountViewModel.groupedTransactions.isEmpty ||
+        stockCountViewModel.groupedTransactions.reduce(0) { $0 + Int($1.total) } == 0
+    }
+
+    var stockEndBatchPopup: some View {
+        ConfirmationDialogue(
+            title: "End Batch Count?",
+            message: stockHasNoCount ? "No items have been counted. Are you sure you want to end?" : nil,
+            cancelButtonText: "No",
+            confirmButtonText: "Yes",
+            onCancel: { showStockEndBatchPopUp = false },
+            onConfirm: { confirmStockEndBatch() }
+        )
+    }
+
+    var stockNoteOptionPopup: some View {
+        NotePopupView(
+            title: "Add a note before ending?",
+            text: $stockCountViewModel.note,
+            errorMessage: stockNoteError,
+            primaryTitle: "Yes",
+            primaryAction: {
+                if stockCountViewModel.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    stockNoteError = "Please add a note"
+                    return
+                }
+                stockNoteError = nil
+                showStockNoteOptions = false
+                showStockEndBatchPopUp = true
+            },
+            secondaryTitle: "Skip",
+            secondaryAction: {
+                stockNoteError = nil
+                showStockNoteOptions = false
+                stockCountViewModel.note = ""
+                showStockEndBatchPopUp = true
+            },
+            onClose: {
+                stockNoteError = nil
+                showStockNoteOptions = false
+                stockCountViewModel.note = ""
+            }
+        )
     }
 
     func handleSubstitute() {

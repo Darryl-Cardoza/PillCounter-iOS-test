@@ -315,6 +315,7 @@ class HistoryViewModel: ObservableObject {
                 total: totalSealed + totalOpen,
                 sealedBottles: totalSealed,
                 sealedBottleQty: txnList.first?.bottle_qty ?? 0,
+                packageQty: txnList.first?.drug?.package_qty ?? 0,
                 openPills: totalOpen,
                 lotDetails: lotDetails
             )

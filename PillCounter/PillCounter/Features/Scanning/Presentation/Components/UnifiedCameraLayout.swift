@@ -32,17 +32,19 @@ struct UnifiedCameraLayout: View {
                 NoCameraPermissionView()
             }
 
-            DetectionOverlay(cameraService: cameraService)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+            if stockCountViewModel.currentBatch == nil {
+                DetectionOverlay(cameraService: cameraService)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
-            TrayOverlay(cameraService: cameraService)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+                TrayOverlay(cameraService: cameraService)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
-            // ── Pill count ring (barcode-scan phase only) ─────────────────────
-            if !showPillCountPanel {
-                PillCountRingView(count: cameraService.stableCount)
+                // ── Pill count ring (barcode-scan phase only) ─────────────────
+                if !showPillCountPanel {
+                    PillCountRingView(count: cameraService.stableCount)
+                }
             }
 
             // ── Loading spinner ───────────────────────────────────────────────

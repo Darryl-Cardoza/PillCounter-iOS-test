@@ -31,13 +31,13 @@ final class Hl7EventHandler: Hl7EventListener {
     }
 
     /// Called when a new HL7 message is received from PMS.
-    func onMessageReceived(message: CompleteHL7Message) {
+    func onMessageReceived(message: CompleteHL7Message, rawHl7: String) {
         Task { @MainActor in
-            // Process incoming HL7 message
             self.pillScanViewModel.handleReceivedMessage(
-                message: message
+                message: message,
+                rawHl7: rawHl7
             ) { _ in
-                // Refresh transactions after processing
+                print("onMessageReceived -> message : \(message)")
                 self.userViewModel.getAllTransactionsAndFilterByCountType()
             }
         }

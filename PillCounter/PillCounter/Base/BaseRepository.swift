@@ -166,7 +166,7 @@ extension BaseRepositoryProtocol {
     }
     
     private static func logResponse(_ data: Data, _ response: URLResponse?) {
-        #if DEBUG
+//        #if DEBUG
         print("\n========================= 📩 API RESPONSE =========================")
         if let httpResponse = response as? HTTPURLResponse {
             print("⬅️ Status Code: \(httpResponse.statusCode)")
@@ -184,7 +184,7 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
-        #endif
+//        #endif
     }
 }
 

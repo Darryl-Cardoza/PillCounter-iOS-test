@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7920C77F2FC5E5030052D261 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 7920C77E2FC5E5030052D261 /* ComposeApp */; };
+		7920C7822FC5E78F0052D261 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 7920C7812FC5E78F0052D261 /* ComposeApp */; };
+		7920C7852FC5EB000052D261 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 7920C7842FC5EB000052D261 /* ComposeApp */; };
 		797D55B42FC0558B00EA9A17 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 797D55B32FC0558B00EA9A17 /* ComposeApp */; };
 		79963B792F8543920053241C /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 79963B782F8543920053241C /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
@@ -72,7 +75,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				79963B792F8543920053241C /* FirebaseMessaging in Frameworks */,
+				7920C7822FC5E78F0052D261 /* ComposeApp in Frameworks */,
 				797D55B42FC0558B00EA9A17 /* ComposeApp in Frameworks */,
+				7920C7852FC5EB000052D261 /* ComposeApp in Frameworks */,
+				7920C77F2FC5E5030052D261 /* ComposeApp in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -143,6 +149,9 @@
 			packageProductDependencies = (
 				79963B782F8543920053241C /* FirebaseMessaging */,
 				797D55B32FC0558B00EA9A17 /* ComposeApp */,
+				7920C77E2FC5E5030052D261 /* ComposeApp */,
+				7920C7812FC5E78F0052D261 /* ComposeApp */,
+				7920C7842FC5EB000052D261 /* ComposeApp */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -234,7 +243,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				79963B772F8543920053241C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				797D55B22FC0558B00EA9A17 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
+				7920C7832FC5EB000052D261 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -676,7 +685,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		797D55B22FC0558B00EA9A17 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
+		7920C7832FC5EB000052D261 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage";
 		};
@@ -694,6 +703,18 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		7920C77E2FC5E5030052D261 /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ComposeApp;
+		};
+		7920C7812FC5E78F0052D261 /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ComposeApp;
+		};
+		7920C7842FC5EB000052D261 /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ComposeApp;
+		};
 		797D55B32FC0558B00EA9A17 /* ComposeApp */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ComposeApp;

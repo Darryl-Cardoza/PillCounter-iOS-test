@@ -317,9 +317,11 @@ final class Hl7ServiceManager {
                 serviceType: serviceType,
                 onMessage: { [weak self] raw, messageId in
                     guard let self else { return }
+                    print("Raw message -> \(raw)")
                     let parsed = self.parser.parse(hl7Message: raw)
                     self.listener?.onMessageReceived(
-                        message: parsed
+                        message: parsed,
+                        rawHl7: raw
                     )
                 },
                 onAckSent: { [weak self] messageId in
@@ -480,4 +482,5 @@ final class Hl7ServiceManager {
             hl7: hl7
         )
     }
+
 }

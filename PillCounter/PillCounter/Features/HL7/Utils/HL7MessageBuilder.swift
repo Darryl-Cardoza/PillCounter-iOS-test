@@ -75,7 +75,9 @@ final class HL7CompletionBuilder {
             expirationDate: txn.expiry,
             substanceManufacturerName: nil,
             cellId: nil,
-            cellLocation: nil
+            cellLocation: nil,
+            dispensePriority: txn.txn_priority,
+            dispensePriorityText: txn.txn_priority
         )
 
         let order = OrderData(
@@ -134,7 +136,7 @@ final class HL7CompletionBuilder {
             notes: buildCommonNotes(txn: txn, totalCount: totalCount),
             inventoryResponseItems: [],
             zinSegments: [],
-            priority: .unknown,
+            priority: TxnPriority.companion.fromString(value: txn.txn_priority),
             customSegments: [],
             obxSegments: buildImageOBX(
                 txn: txn,

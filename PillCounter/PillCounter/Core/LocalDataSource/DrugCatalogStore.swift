@@ -20,13 +20,15 @@ final class DrugCatalogStore {
         drugId: Int64,
         drugName: String,
         drugType: String? = nil,
-        packageQty: Int32 = 0
+        packageQty: Int32 = 0,
+        isHazardous: Bool? = nil
     ) {
         let entity = fetchOrCreate(ndc: ndc, drugId: drugId)
         if !drugName.isEmpty { entity.drug_name = drugName }
         if !gtin.isEmpty { entity.gtin = gtin }
         if let drugType, !drugType.isEmpty { entity.drug_type = drugType }
         if packageQty > 0 { entity.package_qty = packageQty }
+        if let isHazardous { entity.is_hazardous = isHazardous }
         entity.ndc = ndc
         CoreDataManager.shared.save(context: context)
         print("💊 [DrugMasterDAO] SAVED — ndc: \(ndc), drugId: \(drugId), drugName: \(drugName)")
@@ -72,14 +74,15 @@ final class DrugCatalogStore {
         let results = (try? context.fetch(request)) ?? []
         StoreLogger.log(
             dao: "DrugMasterDAO", op: "fetchAll",
-            columns: ["drug_id", "ndc", "drug_name", "gtin", "drug_type", "pkg_qty"],
+            columns: ["drug_id", "ndc", "drug_name", "gtin", "drug_type", "pkg_qty", "is_hazardous"],
             rows: results.map { [
                 "\($0.drug_id)",
                 $0.ndc ?? "-",
                 $0.drug_name ?? "-",
                 $0.gtin ?? "-",
                 $0.drug_type ?? "-",
-                "\($0.package_qty)"
+                "\($0.package_qty)",
+                "\($0.is_hazardous)"
             ]}
         )
         return results
@@ -93,7 +96,8 @@ final class DrugCatalogStore {
         ndc: String? = nil,
         gtin: String? = nil,
         drugType: String? = nil,
-        packageQty: Int32? = nil
+        packageQty: Int32? = nil,
+        isHazardous: Bool? = nil
     ) {
         guard let drug = fetchById(drugId) else { return }
         if let drugName { drug.drug_name = drugName }
@@ -101,6 +105,7 @@ final class DrugCatalogStore {
         if let gtin, !gtin.isEmpty { drug.gtin = gtin }
         if let drugType { drug.drug_type = drugType }
         if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
+        if let isHazardous { drug.is_hazardous = isHazardous }
         CoreDataManager.shared.save(context: context)
         print("💊 [DrugMasterDAO] UPDATED — drugId: \(drugId), drugName: \(drugName ?? "-"), ndc: \(ndc ?? "-"), gtin: \(gtin ?? "-")")
     }

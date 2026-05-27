@@ -11,6 +11,7 @@ extension PillScanViewModel {
     
     func handleReceivedMessage(
         message: CompleteHL7Message,
+        rawHl7: String = "",
         callback: HL7SimpleCallback? = nil
     ) {
 
@@ -39,6 +40,7 @@ extension PillScanViewModel {
 
                 await createFixedHl7Transaction(
                     message: message,
+                    rawHl7: rawHl7,
                     inboundType: .FIXED,
                     callback: callback
                 )
@@ -93,6 +95,7 @@ extension PillScanViewModel {
     @MainActor
     private func createFixedHl7Transaction(
         message: CompleteHL7Message,
+        rawHl7: String = "",
         inboundType: CountType,
         callback: HL7SimpleCallback? = nil
     ) async {
@@ -110,7 +113,12 @@ extension PillScanViewModel {
             return
         }
 
-        let priority = message.priority == .unknown ? nil : message.priority.name
+        // Prefer the raw ZPR string value; fall back to the KMP enum name if known.
+        let priority: String? = {
+            let raw = Self.extractZprPriorityString(from: rawHl7)
+            if let raw, !raw.isEmpty { return raw }
+            return message.priority == .unknown ? nil : message.priority.name
+        }()
 
         for (index, medication) in message.medications.enumerated() {
 
@@ -246,7 +254,8 @@ extension PillScanViewModel {
                         drugId: newId,
                         drugName: lookup,
                         drugType: response.data?.scannedNdc?.deaSchedule,
-                        packageQty: response.data?.scannedNdc?.safeQuantity ?? 0
+                        packageQty: response.data?.scannedNdc?.safeQuantity ?? 0,
+                        isHazardous: response.data?.scannedNdc?.isHazardous
                     )
 
                     drugType = response.data?.scannedNdc?.deaSchedule
@@ -334,6 +343,23 @@ extension PillScanViewModel {
         callback?(true)
     }
 
+
+    // Returns the raw priority string from ZPR segment, e.g. "High", "STAT".
+    // Format: ZPR|<setId>|PRIORITY|<value>
+    static func extractZprPriorityString(from raw: String) -> String? {
+        for line in raw.components(separatedBy: CharacterSet.newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("ZPR|") else { continue }
+            let fields = trimmed.components(separatedBy: "|")
+            if fields.count >= 4,
+               fields[safe: 2]?.uppercased() == "PRIORITY",
+               let value = fields[safe: 3]?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
 
     func buildNotification(
         message: CompleteHL7Message,

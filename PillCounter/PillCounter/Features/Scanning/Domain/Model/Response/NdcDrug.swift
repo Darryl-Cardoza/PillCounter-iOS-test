@@ -10,7 +10,7 @@ struct NdcDrug: Codable {
     let packageNdc: String
     let productNdc: String
     let splittable: Bool
-    let standardName: String
+    let standardName: String?
     let activeIngredients: [ActiveIngredients]
     let deaSchedule: String?
     let dosageForm: String?
@@ -22,6 +22,7 @@ struct NdcDrug: Codable {
     let image: DrugImage?
     let updatedAt: String?
     let package: NdcPackage?
+    let isHazardous: Bool?
 
     enum CodingKeys: String, CodingKey {
         case packageNdc = "package_ndc"
@@ -39,6 +40,7 @@ struct NdcDrug: Codable {
         case image
         case updatedAt = "updated_at"
         case package
+        case isHazardous = "is_hazardous"
     }
 }
 

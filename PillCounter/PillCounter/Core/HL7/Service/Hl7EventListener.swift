@@ -18,7 +18,7 @@ protocol Hl7EventListener: AnyObject {
     func onHl7ServerStopped()
 
     /// Called when a new HL7 message is received from PMS.
-    func onMessageReceived(message: CompleteHL7Message)
+    func onMessageReceived(message: CompleteHL7Message, rawHl7: String)
 
     /// Called after an ACK is successfully sent to PMS.
     func onAckSent(messageId: String)

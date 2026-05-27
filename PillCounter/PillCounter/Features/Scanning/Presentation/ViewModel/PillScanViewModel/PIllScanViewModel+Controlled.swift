@@ -200,12 +200,13 @@ extension PillScanViewModel{
         if let apiNdc = ndcComparisonResponse?.data?.scannedNdc?.packageNdc, !apiNdc.isEmpty {
             let newDrugId = generateUniqueDrugId()
             drugMasterDAO.saveManual(
-                ndc: apiNdc,
-                gtin: gtin,
-                drugId: newDrugId,
-                drugName: ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
-                drugType: ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? "",
-                packageQty: ndcComparisonResponse?.data?.scannedNdc?.safeQuantity ?? 0
+                ndc:         apiNdc,
+                gtin:        gtin,
+                drugId:      newDrugId,
+                drugName:    ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
+                drugType:    ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? "",
+                packageQty:  ndcComparisonResponse?.data?.scannedNdc?.safeQuantity ?? 0,
+                isHazardous: ndcComparisonResponse?.data?.scannedNdc?.isHazardous
             )
             actualDrugId = drugMasterDAO.fetchByNdc(apiNdc)?.drug_id ?? newDrugId
         } else if let localDrug = drugMasterDAO.fetchByGtin(gtin), let localNdc = localDrug.ndc, !localNdc.isEmpty {

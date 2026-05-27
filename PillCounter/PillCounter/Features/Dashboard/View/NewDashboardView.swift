@@ -30,12 +30,19 @@ private enum DashboardQueueItem: Identifiable {
 
 // MARK: - Stat card model
 
+private enum StatCardFilter {
+    case highPriority
+    case hazardous
+    case controlled
+}
+
 private struct DashboardStatCard: Identifiable {
     let id: String
     let iconName: String
     let iconColor: Color
     let count: Int
     let label: String
+    let filter: StatCardFilter?
     let action: () -> Void
 }
 
@@ -51,9 +58,12 @@ struct NewDashboardView: View {
     @StateObject private var locationService = LocationService.shared
 
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser: Bool = true
-    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable) var isHl7Enable: Bool = false
-    @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName) var selectedTerminalName: String = ""
+    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
+        Bool = true
+    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable) var isHl7Enable:
+        Bool = false
+    @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
+    var selectedTerminalName: String = ""
 
     @State private var showStockCountPopup: Bool = false
     @State private var selectedStockCountOption: StockCountOption = .newBatch
@@ -64,6 +74,7 @@ struct NewDashboardView: View {
     @State private var inventoryPartial: [BatchCountEntity] = []
     @State private var pillCounts: [Int64: Int] = [:]
     @State private var batchNdcCounts: [Int64: Int] = [:]
+    @State private var activeFilterCardId: String? = nil
 
     private let transactionDAO = TransactionStore.shared
     private let batchDAO = BatchStore.shared
@@ -80,12 +91,42 @@ struct NewDashboardView: View {
 
     private var mergedQueueItems: [DashboardQueueItem] {
         let dispenseItems = dispensePartial.map {
-            DashboardQueueItem.dispense($0, pillCount: pillCounts[$0.txn_id] ?? 0)
+            DashboardQueueItem.dispense(
+                $0,
+                pillCount: pillCounts[$0.txn_id] ?? 0
+            )
         }
         let inventoryItems = inventoryPartial.map {
-            DashboardQueueItem.inventory($0, ndcCount: batchNdcCounts[$0.batch_id] ?? 0)
+            DashboardQueueItem.inventory(
+                $0,
+                ndcCount: batchNdcCounts[$0.batch_id] ?? 0
+            )
         }
-        return (dispenseItems + inventoryItems).sorted { $0.sortDate < $1.sortDate }
+        return (dispenseItems + inventoryItems).sorted {
+            $0.sortDate < $1.sortDate
+        }
+    }
+
+    private var filteredQueueItems: [DashboardQueueItem] {
+        guard let cardId = activeFilterCardId,
+              let card = statCards.first(where: { $0.id == cardId }),
+              let filter = card.filter else {
+            return mergedQueueItems
+        }
+        return mergedQueueItems.filter { item in
+            switch (item, filter) {
+            case (.dispense(let txn, _), .highPriority):
+                let p = txn.txn_priority?.trimmingCharacters(in: .whitespaces) ?? ""
+                return !p.isEmpty
+            case (.dispense(let txn, _), .hazardous):
+                return txn.drug?.is_hazardous == true
+            case (.dispense(let txn, _), .controlled):
+                let t = txn.drug?.drug_type?.trimmingCharacters(in: .whitespaces) ?? ""
+                return !t.isEmpty
+            default:
+                return false
+            }
+        }
     }
 
     // MARK: - Stat cards built from live data
@@ -96,12 +137,13 @@ struct NewDashboardView: View {
                 id: "disp-high-priority",
                 iconName: "exclamationmark.circle.fill",
                 iconColor: appColors.secondary,
-                count: userViewModel.fixedCountTransactionPartialCount,
+                count: dispensePartial.filter {
+                    let p = $0.txn_priority?.trimmingCharacters(in: .whitespaces) ?? ""
+                    return !p.isEmpty
+                }.count,
                 label: "High Priority",
-                action: {
-                    router.selectedPillScanningType = .FIXED
-                    router.navigate(to: .authentication(.login(.dashboard(.fixedCountPartial))))
-                }
+                filter: .highPriority,
+                action: {}
             ),
             DashboardStatCard(
                 id: "disp-pending",
@@ -109,27 +151,35 @@ struct NewDashboardView: View {
                 iconColor: appColors.secondary,
                 count: userViewModel.fixedCountTransactionPartialCount,
                 label: "Disp. Pending",
+                filter: nil,
                 action: {
                     router.selectedPillScanningType = .FIXED
-                    router.navigate(to: .authentication(.login(.dashboard(.fixedCountPartial))))
+                    router.navigate(
+                        to: .authentication(
+                            .login(.dashboard(.fixedCountPartial))
+                        )
+                    )
                 }
             ),
             DashboardStatCard(
                 id: "disp-cont-drugs",
                 iconName: "pills.fill",
                 iconColor: appColors.secondary,
-                count: userViewModel.fixedCountTransactionCompletedCount,
+                count: dispensePartial.filter {
+                    let t = $0.drug?.drug_type?.trimmingCharacters(in: .whitespaces) ?? ""
+                    return !t.isEmpty
+                }.count,
                 label: "Cont. Drugs",
-                action: {
-                    router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .completed)))))
-                }
+                filter: .controlled,
+                action: {}
             ),
             DashboardStatCard(
                 id: "disp-hazardous",
                 iconName: "shield.fill",
                 iconColor: appColors.secondary,
-                count: 3,
+                count: dispensePartial.filter { $0.drug?.is_hazardous == true }.count,
                 label: "Hazardous",
+                filter: .hazardous,
                 action: {}
             ),
             DashboardStatCard(
@@ -138,8 +188,21 @@ struct NewDashboardView: View {
                 iconColor: appColors.primary,
                 count: stockCountViewModel.totalBatchCount,
                 label: "Cycle Count",
+                filter: nil,
                 action: {
-                    router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
+                    router.navigate(
+                        to: .authentication(
+                            .login(
+                                .dashboard(
+                                    .pillCount(
+                                        .stockCount(
+                                            .stockCountPartialBatchListScreen
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
                 }
             ),
             DashboardStatCard(
@@ -148,8 +211,13 @@ struct NewDashboardView: View {
                 iconColor: appColors.primary,
                 count: stockCountViewModel.totalCompletedBatchCount,
                 label: "Pending Batch",
+                filter: nil,
                 action: {
-                    router.navigate(to: .authentication(.user(.userSettings(.History(.regular, .completed)))))
+                    router.navigate(
+                        to: .authentication(
+                            .user(.userSettings(.History(.regular, .completed)))
+                        )
+                    )
                 }
             ),
         ]
@@ -195,8 +263,13 @@ struct NewDashboardView: View {
         }
         .ignoresSafeArea(edges: .top)
         .onAppear(perform: onAppear)
+        .onChange(of: pillScanViewModel.currentTransaction) { _, _ in
+            loadQueueData()
+        }
         .customPopup(isPresented: $showStockCountPopup) { stockCountPopUp }
-        .customPopup(isPresented: $showSelectBucketIdPopup) { selectBucketPopUp }
+        .customPopup(isPresented: $showSelectBucketIdPopup) {
+            selectBucketPopUp
+        }
     }
 
     // MARK: - Portrait body
@@ -221,7 +294,7 @@ struct NewDashboardView: View {
             .padding(.top, 14)
 
             TabView(selection: $selectedQueueTab) {
-                queueScrollContent(items: mergedQueueItems)
+                queueScrollContent(items: filteredQueueItems)
                     .tag(0)
                 queueScrollContent(items: [])
                     .tag(1)
@@ -257,7 +330,10 @@ struct NewDashboardView: View {
                             iconName: "placeholder_history",
                             title: "Inventory",
                             subtitle: "Start inventory count",
-                            action: { showStockCountPopup = true; resetStockCountSelection() }
+                            action: {
+                                showStockCountPopup = true
+                                resetStockCountSelection()
+                            }
                         )
                         .frame(maxHeight: .infinity)
                     }
@@ -286,13 +362,16 @@ struct NewDashboardView: View {
                             .padding(.top, 10)
 
                         TabView(selection: $selectedQueueTab) {
-                            queueScrollContent(items: mergedQueueItems)
+                            queueScrollContent(items: filteredQueueItems)
                                 .tag(0)
                             queueScrollContent(items: [])
                                 .tag(1)
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
-                        .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+                        .animation(
+                            .easeInOut(duration: 0.25),
+                            value: selectedQueueTab
+                        )
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: panelHeight)
@@ -365,14 +444,16 @@ struct NewDashboardView: View {
         GeometryReader { screen in
             let headerHeight = safeAreaTop + 60.0
             let panelHeight = screen.size.height - headerHeight
-            let vPadding: CGFloat = 16
-            let hPadding: CGFloat = 16
+            let vPadding: CGFloat = 12
+            let hPadding: CGFloat = 8
             let cardsPanelHeight = panelHeight - vPadding * 2
             // Stat cards column: squarish cards — use a fixed narrow width
             let statCardColumnWidth: CGFloat = 175
             let statCardSpacing: CGFloat = 8
-            let totalStatSpacing: CGFloat = statCardSpacing * CGFloat(statCards.count - 1)
-            let cardHeight = (cardsPanelHeight - totalStatSpacing) / CGFloat(statCards.count)
+            let totalStatSpacing: CGFloat =
+                statCardSpacing * CGFloat(statCards.count - 1)
+            let cardHeight =
+                (cardsPanelHeight - totalStatSpacing) / CGFloat(statCards.count)
             // Quick action cards column: bigger, fixed width
             let quickActionColumnWidth: CGFloat = 260
 
@@ -400,7 +481,10 @@ struct NewDashboardView: View {
                             iconName: "placeholder_history",
                             title: "Inventory",
                             subtitle: "Start inventory count",
-                            action: { showStockCountPopup = true; resetStockCountSelection() }
+                            action: {
+                                showStockCountPopup = true
+                                resetStockCountSelection()
+                            }
                         )
                         .frame(maxHeight: .infinity)
                     }
@@ -439,13 +523,16 @@ struct NewDashboardView: View {
                             .padding(.top, 16)
 
                         TabView(selection: $selectedQueueTab) {
-                            queueScrollContent(items: mergedQueueItems)
+                            queueScrollContent(items: filteredQueueItems)
                                 .tag(0)
                             queueScrollContent(items: [])
                                 .tag(1)
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
-                        .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+                        .animation(
+                            .easeInOut(duration: 0.25),
+                            value: selectedQueueTab
+                        )
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: panelHeight)
@@ -517,9 +604,12 @@ struct NewDashboardView: View {
                     .frame(width: isIpad ? 36 : 30, height: isIpad ? 36 : 30)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(userViewModel.pharmacyName.isEmpty ? "Pharmacy" : userViewModel.pharmacyName)
-                        .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
-                        .foregroundColor(appColors.text)
+                    Text(
+                        userViewModel.pharmacyName.isEmpty
+                            ? "Pharmacy" : userViewModel.pharmacyName
+                    )
+                    .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
+                    .foregroundColor(appColors.text)
                     if !selectedTerminalName.isEmpty {
                         Text("Terminal \(selectedTerminalName)")
                             .font(.system(size: isIpad ? 15 : 13))
@@ -532,7 +622,9 @@ struct NewDashboardView: View {
 
             // Right: PMS status + Hamburger menu
             if isHl7Enable {
-                PMSConnectionButtonView(pmsConnectionState: userViewModel.pmsConnectionState)
+                PMSConnectionButtonView(
+                    pmsConnectionState: userViewModel.pmsConnectionState
+                )
             }
 
             Button {
@@ -570,7 +662,10 @@ struct NewDashboardView: View {
                         iconName: "placeholder_history",
                         title: "Inventory",
                         subtitle: "Start inventory count",
-                        action: { showStockCountPopup = true; resetStockCountSelection() }
+                        action: {
+                            showStockCountPopup = true
+                            resetStockCountSelection()
+                        }
                     )
                 }
             } else {
@@ -585,7 +680,10 @@ struct NewDashboardView: View {
                         iconName: "placeholder_history",
                         title: "Inventory",
                         subtitle: "Start inventory count",
-                        action: { showStockCountPopup = true; resetStockCountSelection() }
+                        action: {
+                            showStockCountPopup = true
+                            resetStockCountSelection()
+                        }
                     )
                 }
             }
@@ -617,7 +715,9 @@ struct NewDashboardView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: isIpad ? 24 : 20, weight: .semibold))
+                        .font(
+                            .system(size: isIpad ? 24 : 20, weight: .semibold)
+                        )
                         .foregroundColor(appColors.secondary)
                     Text(subtitle)
                         .font(.system(size: isIpad ? 16 : 14))
@@ -664,33 +764,39 @@ struct NewDashboardView: View {
     }
 
     private func statCardView(card: DashboardStatCard) -> some View {
-        Button(action: card.action) {
+        let isActive = activeFilterCardId == card.id
+        return Button {
+            if card.filter != nil {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    activeFilterCardId = isActive ? nil : card.id
+                }
+            } else {
+                card.action()
+            }
+        } label: {
             VStack(alignment: .leading, spacing: 4) {
-                // Icon top-right
                 HStack {
                     Spacer()
                     Image(systemName: card.iconName)
                         .font(.system(size: 15))
-                        .foregroundColor(card.iconColor)
+                        .foregroundColor(isActive ? .white : card.iconColor)
                 }
 
-                // Count
                 Text("\(card.count)")
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(appColors.primary)
+                    .foregroundColor(isActive ? .white : appColors.primary)
                     .padding(.top, 4)
 
-                // Label
                 Text(card.label)
                     .font(.system(size: 12))
-                    .foregroundColor(appColors.text.opacity(0.6))
+                    .foregroundColor(isActive ? .white.opacity(0.85) : appColors.text.opacity(0.6))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
                     .frame(height: 32, alignment: .topLeading)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white)
+            .background(isActive ? appColors.secondary : Color.white)
             .cornerRadius(14)
             .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
         }
@@ -713,17 +819,25 @@ struct NewDashboardView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 8) {
                 if items.isEmpty {
-                    Text("No pending items")
+                    Text(activeFilterCardId != nil ? "No matching items" : "No pending items")
                         .font(.system(size: 15))
                         .foregroundColor(appColors.text.opacity(0.4))
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 32)
+                        .transition(.opacity)
                 } else {
                     ForEach(items) { item in
                         queueRowView(item: item)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top)),
+                                    removal: .opacity
+                                )
+                            )
                     }
                 }
             }
+            .animation(.easeInOut(duration: 0.3), value: items.map(\.id))
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 32)
@@ -739,8 +853,16 @@ struct NewDashboardView: View {
         } label: {
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: isIpad ? 14 : 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? appColors.text : appColors.text.opacity(0.45))
+                    .font(
+                        .system(
+                            size: isIpad ? 14 : 13,
+                            weight: isSelected ? .semibold : .regular
+                        )
+                    )
+                    .foregroundColor(
+                        isSelected
+                            ? appColors.text : appColors.text.opacity(0.45)
+                    )
                     .tracking(0.8)
 
                 Rectangle()
@@ -758,11 +880,17 @@ struct NewDashboardView: View {
         case .dispense(let txn, let pillCount):
             let data = txn.toRowData(pillCount: pillCount)
             Button {
-                let countType = txn.count_type?.uppercased() == CountType.REGULAR.rawValue ? CountType.REGULAR : CountType.FIXED
+                let countType =
+                    txn.count_type?.uppercased() == CountType.REGULAR.rawValue
+                    ? CountType.REGULAR : CountType.FIXED
                 router.selectedPillScanningType = countType
                 userViewModel.currentTransactionTxnId = txn.txn_id
                 pillScanViewModel.selectedTransaction = txn
-                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.barcode))))))
+                router.navigate(
+                    to: .authentication(
+                        .login(.dashboard(.pillCount(.scan(.barcode))))
+                    )
+                )
             } label: {
                 dashboardDispenseRow(data: data)
             }
@@ -771,7 +899,19 @@ struct NewDashboardView: View {
         case .inventory(let batch, let ndcCount):
             let data = batch.toStockData(ndcCount: ndcCount)
             Button {
-                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
+                router.navigate(
+                    to: .authentication(
+                        .login(
+                            .dashboard(
+                                .pillCount(
+                                    .stockCount(
+                                        .stockCountPartialBatchListScreen
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
             } label: {
                 dashboardInventoryRow(data: data)
             }
@@ -823,10 +963,16 @@ struct NewDashboardView: View {
 
             Spacer()
 
-            let fillFraction: Double = data.targetCount > 0
-                ? min(Double(data.pillCount) / Double(data.targetCount), 1.0) : 0
+            let fillFraction: Double =
+                data.targetCount > 0
+                ? min(Double(data.pillCount) / Double(data.targetCount), 1.0)
+                : 0
             VStack(spacing: 4) {
-                DonutProgressView(fraction: fillFraction, appColors: appColors, size: 26)
+                DonutProgressView(
+                    fraction: fillFraction,
+                    appColors: appColors,
+                    size: 26
+                )
                 Text("\(data.pillCount)/\(data.targetCount)")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(appColors.secondary)
@@ -848,7 +994,8 @@ struct NewDashboardView: View {
                 height: 56,
                 cornerRadius: 8,
                 borderColor: appColors.primaryBackground,
-                placeholderImageName: data.isFromPms ? "dispense_placeholder" : "batch_icon",
+                placeholderImageName: data.isFromPms
+                    ? "dispense_placeholder" : "batch_icon",
                 placeholderBackgroundColor: appColors.text,
                 placeholderSize: CGSize(width: 22, height: 22),
                 showImageBackground: appColors.primaryBackground
@@ -890,12 +1037,60 @@ struct NewDashboardView: View {
         .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
     }
 
+    private func printQueue(_ transactions: [PillCountTransactionEntity]) {
+        let sep = String(repeating: "─", count: 80)
+        print("\n\(sep)")
+        print("📋 TODAY'S QUEUE — \(transactions.count) transaction(s)")
+        print(sep)
+        for (i, t) in transactions.enumerated() {
+            print("[\(i + 1)] txn_id          : \(t.txn_id)")
+            print("    local_id        : \(t.local_id)")
+            print("    drug_id         : \(t.drug_id)")
+            print("    drug_name       : \(t.drug?.drug_name ?? "-")")
+            print("    drug_ndc        : \(t.drug?.ndc ?? "-")")
+            print("    drug_type       : \(t.drug?.drug_type ?? "-")")
+            print("    is_hazardous    : \(t.drug?.is_hazardous ?? false)")
+            print("    count_type      : \(t.count_type ?? "-")")
+            print("    status          : \(t.status ?? "-")")
+            print("    target_count    : \(t.target_count)")
+            print("    bottle_qty      : \(t.bottle_qty)")
+            print("    loose_qty       : \(t.loose_qty)")
+            print("    batch_id        : \(t.batch_id)")
+            print("    rx_no           : \(t.rx_no ?? "-")")
+            print("    req_id          : \(t.req_id ?? "-")")
+            print("    txn_priority    : \(t.txn_priority ?? "-")")
+            print("    bucket_id       : \(t.bucket_id ?? "-")")
+            print("    workflow_step   : \(t.workflow_step ?? "-")")
+            print("    barcode_image   : \(t.barcode_image ?? "-")")
+            print("    lot_no          : \(t.lot_no ?? "-")")
+            print("    expiry          : \(t.expiry ?? "-")")
+            print("    note            : \(t.note ?? "-")")
+            print("    patient_name    : \(t.patient_name ?? "-")")
+            print("    refill_no       : \(t.refill_no ?? "-")")
+            print("    substitute_drug_id: \(t.substitute_drug_id)")
+            print("    is_from_pms     : \(t.is_from_pms)")
+            print("    is_ndc_verfied  : \(t.is_ndc_verfied)")
+            print("    is_substitute   : \(t.is_substitute)")
+            print("    is_synced       : \(t.is_synced)")
+            print("    is_deleted      : \(t.is_deleted)")
+            print("    gloves_detected : \(t.gloves_detected)")
+            print("    created_at      : \(t.created_at)")
+            print("    updated_at      : \(t.updated_at)")
+            if i < transactions.count - 1 { print("    \(String(repeating: "·", count: 40))") }
+        }
+        print(sep)
+    }
+
     private func loadQueueData() {
         guard let user = userStore.fetchByUserId(userId) else { return }
 
         let fixed = transactionDAO.fetchPartial(for: user, countType: .FIXED)
-        let regular = transactionDAO.fetchPartial(for: user, countType: .REGULAR)
+        let regular = transactionDAO.fetchPartial(
+            for: user,
+            countType: .REGULAR
+        )
         dispensePartial = (fixed + regular)
+        printQueue(dispensePartial)
 
         var counts: [Int64: Int] = [:]
         for txn in dispensePartial {
@@ -908,7 +1103,9 @@ struct NewDashboardView: View {
 
         var ndcCounts: [Int64: Int] = [:]
         for batch in batches {
-            ndcCounts[batch.batch_id] = batchDAO.getTransactionCount(for: batch.batch_id)
+            ndcCounts[batch.batch_id] = batchDAO.getTransactionCount(
+                for: batch.batch_id
+            )
         }
         batchNdcCounts = ndcCounts
     }
@@ -917,7 +1114,11 @@ struct NewDashboardView: View {
 
     private func navigateToDispense() {
         router.selectedPillScanningType = .FIXED
-        router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.rx_label))))))
+        router.navigate(
+            to: .authentication(
+                .login(.dashboard(.pillCount(.scan(.rx_label))))
+            )
+        )
     }
 
     // MARK: - Lifecycle
@@ -940,6 +1141,8 @@ struct NewDashboardView: View {
         locationService.requestPermission()
         locationService.startUpdating()
         loadQueueData()
+        
+        DrugCatalogStore.shared.fetchAll()
     }
 
     // MARK: - Popups (same logic as original DashboardView)
@@ -1008,16 +1211,27 @@ struct NewDashboardView: View {
                         case .newBatch:
                             let buckets = userViewModel.bucket
                             pillScanViewModel.bucketOptions = buckets
-                            pillScanViewModel.selectedBucket = buckets.first ?? ""
+                            pillScanViewModel.selectedBucket =
+                                buckets.first ?? ""
                             showSelectBucketIdPopup = true
                             showStockCountPopup = false
                         case .existingBatch:
                             if stockCountViewModel.continueLastBatch() {
                                 router.selectedPillScanningType = .REGULAR
-                                router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.stockCount))))))
+                                router.navigate(
+                                    to: .authentication(
+                                        .login(
+                                            .dashboard(
+                                                .pillCount(.scan(.stockCount))
+                                            )
+                                        )
+                                    )
+                                )
                                 resetStockCountSelection()
                             } else {
-                                pillScanViewModel.showToastMessage(text: L10n.Menu.noLastBatchFound)
+                                pillScanViewModel.showToastMessage(
+                                    text: L10n.Menu.noLastBatchFound
+                                )
                             }
                             showStockCountPopup = false
                         }
@@ -1093,9 +1307,15 @@ struct NewDashboardView: View {
     }
 
     private func handleStockCountSelectedOption() {
-        stockCountViewModel.createNewBatch(bucketId: pillScanViewModel.selectedBucket)
+        stockCountViewModel.createNewBatch(
+            bucketId: pillScanViewModel.selectedBucket
+        )
         router.selectedPillScanningType = .REGULAR
-        router.navigate(to: .authentication(.login(.dashboard(.pillCount(.scan(.stockCount))))))
+        router.navigate(
+            to: .authentication(
+                .login(.dashboard(.pillCount(.scan(.stockCount))))
+            )
+        )
         resetStockCountSelection()
     }
 

@@ -237,12 +237,14 @@ extension PillScanViewModel {
             let resolvedName = data.scannedNdc?.lookupName ?? ""
 
             drugMasterDAO.saveManual(
-                ndc:        ndc,
-                drugId:     generateUniqueDrugId(),
-                drugName:   resolvedName,
-                drugType:   data.scannedNdc?.deaSchedule,
-                packageQty: data.scannedNdc?.safeQuantity ?? 0
+                ndc:          ndc,
+                drugId:       generateUniqueDrugId(),
+                drugName:     resolvedName,
+                drugType:     data.scannedNdc?.deaSchedule,
+                packageQty:   data.scannedNdc?.safeQuantity ?? 0,
+                isHazardous:  data.scannedNdc?.isHazardous
             )
+            print("[resolve Drug Name : isHazardous : ] \(data.scannedNdc?.isHazardous ?? false)")
 
             print("[RxScan] Drug resolved from API → '\(resolvedName)'")
             return resolvedName.isEmpty ? nil : resolvedName

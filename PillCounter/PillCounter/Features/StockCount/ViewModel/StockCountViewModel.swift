@@ -232,12 +232,13 @@ class StockCountViewModel: ObservableObject {
             // Backfill drug master so future scans resolve locally with full data
             let newDrugId = generateUniqueDrugId()
             drugMasterDAO.saveManual(
-                ndc:        ndc,
-                gtin:       gtin,
-                drugId:     newDrugId,
-                drugName:   drugName,
-                drugType:   drugType,
-                packageQty: qty
+                ndc:         ndc,
+                gtin:        gtin,
+                drugId:      newDrugId,
+                drugName:    drugName,
+                drugType:    drugType,
+                packageQty:  qty,
+                isHazardous: response.data?.scannedNdc?.isHazardous
             )
 
             scannedDrugData = ScannedDrugData(

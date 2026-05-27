@@ -271,23 +271,10 @@ struct CountHistoryView: View {
                 title: (isSearching || isEditing) ? "" : title
             )
             .onAppear {
-                if router.selectedPillScanningType == .FIXED {
-                    Task {
-                        await userViewModel.getAllPartialTransactions(
-                            countType: .FIXED
-                        )
-
-                        //                        if userViewModel.fixedCountTransactions.isEmpty {
-                        //                            userViewModel.generateDummyData()
-                        //                        }
-                    }
-                } else {
-                    Task {
-                        await userViewModel.getAllPartialTransactions(
-                            countType: .REGULAR
-                        )
-                    }
-                }
+                reloadTransactions()
+            }
+            .onReceive(TransactionStore.shared.transactionsDidChange.receive(on: DispatchQueue.main)) {
+                reloadTransactions()
             }
             .customPopup(
                 isPresented: Binding(
@@ -551,6 +538,14 @@ struct CountHistoryView: View {
         )
         .cornerRadius(10)
         .animation(.spring(), value: isEditing)
+    }
+
+    private func reloadTransactions() {
+        print("Reload Transaction triggered for count history view....")
+        let countType: CountType = router.selectedPillScanningType ?? .FIXED
+        Task {
+            await userViewModel.getAllPartialTransactions(countType: countType)
+        }
     }
 
     // MARK: - LOGIC HELPERS

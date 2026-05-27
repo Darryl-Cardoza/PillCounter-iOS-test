@@ -98,12 +98,13 @@ extension PillScanViewModel {
                     let newId = generateUniqueDrugId()
 
                     drugMasterDAO.saveManual(
-                        ndc: response.data?.scannedNdc?.packageNdc ?? ndc,
-                        gtin: gtin,
-                        drugId: newId,
-                        drugName: lookup,
-                        drugType: response.data?.scannedNdc?.deaSchedule,
-                        packageQty: response.data?.scannedNdc?.safeQuantity ?? quantity
+                        ndc:         response.data?.scannedNdc?.packageNdc ?? ndc,
+                        gtin:        gtin,
+                        drugId:      newId,
+                        drugName:    lookup,
+                        drugType:    response.data?.scannedNdc?.deaSchedule,
+                        packageQty:  response.data?.scannedNdc?.safeQuantity ?? quantity,
+                        isHazardous: response.data?.scannedNdc?.isHazardous
                     )
 
                     drugIdToUse = newId

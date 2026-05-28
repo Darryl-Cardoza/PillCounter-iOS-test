@@ -29,7 +29,6 @@ struct AppNavigation: View {
                     NewDashboardView()
                 } else {
                     LoginEmailView()
-//                    DashboardView()
                 }
             }
             .navigationDestination(for: PillCounterFlow.self) {

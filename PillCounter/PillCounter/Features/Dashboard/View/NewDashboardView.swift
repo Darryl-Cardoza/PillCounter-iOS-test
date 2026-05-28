@@ -43,7 +43,6 @@ private struct DashboardStatCard: Identifiable {
     let count: Int
     let label: String
     let filter: StatCardFilter?
-    let action: () -> Void
 }
 
 // MARK: - Main view
@@ -73,6 +72,7 @@ struct NewDashboardView: View {
     @State private var pillCounts: [Int64: Int] = [:]
     @State private var batchNdcCounts: [Int64: Int] = [:]
     @State private var activeFilterCardId: String? = nil
+    @State private var selectedIds: Set<Int64> = []
 
     private let transactionDAO = TransactionStore.shared
     private let batchDAO = BatchStore.shared
@@ -133,90 +133,57 @@ struct NewDashboardView: View {
         [
             DashboardStatCard(
                 id: "disp-high-priority",
-                iconName: "exclamationmark.circle.fill",
+                iconName: "icon_priority",
                 iconColor: appColors.secondary,
                 count: dispensePartial.filter {
                     let p = $0.txn_priority?.trimmingCharacters(in: .whitespaces) ?? ""
                     return !p.isEmpty
                 }.count,
                 label: "High Priority",
-                filter: .highPriority,
-                action: {}
+                filter: .highPriority
             ),
             DashboardStatCard(
                 id: "disp-pending",
-                iconName: "clock",
+                iconName: "partial",
                 iconColor: appColors.secondary,
                 count: userViewModel.fixedCountTransactionPartialCount,
                 label: "Disp. Pending",
-                filter: nil,
-                action: {
-                    router.selectedPillScanningType = .FIXED
-                    router.navigate(
-                        to: .authentication(
-                            .login(.dashboard(.fixedCountPartial))
-                        )
-                    )
-                }
+                filter: nil
             ),
             DashboardStatCard(
                 id: "disp-cont-drugs",
-                iconName: "pills.fill",
+                iconName: "icon_controlled",
                 iconColor: appColors.secondary,
                 count: dispensePartial.filter {
                     let t = $0.drug?.drug_type?.trimmingCharacters(in: .whitespaces) ?? ""
                     return !t.isEmpty
                 }.count,
                 label: "Cont. Drugs",
-                filter: .controlled,
-                action: {}
+                filter: .controlled
             ),
             DashboardStatCard(
                 id: "disp-hazardous",
-                iconName: "shield.fill",
+                iconName: "icon_hazardous",
                 iconColor: appColors.secondary,
                 count: dispensePartial.filter { $0.drug?.is_hazardous == true }.count,
                 label: "Hazardous",
-                filter: .hazardous,
-                action: {}
+                filter: .hazardous
             ),
             DashboardStatCard(
                 id: "inv-cycle-count",
-                iconName: "arrow.triangle.2.circlepath",
-                iconColor: appColors.primary,
+                iconName: "new_rx",
+                iconColor: appColors.secondary,
                 count: stockCountViewModel.totalBatchCount,
                 label: "Cycle Count",
-                filter: nil,
-                action: {
-                    router.navigate(
-                        to: .authentication(
-                            .login(
-                                .dashboard(
-                                    .pillCount(
-                                        .stockCount(
-                                            .stockCountPartialBatchListScreen
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    )
-                }
+                filter: nil
             ),
             DashboardStatCard(
                 id: "inv-pending-batch",
-                iconName: "tray.full.fill",
-                iconColor: appColors.primary,
+                iconName: "batch_icon",
+                iconColor: appColors.secondary,
                 count: stockCountViewModel.totalCompletedBatchCount,
                 label: "Pending Batch",
-                filter: nil,
-                action: {
-                    router.navigate(
-                        to: .authentication(
-                            .user(.userSettings(.History(.regular, .completed)))
-                        )
-                    )
-                }
+                filter: nil
             ),
         ]
     }
@@ -247,11 +214,11 @@ struct NewDashboardView: View {
                             .frame(width: 24, height: 24)
                         Text(pillScanViewModel.toastMessage)
                             .font(.subheadline)
-                            .foregroundColor(.white)
+                            .foregroundColor(appColors.secondaryBackground)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.black.opacity(0.8))
+                    .background(appColors.text.opacity(0.8))
                     .cornerRadius(10)
                     .padding(.bottom, 32)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -412,9 +379,9 @@ struct NewDashboardView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.white)
+            .background(appColors.secondaryBackground)
             .cornerRadius(14)
-            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+            .shadow(color: appColors.text.opacity(0.05), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -436,20 +403,15 @@ struct NewDashboardView: View {
 
     private var landscapeBody: some View {
         GeometryReader { screen in
-            let headerHeight = safeAreaTop + 60.0
+            let headerHeight = safeAreaTop + 52.0
             let panelHeight = screen.size.height - headerHeight
-            let vPadding: CGFloat = 12
-            let hPadding: CGFloat = 8
-            let cardsPanelHeight = panelHeight - vPadding * 2
-            // Stat cards column: squarish cards — use a fixed narrow width
-            let statCardColumnWidth: CGFloat = 175
-            let statCardSpacing: CGFloat = 8
-            let totalStatSpacing: CGFloat =
-                statCardSpacing * CGFloat(statCards.count - 1)
-            let cardHeight =
-                (cardsPanelHeight - totalStatSpacing) / CGFloat(statCards.count)
-            // Quick action cards column: bigger, fixed width
-            let quickActionColumnWidth: CGFloat = 260
+            let pad: CGFloat = 10
+            let leftWidth = (screen.size.width - 1) * 0.5
+            let rightWidth = screen.size.width - leftWidth - 1
+            // equal pad on all 4 sides + gap between two rows
+            let rowHeight = (panelHeight - pad * 3) / 2
+            let actionWidth = leftWidth * 0.68
+            let statsWidth = leftWidth - actionWidth - pad * 3
 
             VStack(spacing: 0) {
                 headerBar
@@ -457,49 +419,58 @@ struct NewDashboardView: View {
                     .frame(height: headerHeight)
 
                 HStack(alignment: .top, spacing: 0) {
-                    // Left panel: quick action cards — fill full height equally
-                    VStack(spacing: 12) {
-                        Text("QUICK ACTIONS")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(appColors.text.opacity(0.5))
-                            .tracking(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        landscapeQuickActionCard(
-                            iconName: "dispense_dashboard_icon",
-                            title: "Dispense",
-                            subtitle: "Scan Rx Labels",
-                            action: navigateToDispense
-                        )
-                        .frame(maxHeight: .infinity)
-                        landscapeQuickActionCard(
-                            iconName: "placeholder_history",
-                            title: "Inventory",
-                            subtitle: "Start inventory count",
-                            action: handleInventoryTapped
-                        )
-                        .frame(maxHeight: .infinity)
-                    }
-                    .padding(.horizontal, hPadding)
-                    .padding(.vertical, vPadding)
-                    .frame(width: quickActionColumnWidth)
-                    .frame(height: panelHeight)
 
-                    // Middle panel: 6 stat cards stacked vertically, squarish
-                    VStack(spacing: statCardSpacing) {
-                        Text("QUICK ACTIONS")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.clear)
-                            .tracking(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        ForEach(statCards) { card in
-                            statCardView(card: card)
-                                .frame(width: statCardColumnWidth)
-                                .frame(height: cardHeight)
+                    // ── Left 50%: [Dispense | 3 stats] over [Inventory | 3 stats] ──
+                    VStack(spacing: 0) {
+                        let cardHeight = (rowHeight - pad * 2) / 3
+
+                        VStack(spacing: pad) {
+                            HStack(alignment: .top, spacing: pad) {
+                                landscapeQuickActionCard(
+                                    iconName: "dispense_dashboard_icon",
+                                    title: "Dispense",
+                                    subtitle: "Scan Rx Labels",
+                                    action: navigateToDispense
+                                )
+                                .frame(width: actionWidth)
+                                .frame(height: rowHeight)
+
+                                VStack(spacing: pad) {
+                                    ForEach(Array(statCards.prefix(3))) { card in
+                                        statCardView(card: card)
+                                            .frame(width: statsWidth)
+                                            .frame(height: cardHeight)
+                                    }
+                                }
+                                .frame(width: statsWidth)
+                                .frame(height: rowHeight)
+                            }
+
+                            HStack(alignment: .top, spacing: pad) {
+                                landscapeQuickActionCard(
+                                    iconName: "placeholder_history",
+                                    title: "Inventory",
+                                    subtitle: "Start inventory count",
+                                    action: handleInventoryTapped
+                                )
+                                .frame(width: actionWidth)
+                                .frame(height: rowHeight)
+
+                                VStack(spacing: pad) {
+                                    ForEach(Array(statCards.dropFirst(3))) { card in
+                                        statCardView(card: card)
+                                            .frame(width: statsWidth)
+                                            .frame(height: cardHeight)
+                                    }
+                                }
+                                .frame(width: statsWidth)
+                                .frame(height: rowHeight)
+                            }
                         }
+                        .padding(pad)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .padding(.horizontal, hPadding)
-                    .padding(.vertical, vPadding)
-                    .frame(width: statCardColumnWidth + hPadding * 2)
+                    .frame(width: leftWidth)
                     .frame(height: panelHeight)
 
                     // Divider
@@ -508,10 +479,11 @@ struct NewDashboardView: View {
                         .frame(width: 1)
                         .frame(height: panelHeight)
 
-                    // Right panel: queue tabs + list — takes remaining width
+                    // ── Right 45%: queue tabs + list ──
                     VStack(alignment: .leading, spacing: 0) {
                         queueTabHeaders
-                            .padding(.top, 16)
+                            .padding(.top, pad)
+                            .padding(.horizontal, pad)
 
                         TabView(selection: $selectedQueueTab) {
                             queueScrollContent(items: filteredQueueItems)
@@ -520,12 +492,9 @@ struct NewDashboardView: View {
                                 .tag(1)
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
-                        .animation(
-                            .easeInOut(duration: 0.25),
-                            value: selectedQueueTab
-                        )
+                        .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
                     }
-                    .frame(maxWidth: .infinity)
+                    .frame(width: rightWidth)
                     .frame(height: panelHeight)
                 }
                 .frame(height: panelHeight)
@@ -540,35 +509,41 @@ struct NewDashboardView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .stroke(appColors.primary.opacity(0.25), lineWidth: 6)
-                        .blur(radius: 3)
-                    Circle()
-                        .stroke(appColors.primary, lineWidth: 2.5)
-                    Image(iconName)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundColor(appColors.secondary)
-                        .padding(40)
-                }
-                .frame(width: 150, height: 150)
+            GeometryReader { geo in
+                let circleSize = min(geo.size.width, geo.size.height) * 0.45
+                VStack(spacing: 10) {
+                    Spacer(minLength: 0)
+                    ZStack {
+                        Circle()
+                            .stroke(appColors.primary.opacity(0.25), lineWidth: 6)
+                            .blur(radius: 3)
+                        Circle()
+                            .stroke(appColors.primary, lineWidth: 2.5)
+                        Image(iconName)
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundColor(appColors.secondary)
+                            .padding(circleSize * 0.22)
+                    }
+                    .frame(width: circleSize, height: circleSize)
 
-                VStack(spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundColor(appColors.secondary)
-                    Text(subtitle)
-                        .font(.system(size: 16))
-                        .foregroundColor(appColors.text.opacity(0.6))
+                    VStack(spacing: 3) {
+                        Text(title)
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(appColors.secondary)
+                        Text(subtitle)
+                            .font(.system(size: 13))
+                            .foregroundColor(appColors.text.opacity(0.6))
+                    }
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.white)
+            .background(appColors.secondaryBackground)
             .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+            .shadow(color: appColors.text.opacity(0.05), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -714,9 +689,9 @@ struct NewDashboardView: View {
             .padding(.horizontal, isIpad ? 24 : 16)
             .padding(.vertical, isIpad ? 48 : 22)
             .frame(maxWidth: .infinity)
-            .background(Color.white)
+            .background(appColors.secondaryBackground)
             .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+            .shadow(color: appColors.text.opacity(0.05), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -751,39 +726,47 @@ struct NewDashboardView: View {
     private func statCardView(card: DashboardStatCard) -> some View {
         let isActive = activeFilterCardId == card.id
         return Button {
-            if card.filter != nil {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    activeFilterCardId = isActive ? nil : card.id
-                }
-            } else {
-                card.action()
+            withAnimation(.easeInOut(duration: 0.3)) {
+                activeFilterCardId = isActive ? nil : card.id
             }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Spacer()
-                    Image(systemName: card.iconName)
-                        .font(.system(size: 15))
-                        .foregroundColor(isActive ? .white : card.iconColor)
+                    Image(card.iconName)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 18, height: 18)
+                        .foregroundColor(card.iconColor)
                 }
 
                 Text("\(card.count)")
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(isActive ? .white : appColors.primary)
+                    .foregroundColor(appColors.primary)
                     .padding(.top, 4)
 
                 Text(card.label)
                     .font(.system(size: 12))
-                    .foregroundColor(isActive ? .white.opacity(0.85) : appColors.text.opacity(0.6))
+                    .foregroundColor(appColors.text.opacity(0.6))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
                     .frame(height: 32, alignment: .topLeading)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isActive ? appColors.secondary : Color.white)
+            .background(appColors.secondaryBackground)
             .cornerRadius(14)
-            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+            .shadow(
+                color: isActive ? appColors.secondary.opacity(0.6) : appColors.text.opacity(0.05),
+                radius: isActive ? 8 : 4,
+                x: 0,
+                y: isActive ? 0 : 2
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isActive ? appColors.secondary.opacity(0.8) : Color.clear, lineWidth: 1.5)
+            )
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -864,162 +847,50 @@ struct NewDashboardView: View {
         switch item {
         case .dispense(let txn, let pillCount):
             let data = txn.toRowData(pillCount: pillCount)
-            Button {
-                let countType =
-                    txn.count_type?.uppercased() == CountType.REGULAR.rawValue
-                    ? CountType.REGULAR : CountType.FIXED
-                router.selectedPillScanningType = countType
-                userViewModel.currentTransactionTxnId = txn.txn_id
-                pillScanViewModel.selectedTransaction = txn
-                router.navigate(
-                    to: .authentication(
-                        .login(.dashboard(.pillCount(.scan(.barcode))))
+            let isSelected = selectedIds.contains(txn.txn_id)
+            DispenseItemRowView(data: data, appColors: appColors)
+                .selectableEffect(isSelected: isSelected, highlightColor: appColors.primary)
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        selectedIds.insert(txn.txn_id)
+                    }
+                    let countType =
+                        txn.count_type?.uppercased() == CountType.REGULAR.rawValue
+                        ? CountType.REGULAR : CountType.FIXED
+                    router.selectedPillScanningType = countType
+                    userViewModel.currentTransactionTxnId = txn.txn_id
+                    pillScanViewModel.selectedTransaction = txn
+                    router.navigate(
+                        to: .authentication(
+                            .login(.dashboard(.pillCount(.scan(.barcode))))
+                        )
                     )
-                )
-            } label: {
-                dashboardDispenseRow(data: data)
-            }
-            .buttonStyle(PlainButtonStyle())
+                }
 
         case .inventory(let batch, let ndcCount):
             let data = batch.toStockData(ndcCount: ndcCount)
-            Button {
-                router.navigate(
-                    to: .authentication(
-                        .login(
-                            .dashboard(
-                                .pillCount(
-                                    .stockCount(
-                                        .stockCountPartialBatchListScreen
+            let isSelected = selectedIds.contains(batch.batch_id)
+            StockItemRowView(data: data, appColors: appColors)
+                .selectableEffect(isSelected: isSelected, highlightColor: appColors.primary)
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        selectedIds.insert(batch.batch_id)
+                    }
+                    router.navigate(
+                        to: .authentication(
+                            .login(
+                                .dashboard(
+                                    .pillCount(
+                                        .stockCount(
+                                            .stockCountPartialBatchListScreen
+                                        )
                                     )
                                 )
                             )
                         )
                     )
-                )
-            } label: {
-                dashboardInventoryRow(data: data)
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
-    }
-
-    private func dashboardDispenseRow(data: TransactionRowData) -> some View {
-        HStack(spacing: 12) {
-            ThumbnailImageView(
-                imagePath: data.barcodeImagePath,
-                width: 56,
-                height: 56,
-                cornerRadius: 8,
-                borderColor: appColors.primaryBackground,
-                placeholderImageName: "dispense_placeholder",
-                placeholderBackgroundColor: appColors.text,
-                placeholderSize: CGSize(width: 22, height: 22),
-                showImageBackground: appColors.primaryBackground
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text("NDC \(data.ndc)")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(appColors.primary)
-                        .lineLimit(1)
-                    if !data.drugType.isEmpty {
-                        Text(data.drugType)
-                            .font(.system(size: 13))
-                            .foregroundColor(appColors.text.opacity(0.5))
-                    }
                 }
-                Text(data.drugName)
-                    .font(.system(size: 14))
-                    .foregroundColor(appColors.text)
-                    .lineLimit(1)
-                HStack(spacing: 8) {
-                    Text(DateUtils.formatToUSDateTime(data.createdAt))
-                        .font(.system(size: 13))
-                        .foregroundColor(appColors.text.opacity(0.5))
-                    if !data.bucketId.isEmpty && data.bucketId != "NORMAL" {
-                        Text(data.bucketId)
-                            .font(.system(size: 13))
-                            .foregroundColor(appColors.text.opacity(0.7))
-                    }
-                }
-            }
-
-            Spacer()
-
-            let fillFraction: Double =
-                data.targetCount > 0
-                ? min(Double(data.pillCount) / Double(data.targetCount), 1.0)
-                : 0
-            VStack(spacing: 4) {
-                DonutProgressView(
-                    fraction: fillFraction,
-                    appColors: appColors,
-                    size: 26
-                )
-                Text("\(data.pillCount)/\(data.targetCount)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(appColors.secondary)
-            }
-            .padding(.trailing, 4)
         }
-        .padding(.vertical, isIpad ? 18 : 10)
-        .padding(.horizontal, 12)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
-    }
-
-    private func dashboardInventoryRow(data: StockData) -> some View {
-        HStack(spacing: 12) {
-            ThumbnailImageView(
-                imagePath: nil,
-                width: 56,
-                height: 56,
-                cornerRadius: 8,
-                borderColor: appColors.primaryBackground,
-                placeholderImageName: data.isFromPms
-                    ? "dispense_placeholder" : "batch_icon",
-                placeholderBackgroundColor: appColors.text,
-                placeholderSize: CGSize(width: 22, height: 22),
-                showImageBackground: appColors.primaryBackground
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(String(data.batchId))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(appColors.primary)
-                    .lineLimit(1)
-                HStack(spacing: 8) {
-                    Text(DateUtils.formatToUSDateTime(data.createdAt))
-                        .font(.system(size: 13))
-                        .foregroundColor(appColors.text.opacity(0.5))
-                    if data.bucketId != "NORMAL" {
-                        Text(data.bucketId)
-                            .font(.system(size: 13))
-                            .foregroundColor(appColors.text.opacity(0.7))
-                    }
-                }
-            }
-
-            Spacer()
-
-            VStack(spacing: 4) {
-                Text(String(data.ndcCount))
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(appColors.secondary)
-                Text("NDCs")
-                    .font(.system(size: 13))
-                    .foregroundColor(appColors.text.opacity(0.6))
-            }
-            .padding(.trailing, 4)
-        }
-        .padding(.vertical, isIpad ? 18 : 10)
-        .padding(.horizontal, 12)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
     }
 
     private func printQueue(_ transactions: [PillCountTransactionEntity]) {
@@ -1130,107 +1001,7 @@ struct NewDashboardView: View {
         DrugCatalogStore.shared.fetchAll()
     }
 
-    // MARK: - Popups
-
-    // Kept for reference — no longer shown (inventory goes directly to bucket selection)
-    /*
-    private var stockCountPopUp: some View {
-        VStack(spacing: 35) {
-            VStack(alignment: .leading) {
-                Text(L10n.Dashboard.Popup.whatWouldYouDo)
-                    .font(.system(size: 18))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(appColors.text)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 28) {
-                PillCountingRadioButton(
-                    option: StockCountOption.newBatch,
-                    selectedOption: $selectedStockCountOption,
-                    label: L10n.Dashboard.Popup.createNewBatch,
-                    selectedColor: appColors.secondary,
-                    unselectedColor: .gray,
-                    size: 20,
-                    lineWidth: 2,
-                    textColor: appColors.text
-                )
-                PillCountingRadioButton(
-                    option: StockCountOption.existingBatch,
-                    selectedOption: $selectedStockCountOption,
-                    label: L10n.Dashboard.Popup.continueLastBatch,
-                    selectedColor: appColors.secondary,
-                    unselectedColor: .gray,
-                    size: 20,
-                    lineWidth: 2,
-                    textColor: appColors.text
-                )
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            EqualWidthHStackButtons(spacing: 20) {
-                PillCountingButton(
-                    iconName: nil,
-                    title: L10n.Common.cancel,
-                    textColor: appColors.text,
-                    backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 16, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 20,
-                    iconSize: 0,
-                    action: { showStockCountPopup = false }
-                )
-                PillCountingButton(
-                    iconName: nil,
-                    title: "OK",
-                    textColor: .white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 16, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 32,
-                    verticalPadding: 20,
-                    iconSize: 0,
-                    action: {
-                        switch selectedStockCountOption {
-                        case .newBatch:
-                            let buckets = userViewModel.bucket
-                            pillScanViewModel.bucketOptions = buckets
-                            pillScanViewModel.selectedBucket =
-                                buckets.first ?? ""
-                            showSelectBucketIdPopup = true
-                            showStockCountPopup = false
-                        case .existingBatch:
-                            if stockCountViewModel.continueLastBatch() {
-                                router.selectedPillScanningType = .REGULAR
-                                router.navigate(
-                                    to: .authentication(
-                                        .login(
-                                            .dashboard(
-                                                .pillCount(.scan(.stockCount))
-                                            )
-                                        )
-                                    )
-                                )
-                                resetStockCountSelection()
-                            } else {
-                                pillScanViewModel.showToastMessage(
-                                    text: L10n.Menu.noLastBatchFound
-                                )
-                            }
-                            showStockCountPopup = false
-                        }
-                    }
-                )
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
-    }
-    */
+   //Popoup
 
     private var selectBucketPopUp: some View {
         VStack(spacing: 35) {

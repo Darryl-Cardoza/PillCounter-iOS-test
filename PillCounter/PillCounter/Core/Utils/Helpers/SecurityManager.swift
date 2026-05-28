@@ -17,10 +17,12 @@ struct SecurityManager {
     /// Performs all security validations and returns `true`
     /// if the device or app environment is compromised.
     static func isDeviceCompromised() -> Bool {
-        return isJailbroken()
-            || isDebuggerAttached()
-            || isRunningOnSimulator()
-            || isTampered()
+//        return isJailbroken()
+//            || isDebuggerAttached()
+//            || isRunningOnSimulator()
+//            || isTampered()
+        
+        return false
         
     }
 

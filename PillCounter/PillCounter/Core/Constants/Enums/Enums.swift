@@ -59,7 +59,6 @@ public enum ScanType: Codable, Hashable {
     case stockCount
     case rx_label
     case resumeCount
-
     var instructionText: String {
         switch self {
         case .barcode:

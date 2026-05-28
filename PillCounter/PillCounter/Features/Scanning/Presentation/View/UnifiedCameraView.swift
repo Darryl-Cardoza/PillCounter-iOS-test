@@ -67,6 +67,10 @@ struct UnifiedCameraView: View {
     @State var showSuccessAnimation: Bool = false
     @State var lastAddedCount: Int = 0
 
+    // Open pill scan mode — true while the user is counting loose pills from the stock count sheet
+    @State var isOpenPillScanMode: Bool = false
+    @State var openPillScanNdc: String = ""
+
     @State var showNoteOption: Bool = false
     @State var showConfirmCompletionPopup: Bool = false
     // Stock count end-count popups
@@ -218,6 +222,9 @@ struct UnifiedCameraView: View {
                     },
                     onEndCount: {
                         handleStockEndCount()
+                    },
+                    onScanPills: {
+                        handleOpenPillScanRequest()
                     }
                 )
                 .environmentObject(appColors)
@@ -494,7 +501,7 @@ extension UnifiedCameraView {
                 case .stockCount:
                     await handleStockCountScan(newValue)
                 case .resumeCount:
-                    break;
+                    break
                 }
             } else {
                 await handleStockCountScan(newValue)
@@ -506,9 +513,16 @@ extension UnifiedCameraView {
         switch newValue {
         case true:
             pillScanViewModel.isDrugFound = nil
-            if currentScanType == .stockCount {
-                // Stock count opened-bottle ADD: clear state; scanning already re-enabled
+            if currentScanType == .stockCount && !isOpenPillScanMode {
+                // Sealed stock count ADD: transaction created, scanning re-enabled
                 stockCountViewModel.reset()
+                return
+            }
+            if isOpenPillScanMode {
+                // Open pill barcode matched — start pill counting
+                cameraService.disableBarcodeScanning()
+                showPillCountPanel = true
+                initializeTransaction()
                 return
             }
             cameraService.disableBarcodeScanning()
@@ -628,18 +642,22 @@ extension UnifiedCameraView {
             savedPath = PhotoFileManager.shared.saveImage(finalImage)
         }
 
-        if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
+        pillScanViewModel.addTransactionDetailToCurrentTransaction(
+            pillCount: Int32(cameraService.stableCount),
+            imagePath: savedPath,
+            type: pillScanViewModel.currentControlledStep.rawValue
+        )
+        if isOpenPillScanMode {
             pillScanViewModel.addCurrentOpenPillCount += cameraService.stableCount
-        } else {
-            pillScanViewModel.addTransactionDetailToCurrentTransaction(
-                pillCount: Int32(cameraService.stableCount),
-                imagePath: savedPath,
-                type: pillScanViewModel.currentControlledStep.rawValue
-            )
         }
     }
 
     func handleComplete() {
+        if isOpenPillScanMode {
+            handleOpenPillCountComplete()
+            return
+        }
+
         let stepTotal = Int(pillScanViewModel.getTotalCuntForCurrentStep())
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
@@ -681,12 +699,13 @@ extension UnifiedCameraView {
 
     func handleStockCountAdd() {
         Task {
-            guard let batchId = stockCountViewModel.currentBatch?.batch_id else { return }
+            guard let batchId = stockCountViewModel.currentBatch?.batch_id,
+                  let drug = stockCountViewModel.scannedDrugData else { return }
             await pillScanViewModel.createTxnForBatchFromScan(
-                rawValueFromBarcodeOrQr: scannedRawValue,
-                ndc: stockCountViewModel.scannedDrugData?.ndc ?? "",
-                drugName: stockCountViewModel.scannedDrugData?.drugName ?? "",
-                quantity: Int32(Int(stockCountViewModel.scannedDrugData?.quantity ?? 0)),
+                rawValueFromBarcodeOrQr: drug.rawBarcode,
+                ndc: drug.ndc,
+                drugName: drug.drugName,
+                quantity: Int32(drug.quantity),
                 countType: .REGULAR,
                 batchId: batchId,
                 containerStatus: scannedBottleContainerStatus,
@@ -703,6 +722,13 @@ extension UnifiedCameraView {
     /// - Same barcode as current pending drug → increment bottle count, apply 5s cooldown, no UI flicker
     /// - Different barcode → auto-commit pending drug first, then show new drug info
     func handleStockCountScan(_ rawValue: String) async {
+        // In open pill mode the barcode is used to identify which NDC is being counted.
+        // Create/update the transaction with .opened status, then start pill counting.
+        if isOpenPillScanMode {
+            await handleOpenPillBarcodeScan(rawValue)
+            return
+        }
+
         // Decode to extract GTIN for same-drug detection
         let decoded = stockCountViewModel.decoder.decode(rawValue)
         let scannedGtin = decoded.gtin ?? ""
@@ -736,13 +762,51 @@ extension UnifiedCameraView {
         cameraService.enableBarcodeScanning()
     }
 
+    /// In open pill mode: scan the barcode to confirm/find the drug, then increment open_bottle_qty
+    /// and hand off to pill counting. If the scanned NDC doesn't match the expected one, show an error.
+    func handleOpenPillBarcodeScan(_ rawValue: String) async {
+        guard let batchId = stockCountViewModel.currentBatch?.batch_id else { return }
+
+        await stockCountViewModel.getScannedDrugData(rawValue: rawValue)
+
+        guard let drug = stockCountViewModel.scannedDrugData else {
+            cameraService.resetBarcodeScanState()
+            cameraService.enableBarcodeScanning()
+            return
+        }
+
+        // Warn if the scanned bottle is a different NDC than the one selected for open pill scan.
+        if !openPillScanNdc.isEmpty && drug.ndc != openPillScanNdc {
+            stockCountViewModel.showScannedNdcDoesNotMatch = true
+            cameraService.resetBarcodeScanState()
+            cameraService.enableBarcodeScanning()
+            return
+        }
+
+        openPillScanNdc = drug.ndc
+        scannedBottleContainerStatus = .opened
+
+        await pillScanViewModel.createTxnForBatchFromScan(
+            rawValueFromBarcodeOrQr: rawValue,
+            ndc: drug.ndc,
+            drugName: drug.drugName,
+            quantity: drug.quantity,
+            countType: .REGULAR,
+            batchId: batchId,
+            containerStatus: .opened
+        )
+
+        rejectedBarcodes[rawValue] = Date().addingTimeInterval(3)
+        // isDrugFound = true fires from handlePostScanUI → handleDrugFoundState starts pill counting
+    }
+
     /// If there is a pending (not yet added) scanned drug when a new barcode arrives,
     /// silently commit it with the current stepper count before switching to the new one.
     func autoCommitPendingStockScan() async {
         guard let drug = stockCountViewModel.scannedDrugData,
               let batchId = stockCountViewModel.currentBatch?.batch_id else { return }
         await pillScanViewModel.createTxnForBatchFromScan(
-            rawValueFromBarcodeOrQr: scannedRawValue,
+            rawValueFromBarcodeOrQr: drug.rawBarcode,
             ndc: drug.ndc,
             drugName: drug.drugName,
             quantity: Int32(drug.quantity),
@@ -763,6 +827,43 @@ extension UnifiedCameraView {
         } else {
             showStockEndBatchPopUp = true
         }
+    }
+
+    // MARK: - Open Pill Scan
+
+    func handleOpenPillScanRequest() {
+        // Pre-fill NDC if a drug is already selected; otherwise leave empty so the
+        // barcode scan (handleOpenPillBarcodeScan) will set it after the user scans.
+        let ndc = stockCountViewModel.scannedDrugData?.ndc
+            ?? stockCountViewModel.selectedGroupedTransaction?.ndc
+            ?? ""
+        openPillScanNdc = ndc
+        isOpenPillScanMode = true
+        showStockCountPanel = false
+        stockCountViewModel.reset()
+        cameraService.resetBarcodeScanState()
+        cameraService.enableBarcodeScanning()
+        // Do NOT show the pill count panel here — it opens after the barcode is
+        // scanned and handleDrugFoundState receives isDrugFound == true.
+    }
+
+    func handleOpenPillCountComplete() {
+        guard isOpenPillScanMode,
+              let batchId = stockCountViewModel.currentBatch?.batch_id else { return }
+        let loosePills = pillScanViewModel.addCurrentOpenPillCount
+        pillScanViewModel.updateOpenPillCount(ndc: openPillScanNdc, batchId: batchId, loosePillCount: loosePills)
+        pillScanViewModel.addCurrentOpenPillCount = 0
+        isOpenPillScanMode = false
+        openPillScanNdc = ""
+        scannedRawValue = nil
+        showPillCountPanel = false
+        stockCountViewModel.reset()
+        // Force immediate reload so the batch panel shows updated totals when it reappears.
+        stockCountViewModel.getCountData()
+        cameraService.pauseCounting()
+        cameraService.resetBarcodeScanState()
+        cameraService.enableBarcodeScanning()
+        showStockCountPanel = true
     }
 
     private func confirmStockEndBatch() {

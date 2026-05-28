@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import AudioToolbox
 import SwiftUI
 
 final class CameraService: NSObject, ObservableObject {
@@ -627,6 +628,7 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         else { return }
 
         hasScanned = true
+        AudioServicesPlaySystemSound(1057)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         scannedCode = value
         scannedCodeType = object.type.rawValue

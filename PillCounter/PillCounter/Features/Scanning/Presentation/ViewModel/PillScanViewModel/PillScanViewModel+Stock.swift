@@ -46,8 +46,9 @@ extension PillScanViewModel {
             // MARK: 2️⃣ Update counts
             transactionDAO.updateCounts(
                 txnId: txn.txn_id,
-                bottleQty: containerStatus == .sealed ? Int32(bottleCount) : nil,
-                looseQty: containerStatus == .opened ? 0 : nil
+                bottleQty:     containerStatus == .sealed ? Int32(bottleCount) : nil,
+                looseQty:      nil,   // open pill loose_qty is updated after pill counting via updateOpenPillCount
+                openBottleQty: containerStatus == .opened ? 1 : nil
             )
 
             // MARK: 3️⃣ Update current transaction (IMPORTANT FIX)
@@ -156,8 +157,9 @@ extension PillScanViewModel {
         // MARK: 8️⃣ Set initial counts
         transactionDAO.updateCounts(
             txnId: latestTxn.txn_id,
-            bottleQty: containerStatus == .sealed ? Int32(bottleCount) : nil,
-            looseQty: containerStatus == .opened ? 0 : nil
+            bottleQty:     containerStatus == .sealed ? Int32(bottleCount) : nil,
+            looseQty:      nil,   // open pill loose_qty set after pill counting
+            openBottleQty: containerStatus == .opened ? 1 : nil
         )
 
         // MARK: 9️⃣ Update current txn
@@ -176,6 +178,20 @@ extension PillScanViewModel {
         print("Batch Txn Created → NDC:", ndc, "Batch:", batchId)
     }
  
+    /// Called after open pill counting completes. Sets loose_qty to the final counted value (absolute, not additive).
+    func updateOpenPillCount(ndc: String, batchId: Int64, loosePillCount: Int) {
+        let txns = transactionDAO.fetchByBatch(batchId: batchId).filter {
+            $0.drug?.ndc == ndc && $0.is_deleted == false
+        }
+        // Prefer the transaction that already tracks open bottles; fall back to first.
+        let txn = txns.first { $0.open_bottle_qty > 0 } ?? txns.first
+        guard let txn else { return }
+        transactionDAO.setAbsoluteCounts(txnId: txn.txn_id, looseQty: Int32(loosePillCount))
+        if let updated = transactionDAO.fetchById(txn.txn_id) {
+            self.currentTransaction = updated
+        }
+    }
+
     func formatExpiry(_ date: Date?) -> String? {
         guard let date else { return nil }
         let formatter = DateFormatter()
@@ -198,28 +214,15 @@ extension PillScanViewModel {
         containerStatus: StockCountOptionContainerStatus,
         scannedQty: Int
     ) {
-        
-        let currentBottle = Int(txn.bottle_qty)
-        let currentLoose = Int(txn.loose_qty)
-        
         switch containerStatus {
-            
         case .sealed:
-            transactionDAO.updateCounts(
-                txnId: txn.txn_id,
-                bottleQty: Int32(currentBottle + 1),
-                looseQty: Int32(currentLoose)
-            )
-
+            // additive: increment by 1 bottle
+            transactionDAO.updateCounts(txnId: txn.txn_id, bottleQty: 1)
             handlePostScanUI(containerStatus: containerStatus)
 
-
         case .opened:
-            transactionDAO.updateCounts(
-                txnId: txn.txn_id,
-                bottleQty: Int32(currentBottle),
-                looseQty: Int32(currentLoose + scannedQty)
-            )
+            // additive: increment loose count by the scanned package quantity
+            transactionDAO.updateCounts(txnId: txn.txn_id, looseQty: Int32(scannedQty))
             handlePostScanUI(containerStatus: containerStatus)
         }
     }

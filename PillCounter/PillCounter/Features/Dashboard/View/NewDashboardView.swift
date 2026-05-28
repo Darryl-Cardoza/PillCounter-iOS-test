@@ -65,8 +65,6 @@ struct NewDashboardView: View {
     @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
     var selectedTerminalName: String = ""
 
-    @State private var showStockCountPopup: Bool = false
-    @State private var selectedStockCountOption: StockCountOption = .newBatch
     @State private var showSelectBucketIdPopup: Bool = false
     @State private var hasCheckedNewUser: Bool = false
     @State private var selectedQueueTab: Int = 0  // 0 = Today's Queue, 1 = Recent Activity
@@ -266,7 +264,6 @@ struct NewDashboardView: View {
         .onChange(of: pillScanViewModel.currentTransaction) { _, _ in
             loadQueueData()
         }
-        .customPopup(isPresented: $showStockCountPopup) { stockCountPopUp }
         .customPopup(isPresented: $showSelectBucketIdPopup) {
             selectBucketPopUp
         }
@@ -330,10 +327,7 @@ struct NewDashboardView: View {
                             iconName: "placeholder_history",
                             title: "Inventory",
                             subtitle: "Start inventory count",
-                            action: {
-                                showStockCountPopup = true
-                                resetStockCountSelection()
-                            }
+                            action: handleInventoryTapped
                         )
                         .frame(maxHeight: .infinity)
                     }
@@ -481,10 +475,7 @@ struct NewDashboardView: View {
                             iconName: "placeholder_history",
                             title: "Inventory",
                             subtitle: "Start inventory count",
-                            action: {
-                                showStockCountPopup = true
-                                resetStockCountSelection()
-                            }
+                            action: handleInventoryTapped
                         )
                         .frame(maxHeight: .infinity)
                     }
@@ -662,10 +653,7 @@ struct NewDashboardView: View {
                         iconName: "placeholder_history",
                         title: "Inventory",
                         subtitle: "Start inventory count",
-                        action: {
-                            showStockCountPopup = true
-                            resetStockCountSelection()
-                        }
+                        action: handleInventoryTapped
                     )
                 }
             } else {
@@ -680,10 +668,7 @@ struct NewDashboardView: View {
                         iconName: "placeholder_history",
                         title: "Inventory",
                         subtitle: "Start inventory count",
-                        action: {
-                            showStockCountPopup = true
-                            resetStockCountSelection()
-                        }
+                        action: handleInventoryTapped
                     )
                 }
             }
@@ -1145,8 +1130,10 @@ struct NewDashboardView: View {
         DrugCatalogStore.shared.fetchAll()
     }
 
-    // MARK: - Popups (same logic as original DashboardView)
+    // MARK: - Popups
 
+    // Kept for reference — no longer shown (inventory goes directly to bucket selection)
+    /*
     private var stockCountPopUp: some View {
         VStack(spacing: 35) {
             VStack(alignment: .leading) {
@@ -1243,6 +1230,7 @@ struct NewDashboardView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 10)
     }
+    */
 
     private var selectBucketPopUp: some View {
         VStack(spacing: 35) {
@@ -1296,7 +1284,7 @@ struct NewDashboardView: View {
                     verticalPadding: 20,
                     iconSize: 0,
                     action: {
-                        handleStockCountSelectedOption()
+                        createBatchAndNavigate(bucketId: pillScanViewModel.selectedBucket)
                         showSelectBucketIdPopup = false
                     }
                 )
@@ -1306,20 +1294,27 @@ struct NewDashboardView: View {
         .padding(.horizontal, 8)
     }
 
-    private func handleStockCountSelectedOption() {
-        stockCountViewModel.createNewBatch(
-            bucketId: pillScanViewModel.selectedBucket
-        )
+    private func handleInventoryTapped() {
+        let buckets = userViewModel.bucket
+//        let buckets = ["NORMAL"] 
+        let meaningful = buckets.filter { $0 != "NORMAL" && !$0.isEmpty }
+        if meaningful.isEmpty {
+            // No real bucket choices — skip popup, use NORMAL directly
+            createBatchAndNavigate(bucketId: "NORMAL")
+        } else {
+            pillScanViewModel.bucketOptions = buckets
+            pillScanViewModel.selectedBucket = buckets.first ?? ""
+            showSelectBucketIdPopup = true
+        }
+    }
+
+    private func createBatchAndNavigate(bucketId: String) {
+        stockCountViewModel.createNewBatch(bucketId: bucketId)
         router.selectedPillScanningType = .REGULAR
         router.navigate(
             to: .authentication(
                 .login(.dashboard(.pillCount(.scan(.stockCount))))
             )
         )
-        resetStockCountSelection()
-    }
-
-    private func resetStockCountSelection() {
-        selectedStockCountOption = .newBatch
     }
 }

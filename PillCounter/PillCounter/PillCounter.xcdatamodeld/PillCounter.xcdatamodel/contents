@@ -51,6 +51,7 @@
         <attribute name="is_synced" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="local_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="loose_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="open_bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="lot_no" optional="YES" attributeType="String"/>
         <attribute name="note" optional="YES" attributeType="String"/>
         <attribute name="patient_name" optional="YES" attributeType="String"/>

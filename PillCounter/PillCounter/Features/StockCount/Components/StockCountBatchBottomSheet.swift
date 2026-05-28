@@ -14,11 +14,13 @@ struct StockCountBatchPanel<BottomContent: View>: View {
 
     let topPadding: CGFloat
     let hideHeader: Bool
+    let onScanPills: (() -> Void)?
     let bottomContent: () -> BottomContent
 
-    init(topPadding: CGFloat = 0, hideHeader: Bool = false, @ViewBuilder bottomContent: @escaping () -> BottomContent) {
+    init(topPadding: CGFloat = 0, hideHeader: Bool = false, onScanPills: (() -> Void)? = nil, @ViewBuilder bottomContent: @escaping () -> BottomContent) {
         self.topPadding = topPadding
         self.hideHeader = hideHeader
+        self.onScanPills = onScanPills
         self.bottomContent = bottomContent
     }
 
@@ -55,17 +57,17 @@ struct StockCountBatchPanel<BottomContent: View>: View {
             .padding(.bottom, 4)
 
             // ── Scrollable list ──────────────────────────────────
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0) {
-                    if stockCountViewModel.groupedTransactions.isEmpty {
-                        emptyState
-                    } else {
+            if stockCountViewModel.groupedTransactions.isEmpty {
+                emptyState
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
                         ForEach(stockCountViewModel.groupedTransactions, id: \.ndc) { txn in
                             countRow(txn)
                         }
                     }
                 }
-                .padding(.vertical, 4)
             }
 
             bottomContent()
@@ -76,16 +78,15 @@ struct StockCountBatchPanel<BottomContent: View>: View {
     // MARK: Sub-views
 
     private var scanPillsButton: some View {
-        Text("SCAN PILLS")
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(appColors.primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(appColors.primary, lineWidth: 1.5)
-            )
-            .fixedSize()
+        PillCountingButton(
+            iconName: nil, title: "SCAN PILLS",
+            textColor: appColors.primary, backgroundColor: .clear,
+            borderColor: appColors.primary,
+            font: .system(size: 11, weight: .bold),
+            cornerRadius: 20, horizontalPadding: 14, verticalPadding: 7, iconSize: 0,
+            action: { onScanPills?() }
+        )
+        .fixedSize()
     }
 
     private var recentLabel: String {
@@ -102,27 +103,27 @@ struct StockCountBatchPanel<BottomContent: View>: View {
                 .font(.system(size: 13))
                 .foregroundColor(appColors.text.opacity(0.3))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private func countRow(_ txn: GroupedTransaction) -> some View {
         let isSelected = stockCountViewModel.selectedGroupedTransaction?.ndc == txn.ndc
-        return BatchCountCard(txn: txn, isSelected: isSelected) {
-            if isSelected {
-                stockCountViewModel.selectedGroupedTransaction = nil
-                stockCountViewModel.scannedDrugData = nil
-            } else {
-                stockCountViewModel.selectTransaction(txn)
+        return VStack(spacing: 0) {
+            BatchCountCard(txn: txn, isSelected: isSelected) {
+                if isSelected {
+                    stockCountViewModel.selectedGroupedTransaction = nil
+                    stockCountViewModel.scannedDrugData = nil
+                } else {
+                    stockCountViewModel.selectTransaction(txn)
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 5)
     }
 }
 
 // MARK: - Batch Count Card
-
 struct BatchCountCard: View {
 
     @EnvironmentObject private var appColors: AppColors
@@ -141,40 +142,45 @@ struct BatchCountCard: View {
                     .font(.system(size: 12))
                     .foregroundColor(appColors.text.opacity(0.48))
             }
+
             Spacer(minLength: 12)
-            HStack(alignment: .center, spacing: 20) {
-                VStack(alignment: .center, spacing: 2) {
-                    Text("\(txn.sealedBottleQty)")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(appColors.secondary)
-                    Text("Bottles")
-                        .font(.system(size: 11))
-                        .foregroundColor(appColors.text.opacity(0.4))
-                }
+
+            HStack(alignment: .center, spacing: 0) {
+                // Pills first
                 VStack(alignment: .center, spacing: 2) {
                     Text("\(txn.total)")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(appColors.secondary)
+                        .monospacedDigit()
                     Text("Pills")
                         .font(.system(size: 11))
                         .foregroundColor(appColors.text.opacity(0.4))
                 }
+                .frame(width: 64)               // fixed — fits 4 digits comfortably
+
+                // Bottles second
+                VStack(alignment: .center, spacing: 2) {
+                    Text("\(txn.sealedBottleQty)")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(appColors.secondary)
+                        .monospacedDigit()
+                    Text("Bottles")
+                        .font(.system(size: 11))
+                        .foregroundColor(appColors.text.opacity(0.4))
+                }
+                .frame(width: 64)               // same fixed width
             }
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
-        .background(isSelected ? appColors.primary.opacity(0.1) : appColors.secondaryBackground)
+        .background(appColors.secondaryBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isSelected ? appColors.primary : Color.clear, lineWidth: 1.5)
-        )
         .shadow(color: Color.black.opacity(0.07), radius: 8, x: 0, y: 2)
+        .selectableEffect(isSelected: isSelected, highlightColor: appColors.secondary)
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture { onTap?() }
     }
 }
-
 // MARK: - Scanned Drug Details slot
 
 struct ScannedDrugDetailsSlot: View {
@@ -185,33 +191,31 @@ struct ScannedDrugDetailsSlot: View {
     @Binding var containerStatus: StockCountOptionContainerStatus
     let onCancel: () -> Void
     let onAdd:    () -> Void
-    var isEmbedded: Bool = false
+    let isIpadPortrait: Bool
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 16) {                          // was 24
 
             Text("SCANNED DRUG DETAILS")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text.opacity(0.4))
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
                 .padding(.top, 14)
 
             drugCard
-                .padding(.horizontal, 20)
 
             actionButtons
-                .padding(.horizontal, 20)
                 .padding(.vertical, 8)
         }
+        .padding(.horizontal, 20)                      // moved here — equal sides
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(appColors.secondaryBackground)
-        .modifier(BottomSheetStyle(enabled: !isEmbedded))
+        .modifier(BottomSheetStyle(enabled: !isIpadPortrait))
     }
 
     // ── Drug card ──────────────────────────────────────────────
-
     private var drugCard: some View {
+        
         let drug       = stockCountViewModel.scannedDrugData
         let bucket     = stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL"
         let packageQty = Int(drug?.quantity ?? 0)
@@ -220,40 +224,80 @@ struct ScannedDrugDetailsSlot: View {
         let newTotal   = existing + adding
         let totalPills = newTotal * packageQty
 
-        return VStack(spacing: 24) {
+        return VStack(spacing: 16) {
 
-            HStack(alignment: .top) {
-                cellLabel("Drug Name", value: drug?.drugName ?? "—", color: appColors.secondary)
-                Spacer()
-                cellLabel("Bucket", value: bucket.uppercased(), color: appColors.text)
+            if isIpadPortrait {
+         
+
+                // ── Portrait: NDC full width, then Batch No + Expiry Date side by side ──
+                VStack(alignment: .leading, spacing: 16) {
+                    
+                    cellLabel("Drug Name", value: drug?.drugName ?? "—", color: appColors.secondary, align: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Divider()
+
+                    cellLabel(
+                        "NDC Number",
+                        value: drug?.ndc ?? "—",
+                        color: appColors.secondary
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Divider()
+
+                    HStack(alignment: .top, spacing: 12) {
+                        cellLabel(
+                            "Batch No.",
+                            value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—",
+                            color: appColors.secondary
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        cellLabel(
+                            "Expiry Date",
+                            value: drug?.expiry.isEmpty == false ? drug!.expiry : "—",
+                            color: appColors.secondary
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        cellLabel("Bucket", value: bucket.uppercased(), color: appColors.secondary, align: .trailing)
+                    }
+                }
+
+            } else {
+                HStack(alignment: .top) {
+                    cellLabel("Drug Name", value: drug?.drugName ?? "—", color: appColors.secondary)
+                    Spacer()
+                    cellLabel("Bucket", value: bucket.uppercased(), color: appColors.secondary, align: .leading)
+                }
+                
+                Divider()
+                // ── Landscape: NDC + Batch No + Expiry Date all in one row ──
+                HStack(alignment: .top, spacing: 12) {
+                    cellLabel(
+                        "NDC Number",
+                        value: drug?.ndc ?? "—",
+                        color: appColors.secondary
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)   // gets 2x space
+
+                    cellLabel(
+                        "Batch No.",
+                        value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—",
+                        color: appColors.secondary
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    cellLabel(
+                        "Expiry Date",
+                        value: drug?.expiry.isEmpty == false ? drug!.expiry : "—",
+                        color: appColors.secondary
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.vertical, 5)
             }
-            .padding(.vertical, 5)
-
-            Divider()
-
-            HStack(alignment: .top, spacing: 12) {
-                cellLabel(
-                    "NDC Number",
-                    value: drug?.ndc ?? "—",
-                    color: appColors.secondary
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                cellLabel(
-                    "Batch No.",
-                    value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—",
-                    color: appColors.secondary
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                cellLabel(
-                    "Expiry Date",
-                    value: drug?.expiry.isEmpty == false ? drug!.expiry : "—",
-                    color: appColors.secondary
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.vertical, 5)
 
             bottleStepper(adding: adding, newTotal: newTotal, totalPills: totalPills, existing: existing)
                 .padding(.vertical, 6)
@@ -261,7 +305,7 @@ struct ScannedDrugDetailsSlot: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
     }
-
+    
     private func cellLabel(
         _ label: String, value: String, color: Color,
         align: HorizontalAlignment = .leading
@@ -298,7 +342,7 @@ struct ScannedDrugDetailsSlot: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
             }
-            .frame(width: 76)
+            .frame(width: 82)
             .background(appColors.primaryBackground)
             .clipShape(
                 .rect(
@@ -341,7 +385,7 @@ struct ScannedDrugDetailsSlot: View {
                     .foregroundColor(appColors.primary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(width: 76)
+            .frame(width: 82)
             .background(appColors.primaryBackground)
             .clipShape(
                 .rect(
@@ -378,6 +422,8 @@ struct ScannedDrugDetailsSlot: View {
     }
 }
 
+
+
 // MARK: - Scanned Summary slot
 
 struct ScannedSummarySlot: View {
@@ -398,7 +444,7 @@ struct ScannedSummarySlot: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top,  24)
+                .padding(.top,  30)
 
             // ── Scan new bottle placeholder ──────────────────────
                 VStack(spacing: 20) {
@@ -482,6 +528,7 @@ struct StockCountBatchBottomSheet: View {
     let onCancel:   () -> Void
     let onAdd:      () -> Void
     let onEndCount: () -> Void
+    let onScanPills: () -> Void
 
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.verticalSizeClass)   private var vSizeClass
@@ -520,20 +567,19 @@ struct StockCountBatchBottomSheet: View {
         VStack(alignment: .leading, spacing: 0) {
 
             // TOP — batch list with status-bar-aware top padding
-            StockCountBatchPanel(topPadding: statusBarHeight) {
+            StockCountBatchPanel(topPadding: statusBarHeight, onScanPills: onScanPills) {
                 EmptyView()
             }
             .frame(maxHeight: .infinity)
 
-
-            
 
             // BOTTOM — drug details or summary
             if showDrugDetails {
                 ScannedDrugDetailsSlot(
                     containerStatus: $containerStatus,
                     onCancel: onCancel,
-                    onAdd: onAdd
+                    onAdd: onAdd,
+                    isIpadPortrait: false
                 )
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
@@ -557,27 +603,30 @@ struct StockCountBatchBottomSheet: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 scanPillsButtonView
+                    .fixedSize()
             }
             .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 12)
+            .padding(.vertical, 20)
 
             // ── Two-column body ──────────────────────────────────
-            HStack(spacing: 0) {
-                StockCountBatchPanel(hideHeader: true) {
+            HStack(alignment: .top, spacing: 0) {
+
+                // LEFT — list panel (header suppressed, full height)
+                StockCountBatchPanel(hideHeader: true, onScanPills: onScanPills) {
                     EmptyView()
                 }
-                .frame(width: size.width * 0.50)
+                .padding(.top, 16)
+                .frame(maxWidth: .infinity)          // fills its half naturally
                 .frame(maxHeight: .infinity)
 
-                // RIGHT — rounded card wrapping the detail/summary slot
+                // RIGHT — drug details or summary card
                 Group {
                     if showDrugDetails {
                         ScannedDrugDetailsSlot(
                             containerStatus: $containerStatus,
                             onCancel: onCancel,
                             onAdd: onAdd,
-                            isEmbedded: true
+                            isIpadPortrait: true
                         )
                         .environmentObject(appColors)
                         .environmentObject(stockCountViewModel)
@@ -587,31 +636,28 @@ struct StockCountBatchBottomSheet: View {
                             .environmentObject(stockCountViewModel)
                     }
                 }
-                .frame(maxHeight: .infinity)
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(appColors.secondaryBackground)
-                        .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 2)
-                )
-                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(appColors.secondaryBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 2)
+                .padding(.leading, 8)               // small gap from left panel
                 .padding(.trailing, 16)
-                .frame(width: size.width * 0.50)
+                .padding(.bottom, 20)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
-
     // ── iPhone (portrait + landscape): drag pill + drug details or summary only ──
     private func iPhoneLayout(size: CGSize) -> some View {
         VStack(spacing: 0) {
-            dragPill
             if showDrugDetails {
                 ScannedDrugDetailsSlot(
                     containerStatus: $containerStatus,
                     onCancel: onCancel,
-                    onAdd: onAdd
+                    onAdd: onAdd,
+                    isIpadPortrait: false
                 )
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
@@ -624,20 +670,16 @@ struct StockCountBatchBottomSheet: View {
         }
     }
 
-    private var dragPill: some View {
-        EmptyView()
-    }
+  
 
     private var scanPillsButtonView: some View {
-        Text("SCAN PILLS")
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(appColors.primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(appColors.primary, lineWidth: 1.5)
-            )
-            .fixedSize()
+        PillCountingButton(
+            iconName: nil, title: "SCAN PILLS",
+            textColor: appColors.primary, backgroundColor: .clear,
+            borderColor: appColors.primary,
+            font: .system(size: 11, weight: .bold),
+            cornerRadius: 20, horizontalPadding: 14, verticalPadding: 10, iconSize: 0,
+            action: onScanPills
+        )
     }
 }

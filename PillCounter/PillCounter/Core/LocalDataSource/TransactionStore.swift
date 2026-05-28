@@ -192,6 +192,7 @@ final class TransactionStore {
         txn.workflow_step = step.rawValue
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        transactionsDidChange.send()
     }
 
     func getContainerPendingTarget(txnId: Int64) -> Int32 {
@@ -200,13 +201,28 @@ final class TransactionStore {
         return max(containerCount - txn.target_count, 0)
     }
 
-    func updateCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil) {
+    /// Increments the given count fields by the provided amounts (additive).
+    func updateCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
         guard let txn = fetchById(txnId) else { return }
         if let bottleQty { txn.bottle_qty += bottleQty }
         if let looseQty { txn.loose_qty += looseQty }
+        if let openBottleQty { txn.open_bottle_qty += openBottleQty }
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
-        print("📋 [TransactionDAO] UPDATED counts — txnId: \(txnId), bottleQty: \(bottleQty.map { "+\($0)" } ?? "-"), looseQty: \(looseQty.map { "+\($0)" } ?? "-")")
+        transactionsDidChange.send()
+        print("📋 [TransactionDAO] UPDATED counts — txnId: \(txnId), bottleQty: \(bottleQty.map { "+\($0)" } ?? "-"), looseQty: \(looseQty.map { "+\($0)" } ?? "-"), openBottleQty: \(openBottleQty.map { "+\($0)" } ?? "-")")
+    }
+
+    /// Sets the given count fields to absolute values (non-additive). Use for open pill count finalization.
+    func setAbsoluteCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
+        guard let txn = fetchById(txnId) else { return }
+        if let bottleQty { txn.bottle_qty = bottleQty }
+        if let looseQty { txn.loose_qty = looseQty }
+        if let openBottleQty { txn.open_bottle_qty = openBottleQty }
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: context)
+        transactionsDidChange.send()
+        print("📋 [TransactionDAO] SET absolute counts — txnId: \(txnId), bottleQty: \(String(describing: bottleQty)), looseQty: \(String(describing: looseQty)), openBottleQty: \(String(describing: openBottleQty))")
     }
 
     func countTransactions(for user: UserEntity, countType: CountType, status: CountStatus) -> Int {
@@ -261,6 +277,7 @@ final class TransactionStore {
         txn.is_ndc_verfied = verified
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
+        transactionsDidChange.send()
         print("📋 [TransactionDAO] UPDATED ndcVerified — txnId: \(txnId), verified: \(verified)")
     }
 

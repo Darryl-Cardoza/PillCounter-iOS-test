@@ -32,7 +32,7 @@ struct UnifiedCameraLayout: View {
                 NoCameraPermissionView()
             }
 
-            if stockCountViewModel.currentBatch == nil {
+            if stockCountViewModel.currentBatch == nil || showPillCountPanel {
                 DetectionOverlay(cameraService: cameraService)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)

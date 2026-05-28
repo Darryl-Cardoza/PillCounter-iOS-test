@@ -118,9 +118,9 @@ struct AppNavigation: View {
                       isLandscape = newValue
                   }
               }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
         .onAppear {
-            appColors.updateSystemAppearance(false)
+            appColors.updateSystemAppearance(true)
         }
         
     }

@@ -67,17 +67,17 @@ struct DispenseCountPartialTxnList: View {
                         )
                     }
                     .collapsible(isVisible: !deletingIds.contains(txn.txn_id))
-                    .selectableEffect(
-                        isSelected: selectedIds.contains(txn.txn_id),
-                        highlightColor: appColors.secondary
-                    )
+                        .selectableEffect(
+                            isSelected: selectedIds.contains(txn.txn_id),
+                            highlightColor: appColors.secondary
+                        )
                     .animation(
                         .spring(response: 0.38, dampingFraction: 0.82),
                         value: deletingIds.contains(txn.txn_id)
                     )
                     .onAppear {
                         guard !appearedIds.contains(txn.txn_id) else { return }
-
+                        
                         let index = filteredTransactions.firstIndex(where: {
                             $0.txn_id == txn.txn_id
                         }) ?? 0

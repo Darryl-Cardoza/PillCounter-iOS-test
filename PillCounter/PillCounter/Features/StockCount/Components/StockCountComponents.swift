@@ -46,6 +46,11 @@ struct StockTransactionListView: View {
                             set: { newValue in
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     expandedNdc = newValue ? txn.ndc : nil
+                                    if newValue {
+                                        selectedIds = [txn.ndc]
+                                    } else {
+                                        selectedIds.remove(txn.ndc)
+                                    }
                                 }
                             }
                         )
@@ -122,12 +127,8 @@ struct StockTransactionListView: View {
                         .padding(.bottom, 8)
                     }
                 }
-                .listRowAnimated(
-                    id: Int64(index),
-                    index: index,
-                    isEditing: isEditing,
+                .selectableEffect(
                     isSelected: selectedIds.contains(txn.ndc),
-                    isDeleting: false,
                     highlightColor: appColors.secondary
                 )
             }

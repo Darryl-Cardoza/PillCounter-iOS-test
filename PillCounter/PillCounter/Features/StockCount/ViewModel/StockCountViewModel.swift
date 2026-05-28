@@ -40,6 +40,8 @@ class StockCountViewModel: ObservableObject {
     @Published var note: String = ""
     @Published var pendingBottleCount: Int = 1
     @Published var existingNdcBottleCount: Int = 0
+    @Published var openPillScanRequested: Bool = false
+    @Published var openPillScanNdc: String = ""
     
     @AppStorage(AppStorageManager.AppStorageKeys.isPillCountingEnabled) var isNoteEnable: Bool = false
 
@@ -154,12 +156,13 @@ class StockCountViewModel: ObservableObject {
 
     // MARK: - Transactions
 
-    func updateCounts(txnId: Int64?, bottleQty: Int? = nil, looseQty: Int? = nil) {
+    func updateCounts(txnId: Int64?, bottleQty: Int? = nil, looseQty: Int? = nil, openBottleQty: Int? = nil) {
         guard let txnId else { return }
         transactionDAO.updateCounts(
             txnId: txnId,
-            bottleQty: bottleQty.map { Int32($0) },
-            looseQty:  looseQty.map  { Int32($0) }
+            bottleQty:     bottleQty.map     { Int32($0) },
+            looseQty:      looseQty.map      { Int32($0) },
+            openBottleQty: openBottleQty.map { Int32($0) }
         )
         // reloadAllState() fires automatically via publisher
     }
@@ -188,7 +191,7 @@ class StockCountViewModel: ObservableObject {
         let gtin = decoded.gtin ?? ""
         let lotNumber = decoded.lotNumber ?? ""
         let expiryString = formatExpiry(decoded.expirationDate) ?? ""
-        await fetchDrugDataOnly(gtin: gtin, lotNumber: lotNumber, expiry: expiryString)
+        await fetchDrugDataOnly(rawValue: rawValue, gtin: gtin, lotNumber: lotNumber, expiry: expiryString)
     }
 
     private func formatExpiry(_ date: Date?) -> String? {
@@ -199,7 +202,7 @@ class StockCountViewModel: ObservableObject {
         return formatter.string(from: date)
     }
 
-    private func fetchDrugDataOnly(gtin: String, lotNumber: String = "", expiry: String = "") async {
+    private func fetchDrugDataOnly(rawValue: String, gtin: String, lotNumber: String = "", expiry: String = "") async {
         guard !gtin.isEmpty else {
             showScanError = true
             barcodeNotFound = true
@@ -219,12 +222,13 @@ class StockCountViewModel: ObservableObject {
                 return
             }
             scannedDrugData = ScannedDrugData(
-                drugName:  localDrug.drug_name ?? "",
-                ndc:       ndc,
-                gtin:      localDrug.gtin ?? "",
-                quantity:  localDrug.package_qty,
-                lotNumber: lotNumber,
-                expiry:    expiry
+                drugName:   localDrug.drug_name ?? "",
+                ndc:        ndc,
+                gtin:       localDrug.gtin ?? "",
+                quantity:   localDrug.package_qty,
+                lotNumber:  lotNumber,
+                expiry:     expiry,
+                rawBarcode: rawValue
             )
             let existing = existingBottleCount(for: ndc)
             existingNdcBottleCount = existing
@@ -264,12 +268,13 @@ class StockCountViewModel: ObservableObject {
             )
 
             scannedDrugData = ScannedDrugData(
-                drugName:  drugName,
-                ndc:       ndc,
-                gtin:      gtin,
-                quantity:  qty,
-                lotNumber: lotNumber,
-                expiry:    expiry
+                drugName:   drugName,
+                ndc:        ndc,
+                gtin:       gtin,
+                quantity:   qty,
+                lotNumber:  lotNumber,
+                expiry:     expiry,
+                rawBarcode: rawValue
             )
             let existingApi = existingBottleCount(for: ndc)
             existingNdcBottleCount = existingApi
@@ -301,6 +306,8 @@ class StockCountViewModel: ObservableObject {
         isLoading = false
         pendingBottleCount = 1
         existingNdcBottleCount = 0
+        openPillScanRequested = false
+        openPillScanNdc = ""
     }
 
     /// Returns the existing sealed bottle count for an NDC already in the current batch.
@@ -309,6 +316,19 @@ class StockCountViewModel: ObservableObject {
         guard let batchId = currentBatch?.batch_id else { return 0 }
         let txns = transactionDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
         return txns.reduce(0) { $0 + Int($1.bottle_qty) }
+    }
+
+    /// Returns the existing open bottle count for an NDC in the current batch.
+    func existingOpenBottleCount(for ndc: String) -> Int {
+        guard let batchId = currentBatch?.batch_id else { return 0 }
+        let txns = transactionDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
+        return txns.reduce(0) { $0 + Int($1.open_bottle_qty) }
+    }
+
+    /// Finds the transaction for the given NDC in the current batch (used by open pill flow).
+    func existingTxn(for ndc: String) -> PillCountTransactionEntity? {
+        guard let batchId = currentBatch?.batch_id else { return nil }
+        return transactionDAO.fetchByBatch(batchId: batchId).first { $0.drug?.ndc == ndc && $0.is_deleted == false }
     }
 
     func selectTransaction(_ txn: GroupedTransaction) {
@@ -322,7 +342,7 @@ class StockCountViewModel: ObservableObject {
             expiry:    firstLot?.expiry ?? ""
         )
         existingNdcBottleCount = Int(txn.sealedBottleQty)
-        pendingBottleCount = 0
+        pendingBottleCount = 1
         selectedGroupedTransaction = txn
     }
 
@@ -372,12 +392,13 @@ class StockCountViewModel: ObservableObject {
 // MARK: - Supporting Types
 
 struct ScannedDrugData {
-    let drugName:  String
-    let ndc:       String
-    let gtin:      String
-    let quantity:  Int32
-    let lotNumber: String
-    let expiry:    String
+    let drugName:   String
+    let ndc:        String
+    let gtin:       String
+    let quantity:   Int32
+    let lotNumber:  String
+    let expiry:     String
+    var rawBarcode: String = ""
 }
 
 struct StockTransaction: Identifiable, Hashable {

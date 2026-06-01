@@ -18,6 +18,7 @@ struct UnifiedCameraLayout: View {
     let pillCountSheetHeight: CGFloat
     let isLandscape: Bool
     let controlledStepInstruction: String
+    let showPillDetectionUI: Bool
     let onBack: () -> Void
     let onResume: () -> Void
 
@@ -32,7 +33,7 @@ struct UnifiedCameraLayout: View {
                 NoCameraPermissionView()
             }
 
-            if stockCountViewModel.currentBatch == nil || showPillCountPanel {
+            if showPillDetectionUI {
                 DetectionOverlay(cameraService: cameraService)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)

@@ -42,6 +42,15 @@ class StockCountViewModel: ObservableObject {
     @Published var existingNdcBottleCount: Int = 0
     @Published var openPillScanRequested: Bool = false
     @Published var openPillScanNdc: String = ""
+    var pendingBucketId: String = ""
+
+    /// Txn committed by the last auto-add. Stepper changes debounce-update this txn.
+    @Published var committedTxnId: Int64? = nil
+    private var stepperDebounceTask: Task<Void, Never>? = nil
+
+    /// While true, DB-change publisher events do not trigger a list reload.
+    /// Set true before auto-add writes; set false + call reloadAllState() on dismiss.
+    var suppressListReload: Bool = false
     
     @AppStorage(AppStorageManager.AppStorageKeys.isPillCountingEnabled) var isNoteEnable: Bool = false
 
@@ -66,14 +75,15 @@ class StockCountViewModel: ObservableObject {
         )
         .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
         .sink { [weak self] in
-            self?.reloadAllState()
+            guard let self, !self.suppressListReload else { return }
+            self.reloadAllState()
         }
         .store(in: &cancellables)
     }
 
     /// Central state refresh. Replaces loadTransactions() + updateBatchCount()
     /// everywhere they were previously called manually.
-    private func reloadAllState() {
+    func reloadAllState() {
         Log("State Reloaded")
         let batches = batchDAO.fetchAllPartial()
         totalBatchCount = batches.count
@@ -97,6 +107,12 @@ class StockCountViewModel: ObservableObject {
             currentBatch = batch
             // reloadAllState() fires automatically via publisher
         }
+    }
+
+    /// Creates the batch lazily on the first scan. Call before creating any transaction.
+    func ensureBatchExists() {
+        guard currentBatch == nil else { return }
+        createNewBatch(bucketId: pendingBucketId)
     }
 
     func continueLastBatch() -> Bool {
@@ -155,6 +171,18 @@ class StockCountViewModel: ObservableObject {
     }
 
     // MARK: - Transactions
+
+    /// Call when the stepper changes after a drug has been auto-added.
+    /// Debounces so rapid taps only fire one DB write after 600ms of silence.
+    func debouncedUpdateBottleCount(_ count: Int) {
+        guard let txnId = committedTxnId else { return }
+        stepperDebounceTask?.cancel()
+        stepperDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            transactionDAO.setAbsoluteCounts(txnId: txnId, bottleQty: Int32(count))
+        }
+    }
 
     func updateCounts(txnId: Int64?, bottleQty: Int? = nil, looseQty: Int? = nil, openBottleQty: Int? = nil) {
         guard let txnId else { return }
@@ -232,7 +260,7 @@ class StockCountViewModel: ObservableObject {
             )
             let existing = existingBottleCount(for: ndc)
             existingNdcBottleCount = existing
-            pendingBottleCount = 1
+            pendingBottleCount = existing + 1
             isLoading = false
             showStockCountScannedDetails = true
             print("Fetched response from Local")
@@ -278,7 +306,7 @@ class StockCountViewModel: ObservableObject {
             )
             let existingApi = existingBottleCount(for: ndc)
             existingNdcBottleCount = existingApi
-            pendingBottleCount = 1
+            pendingBottleCount = existingApi + 1
             isLoading = false
             showStockCountScannedDetails = true
             print("Fetched response from API: \(response)")
@@ -308,6 +336,12 @@ class StockCountViewModel: ObservableObject {
         existingNdcBottleCount = 0
         openPillScanRequested = false
         openPillScanNdc = ""
+        committedTxnId = nil
+        stepperDebounceTask?.cancel()
+        stepperDebounceTask = nil
+        suppressListReload = false
+        // Note: pendingBucketId and currentBatch are intentionally NOT cleared here
+        // so they survive scan resets within the same session.
     }
 
     /// Returns the existing sealed bottle count for an NDC already in the current batch.

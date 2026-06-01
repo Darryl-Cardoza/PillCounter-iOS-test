@@ -249,7 +249,7 @@ struct NewDashboardView: View {
                 statCardsSection
                     .padding(.bottom, 28)
                 Rectangle()
-                    .fill(appColors.text.opacity(0.18))
+                    .fill(appColors.text.opacity(0.18)) 
                     .frame(height: 1)
                     .padding(.bottom, 20)
                 queueTabHeaders
@@ -341,6 +341,7 @@ struct NewDashboardView: View {
             }
         }
     }
+
 
     private func phoneQuickActionCard(
         iconName: String,
@@ -1080,7 +1081,10 @@ struct NewDashboardView: View {
     }
 
     private func createBatchAndNavigate(bucketId: String) {
-        stockCountViewModel.createNewBatch(bucketId: bucketId)
+        stockCountViewModel.currentBatch = nil
+        stockCountViewModel.groupedTransactions = []
+        stockCountViewModel.batchNdcSet = []
+        stockCountViewModel.pendingBucketId = bucketId
         router.selectedPillScanningType = .REGULAR
         router.navigate(
             to: .authentication(

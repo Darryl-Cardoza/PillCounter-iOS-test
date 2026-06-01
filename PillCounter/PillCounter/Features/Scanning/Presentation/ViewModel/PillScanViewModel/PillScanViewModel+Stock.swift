@@ -43,12 +43,11 @@ extension PillScanViewModel {
 
             print("Existing txn found → merging")
 
-            // MARK: 2️⃣ Update counts
-            transactionDAO.updateCounts(
+            // MARK: 2️⃣ Update counts (absolute — bottleCount already includes existing)
+            transactionDAO.setAbsoluteCounts(
                 txnId: txn.txn_id,
                 bottleQty:     containerStatus == .sealed ? Int32(bottleCount) : nil,
-                looseQty:      nil,   // open pill loose_qty is updated after pill counting via updateOpenPillCount
-                openBottleQty: containerStatus == .opened ? 1 : nil
+                openBottleQty: containerStatus == .opened ? (txn.open_bottle_qty + 1) : nil
             )
 
             // MARK: 3️⃣ Update current transaction (IMPORTANT FIX)
@@ -154,11 +153,10 @@ extension PillScanViewModel {
             return
         }
 
-        // MARK: 8️⃣ Set initial counts
-        transactionDAO.updateCounts(
+        // MARK: 8️⃣ Set initial counts (absolute)
+        transactionDAO.setAbsoluteCounts(
             txnId: latestTxn.txn_id,
             bottleQty:     containerStatus == .sealed ? Int32(bottleCount) : nil,
-            looseQty:      nil,   // open pill loose_qty set after pill counting
             openBottleQty: containerStatus == .opened ? 1 : nil
         )
 

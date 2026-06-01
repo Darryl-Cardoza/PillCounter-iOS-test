@@ -12,12 +12,14 @@ struct StockCountBatchPanel<BottomContent: View>: View {
 
     let topPadding: CGFloat
     let hideHeader: Bool
+    let showScanPillsButton: Bool
     let onScanPills: (() -> Void)?
     let bottomContent: () -> BottomContent
 
-    init(topPadding: CGFloat = 0, hideHeader: Bool = false, onScanPills: (() -> Void)? = nil, @ViewBuilder bottomContent: @escaping () -> BottomContent) {
+    init(topPadding: CGFloat = 0, hideHeader: Bool = false, showScanPillsButton: Bool = true, onScanPills: (() -> Void)? = nil, @ViewBuilder bottomContent: @escaping () -> BottomContent) {
         self.topPadding = topPadding
         self.hideHeader = hideHeader
+        self.showScanPillsButton = showScanPillsButton
         self.onScanPills = onScanPills
         self.bottomContent = bottomContent
     }
@@ -32,7 +34,9 @@ struct StockCountBatchPanel<BottomContent: View>: View {
                         .foregroundColor(appColors.text)
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    scanPillsButton
+                    if showScanPillsButton {
+                        scanPillsButton
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, topPadding + 16)

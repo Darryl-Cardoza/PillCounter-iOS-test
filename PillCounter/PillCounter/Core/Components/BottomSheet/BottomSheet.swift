@@ -20,6 +20,12 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
     let portraitHeight: CGFloat?
     /// Width of the side sheet in landscape. Nil = 380 (existing default behaviour).
     let landscapeWidth: CGFloat?
+    /// When non-nil, the portrait sheet height is driven by this binding (for drag-to-expand).
+    /// Falls back to portraitHeight when nil.
+    let heightBinding: Binding<CGFloat>?
+    /// When non-nil, the landscape sheet width is driven by this binding (for drag-to-expand).
+    /// Falls back to landscapeWidth when nil.
+    let widthBinding: Binding<CGFloat>?
     let sheetContent: () -> SheetContent
 
     private let defaultSideSheetWidth: CGFloat = 380
@@ -74,10 +80,11 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
     private func sheetView(isLandscape: Bool, size: CGSize) -> some View {
         if isLandscape {
             // Right side sheet — full screen height, edge-to-edge
+            let sheetWidth = widthBinding?.wrappedValue ?? landscapeWidth ?? defaultSideSheetWidth
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
                 sheetContent()
-                    .frame(width: min(landscapeWidth ?? defaultSideSheetWidth, size.width * 0.6))
+                    .frame(width: min(sheetWidth, size.width * 0.95))
                     .frame(maxHeight: .infinity)
                     .clipShape(
                         RoundedCorners(radius: cornerRadius,
@@ -93,7 +100,7 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 Group {
-                    if let h = portraitHeight {
+                    if let h = heightBinding?.wrappedValue ?? portraitHeight {
                         sheetContent().frame(maxWidth: .infinity).frame(height: h)
                     } else {
                         sheetContent().frame(maxWidth: .infinity)
@@ -140,6 +147,8 @@ extension View {
         showDim: Bool = true,
         portraitHeight: CGFloat? = nil,
         landscapeWidth: CGFloat? = nil,
+        heightBinding: Binding<CGFloat>? = nil,
+        widthBinding: Binding<CGFloat>? = nil,
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
@@ -151,6 +160,8 @@ extension View {
                 showDim: showDim,
                 portraitHeight: portraitHeight,
                 landscapeWidth: landscapeWidth,
+                heightBinding: heightBinding,
+                widthBinding: widthBinding,
                 sheetContent: content
             )
         )

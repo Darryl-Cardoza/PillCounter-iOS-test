@@ -39,6 +39,7 @@ struct ScannedSummarySlot: View {
                     .foregroundColor(appColors.text)
             }
             .frame(maxWidth: .infinity)
+            .frame(maxHeight: isIPhone ? 180 : .infinity)
 
             if isIPhone {
                 Divider()

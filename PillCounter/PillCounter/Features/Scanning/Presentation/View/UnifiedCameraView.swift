@@ -56,6 +56,9 @@ struct UnifiedCameraView: View {
 
     // ── Stock count panel (always visible when scanType == .stockCount) ───────
     @State var showStockCountPanel: Bool
+    @State private var stockSheetCurrentHeight: CGFloat = UIScreen.main.bounds.height * 0.48
+    @State private var stockSheetCurrentWidth: CGFloat = UIScreen.main.bounds.width * 0.60
+    @State private var stockSheetIsExpanded: Bool = false
 
     init(currentScanType: ScanType) {
         self.currentScanType = currentScanType
@@ -143,7 +146,33 @@ struct UnifiedCameraView: View {
     var stockCountSheetHeight: CGFloat {
         UIDevice.current.userInterfaceIdiom == .pad
             ? UIScreen.main.bounds.height * 0.45
-            : UIScreen.main.bounds.height * 0.50
+            : UIScreen.main.bounds.height * 0.48
+    }
+
+    var stockCountSheetExpandedHeight: CGFloat {
+        UIScreen.main.bounds.height * 0.90
+    }
+
+    var stockCountSheetExpandedWidth: CGFloat {
+        UIScreen.main.bounds.width * 0.90
+    }
+
+    func snapStockSheet(portrait height: CGFloat) {
+        let mid = (stockCountSheetExpandedHeight + stockCountSheetHeight) / 2
+        let target = height > mid ? stockCountSheetExpandedHeight : stockCountSheetHeight
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+            stockSheetCurrentHeight = target
+            stockSheetIsExpanded = (target == stockCountSheetExpandedHeight)
+        }
+    }
+
+    func snapStockSheet(landscape width: CGFloat) {
+        let mid = (stockCountSheetExpandedWidth + stockCountSheetWidth) / 2
+        let target = width > mid ? stockCountSheetExpandedWidth : stockCountSheetWidth
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+            stockSheetCurrentWidth = target
+            stockSheetIsExpanded = (target == stockCountSheetExpandedWidth)
+        }
     }
 
     var stockCountSheetWidth: CGFloat {
@@ -204,21 +233,35 @@ struct UnifiedCameraView: View {
             }
             .customPopup(isPresented: $pillScanViewModel.showNdcEquivalencePopup, dismissOnBackgroundTap: false) { ndcEquivalencePopup }
             .customPopup(isPresented: $stockCountViewModel.barcodeNotFound) { barcodeNotFoundPopup }
-            .bottomSheet(isPresented: $showStockCountPanel, dismissOnBackgroundTap: false, showDim: false, portraitHeight: stockCountSheetHeight, landscapeWidth: stockCountSheetWidth) {
+            .bottomSheet(
+                isPresented: $showStockCountPanel,
+                dismissOnBackgroundTap: false,
+                showDim: false,
+                portraitHeight: stockCountSheetHeight,
+                landscapeWidth: stockCountSheetWidth,
+                heightBinding: UIDevice.current.userInterfaceIdiom == .pad ? nil : $stockSheetCurrentHeight,
+                widthBinding: UIDevice.current.userInterfaceIdiom == .pad ? nil : $stockSheetCurrentWidth
+            ) {
                 StockCountBatchBottomSheet(
                     containerStatus: $scannedBottleContainerStatus,
-                    onCancel: {
-                        dismissScannedDetails()
+                    isExpanded: $stockSheetIsExpanded,
+                    onPortraitDragChanged: { translationY in
+                        let base = stockSheetIsExpanded ? stockCountSheetExpandedHeight : stockCountSheetHeight
+                        let clamped = min(max(base - translationY, stockCountSheetHeight), stockCountSheetExpandedHeight + 20)
+                        stockSheetCurrentHeight = clamped
                     },
-                    onAdd: {
-                        dismissScannedDetails()
+                    onPortraitDragEnded: { snapStockSheet(portrait: stockSheetCurrentHeight) },
+                    onLandscapeDragChanged: { translationX in
+                        // Drag left = negative translationX = expanding (sheet comes from right)
+                        let base = stockSheetIsExpanded ? stockCountSheetExpandedWidth : stockCountSheetWidth
+                        let clamped = min(max(base - translationX, stockCountSheetWidth), stockCountSheetExpandedWidth + 20)
+                        stockSheetCurrentWidth = clamped
                     },
-                    onEndCount: {
-                        handleStockEndCount()
-                    },
-                    onScanPills: {
-                        handleOpenPillScanRequest()
-                    }
+                    onLandscapeDragEnded: { snapStockSheet(landscape: stockSheetCurrentWidth) },
+                    onCancel: { dismissScannedDetails() },
+                    onAdd: { dismissScannedDetails() },
+                    onEndCount: { handleStockEndCount() },
+                    onScanPills: { handleOpenPillScanRequest() }
                 )
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
@@ -313,6 +356,13 @@ struct UnifiedCameraView: View {
                 handleVialDone()
             }
         }
+        .onChange(of: showStockCountPanel) { _, visible in
+            if !visible {
+                stockSheetCurrentHeight = stockCountSheetHeight
+                stockSheetCurrentWidth = stockCountSheetWidth
+                stockSheetIsExpanded = false
+            }
+        }
     }
 
     // MARK: - Computed helpers
@@ -361,6 +411,9 @@ extension UnifiedCameraView {
 
         stockCountViewModel.reset()
         showStockCountPanel = currentScanType == .stockCount
+        stockSheetCurrentHeight = stockCountSheetHeight
+        stockSheetCurrentWidth = stockCountSheetWidth
+        stockSheetIsExpanded = false
         pillScanViewModel.resetScanningState()
         cameraState = .scanning
         scannedRawValue = nil

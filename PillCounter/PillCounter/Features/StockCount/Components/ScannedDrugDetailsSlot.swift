@@ -106,7 +106,7 @@ struct ScannedDrugDetailsSlot: View {
             }
 
             bottleStepper(newTotal: newTotal, totalPills: totalPills)
-                .padding(.vertical, 6)
+                .padding(.vertical, isIPhone ? 0 : 6)
         }
     }
 

@@ -28,6 +28,11 @@ struct StockCountBatchBottomSheet: View {
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
 
     @Binding var containerStatus: StockCountOptionContainerStatus
+    @Binding var isExpanded: Bool
+    let onPortraitDragChanged: (CGFloat) -> Void
+    let onPortraitDragEnded: () -> Void
+    let onLandscapeDragChanged: (CGFloat) -> Void
+    let onLandscapeDragEnded: () -> Void
     let onCancel:    () -> Void
     let onAdd:       () -> Void
     let onEndCount:  () -> Void
@@ -60,13 +65,19 @@ struct StockCountBatchBottomSheet: View {
             Group {
                 if isIPad && isLandscape {
                     iPadLandscapeLayout
+                        .frame(width: geo.size.width, height: geo.size.height)
                 } else if isIPad {
                     iPadPortraitLayout
+                        .frame(width: geo.size.width, height: geo.size.height)
+                } else if isLandscape {
+                    iPhoneLandscapeLayout
+                        .frame(width: geo.size.width, height: geo.size.height)
                 } else {
+                    // iPhone portrait: content has its own fixed full height so it
+                    // doesn't compress — the BottomSheet frame + clipped() reveals it.
                     iPhoneLayout
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height)
         }
         .background(appColors.primaryBackground)
         .ignoresSafeArea(edges: .bottom)
@@ -129,10 +140,24 @@ struct StockCountBatchBottomSheet: View {
         .background(appColors.primaryBackground)
     }
 
-    // MARK: - iPhone
+    // MARK: - iPhone Portrait
+    // Full content is always rendered; the BottomSheet frame clips from below.
+    // Dragging up grows the frame, revealing the list that sits below the details.
+
+    private var iPhonePortraitDragGesture: some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .global)
+            .onChanged { v in onPortraitDragChanged(v.translation.height) }
+            .onEnded   { _ in onPortraitDragEnded() }
+    }
 
     private var iPhoneLayout: some View {
-        VStack(spacing: 0) {
+        // Outer frame is set by the heightBinding in BottomSheet.
+        // We give the VStack a fixed large intrinsic height so it never shrinks —
+        // the sheet frame + clipped() acts as the reveal window.
+        let fullHeight = UIScreen.main.bounds.height * 0.90
+
+        return VStack(spacing: 0) {
+            // ── Header (drag target) ────────────────────────────
             HStack(spacing: 8) {
                 Text("Batch Stock Count")
                     .font(.system(size: 18, weight: .bold))
@@ -144,7 +169,10 @@ struct StockCountBatchBottomSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 12)
+            .contentShape(Rectangle())
+            .gesture(iPhonePortraitDragGesture)
 
+            // ── Drug detail card ────────────────────────────────
             Group {
                 detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
             }
@@ -153,12 +181,76 @@ struct StockCountBatchBottomSheet: View {
             .shadow(color: Color.black.opacity(0.10), radius: 12, x: 0, y: 2)
             .padding(.horizontal, 16)
             .padding(.top, 4)
+            .gesture(iPhonePortraitDragGesture)
 
-            Spacer(minLength: 0)
+            // ── List — always in layout below details, revealed when sheet expands ──
+            StockCountBatchPanel(hideHeader: true, showScanPillsButton: false, onScanPills: onScanPills) {
+                EmptyView()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
         }
+        // Anchor content to top so it never compresses — frame clips the bottom portion
+        .frame(width: UIScreen.main.bounds.width, height: fullHeight, alignment: .top)
         .background(appColors.primaryBackground)
         .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .topRight]))
         .shadow(color: Color.black.opacity(0.14), radius: 20, x: 0, y: -6)
+    }
+
+    // MARK: - iPhone Landscape
+    // Sheet slides in from the right; drag left expands, drag right collapses.
+    // Full content rendered in a HStack; the BottomSheet frame clips from the right edge.
+
+    private var iPhoneLandscapeLayout: some View {
+        let fullWidth = UIScreen.main.bounds.width * 0.90
+        let detailColWidth = UIScreen.main.bounds.width * 0.55
+
+        return HStack(spacing: 0) {
+            // ── List — left side, revealed as frame widens ──────
+            StockCountBatchPanel(hideHeader: false, onScanPills: onScanPills) {
+                EmptyView()
+            }
+            .frame(maxHeight: .infinity)
+
+            // ── Detail column — always visible at the right edge ─
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Text("Batch Stock Count")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(appColors.text)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    scanPillsButtonView.fixedSize()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 6, coordinateSpace: .global)
+                        .onChanged { v in onLandscapeDragChanged(v.translation.width) }
+                        .onEnded   { _ in onLandscapeDragEnded() }
+                )
+
+                Group {
+                    detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
+                }
+                .background(appColors.secondaryBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 2)
+                .padding(.horizontal, 12)
+                .padding(.top, 4)
+
+                Spacer(minLength: 0)
+            }
+            .frame(width: detailColWidth, alignment: .top)
+            .background(appColors.primaryBackground)
+        }
+        // Fixed full width — BottomSheet widthBinding clips from the left edge
+        .frame(width: fullWidth, height: UIScreen.main.bounds.height, alignment: .trailing)
+        .background(appColors.primaryBackground)
+        .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .bottomLeft]))
+        .shadow(color: Color.black.opacity(0.14), radius: 20, x: -6, y: 0)
     }
 
     // MARK: - Shared detail slot

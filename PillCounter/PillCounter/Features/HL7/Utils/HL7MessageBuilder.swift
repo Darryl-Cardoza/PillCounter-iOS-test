@@ -467,7 +467,7 @@ private extension HL7CompletionBuilder {
             
             let fileName = (barcodePath as NSString).lastPathComponent
             
-            let barcodeObx = ObservationData(
+            let barcodeObx = ObservationData(   
                 setId: "\(obxList.count + 1)",
                 valueType: "ST",
                 observationId: observationId,

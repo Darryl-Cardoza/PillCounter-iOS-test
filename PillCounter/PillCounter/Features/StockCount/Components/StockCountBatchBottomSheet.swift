@@ -86,7 +86,6 @@ struct StockCountBatchBottomSheet: View {
     }
 
     // MARK: - iPad Portrait
-
     private var iPadPortraitLayout: some View {
         VStack(spacing: 0) {
 
@@ -134,15 +133,38 @@ struct StockCountBatchBottomSheet: View {
 
     private var iPhoneLayout: some View {
         VStack(spacing: 0) {
-            detailSlot(isIpadPortrait: false)
+            HStack(spacing: 8) {
+                Text("Batch Stock Count")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(appColors.text)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                scanPillsButtonView.fixedSize()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+
+            Group {
+                detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
+            }
+            .background(appColors.secondaryBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: Color.black.opacity(0.10), radius: 12, x: 0, y: 2)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+
             Spacer(minLength: 0)
         }
+        .background(appColors.primaryBackground)
+        .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .topRight]))
+        .shadow(color: Color.black.opacity(0.14), radius: 20, x: 0, y: -6)
     }
 
     // MARK: - Shared detail slot
 
     @ViewBuilder
-    private func detailSlot(isIpadPortrait: Bool) -> some View {
+    private func detailSlot(isIpadPortrait: Bool, isIPhone: Bool = false, applyBottomSheetStyle: Bool = true) -> some View {
         if showEditSheet, let txn = editableTxn {
             StockCountEditDetailsSheet(txn: txn, onDismiss: { showEditSheet = false })
                 .environmentObject(appColors)
@@ -153,12 +175,14 @@ struct StockCountBatchBottomSheet: View {
                 onCancel: onCancel,
                 onAdd: onAdd,
                 onEditTapped: { showEditSheet = true },
-                isIpadPortrait: isIpadPortrait
+                isIpadPortrait: isIpadPortrait,
+                applyBottomSheetStyle: applyBottomSheetStyle,
+                isIPhone: isIPhone
             )
             .environmentObject(appColors)
             .environmentObject(stockCountViewModel)
         } else {
-            ScannedSummarySlot(onEndCount: onEndCount, isIpadPortrait: isIpadPortrait)
+            ScannedSummarySlot(onEndCount: onEndCount, isIpadPortrait: isIpadPortrait, applyBottomSheetStyle: applyBottomSheetStyle, isIPhone: isIPhone)
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
         }

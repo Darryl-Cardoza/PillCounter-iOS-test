@@ -12,12 +12,14 @@ struct ScannedSummarySlot: View {
 
     let onEndCount: () -> Void
     var isIpadPortrait: Bool = false
+    var applyBottomSheetStyle: Bool = true
+    var isIPhone: Bool = false
 
     var body: some View {
         let totalNdc  = stockCountViewModel.groupedTransactions.count
         let totalPill = stockCountViewModel.groupedTransactions.reduce(0) { $0 + Int($1.total) }
 
-        return VStack(spacing: 12) {
+        return VStack(spacing: isIPhone ? 8  : 12) {
 
             // ── Header — mirrors ScannedDrugDetailsSlot header row ──
             Text("SCANNED DRUG DETAILS")
@@ -36,8 +38,12 @@ struct ScannedSummarySlot: View {
                     .font(.system(size: 12, weight: .regular))
                     .foregroundColor(appColors.text)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
 
+            if isIPhone {
+                Divider()
+            }
+            
             // ── Summary footer ──
             VStack(spacing: 12) {
                 Text("SCANNED SUMMARY")
@@ -82,6 +88,6 @@ struct ScannedSummarySlot: View {
         .padding(.horizontal, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(appColors.secondaryBackground)
-        .modifier(BottomSheetStyle(enabled: !isIpadPortrait))
+        .modifier(BottomSheetStyle(enabled: applyBottomSheetStyle && !isIpadPortrait))
     }
 }

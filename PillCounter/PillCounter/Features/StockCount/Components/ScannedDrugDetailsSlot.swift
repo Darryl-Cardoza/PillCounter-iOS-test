@@ -15,6 +15,8 @@ struct ScannedDrugDetailsSlot: View {
     let onAdd:         () -> Void
     let onEditTapped:  () -> Void
     let isIpadPortrait: Bool
+    var applyBottomSheetStyle: Bool = true
+    var isIPhone: Bool = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -45,7 +47,7 @@ struct ScannedDrugDetailsSlot: View {
         .padding(.horizontal, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(appColors.secondaryBackground)
-        .modifier(BottomSheetStyle(enabled: !isIpadPortrait))
+        .modifier(BottomSheetStyle(enabled: applyBottomSheetStyle && !isIpadPortrait))
     }
 
     // MARK: - Drug Card
@@ -133,7 +135,7 @@ struct ScannedDrugDetailsSlot: View {
 
             VStack(spacing: 2) {
                 Text("\(newTotal)")
-                    .font(.system(size: 32, weight: .semibold))
+                    .font(.system(size: isIPhone ? 24 : 32, weight: .semibold))
                     .foregroundColor(appColors.secondary)
                     .contentTransition(.numericText())
                     .animation(.spring(duration: 0.25), value: newTotal)
@@ -144,7 +146,7 @@ struct ScannedDrugDetailsSlot: View {
                     .animation(.spring(duration: 0.25), value: totalPills)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 100)
+            .frame(height: isIPhone ? 72 : 100)
             .background(appColors.secondaryBackground)
             .overlay(Rectangle().stroke(appColors.primaryBackground, lineWidth: 4))
 
@@ -153,7 +155,7 @@ struct ScannedDrugDetailsSlot: View {
                 stockCountViewModel.debouncedUpdateBottleCount(stockCountViewModel.pendingBottleCount)
             }
         }
-        .frame(height: 100)
+        .frame(height: isIPhone ? 72 : 100)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 

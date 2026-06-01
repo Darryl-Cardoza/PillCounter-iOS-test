@@ -143,7 +143,13 @@ struct UnifiedCameraView: View {
     var stockCountSheetHeight: CGFloat {
         UIDevice.current.userInterfaceIdiom == .pad
             ? UIScreen.main.bounds.height * 0.45
-            : UIScreen.main.bounds.height * 0.28
+            : UIScreen.main.bounds.height * 0.50
+    }
+
+    var stockCountSheetWidth: CGFloat {
+        UIDevice.current.userInterfaceIdiom == .pad
+            ? UIScreen.main.bounds.width * 0.40
+            : UIScreen.main.bounds.width * 0.60
     }
 
     private var rootWithPillCountSheet: some View {
@@ -198,7 +204,7 @@ struct UnifiedCameraView: View {
             }
             .customPopup(isPresented: $pillScanViewModel.showNdcEquivalencePopup, dismissOnBackgroundTap: false) { ndcEquivalencePopup }
             .customPopup(isPresented: $stockCountViewModel.barcodeNotFound) { barcodeNotFoundPopup }
-            .bottomSheet(isPresented: $showStockCountPanel, dismissOnBackgroundTap: false, showDim: false, portraitHeight: stockCountSheetHeight, landscapeWidth: UIScreen.main.bounds.width * 0.35) {
+            .bottomSheet(isPresented: $showStockCountPanel, dismissOnBackgroundTap: false, showDim: false, portraitHeight: stockCountSheetHeight, landscapeWidth: stockCountSheetWidth) {
                 StockCountBatchBottomSheet(
                     containerStatus: $scannedBottleContainerStatus,
                     onCancel: {

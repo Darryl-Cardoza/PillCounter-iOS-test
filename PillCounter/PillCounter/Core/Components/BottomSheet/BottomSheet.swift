@@ -66,6 +66,7 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .animation(.easeInOut(duration: 0.28), value: isPresented)
                 }
+                .ignoresSafeArea()
             )
             // Fire onDismiss whenever the sheet transitions to hidden
             .onChange(of: isPresented) { newValue in
@@ -84,7 +85,7 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
                 sheetContent()
-                    .frame(width: min(sheetWidth, size.width * 0.95))
+                    .frame(width: min(sheetWidth, size.width))
                     .frame(maxHeight: .infinity)
                     .clipShape(
                         RoundedCorners(radius: cornerRadius,

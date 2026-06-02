@@ -299,6 +299,40 @@ enum L10n {
         static let cancelButton = NSLocalizedString("stock.cancelButton", comment: "")
     }
     
+    // MARK: - Stock Count Sheet (bottom sheet + sub-components)
+    enum StockCountSheet {
+        static let batchStockCount        = NSLocalizedString("stockCountSheet.batchStockCount", comment: "")
+        static let scanPills              = NSLocalizedString("stockCountSheet.scanPills", comment: "")
+        static let recentBatchCount       = NSLocalizedString("stockCountSheet.recentBatchCount", comment: "")
+        static let noItemsAddedYet        = NSLocalizedString("stockCountSheet.noItemsAddedYet", comment: "")
+        static let scannedDrugDetails     = NSLocalizedString("stockCountSheet.scannedDrugDetails", comment: "")
+        static let scannedSummary         = NSLocalizedString("stockCountSheet.scannedSummary", comment: "")
+        static let scanNewStockBottle     = NSLocalizedString("stockCountSheet.scanNewStockBottle", comment: "")
+        static let totalNdcs              = NSLocalizedString("stockCountSheet.totalNdcs", comment: "")
+        static let totalPills             = NSLocalizedString("stockCountSheet.totalPills", comment: "")
+        static let pills                  = NSLocalizedString("stockCountSheet.pills", comment: "")
+        static let bottles                = NSLocalizedString("stockCountSheet.bottles", comment: "")
+        static let sealedBottles          = NSLocalizedString("stockCountSheet.sealedBottles", comment: "")
+        static let openedBottles          = NSLocalizedString("stockCountSheet.openedBottles", comment: "")
+        static let editDetails            = NSLocalizedString("stockCountSheet.editDetails", comment: "")
+        static let drugName               = NSLocalizedString("stockCountSheet.drugName", comment: "")
+        static let ndcNumber              = NSLocalizedString("stockCountSheet.ndcNumber", comment: "")
+        static let bucket                 = NSLocalizedString("stockCountSheet.bucket", comment: "")
+        static let batchNo                = NSLocalizedString("stockCountSheet.batchNo", comment: "")
+        static let expiryDate             = NSLocalizedString("stockCountSheet.expiryDate", comment: "")
+        static let openPills              = NSLocalizedString("stockCountSheet.openPills", comment: "")
+        static let lotNumber              = NSLocalizedString("stockCountSheet.lotNumber", comment: "")
+        static let total                  = NSLocalizedString("stockCountSheet.total", comment: "")
+        static let clear                  = NSLocalizedString("stockCountSheet.clear", comment: "")
+        static let add                    = NSLocalizedString("stockCountSheet.add", comment: "")
+        static let edit                   = NSLocalizedString("stockCountSheet.edit", comment: "")
+        static let pillsWithCount         = NSLocalizedString("stockCountSheet.pillsWithCount", comment: "")
+
+        static func recentBatchCountWithN(_ n: Int) -> String {
+            String(format: NSLocalizedString("stockCountSheet.recentBatchCountWithN", comment: ""), n)
+        }
+    }
+
     // MARK: - Stock Count Partial Batch List
      enum StockCountBatchList {
          static let pendingBatches = NSLocalizedString("stockCountBatchList.pendingBatches", comment: "")

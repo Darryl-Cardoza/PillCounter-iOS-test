@@ -261,6 +261,36 @@
 "unsync.syncAll" = "SYNC ALL";
 
 
+// MARK: - STOCK COUNT SHEET
+"stockCountSheet.batchStockCount" = "Batch Stock Count";
+"stockCountSheet.scanPills" = "SCAN PILLS";
+"stockCountSheet.recentBatchCount" = "RECENT BATCH COUNT";
+"stockCountSheet.recentBatchCountWithN" = "RECENT BATCH COUNT (%d)";
+"stockCountSheet.noItemsAddedYet" = "No items added yet";
+"stockCountSheet.scannedDrugDetails" = "SCANNED DRUG DETAILS";
+"stockCountSheet.scannedSummary" = "SCANNED SUMMARY";
+"stockCountSheet.scanNewStockBottle" = "Scan a new Stock bottle";
+"stockCountSheet.totalNdcs" = "Total NDCs";
+"stockCountSheet.totalPills" = "Total Pills";
+"stockCountSheet.pills" = "Pills";
+"stockCountSheet.bottles" = "Bottles";
+"stockCountSheet.sealedBottles" = "Sealed Bottles";
+"stockCountSheet.openedBottles" = "Opened Bottles";
+"stockCountSheet.editDetails" = "Edit Details";
+"stockCountSheet.drugName" = "Drug Name";
+"stockCountSheet.ndcNumber" = "NDC Number";
+"stockCountSheet.bucket" = "Bucket";
+"stockCountSheet.batchNo" = "Batch No.";
+"stockCountSheet.expiryDate" = "Expiry Date";
+"stockCountSheet.openPills" = "Open Pills";
+"stockCountSheet.lotNumber" = "Lot Number";
+"stockCountSheet.total" = "Total";
+"stockCountSheet.clear" = "CLEAR";
+"stockCountSheet.add" = "ADD";
+"stockCountSheet.edit" = "Edit";
+"stockCountSheet.pillsWithCount" = "%d pills";
+
+
 // MARK: - STOCK COUNT PARTIAL BATCH LIST
 "stockCountBatchList.pendingBatches" = "PENDING_BATCHES";
 "stockCountBatchList.batchPrefix" = "Batch %@";

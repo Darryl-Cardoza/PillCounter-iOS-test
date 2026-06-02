@@ -22,13 +22,13 @@ struct ScannedDrugDetailsSlot: View {
         VStack(spacing: 16) {
 
             HStack(alignment: .center) {
-                Text("SCANNED DRUG DETAILS")
+                Text(L10n.StockCountSheet.scannedDrugDetails)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(appColors.text.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 PillCountingButton(
-                    iconName: nil, title: "Edit",
+                    iconName: nil, title: L10n.StockCountSheet.edit,
                     textColor: appColors.primary, backgroundColor: .clear,
                     borderColor: appColors.primary,
                     font: .system(size: 14, weight: .semibold),
@@ -63,43 +63,43 @@ struct ScannedDrugDetailsSlot: View {
         return VStack(spacing: 16) {
             if isIpadPortrait {
                 VStack(alignment: .leading, spacing: 16) {
-                    cellLabel("Drug Name", value: drug?.drugName ?? "—", color: appColors.secondary, align: .leading)
+                    cellLabel(L10n.StockCountSheet.drugName, value: drug?.drugName ?? "—", color: appColors.secondary, align: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Divider()
 
-                    cellLabel("NDC Number", value: drug?.ndc ?? "—", color: appColors.secondary)
+                    cellLabel(L10n.StockCountSheet.ndcNumber, value: drug?.ndc ?? "—", color: appColors.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Divider()
 
                     HStack(alignment: .top, spacing: 12) {
-                        cellLabel("Batch No.", value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—", color: appColors.secondary)
+                        cellLabel(L10n.StockCountSheet.batchNo, value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—", color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                        cellLabel("Expiry Date", value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
+                        cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                        cellLabel("Bucket", value: bucket.uppercased(), color: appColors.secondary, align: .trailing)
+                        cellLabel(L10n.StockCountSheet.bucket, value: bucket.uppercased(), color: appColors.secondary, align: .trailing)
                     }
                 }
             } else {
                 HStack(alignment: .top) {
-                    cellLabel("Drug Name", value: drug?.drugName ?? "—", color: appColors.secondary)
+                    cellLabel(L10n.StockCountSheet.drugName, value: drug?.drugName ?? "—", color: appColors.secondary)
                     Spacer()
-                    cellLabel("Bucket", value: bucket.uppercased(), color: appColors.secondary, align: .leading)
+                    cellLabel(L10n.StockCountSheet.bucket, value: bucket.uppercased(), color: appColors.secondary, align: .leading)
                 }
 
                 Divider()
 
                 HStack(alignment: .top, spacing: 12) {
-                    cellLabel("NDC Number", value: drug?.ndc ?? "—", color: appColors.secondary)
+                    cellLabel(L10n.StockCountSheet.ndcNumber, value: drug?.ndc ?? "—", color: appColors.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    cellLabel("Batch No.", value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—", color: appColors.secondary)
+                    cellLabel(L10n.StockCountSheet.batchNo, value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—", color: appColors.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    cellLabel("Expiry Date", value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
+                    cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.vertical, 5)
@@ -139,7 +139,7 @@ struct ScannedDrugDetailsSlot: View {
                     .foregroundColor(appColors.secondary)
                     .contentTransition(.numericText())
                     .animation(.spring(duration: 0.25), value: newTotal)
-                Text("\(totalPills) pills")
+                Text(String(format: L10n.StockCountSheet.pillsWithCount, totalPills))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(appColors.text.opacity(0.4))
                     .contentTransition(.numericText())
@@ -184,7 +184,7 @@ struct ScannedDrugDetailsSlot: View {
     private var actionButtons: some View {
         EqualWidthHStackButtons(spacing: 16) {
             PillCountingButton(
-                iconName: nil, title: "CLEAR",
+                iconName: nil, title: L10n.StockCountSheet.clear,
                 textColor: appColors.primary, backgroundColor: .clear,
                 borderColor: appColors.primary,
                 font: .system(size: 14, weight: .bold),
@@ -192,7 +192,7 @@ struct ScannedDrugDetailsSlot: View {
                 action: onCancel
             )
             PillCountingButton(
-                iconName: nil, title: "ADD",
+                iconName: nil, title: L10n.StockCountSheet.add,
                 textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
                 font: .system(size: 14, weight: .bold),
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,

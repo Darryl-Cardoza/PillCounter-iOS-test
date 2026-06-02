@@ -63,7 +63,7 @@ struct StockCountEditDetailsSheet: View {
 
     private var dialogHeader: some View {
         HStack {
-            Text("Edit Details")
+            Text(L10n.StockCountSheet.editDetails)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(appColors.text)
             Spacer()
@@ -108,14 +108,14 @@ struct StockCountEditDetailsSheet: View {
 
     private var drugInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("SCANNED DRUG DETAILS")
+            sectionLabel(L10n.StockCountSheet.scannedDrugDetails)
 
             VStack(alignment: .leading, spacing: 10) {
-                infoRow(label: "Drug Name", value: txn.drugName, valueColor: appColors.secondary)
+                infoRow(label: L10n.StockCountSheet.drugName, value: txn.drugName, valueColor: appColors.secondary)
                 Divider()
                 HStack(alignment: .top, spacing: 16) {
-                    infoCell(label: "NDC Number", value: txn.ndc, valueColor: appColors.secondary)
-                    infoCell(label: "Bucket", value: (stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL").uppercased(), valueColor: appColors.secondary)
+                    infoCell(label: L10n.StockCountSheet.ndcNumber, value: txn.ndc, valueColor: appColors.secondary)
+                    infoCell(label: L10n.StockCountSheet.bucket, value: (stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL").uppercased(), valueColor: appColors.secondary)
                 }
             }
             .padding(16)
@@ -129,7 +129,7 @@ struct StockCountEditDetailsSheet: View {
     private var sealedBottlesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                sectionLabel("Sealed Bottles")
+                sectionLabel(L10n.StockCountSheet.sealedBottles)
                 Spacer()
                 Text("\(lotRows.reduce(0) { $0 + $1.sealedBottles })")
                     .font(.system(size: 14, weight: .bold))
@@ -148,9 +148,9 @@ struct StockCountEditDetailsSheet: View {
 
     private func lotColumnHeader() -> some View {
         HStack(spacing: 0) {
-            Text("Batch No.")
+            Text(L10n.StockCountSheet.batchNo)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text("Expiry Date")
+            Text(L10n.StockCountSheet.expiryDate)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("")
                 .frame(width: 130)
@@ -185,7 +185,7 @@ struct StockCountEditDetailsSheet: View {
     private var openPillsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                sectionLabel("Open Pills")
+                sectionLabel(L10n.StockCountSheet.openPills)
                 Spacer()
                 Text("\(lotRows.reduce(0) { $0 + $1.openPills })")
                     .font(.system(size: 14, weight: .bold))
@@ -267,7 +267,7 @@ struct StockCountEditDetailsSheet: View {
     private var dialogFooter: some View {
         HStack(spacing: 16) {
             PillCountingButton(
-                iconName: nil, title: "CANCEL",
+                iconName: nil, title: L10n.Common.cancel,
                 textColor: appColors.primary, backgroundColor: .clear,
                 borderColor: appColors.primary,
                 font: .system(size: 14, weight: .bold),
@@ -275,7 +275,7 @@ struct StockCountEditDetailsSheet: View {
                 action: onDismiss
             )
             PillCountingButton(
-                iconName: nil, title: "SAVE",
+                iconName: nil, title: L10n.Common.save,
                 textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
                 font: .system(size: 14, weight: .bold),
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,

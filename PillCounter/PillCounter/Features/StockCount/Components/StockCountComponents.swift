@@ -79,7 +79,7 @@ struct StockTransactionListView: View {
                             let sealedTotal = sealedDetails.reduce(Int32(0)) { $0 + $1.sealedQty }
                             
                             HStack {
-                                Text("Sealed Bottles")
+                                Text(L10n.StockCountSheet.sealedBottles)
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(appColors.text)
                                 Spacer()
@@ -103,7 +103,7 @@ struct StockTransactionListView: View {
                             let openTotal = openDetails.reduce(Int32(0)) { $0 + $1.openQty }
                             
                             HStack {
-                                Text("Opened Bottles")
+                                Text(L10n.StockCountSheet.openedBottles)
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(appColors.text)
                                 Spacer()
@@ -199,17 +199,17 @@ struct LotColumnHeader: View {
 
     var body: some View {
         HStack {
-            Text("Lot Number")
+            Text(L10n.StockCountSheet.lotNumber)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("Expiry Date")
+            Text(L10n.StockCountSheet.expiryDate)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .frame(width: 110, alignment: .leading)
 
-            Text("Pills")
+            Text(L10n.StockCountSheet.pills)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .frame(minWidth: 50, alignment: .trailing)
@@ -231,7 +231,7 @@ struct LotTotalRow: View {
                 .padding(.vertical, 5)
 
             HStack {
-                Text("Total")
+                Text(L10n.StockCountSheet.total)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)

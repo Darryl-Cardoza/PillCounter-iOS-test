@@ -32,7 +32,7 @@ struct BatchCountCard: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(appColors.secondary)
                         .monospacedDigit()
-                    Text("Pills")
+                    Text(L10n.StockCountSheet.pills)
                         .font(.system(size: 11))
                         .foregroundColor(appColors.text.opacity(0.4))
                 }
@@ -43,7 +43,7 @@ struct BatchCountCard: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(appColors.secondary)
                         .monospacedDigit()
-                    Text("Bottles")
+                    Text(L10n.StockCountSheet.bottles)
                         .font(.system(size: 11))
                         .foregroundColor(appColors.text.opacity(0.4))
                 }

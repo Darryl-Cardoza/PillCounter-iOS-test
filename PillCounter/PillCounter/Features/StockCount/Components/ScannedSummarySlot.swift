@@ -22,7 +22,7 @@ struct ScannedSummarySlot: View {
         return VStack(spacing: isIPhone ? 8  : 12) {
 
             // ── Header — mirrors ScannedDrugDetailsSlot header row ──
-            Text("SCANNED DRUG DETAILS")
+            Text(L10n.StockCountSheet.scannedDrugDetails)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text.opacity(0.4))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -34,7 +34,7 @@ struct ScannedSummarySlot: View {
                     .renderingMode(.template)
                     .foregroundColor(appColors.secondary)
 
-                Text("Scan a new Stock bottle")
+                Text(L10n.StockCountSheet.scanNewStockBottle)
                     .font(.system(size: 12, weight: .regular))
                     .foregroundColor(appColors.text)
             }
@@ -47,14 +47,14 @@ struct ScannedSummarySlot: View {
             
             // ── Summary footer ──
             VStack(spacing: 12) {
-                Text("SCANNED SUMMARY")
+                Text(L10n.StockCountSheet.scannedSummary)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(appColors.text.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(alignment: .bottom, spacing: 0) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Total NDCs")
+                        Text(L10n.StockCountSheet.totalNdcs)
                             .font(.system(size: 13))
                             .foregroundColor(appColors.text.opacity(0.6))
                         Text("\(totalNdc)")
@@ -63,7 +63,7 @@ struct ScannedSummarySlot: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Total Pills")
+                        Text(L10n.StockCountSheet.totalPills)
                             .font(.system(size: 13))
                             .foregroundColor(appColors.text.opacity(0.6))
                         Text("\(totalPill)")
@@ -75,7 +75,7 @@ struct ScannedSummarySlot: View {
                     Spacer()
 
                     PillCountingButton(
-                        iconName: nil, title: "END COUNT",
+                        iconName: nil, title: L10n.Stock.endCount,
                         textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
                         font: .system(size: 13, weight: .bold),
                         cornerRadius: 22, horizontalPadding: 18, verticalPadding: 13, iconSize: 0,

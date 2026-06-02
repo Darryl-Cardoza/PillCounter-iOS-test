@@ -57,7 +57,7 @@ struct UnifiedCameraView: View {
     // ── Stock count panel (always visible when scanType == .stockCount) ───────
     @State var showStockCountPanel: Bool
     @State private var stockSheetCurrentHeight: CGFloat = UIScreen.main.bounds.height * 0.48
-    @State private var stockSheetCurrentWidth: CGFloat = UIScreen.main.bounds.width * 0.60
+    @State private var stockSheetCurrentWidth: CGFloat = UIScreen.main.bounds.width * 0.45
     @State private var stockSheetIsExpanded: Bool = false
 
     init(currentScanType: ScanType) {
@@ -154,7 +154,7 @@ struct UnifiedCameraView: View {
     }
 
     var stockCountSheetExpandedWidth: CGFloat {
-        UIScreen.main.bounds.width * 0.90
+        UIScreen.main.bounds.width
     }
 
     func snapStockSheet(portrait height: CGFloat) {
@@ -178,7 +178,7 @@ struct UnifiedCameraView: View {
     var stockCountSheetWidth: CGFloat {
         UIDevice.current.userInterfaceIdiom == .pad
             ? UIScreen.main.bounds.width * 0.40
-            : UIScreen.main.bounds.width * 0.60
+            : UIScreen.main.bounds.width * 0.50
     }
 
     private var rootWithPillCountSheet: some View {

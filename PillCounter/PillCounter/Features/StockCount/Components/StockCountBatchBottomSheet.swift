@@ -55,9 +55,13 @@ struct StockCountBatchBottomSheet: View {
     }
 
     private var statusBarHeight: CGFloat {
-        (UIApplication.shared.connectedScenes
+        safeAreaInsets.top
+    }
+
+    private var safeAreaInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first?.safeAreaInsets.top) ?? 0
+            .first?.windows.first?.safeAreaInsets ?? .zero
     }
 
     var body: some View {
@@ -70,8 +74,9 @@ struct StockCountBatchBottomSheet: View {
                     iPadPortraitLayout
                         .frame(width: geo.size.width, height: geo.size.height)
                 } else if isLandscape {
+                    // iPhone landscape: content has its own fixed full width so it
+                    // doesn't compress — the BottomSheet frame + clipped() reveals it.
                     iPhoneLandscapeLayout
-                        .frame(width: geo.size.width, height: geo.size.height)
                 } else {
                     // iPhone portrait: content has its own fixed full height so it
                     // doesn't compress — the BottomSheet frame + clipped() reveals it.
@@ -102,7 +107,7 @@ struct StockCountBatchBottomSheet: View {
 
             // ── Header ──────────────────────────────────────────
             HStack(spacing: 8) {
-                Text("Batch Stock Count")
+                Text(L10n.StockCountSheet.batchStockCount)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(appColors.text)
                     .lineLimit(1)
@@ -159,7 +164,7 @@ struct StockCountBatchBottomSheet: View {
         return VStack(spacing: 0) {
             // ── Header (drag target) ────────────────────────────
             HStack(spacing: 8) {
-                Text("Batch Stock Count")
+                Text(L10n.StockCountSheet.batchStockCount)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(appColors.text)
                     .lineLimit(1)
@@ -201,21 +206,26 @@ struct StockCountBatchBottomSheet: View {
     // Sheet slides in from the right; drag left expands, drag right collapses.
     // Full content rendered in a HStack; the BottomSheet frame clips from the right edge.
 
+    private var iPhoneLandscapeDragGesture: some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .global)
+            .onChanged { v in onLandscapeDragChanged(v.translation.width) }
+            .onEnded   { _ in onLandscapeDragEnded() }
+    }
+
     private var iPhoneLandscapeLayout: some View {
-        let fullWidth = UIScreen.main.bounds.width * 0.90
-        let detailColWidth = UIScreen.main.bounds.width * 0.55
+        let screenW        = UIScreen.main.bounds.width
+        let screenH        = UIScreen.main.bounds.height
+        // Full expanded width — full screen width (overlay now ignores safe area)
+        let fullWidth      = screenW
+        // Each column gets exactly half — equal left/right split
+        let detailColWidth = fullWidth / 2
+        let listColWidth   = fullWidth / 2
 
         return HStack(spacing: 0) {
-            // ── List — left side, revealed as frame widens ──────
-            StockCountBatchPanel(hideHeader: false, onScanPills: onScanPills) {
-                EmptyView()
-            }
-            .frame(maxHeight: .infinity)
-
-            // ── Detail column — always visible at the right edge ─
+            // ── Detail column — LEFT, fixed size, always fully visible ───────
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    Text("Batch Stock Count")
+                    Text(L10n.StockCountSheet.batchStockCount)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(appColors.text)
                         .lineLimit(1)
@@ -226,11 +236,7 @@ struct StockCountBatchBottomSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 10)
                 .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 6, coordinateSpace: .global)
-                        .onChanged { v in onLandscapeDragChanged(v.translation.width) }
-                        .onEnded   { _ in onLandscapeDragEnded() }
-                )
+                .gesture(iPhoneLandscapeDragGesture)
 
                 Group {
                     detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
@@ -240,14 +246,23 @@ struct StockCountBatchBottomSheet: View {
                 .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 2)
                 .padding(.horizontal, 12)
                 .padding(.top, 4)
+                .gesture(iPhoneLandscapeDragGesture)
 
                 Spacer(minLength: 0)
             }
-            .frame(width: detailColWidth, alignment: .top)
+            // Fixed dimensions — never compresses regardless of the sheet frame width
+            .frame(width: detailColWidth, height: screenH)
             .background(appColors.primaryBackground)
+
+            // ── List — RIGHT, fixed size, clipped until widthBinding grows ──
+            StockCountBatchPanel(hideHeader: true, showScanPillsButton: false, onScanPills: onScanPills) {
+                EmptyView()
+            }
+            .frame(width: listColWidth, height: screenH)
         }
-        // Fixed full width — BottomSheet widthBinding clips from the left edge
-        .frame(width: fullWidth, height: UIScreen.main.bounds.height, alignment: .trailing)
+        // Total content is fullWidth wide, anchored to leading edge.
+        // The BottomSheet frame (widthBinding) clips from the right — list hidden until expanded.
+        .frame(width: fullWidth, height: screenH, alignment: .leading)
         .background(appColors.primaryBackground)
         .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .bottomLeft]))
         .shadow(color: Color.black.opacity(0.14), radius: 20, x: -6, y: 0)
@@ -284,7 +299,7 @@ struct StockCountBatchBottomSheet: View {
 
     private var scanPillsButtonView: some View {
         PillCountingButton(
-            iconName: nil, title: "SCAN PILLS",
+            iconName: nil, title: L10n.StockCountSheet.scanPills,
             textColor: appColors.primary, backgroundColor: .clear,
             borderColor: appColors.primary,
             font: .system(size: 11, weight: .bold),

@@ -29,7 +29,7 @@ struct StockCountBatchPanel<BottomContent: View>: View {
 
             if !hideHeader {
                 HStack(spacing: 8) {
-                    Text("Batch Stock Count")
+                    Text(L10n.StockCountSheet.batchStockCount)
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(appColors.text)
                         .lineLimit(1)
@@ -79,7 +79,7 @@ struct StockCountBatchPanel<BottomContent: View>: View {
 
     private var scanPillsButton: some View {
         PillCountingButton(
-            iconName: nil, title: "SCAN PILLS",
+            iconName: nil, title: L10n.StockCountSheet.scanPills,
             textColor: appColors.primary, backgroundColor: .clear,
             borderColor: appColors.primary,
             font: .system(size: 11, weight: .bold),
@@ -91,7 +91,7 @@ struct StockCountBatchPanel<BottomContent: View>: View {
 
     private var recentLabel: String {
         let n = stockCountViewModel.groupedTransactions.count
-        return n > 0 ? "RECENT BATCH COUNT (\(n))" : "RECENT BATCH COUNT"
+        return n > 0 ? L10n.StockCountSheet.recentBatchCountWithN(n) : L10n.StockCountSheet.recentBatchCount
     }
 
     private var emptyState: some View {
@@ -99,7 +99,7 @@ struct StockCountBatchPanel<BottomContent: View>: View {
             Image(systemName: "tray")
                 .font(.system(size: 28))
                 .foregroundColor(appColors.text.opacity(0.2))
-            Text("No items added yet")
+            Text(L10n.StockCountSheet.noItemsAddedYet)
                 .font(.system(size: 13))
                 .foregroundColor(appColors.text.opacity(0.3))
         }

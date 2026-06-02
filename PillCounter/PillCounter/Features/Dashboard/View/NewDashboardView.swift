@@ -377,8 +377,8 @@ struct NewDashboardView: View {
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
                     .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: contentHeight)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: contentHeight)
                 }
                 .frame(height: contentHeight)
             }
@@ -535,8 +535,8 @@ struct NewDashboardView: View {
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
                     .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
-                    .padding(.top, -2)
-                    .frame(width: rightWidth, height: contentHeight + 2)
+                        .padding(.top, -2)
+                        .frame(width: rightWidth, height: contentHeight + 2)
                 }
                 .frame(height: contentHeight)
             }
@@ -565,7 +565,7 @@ struct NewDashboardView: View {
                             .resizable()
                             .scaledToFit()
                             .foregroundColor(appColors.secondary)
-                            .padding(circleSize * 0.22)
+                            .padding(circleSize * 0.3)
                     }
                     .frame(width: circleSize, height: circleSize)
 
@@ -574,8 +574,8 @@ struct NewDashboardView: View {
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundColor(appColors.secondary)
                         Text(subtitle)
-                            .font(.system(size: 13))
-                            .foregroundColor(appColors.text.opacity(0.6))
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(appColors.text)
                     }
                     Spacer(minLength: 0)
                 }
@@ -723,7 +723,8 @@ struct NewDashboardView: View {
                         .foregroundColor(appColors.secondary)
                     Text(subtitle)
                         .font(.system(size: isIpad ? 16 : 14))
-                        .foregroundColor(appColors.text.opacity(0.6))
+                        .fontWeight(.semibold)
+                        .foregroundColor(appColors.text)
                 }
 
                 Spacer()
@@ -779,18 +780,18 @@ struct NewDashboardView: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 18, height: 18)
+                        .frame(width: 20, height: 20)
                         .foregroundColor(card.iconColor)
                 }
 
                 Text("\(card.count)")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundColor(appColors.primary)
                     .padding(.top, 4)
 
                 Text(card.label)
-                    .font(.system(size: 12))
-                    .foregroundColor(appColors.text.opacity(0.6))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(appColors.text)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
                     .frame(height: 32, alignment: .topLeading)
@@ -869,23 +870,18 @@ struct NewDashboardView: View {
     private func queueTabHeader(title: String, index: Int) -> some View {
         let isSelected = selectedQueueTab == index
         return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedQueueTab = index
-            }
+            selectedQueueTab = index
         } label: {
             VStack(spacing: 6) {
                 Text(title)
                     .font(
                         .system(
-                            size: isIpad ? 14 : 13,
+                            size: isIpad ? 15 : 13,
                             weight: isSelected ? .semibold : .regular
                         )
                     )
                     .textCase(.uppercase)
-                    .foregroundColor(
-                        isSelected
-                            ? appColors.secondary : appColors.text.opacity(0.45)
-                    )
+                    .foregroundColor(appColors.text)
                     .tracking(0.8)
 
                 Rectangle()

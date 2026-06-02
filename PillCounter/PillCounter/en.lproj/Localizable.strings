@@ -46,7 +46,7 @@
 "dashboard.completed" = "Completed";
 "dashboard.pending" = "Pending";
 "dashboard.fixedCount.title" = "Dispense";
-"dashboard.fixedCount.subtitle" = "Tap to Scan Rx Label";
+"dashboard.fixedCount.subtitle" = "Scan Rx Label";
 "dashboard.regularCount.title" = "Stock Count";
 "dashboard.regularCount.subtitle" = "Start Inventory count";
 "dashboard.quickActions" = "Quick Actions";

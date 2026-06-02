@@ -98,6 +98,9 @@ struct UnifiedCameraView: View {
     /// hasn't moved the camera, but still allows a retry after the cooldown.
     @State private var rejectedBarcodes: [String: Date] = [:]
     let barcodeCooldownSeconds: TimeInterval = 4
+    
+    // ── Bluetooth HID scanner ─────────────────────────────────────────────────
+    @State private var btScannerFocusTrigger: Int = 0
 
     @StateObject private var locationService = LocationService.shared
     @Environment(\.scenePhase) private var scenePhase
@@ -268,8 +271,32 @@ struct UnifiedCameraView: View {
             }
             .customPopup(isPresented: $stockCountViewModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false) { ndcMismatchPopup }
     }
-
+    // Split into two properties so the Swift type-checker doesn't time out
+    // on the long onChange chain.
     private var rootContent: some View {
+        cameraLayoutWithScanObservers
+            .withBtFocusTriggers(
+                showPillCountPanel: showPillCountPanel,
+                pillScanViewModel: pillScanViewModel,
+                stockCountViewModel: stockCountViewModel,
+                showManualEntryPopup: showManualEntryPopup,
+                btScannerFocusTrigger: $btScannerFocusTrigger
+            )
+            .overlay(alignment: .topLeading) {
+                if !showPillCountPanel {
+                    BtScannerInputBar(
+                        focusTrigger: $btScannerFocusTrigger,
+                        onSubmit: { barcode in
+                            guard !barcode.isEmpty else { return }
+                            handleScannedCode(barcode)
+                        }
+                    )
+                    .frame(width: 1, height: 1)
+                }
+            }
+    }
+    
+    private var cameraLayoutWithScanObservers: some View {
         UnifiedCameraLayout(
             cameraService: cameraService,
             showPillCountPanel: showPillCountPanel,
@@ -283,6 +310,7 @@ struct UnifiedCameraView: View {
                 cameraService.resetInactivityTimer()
             }
         )
+        
         .onAppear(perform: onAppear)
         .onDisappear(perform: onDisappear)
         .onChange(of: scenePhase) { _, phase in
@@ -541,7 +569,6 @@ extension UnifiedCameraView {
             
 
             if router.selectedPillScanningType == .FIXED
-//                && pillScanViewModel.selectedTransaction?.target_count == nil
             {
                 switch scanType {
                 case .rx_label:
@@ -553,6 +580,7 @@ extension UnifiedCameraView {
                         restartFlow()
                     }
                 case .barcode:
+                    print("Scan step Barcode")
                     guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
                 case .stockCount:
                     await handleStockCountScan(newValue)
@@ -1052,5 +1080,43 @@ extension UnifiedCameraView {
             pillScanViewModel.markNdcVerified()
             pillScanViewModel.showNdcEquivalencePopup = false
         }
+    }
+}
+
+
+
+// MARK: - View modifier helpers (type-checker relief)
+
+private extension View {
+
+    /// Wires the six BT focus-trigger onChange modifiers as a separate
+    /// sub-expression so the Swift type-checker doesn't time out on the
+    /// combined rootContent chain.
+    func withBtFocusTriggers(
+        showPillCountPanel: Bool,
+        pillScanViewModel: PillScanViewModel,
+        stockCountViewModel: StockCountViewModel,
+        showManualEntryPopup: Bool,
+        btScannerFocusTrigger: Binding<Int>
+    ) -> some View {
+        self
+            .onChange(of: pillScanViewModel.showRxFlowPopup) { _, showing in
+                if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
+            }
+            .onChange(of: pillScanViewModel.showNdcEquivalencePopup) { _, showing in
+                if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
+            }
+            .onChange(of: stockCountViewModel.barcodeNotFound) { _, showing in
+                if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
+            }
+            .onChange(of: stockCountViewModel.showStockCountScannedDetails) { _, showing in
+                if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
+            }
+            .onChange(of: stockCountViewModel.showScannedNdcDoesNotMatch) { _, showing in
+                if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
+            }
+            .onChange(of: showManualEntryPopup) { _, showing in
+                if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
+            }
     }
 }

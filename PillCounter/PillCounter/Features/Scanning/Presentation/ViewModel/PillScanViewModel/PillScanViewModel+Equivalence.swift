@@ -32,17 +32,18 @@ extension PillScanViewModel {
             isNdcEquivalent = false
             updateScannedDrugData(drugName: localName, ndcNo: localNdc)
             if isSame {
+                print("barcode ndc same")
                 isCheckingNdc = false
                 showScannedDrugInfoPopoup = true
             } else {
+                print("Barcode not same")
                 // NDCs differ locally — fall through to API for equivalence check.
                 isCheckingNdc = false
                 callControlledDrugInfoAPI(targetNdc: targetNdc, scannedNdc: scannedNdc)
             }
-            return
+        }else{
+            callControlledDrugInfoAPI(targetNdc: targetNdc, scannedNdc: scannedNdc)
         }
-
-        callControlledDrugInfoAPI(targetNdc: targetNdc, scannedNdc: scannedNdc)
     }
 
     private func callControlledDrugInfoAPI(targetNdc: String, scannedNdc: String) {
@@ -81,6 +82,7 @@ extension PillScanViewModel {
                 }
 
             } catch {
+                print("API Faield with error: \(error)")
                 isNdcEquivalent = false
                 showToastMessage(text: L10n.BarcodeScan.ndcDoesNotMatch)
                 ndcMismatchRestartFlow = true

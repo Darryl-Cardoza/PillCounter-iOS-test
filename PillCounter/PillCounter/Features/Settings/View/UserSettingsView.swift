@@ -417,6 +417,7 @@ struct ToggleRowView: View {
         HStack {
             Text(title)
                 .fontWeight(Font.Weight.regular)
+                .foregroundColor(AppColors.shared.text)
             Spacer()
             PillCountingToggleButton(
                 isOn: Binding(

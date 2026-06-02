@@ -294,7 +294,7 @@ struct UnifiedCameraView: View {
                         focusTrigger: $btScannerFocusTrigger,
                         onSubmit: { barcode in
                             guard !barcode.isEmpty else { return }
-                            handleScannedCode(barcode)
+                            handleScannedCode(barcode, ignoreCooldown: true)
                         }
                     )
                     .frame(width: 1, height: 1)
@@ -307,6 +307,8 @@ struct UnifiedCameraView: View {
             cameraService: cameraService,
             showPillCountPanel: showPillCountPanel,
             pillCountSheetHeight: pillCountSheetHeight,
+            showStockCountPanel: showStockCountPanel,
+            stockCountSheetHeight: stockSheetCurrentHeight,
             isLandscape: isLandscape,
             controlledStepInstruction: controlledStepInstruction,
             showPillDetectionUI: currentScanType != .stockCount || isOpenPillScanMode,
@@ -548,7 +550,7 @@ extension UnifiedCameraView {
         rejectedBarcodes[barcode] = Date().addingTimeInterval(barcodeCooldownSeconds)
     }
 
-    func handleScannedCode(_ newValue: String) {
+    func handleScannedCode(_ newValue: String, ignoreCooldown: Bool = false) {
         guard !newValue.isEmpty,
 //              pillScanViewModel.isDrugFound == nil,
               !pillScanViewModel.isCheckingNdc
@@ -557,13 +559,19 @@ extension UnifiedCameraView {
             return
         }
 
-        // If this barcode was recently rejected, silently skip it until the cooldown expires.
-        if let retryAfter = rejectedBarcodes[newValue], Date() < retryAfter {
+        // BT scanner submits intentionally — skip cooldown. Camera scans respect it
+        // to avoid continuous re-triggers while the barcode stays in frame.
+        if !ignoreCooldown, let retryAfter = rejectedBarcodes[newValue], Date() < retryAfter {
             cameraService.resetBarcodeScanState()
             cameraService.enableBarcodeScanning()
             return
         }
         rejectedBarcodes.removeValue(forKey: newValue)
+
+        FeedbackManager.shared.triggerDetectionFeedback(
+            isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
+            isSoundEnabled: AppStorageManager.shared.isSoundEnabled
+        )
 
         cameraService.disableBarcodeScanning()
         if currentScanType != .stockCount { cameraService.pauseCounting() }
@@ -572,7 +580,6 @@ extension UnifiedCameraView {
         scannedRawValue = newValue
 
         Task { @MainActor in
-            
 
             if router.selectedPillScanningType == .FIXED
             {
@@ -586,15 +593,14 @@ extension UnifiedCameraView {
                         restartFlow()
                     }
                 case .barcode:
-                    print("Scan step Barcode")
                     guard pillScanViewModel.checkIsNdcMatch(rawValueFromBarcodeOrQr: newValue) else { return }
                 case .stockCount:
-                    await handleStockCountScan(newValue)
+                    await handleStockCountScan(newValue, ignoreCooldown: ignoreCooldown)
                 case .resumeCount:
                     break
                 }
             } else {
-                await handleStockCountScan(newValue)
+                await handleStockCountScan(newValue, ignoreCooldown: ignoreCooldown)
             }
         }
     }
@@ -828,15 +834,17 @@ extension UnifiedCameraView {
 
     /// Called by Add/Clear buttons — dismisses the details panel and refreshes the list.
     func dismissScannedDetails() {
+        stockCountViewModel.flushPendingBottleCount()
         stockCountViewModel.suppressListReload = false
         stockCountViewModel.reset()
         stockCountViewModel.reloadAllState()
+        btScannerFocusTrigger += 1
     }
 
     /// Handles a new barcode in stock-count flow:
     /// - Same barcode as current pending drug → increment bottle count, apply 5s cooldown, no UI flicker
     /// - Different barcode → auto-commit pending drug first, then show new drug info
-    func handleStockCountScan(_ rawValue: String) async {
+    func handleStockCountScan(_ rawValue: String, ignoreCooldown: Bool = false) async {
         // In open pill mode the barcode is used to identify which NDC is being counted.
         // Create/update the transaction with .opened status, then start pill counting.
         if isOpenPillScanMode {
@@ -862,11 +870,12 @@ extension UnifiedCameraView {
         }()
 
         if isSameNdc {
-            // Same barcode held in front — increment sealed bottle count, commit immediately,
-            // and apply a cooldown so it doesn't keep firing while the label stays in frame.
+            // Same barcode held in front — increment sealed bottle count, commit immediately.
+            // Camera: apply cooldown to prevent re-trigger while label stays in frame.
+            // BT scanner: no cooldown — user is intentionally scanning again.
             stockCountViewModel.pendingBottleCount += 1
             await performStockCountAdd()
-            rejectedBarcodes[rawValue] = Date().addingTimeInterval(3)
+            if !ignoreCooldown { rejectedBarcodes[rawValue] = Date().addingTimeInterval(3) }
         } else {
             // Different NDC — commit any pending drug first, then fetch and auto-add the new one.
             await autoCommitPendingStockScan()
@@ -875,14 +884,15 @@ extension UnifiedCameraView {
             if stockCountViewModel.scannedDrugData != nil {
                 await performStockCountAdd()
             }
-            // Apply a short cooldown on the new barcode too so the just-scanned label
-            // doesn't immediately re-trigger before the user moves the camera away.
-            rejectedBarcodes[rawValue] = Date().addingTimeInterval(3)
+            // Camera: cooldown so just-scanned label doesn't re-trigger before user moves away.
+            // BT scanner: no cooldown.
+            if !ignoreCooldown { rejectedBarcodes[rawValue] = Date().addingTimeInterval(3) }
         }
 
         // Always re-enable scanning so any barcode (including a new one) can be read.
         cameraService.resetBarcodeScanState()
         cameraService.enableBarcodeScanning()
+        btScannerFocusTrigger += 1
     }
 
     /// In open pill mode: scan the barcode to confirm/find the drug, then increment open_bottle_qty

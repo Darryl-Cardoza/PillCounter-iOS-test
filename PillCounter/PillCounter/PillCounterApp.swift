@@ -133,7 +133,7 @@ struct PillCounterApp: App {
                 if isCompromised {
                     securityState.isSecure = false
                 }
-//                
+
                 Hl7ServiceController.shared.bind(
                     pillScanViewModel: pillScanViewModel,
                     userViewModel: userViewModel

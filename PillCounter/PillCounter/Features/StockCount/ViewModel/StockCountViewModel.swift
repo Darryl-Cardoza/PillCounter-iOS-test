@@ -184,6 +184,15 @@ class StockCountViewModel: ObservableObject {
         }
     }
 
+    /// Cancels any pending debounce and writes the current bottle count immediately.
+    /// Call before Add/Clear so the latest stepper value is always committed.
+    func flushPendingBottleCount() {
+        guard let txnId = committedTxnId else { return }
+        stepperDebounceTask?.cancel()
+        stepperDebounceTask = nil
+        transactionDAO.setAbsoluteCounts(txnId: txnId, bottleQty: Int32(pendingBottleCount))
+    }
+
     func updateCounts(txnId: Int64?, bottleQty: Int? = nil, looseQty: Int? = nil, openBottleQty: Int? = nil) {
         guard let txnId else { return }
         transactionDAO.updateCounts(
@@ -337,6 +346,7 @@ class StockCountViewModel: ObservableObject {
         openPillScanRequested = false
         openPillScanNdc = ""
         committedTxnId = nil
+        selectedGroupedTransaction = nil
         stepperDebounceTask?.cancel()
         stepperDebounceTask = nil
         suppressListReload = false
@@ -376,7 +386,8 @@ class StockCountViewModel: ObservableObject {
             expiry:    firstLot?.expiry ?? ""
         )
         existingNdcBottleCount = Int(txn.sealedBottleQty)
-        pendingBottleCount = 1
+        pendingBottleCount = Int(txn.sealedBottleQty)
+        committedTxnId = txn.txnId
         selectedGroupedTransaction = txn
     }
 

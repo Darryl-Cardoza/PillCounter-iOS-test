@@ -52,6 +52,7 @@ class PillScanViewModel: ObservableObject {
     //Toast
     @Published  var showToast: Bool = false
     @Published  var toastMessage: String = ""
+    @Published  var toastAutoClose: Bool = true
 
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
@@ -394,10 +395,12 @@ class PillScanViewModel: ObservableObject {
     typealias HL7SimpleCallback = (Bool) -> Void
     
     //ShowToastMessage
-    func showToastMessage(text: String) {
+    func showToastMessage(text: String, autoClose: Bool = true) {
         toastMessage = text
+        toastAutoClose = autoClose
         showToast = true
 
+        guard autoClose else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
             self.showToast = false
         }

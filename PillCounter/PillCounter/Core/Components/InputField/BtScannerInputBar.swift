@@ -26,7 +26,8 @@ struct BtScannerInputBar: UIViewRepresentable {
     func makeUIView(context: Context) -> UITextField {
         let tf = UITextField()
         tf.inputView = UIView()
-        let zeroAccessory = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
+        let zeroAccessory = UIView(frame: .zero)
+        zeroAccessory.autoresizingMask = []
         tf.inputAccessoryView = zeroAccessory
         tf.autocorrectionType = .no
         tf.autocapitalizationType = .none
@@ -36,6 +37,10 @@ struct BtScannerInputBar: UIViewRepresentable {
         tf.returnKeyType = .done
         tf.delegate = context.coordinator
         context.coordinator.uiTextField = tf
+
+        // iPad: suppress the shortcut bar that shows the mic/dictation button
+        tf.inputAssistantItem.leadingBarButtonGroups = []
+        tf.inputAssistantItem.trailingBarButtonGroups = []
 
         tf.alpha = 0
         tf.backgroundColor = .clear

@@ -35,10 +35,13 @@ final class HL7TLSServer {
         self.onMessage = onMessage
         self.onAckSent = onAckSent
 
+        print("🟡 [HL7][SERVER] start() called — serviceName='\(serviceName)' serviceType='\(serviceType)' port=\(port.rawValue)")
+
         let tlsOptions = NWProtocolTLS.Options()
         let secIdentity = try TLSIdentityManager.loadOrCreateIdentity()
 
         guard let osIdentity = sec_identity_create(secIdentity) else {
+            print("❌ [HL7][SERVER] sec_identity_create returned nil")
             throw NSError(domain: "TLS", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "sec_identity_create returned nil"])
         }
@@ -49,6 +52,7 @@ final class HL7TLSServer {
         let parameters = NWParameters(tls: tlsOptions)
         parameters.allowLocalEndpointReuse = true
 
+        print("🟡 [HL7][SERVER] Creating NWListener on port \(port.rawValue)")
         let listener = try NWListener(using: parameters, on: port)
 
         listener.service = NWListener.Service(
@@ -56,17 +60,23 @@ final class HL7TLSServer {
             type: serviceType,
             domain: "local"
         )
+        print("🟡 [HL7][SERVER] Bonjour service set — name='\(serviceName)' type='\(serviceType)'")
 
         listener.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
+                print("✅ [HL7][SERVER] NWListener READY — port=\(self?.port.rawValue ?? 0) bonjour='\(serviceName)'")
                 Log("HL7 TLS Server ready on port \(self?.port.rawValue ?? 0)")
             case .failed(let error):
+                print("❌ [HL7][SERVER] NWListener FAILED — \(error) (posix=\(error.localizedDescription))")
                 Log("HL7 TLS Server failed: \(error.localizedDescription)")
                 // Attempt recovery — recreate listener after a short delay
                 self?.scheduleRestart(serviceName: serviceName, serviceType: serviceType)
             case .cancelled:
+                print("🔴 [HL7][SERVER] NWListener CANCELLED")
                 Log("HL7 TLS Server stopped")
+            case .waiting(let error):
+                print("⏳ [HL7][SERVER] NWListener WAITING — \(error)")
             default:
                 break
             }
@@ -86,12 +96,11 @@ final class HL7TLSServer {
     // MARK: - Stop
 
     func stop() {
-        queue.async { [weak self] in
-            guard let self else { return }
-            self.activeConnections.values.forEach { $0.cancel() }
-            self.activeConnections.removeAll()
-            self.listener?.cancel()
-            self.listener = nil
+        queue.sync {
+            activeConnections.values.forEach { $0.cancel() }
+            activeConnections.removeAll()
+            listener?.cancel()
+            listener = nil
             Log("HL7 TLS Server stopped")
         }
     }

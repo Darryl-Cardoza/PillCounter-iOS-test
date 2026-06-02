@@ -39,14 +39,14 @@ struct ScannedSummarySlot: View {
                     .foregroundColor(appColors.text)
             }
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: isIPhone ? 120 : .infinity)
+            .frame(maxHeight: isIPhone ? 150 : .infinity)
 
             if isIPhone {
                 Divider()
             }
             
             // ── Summary footer ──
-            VStack(spacing: 12) {
+            VStack(spacing: isIPhone ? 24 : 12) {
                 Text(L10n.StockCountSheet.scannedSummary)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(appColors.text.opacity(0.4))
@@ -84,7 +84,7 @@ struct ScannedSummarySlot: View {
                     .fixedSize()
                 }
             }
-            .padding(.bottom,isIpadPortrait ? 14 : 0)
+            .padding(.bottom, isIPhone ? 0 : 14)
         }
         .padding(.horizontal, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

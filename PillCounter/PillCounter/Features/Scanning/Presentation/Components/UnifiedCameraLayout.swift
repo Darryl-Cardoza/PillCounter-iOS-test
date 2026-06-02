@@ -16,6 +16,8 @@ struct UnifiedCameraLayout: View {
     let cameraService: CameraService
     let showPillCountPanel: Bool
     let pillCountSheetHeight: CGFloat
+    let showStockCountPanel: Bool
+    let stockCountSheetHeight: CGFloat
     let isLandscape: Bool
     let controlledStepInstruction: String
     let showPillDetectionUI: Bool
@@ -44,7 +46,7 @@ struct UnifiedCameraLayout: View {
 
                 // ── Pill count ring (barcode-scan phase only) ─────────────────
                 if !showPillCountPanel {
-                    PillCountRingView(count: cameraService.stableCount)
+                    PillCountRingView(count: cameraService.stableCount, isLandscape: isLandscape)
                 }
             }
 
@@ -150,25 +152,72 @@ struct UnifiedCameraLayout: View {
         }
     }
 
+    // MARK: - Toast
+
+//    // ── OLD bottom toast (kept for reference) ────────────────────────────────
+//    private var toastView: some View {
+//        VStack {
+//            Spacer()
+//            HStack(spacing: 10) {
+//                Image("app_icon")
+//                    .resizable()
+//                    .scaledToFit()
+//                    .frame(width: 24, height: 24)
+//                Text(pillScanViewModel.toastMessage)
+//                    .font(.subheadline)
+//                    .foregroundColor(.white)
+//            }
+//            .padding(.horizontal, 14)
+//            .padding(.vertical, 10)
+//            .background(Color.black.opacity(0.8))
+//            .cornerRadius(10)
+//            .padding(.bottom, isLandscape ? 10 : showPillCountPanel ? pillCountSheetHeight + 16 : showStockCountPanel ? stockCountSheetHeight + 16 : 32)
+//            .transition(.move(edge: .bottom).combined(with: .opacity))
+//        }
+//        .animation(.easeInOut, value: pillScanViewModel.showToast)
+//    }
+
     private var toastView: some View {
         VStack {
-            Spacer()
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Image("app_icon")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 24, height: 24)
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+
                 Text(pillScanViewModel.toastMessage)
-                    .font(.subheadline)
-                    .foregroundColor(.white)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(appColors.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(2)
+
+                if !pillScanViewModel.toastAutoClose {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            pillScanViewModel.showToast = false
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(appColors.text.opacity(0.6))
+                            .padding(6)
+                            .background(appColors.text.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.black.opacity(0.8))
-            .cornerRadius(10)
-            .padding(.bottom, isLandscape ? 10 : showPillCountPanel ? pillCountSheetHeight + 16 : 32)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(appColors.secondaryBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 4)
+            .padding(.horizontal, 24)
+            .padding(.top, isLandscape ? 16 : 60)
+            .transition(.move(edge: .top).combined(with: .opacity))
+
+            Spacer()
         }
-        .animation(.easeInOut, value: pillScanViewModel.showToast)
+        .animation(.easeInOut(duration: 0.3), value: pillScanViewModel.showToast)
     }
 }

@@ -6,7 +6,6 @@
 //
 
 import AVFoundation
-import AudioToolbox
 import SwiftUI
 
 final class CameraService: NSObject, ObservableObject {
@@ -172,11 +171,11 @@ final class CameraService: NSObject, ObservableObject {
         // Clear published values synchronously — caller is always on main thread.
         // Doing this async allowed scannedCode onChange to re-fire with the stale
         // value before the clear landed, causing repeated API calls on NDC mismatch.
+        // hasScanned is intentionally NOT reset here — only enableBarcodeScanning()
+        // re-arms it, preventing the camera delegate from re-firing haptic/sound
+        // while the barcode is still in frame between reset and the next enable call.
         scannedCode = ""
         scannedCodeType = ""
-        sessionQueue.async { [weak self] in
-            self?.hasScanned = false
-        }
     }
 
     // MARK: - ZOOM CONTROL
@@ -628,8 +627,6 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         else { return }
 
         hasScanned = true
-        AudioServicesPlaySystemSound(1057)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
         scannedCode = value
         scannedCodeType = object.type.rawValue
     }

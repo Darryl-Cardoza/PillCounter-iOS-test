@@ -126,8 +126,11 @@ final class Hl7ServiceManager {
     // MARK: - Network Monitoring
 
     private func startMonitoringNetwork() {
+        print("🟡 [HL7][NETWORK] startMonitoringNetwork() called — serviceName='\(serviceName)'")
         monitor.pathUpdateHandler = { [weak self] path in
             guard let self else { return }
+
+            print("🌐 [HL7][NETWORK] path update — status=\(path.status) wifi=\(path.usesInterfaceType(.wifi)) cellular=\(path.usesInterfaceType(.cellular))")
 
             if path.status == .satisfied && path.usesInterfaceType(.wifi) {
                 // Detect interface change (AP switch, e.g. home → office WiFi)

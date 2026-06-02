@@ -53,8 +53,9 @@ struct ScannedDrugDetailsSlot: View {
     // MARK: - Drug Card
 
     private var drugCard: some View {
-        let drug       = stockCountViewModel.scannedDrugData
-        let bucket     = stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL"
+        let drug  = stockCountViewModel.scannedDrugData
+        let bucket = stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL"
+        let batchId = String(stockCountViewModel.currentBatch?.batch_id ?? 0)
         let packageQty = Int(drug?.quantity ?? 0)
         // After auto-add, pendingBottleCount reflects the committed bottle count.
         let newTotal   = stockCountViewModel.pendingBottleCount
@@ -74,7 +75,7 @@ struct ScannedDrugDetailsSlot: View {
                     Divider()
 
                     HStack(alignment: .top, spacing: 12) {
-                        cellLabel(L10n.StockCountSheet.batchNo, value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—", color: appColors.secondary)
+                        cellLabel(L10n.StockCountSheet.batchNo, value: batchId, color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
@@ -96,7 +97,7 @@ struct ScannedDrugDetailsSlot: View {
                     cellLabel(L10n.StockCountSheet.ndcNumber, value: drug?.ndc ?? "—", color: appColors.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    cellLabel(L10n.StockCountSheet.batchNo, value: drug?.lotNumber.isEmpty == false ? drug!.lotNumber : "—", color: appColors.secondary)
+                    cellLabel(L10n.StockCountSheet.batchNo, value: batchId, color: appColors.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)

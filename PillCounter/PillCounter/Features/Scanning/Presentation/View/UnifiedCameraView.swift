@@ -235,7 +235,13 @@ struct UnifiedCameraView: View {
                 .environmentObject(appColors)
             }
             .customPopup(isPresented: $pillScanViewModel.showNdcEquivalencePopup, dismissOnBackgroundTap: false) { ndcEquivalencePopup }
-            .customPopup(isPresented: $stockCountViewModel.barcodeNotFound) { barcodeNotFoundPopup }
+            .onChange(of: stockCountViewModel.barcodeNotFound) { _, notFound in
+                if notFound {
+                    stockCountViewModel.barcodeNotFound = false
+                    pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.drugNotFound)
+                    restartFlow()
+                }
+            }
             .bottomSheet(
                 isPresented: $showStockCountPanel,
                 dismissOnBackgroundTap: false,
@@ -1104,9 +1110,6 @@ private extension View {
                 if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
             }
             .onChange(of: pillScanViewModel.showNdcEquivalencePopup) { _, showing in
-                if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
-            }
-            .onChange(of: stockCountViewModel.barcodeNotFound) { _, showing in
                 if !showing && !showPillCountPanel { btScannerFocusTrigger.wrappedValue += 1 }
             }
             .onChange(of: stockCountViewModel.showStockCountScannedDetails) { _, showing in

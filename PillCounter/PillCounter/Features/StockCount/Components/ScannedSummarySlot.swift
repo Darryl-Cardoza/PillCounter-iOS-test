@@ -19,7 +19,7 @@ struct ScannedSummarySlot: View {
         let totalNdc  = stockCountViewModel.groupedTransactions.count
         let totalPill = stockCountViewModel.groupedTransactions.reduce(0) { $0 + Int($1.total) }
 
-        return VStack(spacing: isIPhone ? 8  : 12) {
+        return VStack(spacing: isIPhone ? 16  : 12) {
 
             // ── Header — mirrors ScannedDrugDetailsSlot header row ──
             Text(L10n.StockCountSheet.scannedDrugDetails)
@@ -39,7 +39,7 @@ struct ScannedSummarySlot: View {
                     .foregroundColor(appColors.text)
             }
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: isIPhone ? 180 : .infinity)
+            .frame(maxHeight: isIPhone ? 120 : .infinity)
 
             if isIPhone {
                 Divider()
@@ -84,7 +84,7 @@ struct ScannedSummarySlot: View {
                     .fixedSize()
                 }
             }
-            .padding(.bottom,isIpadPortrait ? 14 : 14)
+            .padding(.bottom,isIpadPortrait ? 14 : 0)
         }
         .padding(.horizontal, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

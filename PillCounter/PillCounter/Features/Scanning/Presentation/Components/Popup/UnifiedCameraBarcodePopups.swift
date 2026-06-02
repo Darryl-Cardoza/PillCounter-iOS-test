@@ -38,18 +38,6 @@ extension UnifiedCameraView {
         )
     }
 
-    var barcodeNotFoundPopup: some View {
-        ConfirmationDialogue(
-            title: L10n.BarcodeScan.drugNotFound,
-            message: L10n.BarcodeScan.drugNotFoundMessage,
-            cancelButtonText: L10n.Common.cancel,
-            confirmButtonText: L10n.BarcodeScan.rescan,
-            showSingleConfirmButton: true,
-            onCancel: { restartFlow() },
-            onConfirm: { restartFlow() }
-        )
-    }
-
     var stockCountDetailsPopup: some View {
         VStack(spacing: 23) {
             ScrollView {

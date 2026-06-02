@@ -234,8 +234,13 @@ class UserViewModel: ObservableObject {
                 print("[Terminals] fetchedTerminals count: \(fetchedTerminals.count)")
                 terminals = fetchedTerminals
                 if selectedTerminal == nil {
-                    selectedTerminal = fetchedTerminals.first(where: { $0.isActive == true }) ?? fetchedTerminals.first
-                    pendingTerminal = selectedTerminal
+                    let active = fetchedTerminals.first(where: { $0.isActive == true }) ?? fetchedTerminals.first
+                    selectedTerminal = active
+                    pendingTerminal = active
+                    if let name = active?.terminalName,
+                       AppStorageManager.shared.selectedTerminalName.isEmpty {
+                        AppStorageManager.shared.selectedTerminalName = name
+                    }
                 }
 
                 userID = getUserResult.data?.profile?.userId ?? ""

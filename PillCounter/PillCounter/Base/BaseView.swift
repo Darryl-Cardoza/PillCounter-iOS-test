@@ -412,117 +412,54 @@ extension BaseView {
 
 // PMS Connection View in DashBoard
 struct PMSConnectionButtonView: View {
-    
+
     // MARK: - Input
     let pmsConnectionState: PmsConnectionState
-    
+
     // MARK: - Private State
-    @State private var animatePulse: Bool = false
-    @State private var showPmsToast: Bool = false
-    @State private var pmsToastMessage: String = ""
-    @State private var pmsToastTextColor: Color = .green
-    @State private var pmsToastDismissTask: Task<Void, Never>? = nil
-    
+    @State private var animateScale: Bool = false
+
     // MARK: - Computed
-    private var pmsIconColor: Color {
+    private var statusText: String {
         switch pmsConnectionState {
-        case .connected:    return AppColors.shared.secondary
-        case .disconnected: return .gray
-        case .connecting:   return .gray
-        case .notAvailable: return .gray
+        case .connected:               return "PMS Connected"
+        case .disconnected, .notAvailable: return "PMS Disconnected"
+        case .connecting:              return "Connecting..."
         }
     }
-    
+
+    private var statusColor: Color {
+        switch pmsConnectionState {
+        case .connected: return AppColors.shared.secondary
+        default:         return .gray
+        }
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
-            
-            // MARK: - PMS Button
-            Button {
-                // optional action
-            } label: {
-                Image("pms_icon")
-                    .renderingMode(.template)
-                    .foregroundColor(pmsIconColor)
-                    .frame(width: 44, height: 44)
-                    .clipShape(Circle())
-                    .scaleEffect(
-                        pmsConnectionState == .connecting
-                        ? (animatePulse ? 1.15 : 1.0)
-                        : 1.0
-                    )
-            }
-            .buttonStyle(.plain)
-            
-            // MARK: - Sliding Toast Pill
-            if showPmsToast {
-                Text(pmsToastMessage)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(pmsToastTextColor)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(pmsToastTextColor.opacity(0.15))
-                    .overlay(
-                        Capsule().stroke(pmsToastTextColor.opacity(0.35), lineWidth: 1)
-                    )
-                    .clipShape(Capsule())
-                    .padding(.leading, 4)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal:   .move(edge: .leading).combined(with: .opacity)
-                    ))
-            }
+        HStack(spacing: 6) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 8, height: 8)
+            Text(statusText)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(statusColor)
         }
-        .onAppear {
-//            if pmsConnectionState == .connecting {
-//                startPulse()
-//            }
-        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.white)
+        .clipShape(Capsule())
+        .scaleEffect(animateScale ? 1.12 : 1.0)
         .onChange(of: pmsConnectionState) { _, newValue in
-            if newValue == .connecting {
-//                startPulse()
-            } else {
-                animatePulse = false
+            guard newValue == .connected else {
+                animateScale = false
+                return
             }
-            triggerPmsToast(for: newValue)
-        }
-    }
-    
-//    // MARK: - Helpers
-//    private func startPulse() {
-//        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-//            animatePulse = true
-//        }
-//    }
-    
-    private func triggerPmsToast(for state: PmsConnectionState) {
-        switch state {
-        case .connected:
-            pmsToastMessage = "PMS connected"
-            pmsToastTextColor = AppColors.shared.secondary
-        case .disconnected:
-            pmsToastMessage = "PMS disconnected"
-            pmsToastTextColor = .gray
-        case .connecting:
-            pmsToastMessage = "Connecting..."
-            pmsToastTextColor = .gray
-        case .notAvailable:
-            pmsToastMessage = "PMS disconnected"
-            pmsToastTextColor = .gray
-        }
-        
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) {
-            showPmsToast = true
-        }
-        
-        pmsToastDismissTask?.cancel()
-        
-        guard state != .connecting else { return }
-        pmsToastDismissTask = Task {
-            try? await Task.sleep(nanoseconds: 2_800_000_000)
-            await MainActor.run {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    showPmsToast = false
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) {
+                animateScale = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    animateScale = false
                 }
             }
         }

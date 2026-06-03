@@ -34,6 +34,7 @@ public enum DashboardFlow: Hashable, Codable {
     case dashboardHome
     case fixedCountPartial
     case pillCount(ScanningFlow)
+
 }
 
 public enum ScanningFlow: Codable, Hashable {

@@ -2,113 +2,14 @@
 //  UserViewModel.swift
 //  PillCounter
 //
-//  Created by HC on 12/11/25.
-//
 
 import Foundation
 import SwiftUI
 import CoreData
 import ComposeApp
 
-@MainActor  // decalaring this as an main actor since we will change the colors on the app launch.
+@MainActor
 class UserViewModel: ObservableObject {
-    // MARK: - APP STORAGE
-    
-     
-    // get the access token from the app storage
-    @AppStorage(AppStorageManager.AppStorageKeys.accessToken) var accessToken:
-        String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.refreshToken) var refreshToken:
-        String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.userEmail) var userEmail:
-        String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.userId) var userID: String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.pmsHostName)
-    var pmsHostName: String = ""
-
-    @AppStorage(AppStorageManager.AppStorageKeys.pillCounterHostName)
-    var pillCounterHostName: String = ""
-
-    @AppStorage(AppStorageManager.AppStorageKeys.barcodeFormat)
-    private var barcodeFormat: String = ""
-
-    @AppStorage(AppStorageManager.AppStorageKeys.bucketList)
-    private var bucketData: Data = Data()
-    
-    
-    
-    // MARK: PUBLISHED VARIABLES
-    // general loading  
-    @Published var isLoading: Bool = false
-
-    // user details
-    @Published var userProfileDetails: UserProfile? = nil
-    // user profile values for binding
-    @Published var fullName: String = ""
-    @Published var firstName: String = ""
-    @Published var lastName: String = ""
-    @Published var email: String = ""
-    @Published var phoneNumber: String = ""
-    @Published var pharmacyName: String = ""
-    @Published var npiID: String = ""
-
-    // terminals
-    @Published var terminals: [UserTerminal] = []
-    @Published var selectedTerminal: UserTerminal? = nil
-    @Published var pendingTerminal: UserTerminal? = nil
-
-    // when user updates the profile successfully,
-    @Published var isProfileUpdated: Bool = false
-
-    // Transactions of the user.
-    @Published var historyCountTransactions: [PillCountTransactionEntity] = []
-    //    @Published var regularCountTransactions: [PillCountTransactionEntity] = []
-
-    // count of fixed completed and partial
-    @Published var fixedCountTransactionCompletedCount: Int = 0
-    @Published var fixedCountTransactionPartialCount: Int = 0
-
-    // count of regualr completed and partial
-    @Published var regularCountTransactionCompletedCount: Int = 0
-    @Published var regularCountTransactionPartialCount: Int = 0
-
-    // transactions of the user filtered by dates.
-    @Published var filteredTransactionsOfUserByDate:
-        [PillCountTransactionEntity] = []
-
-    @Published var filteredBatchesOfUserByDate: [BatchCountEntity] = []
-    
-    @Published var transactionRows: [TransactionRowData] = []
-    @Published var batchRows: [StockData] = []
-
-    // variable to hold the actual counted pills for the fixed transactions.
-    @Published var actualCountedPillsForTheTransactions: [Int64: Int] = [:]
-
-    // Counts for the History Header
-    @Published var historyTotalTransactionsCount: Int = 0
-
-    // this published variable is only if the user navigates to the pill count view
-    @Published var currentTransactionTxnId: Int64?
-
-    // force update
-    @Published var isForceUpdate: Bool = false
-
-    // maintenance
-    @Published var isMaintenance: Bool = false
-    
-    @Published var unsyncedTransactions: [PillCountTransactionEntity] = []
-
-    @Published var pmsConnectionState: PmsConnectionState = .notAvailable
-    
-    var bucket: [String] {
-        get {
-            (try? JSONDecoder().decode([String].self, from: bucketData)) ?? []
-        }
-        set {
-            bucketData = (try? JSONEncoder().encode(newValue)) ?? Data()
-        }
-    }
-
 
     // MARK: DATABASE
     let userLocalDB = UserStore.shared
@@ -124,46 +25,90 @@ class UserViewModel: ObservableObject {
 
     // settings repo
     let settingsRepo = SettingsRepository.shared
- 
-    
- 
 
-    // MARK: MOBILE SETTINGS
-    // mobile color settings.
+    // MARK: - Published UI state
+    @Published var isLoading: Bool = false
+    @Published var userProfileDetails: UserProfile? = nil
+    @Published var fullName: String = ""
+    @Published var firstName: String = ""
+    @Published var lastName: String = ""
+    @Published var email: String = ""
+    @Published var phoneNumber: String = ""
+    @Published var pharmacyName: String = ""
+    @Published var npiID: String = ""
+
+    // terminals
+    @Published var terminals: [UserTerminal] = []
+    @Published var selectedTerminal: UserTerminal? = nil
+    @Published var pendingTerminal: UserTerminal? = nil
+
+    // when user updates the profile successfully,
+    @Published var isProfileUpdated: Bool = false
+    @Published var historyCountTransactions: [PillCountTransactionEntity] = []
+    @Published var fixedCountTransactionCompletedCount: Int = 0
+    @Published var fixedCountTransactionPartialCount: Int = 0
+    @Published var regularCountTransactionCompletedCount: Int = 0
+    @Published var regularCountTransactionPartialCount: Int = 0
+    @Published var filteredTransactionsOfUserByDate: [PillCountTransactionEntity] = []
+    @Published var filteredBatchesOfUserByDate: [BatchCountEntity] = []
+    @Published var transactionRows: [TransactionRowData] = []
+    @Published var batchRows: [StockData] = []
+    @Published var actualCountedPillsForTheTransactions: [Int64: Int] = [:]
+    @Published var historyTotalTransactionsCount: Int = 0
+    @Published var currentTransactionTxnId: Int64?
+    @Published var isForceUpdate: Bool = false
+    @Published var isMaintenance: Bool = false
+    @Published var unsyncedTransactions: [PillCountTransactionEntity] = []
+    @Published var pmsConnectionState: PmsConnectionState = .notAvailable
+
+    // MARK: - Keychain-backed convenience
+    private var accessToken: String { AppStorageManager.shared.accessToken ?? "" }
+
+    private var userID: String {
+        get { AppStorageManager.shared.userId ?? "" }
+        set { AppStorageManager.shared.userId = newValue }
+    }
+
+    var bucket: [String] {
+        get { AppStorageManager.shared.bucket }
+        set { AppStorageManager.shared.bucket = newValue }
+    }
+
+    // MARK: - Mobile Settings
+
     func loadMobileThemeSettings() {
-        let appVersion =
-            Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-            ?? "0.0.0"
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
 
         Task.detached(priority: .background) {
             do {
-                let response = try await self.settingsRepo.getMobileSettings(
-                    currentVersion: appVersion
-                )
-                print("Setting Repo resonse \(response)")
+                let response = try await self.settingsRepo.getMobileSettings(currentVersion: appVersion)
+
                 await MainActor.run {
                     if let colors = response.data?.settings?.colors {
                         AppColors.shared.update(with: colors)
                     }
 
-                    self.isMaintenance =
-                        response.data?.isMaintenanceMode ?? false
+                    self.isMaintenance = response.data?.isMaintenanceMode ?? false
 
                     if let iosVersion = response.data?.iosVersion {
-                        self.isForceUpdate =
-                            iosVersion.isVersionGreater(than: appVersion)
+                        self.isForceUpdate = iosVersion.isVersionGreater(than: appVersion)
                     } else {
                         self.isForceUpdate = false
                     }
-                    
-                    self.pmsHostName = response.data?.hl7Config?.pmsHostName ?? ""
-                    self.pillCounterHostName = response.data?.hl7Config?.pillCounterHostName ?? ""
-                    self.barcodeFormat = response.data?.hl7Config?.barcodeFormat ?? ""
-                    print("Barcode format \(response.data?.hl7Config?.barcodeFormat ?? "")")
-                }
 
+                    AppStorageManager.shared.pmsHostName         = response.data?.hl7Config?.pmsHostName ?? ""
+                    AppStorageManager.shared.pillCounterHostName = response.data?.hl7Config?.pillCounterHostName ?? ""
+                    AppStorageManager.shared.barcodeFormat       = response.data?.hl7Config?.barcodeFormat ?? ""
+
+                    Log("Barcode format: \(response.data?.hl7Config?.barcodeFormat ?? "")")
+
+                    // Notify the HL7 controller that pmsHostName is now populated.
+                    // This triggers the first real Bonjour browse if the service
+                    // type was empty when Hl7ServiceController.evaluate() ran.
+                    Hl7ServiceController.shared.notifySettingsUpdated()
+                }
             } catch {
-                print("❌ Failed to load mobile settings: \(error)")
+                Log("❌ Failed to load mobile settings: \(error)")
                 await MainActor.run {
                     self.isMaintenance = false
                     self.isForceUpdate = false
@@ -172,9 +117,10 @@ class UserViewModel: ObservableObject {
         }
     }
 
-    // MARK: GET USER
-    // get user info
+    // MARK: - Get User
+
     func getUser() async {
+        let userID = AppStorageManager.shared.userId ?? ""
         isLoading = true
         defer {
             isLoading = false
@@ -185,43 +131,29 @@ class UserViewModel: ObservableObject {
 
 
             let name = Formatter.segregateName(from: localUser.fname ?? "")
-
-            firstName = name.firstName
-            lastName = name.lastName
-
-            email = localUser.email ?? ""
+            firstName    = name.firstName
+            lastName     = name.lastName
+            email        = localUser.email ?? ""
             pharmacyName = localUser.pharmacy_name ?? ""
-            npiID = localUser.npi_id ?? ""
-            phoneNumber = localUser.phone_number ?? ""
-
+            npiID        = localUser.npi_id ?? ""
+            phoneNumber  = localUser.phone_number ?? ""
+            // Load transactions only once we have a valid local user.
             getAllTransactionsAndFilterByCountType()
-
-//            return
         }
 
-
         do {
-            getAllTransactionsAndFilterByCountType()
+            let currentAppVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
 
-            let currentAppVersion =
-                Bundle.main.infoDictionary?["CFBundleShortVersionString"]
-                as? String ?? "Unknown"
-
-
-
-            let getUserResult = try await userRepo.getUser(
+            let result = try await userRepo.getUser(
                 accessToken: accessToken,
                 currentAppVersion: currentAppVersion,
                 fcmToken: ""
             )
 
+            if result.isSuccess ?? false {
+                email = AppStorageManager.shared.userEmail ?? ""
 
-            if getUserResult.isSuccess ?? false {
-
-
-                email = userEmail
-
-                if let user = getUserResult.data?.profile {
+                if let user = result.data?.profile {
                     userProfileDetails = user
                     populateEditableFields(from: user)
                 }
@@ -251,37 +183,30 @@ class UserViewModel: ObservableObject {
             getAllTransactionsAndFilterByCountType()
 
         } catch {
-            print(" [User] Error fetching user: \(error.localizedDescription)")
+            Log("[User] Error fetching user: \(error.localizedDescription)")
         }
     }
-    // private func for profile screen fields
+
     private func populateEditableFields(from user: UserProfile) {
         let fullName = user.fname ?? ""
-        let name = Formatter.segregateName(from: fullName)
-        
-        firstName = name.firstName
-        lastName = name.lastName
-
-        email = user.email ?? ""
-        phoneNumber = user.phoneNumber ?? ""
+        let name     = Formatter.segregateName(from: fullName)
+        firstName    = name.firstName
+        lastName     = name.lastName
+        email        = user.email ?? ""
+        phoneNumber  = user.phoneNumber ?? ""
         pharmacyName = user.pharmacyName ?? ""
         npiID = user.npiID ?? ""
         self.bucket = user.bucket ?? ["NORMAL"]
         self.fullName = fullName
     }
 
-    // MARK: UPDATE USER PROFILE
-    // update user profile
-    func updateUserProfile() async {    
-        if !hasUserProfileChanged() {
-            return
-        }
+    // MARK: - Update User Profile
+
+    func updateUserProfile() async {
+        guard hasUserProfileChanged() else { return }
 
         isLoading = true
-
-        defer {
-            isLoading = false
-        }
+        defer { isLoading = false }
 
         do {
             
@@ -302,14 +227,19 @@ class UserViewModel: ObservableObject {
                 language: "",
                 timezone: ""
             )
-            
-            let updateUserProfileResult = try await userRepo.updateUserProfile(
+
+            // FIX: updateProfile returns UserResponse but the server may return
+            // a shape where `data.profile` is at the top level of `data` rather
+            // than nested under `data.user`. Decode with UserResponse as usual —
+            // if the server shape genuinely differs, the parsingError will appear
+            // here and you should check the 📩 API RESPONSE log block immediately
+            // above this error to see the raw JSON and adjust UserResponse/UserData.
+            let result = try await userRepo.updateUserProfile(
                 request: request,
                 accessToken: accessToken
             )
 
-            if updateUserProfileResult.isSuccess ?? false {
-
+            if result.isSuccess ?? false {
                 isProfileUpdated = true
 
                 let previousUserProfileDetails = userProfileDetails
@@ -324,10 +254,9 @@ class UserViewModel: ObservableObject {
                     userLocalDB.update(userId: userID, field: .phoneNumber, value: phoneNumber)
                     userLocalDB.update(userId: userID, field: .npiId, value: npiID)
                 }
-            } else {
             }
-
         } catch {
+            Log("updateUserProfile error: \(error)")
         }
     }
     // func to check if any updates were there in the profile.
@@ -345,15 +274,15 @@ class UserViewModel: ObservableObject {
             .joined(separator: " ")
         let fullNameChanged = currentName != originalName
         let pharmacyChanged = pharmacyName != (original.pharmacyName ?? "")
-        let phoneChanged = phoneNumber != (original.phoneNumber ?? "")
-        let npiChanged = npiID != (original.npiID ?? "")
-
+        let phoneChanged    = phoneNumber  != (original.phoneNumber ?? "")
+        let npiChanged      = npiID        != (original.npiID ?? "")
         return fullNameChanged || pharmacyChanged || phoneChanged || npiChanged
     }
 
-    // MARK: ALL TRANSACTION FILTER BY COUNT TYPE
-    // get user's all active transactions.
+    // MARK: - Transactions
+
     func getAllTransactionsAndFilterByCountType() {
+        let userID = AppStorageManager.shared.userId ?? ""
 
         // Get the user
         guard let user = userLocalDB.fetchByUserId( userID) else {
@@ -388,23 +317,17 @@ class UserViewModel: ObservableObject {
         endDate: Date,
         filter: HistoryFilterType
     ) async {
-        
+        let userID = AppStorageManager.shared.userId ?? ""
 
         guard let user = userLocalDB.fetchByUserId( userID) else {
             self.filteredTransactionsOfUserByDate = []
             return
         }
 
-        // MARK: Date range
-        let startOfDay = Calendar.current.startOfDay(for: startDate)
-
-         let endOfDay = Calendar.current.date(
-             byAdding: DateComponents(day: 1, second: -1),
-             to: Calendar.current.startOfDay(for: endDate)
-         )!
-
-        let startTimestamp = Int64(startOfDay.timeIntervalSince1970 * 1000)
-        let endTimestamp = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        let startOfDay  = Calendar.current.startOfDay(for: startDate)
+        let endOfDay    = Calendar.current.date(byAdding: DateComponents(day: 1, second: -1), to: Calendar.current.startOfDay(for: endDate))!
+        let startTs     = Int64(startOfDay.timeIntervalSince1970 * 1000)
+        let endTs       = Int64(endOfDay.timeIntervalSince1970 * 1000)
 
         // STEP 1: Get all transactions of that date
         let allTransactions =
@@ -414,41 +337,15 @@ class UserViewModel: ObservableObject {
                 endDateTs: endTimestamp
             )
 
-        // STEP 2: Apply business filter
         let finalTransactions: [PillCountTransactionEntity]
-
         switch filter {
-
-//        case .all:
-//            finalTransactions = allTransactions
-
-        case .regular:
-            finalTransactions = allTransactions.filter { txn in
-                txn.count_type == CountType.REGULAR.rawValue
-//                txn.count_type == CountType.REGULAR.rawValue &&
-//                (
-//                    txn.status == CountStatus.COMPLETED.rawValue
-//                )
-            }
-
-        case .fixed:
-            finalTransactions = allTransactions.filter { txn in
-                txn.count_type == CountType.FIXED.rawValue
-//                (
-//                    txn.status == CountStatus.COMPLETED.rawValue
-//                )
-            }
+        case .regular: finalTransactions = allTransactions.filter { $0.count_type == CountType.REGULAR.rawValue }
+        case .fixed:   finalTransactions = allTransactions.filter { $0.count_type == CountType.FIXED.rawValue }
         }
 
-        // STEP 3: assign to UI
-        await MainActor.run {
-            self.filteredTransactionsOfUserByDate = finalTransactions
-        }
+        await MainActor.run { filteredTransactionsOfUserByDate = finalTransactions }
     }
 
-
-    // MARK: ALL PARTIAL TRANSACTIONS
-    // get user's fixed count partial transactoins
     func getAllPartialTransactions(countType: CountType) async {
         guard let user = userLocalDB.fetchByUserId( userID) else {
             self.historyCountTransactions = []
@@ -475,60 +372,37 @@ class UserViewModel: ObservableObject {
         transactionDAO.softDelete(txnId: transactionId)
 
         if countType == .FIXED {
+            await sendCompletionHL7(txnId: txnId)
             await getAllPartialTransactions(countType: .FIXED)
         } else {
             await getAllPartialTransactions(countType: .REGULAR)
         }
+        getAllTransactionsAndFilterByCountType()
     }
-    
-    
-    
-    // Send HL7 message
+
     private func sendCompletionHL7(txnId: Int64) async {
 
         guard let txn = transactionDAO.fetchById(txnId) else {
             print("[HL7] Txn not found")
             return
         }
-
-        // 1. Generate messageId
         let messageId = "TXN_\(txnId)_\(Int(Date().timeIntervalSince1970))"
-
-        // 2. Build header
         let header = MessageHeaderData(
-            fieldSeparator: "|",
-            encodingCharacters: "^~\\&",
-            sendingApplication: "PILLCOUNTER",
-            sendingFacility: "PC",
-            receivingApplication: "PMS",
-            receivingFacility: "PMS",
+            fieldSeparator: "|", encodingCharacters: "^~\\&",
+            sendingApplication: "PILLCOUNTER", sendingFacility: "PC",
+            receivingApplication: "PMS", receivingFacility: "PMS",
             messageDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
-            messageType: "RDS",
-            triggerEvent: "O13",
-            messageControlId: messageId,
-            processingId: "P",
-            versionId: "2.3",
-            countryCode: nil
+            messageType: "RDS", triggerEvent: "O13",
+            messageControlId: messageId, processingId: "P",
+            versionId: "2.3", countryCode: nil
         )
-
-        // 3. Build ORDER (ORC)
         let order = OrderData(
-            orderControl: "RE", // Completed / Result
-            placerOrderId: "\(txnId)",
-            placerOrderNamespace: nil,
-            fillerOrderId: nil,
-            fillerOrderNamespace: nil,
-            orderStatus: "CM", // Completed
-            orderDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
-            orderingProviderId: nil,
-            orderingProviderFamilyName: nil,
-            orderingProviderGivenName: nil,
-            orderingFacility: nil
+            orderControl: "RE", placerOrderId: "\(txnId)",
+            placerOrderNamespace: nil, fillerOrderId: nil, fillerOrderNamespace: nil,
+            orderStatus: "CM", orderDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
+            orderingProviderId: nil, orderingProviderFamilyName: nil,
+            orderingProviderGivenName: nil, orderingFacility: nil
         )
-
-        // 4. Build DISPENSE (RXD) — THIS IS IMPORTANT
-
-        // 5. Create complete message
         let message = CompleteHL7Message(
             messageId: messageId,
             messageType: "RDS",
@@ -635,50 +509,26 @@ class UserViewModel: ObservableObject {
     // MARK: REFRESH TOKEN
     func refreshToken() async {
         do {
-            // defer { isLoading = false } // Optional: usually background refresh doesn't show loading UI
-            let refreshTokenResponse = try await userRepo.refreshToken(
-                refreshToken: refreshToken)
-
-            if refreshTokenResponse.isSuccess ?? false {
-
-                // 1. Update Tokens
-                accessToken = refreshTokenResponse.data?.accessToken ?? ""
-                refreshToken = refreshTokenResponse.data?.refreshToken ?? ""
-
-                // 2. Update Expiry Time
-                let expiresInSeconds = TimeInterval(
-                    refreshTokenResponse.data?.expiresIn ?? 86400)
-                let newExpiryDate = Date().addingTimeInterval(expiresInSeconds)
-
+            let result = try await userRepo.refreshToken(
+                refreshToken: AppStorageManager.shared.refreshToken ?? ""
+            )
+            if result.isSuccess ?? false {
+                AppStorageManager.shared.accessToken  = result.data?.accessToken ?? ""
+                AppStorageManager.shared.refreshToken = result.data?.refreshToken ?? ""
+                let expiresIn = TimeInterval(result.data?.expiresIn ?? 86400)
                 AppStorageManager.shared.tokenExpiryTimestamp =
-                    newExpiryDate.timeIntervalSince1970
+                    Date().addingTimeInterval(expiresIn).timeIntervalSince1970
             }
-
-        } catch let error {
-            print("❌ Refresh Error: \(error)")
-            // Optional: If refresh fails (e.g. 401), you might want to force logout here
+        } catch {
+            Log("❌ Token refresh error: \(error)")
         }
     }
 
-    // MARK: - CHECK EXPIRY LOGIC
     func checkAndRefreshTokenIfNeeded() async {
-        // 1. Get the stored expiry time
-        let storedExpiryTimestamp =
-            AppStorageManager.shared.tokenExpiryTimestamp ?? 0.0
-
-        // If timestamp is 0, it means we haven't stored it yet (legacy login), so we should refresh just in case.
-        if storedExpiryTimestamp == 0.0 {
-            await refreshToken()
-            return
-        }
-        let expiryDate = Date(timeIntervalSince1970: storedExpiryTimestamp)
-        let currentDate = Date()
-        // 2. Logic: Check if Current Date is AFTER Expiry Date
-        // Optional: Add a "Buffer" (e.g., 5 minutes) so we refresh slightly before it actually dies.
-        // If (Now > Expiry - 5 minutes) -> Refresh
-        if currentDate > expiryDate.addingTimeInterval(-300) {
-            await refreshToken()
-        }
+        let storedExpiry = AppStorageManager.shared.tokenExpiryTimestamp ?? 0.0
+        if storedExpiry == 0.0 { await refreshToken(); return }
+        let expiryDate = Date(timeIntervalSince1970: storedExpiry)
+        if Date() > expiryDate.addingTimeInterval(-300) { await refreshToken() }
     }
 
     // MARK: - BATCH ACTIONS
@@ -696,148 +546,6 @@ class UserViewModel: ObservableObject {
             await getAllPartialTransactions(countType: .FIXED)
         } else {
             await getAllPartialTransactions(countType: .REGULAR)
-        }
-    }
-
-    // MARK: - GENERATE DUMMY DATA
-    func generateDummyData() {
-        let context = CoreDataManager.shared.context
-
-        // 1. Check for Existing User OR Create Dummy User
-        var user = userLocalDB.fetchByUserId( userID)
-
-        if user == nil {
-
-            let dummyUser = UserEntity(context: context)
-            // Assign dummy values based on your UserEntity definition
-            dummyUser.user_id = "dummy_user_123"
-            dummyUser.fname = "Test User"
-            dummyUser.email = "test@example.com"
-            dummyUser.pharmacy_name = "Test Pharmacy"
-            dummyUser.phone_number = "555-0123"
-            dummyUser.npi_id = "NPI-999"
-            dummyUser.role = "pharmacist"
-            dummyUser.is_profile_completed = true
-            dummyUser.is_verified = true
-            dummyUser.notifications = true
-            dummyUser.language = "en"
-            dummyUser.timezone = TimeZone.current.identifier
-            dummyUser.created_at = Date()
-            dummyUser.local_id = 1  // Arbitrary local ID since your entity requires Int64
-
-            // Save the dummy user
-            CoreDataManager.shared.save(context: context)
-
-            // Update the ViewModel's userID so subsequent fetches work
-            self.userID = dummyUser.user_id ?? ""
-            user = dummyUser
-        }
-
-        guard let currentUser = user else {
-            print("❌ Critical Error: Failed to retrieve or create user.")
-            return
-        }
-
-        // 2. Create Dummy Drugs (So we have names to display)
-        let dummyDrugs = [
-            "Amoxicillin 500mg", "Ibuprofen 200mg", "Lipitor 10mg",
-            "Metformin 500mg", "Lisinopril 20mg", "Amlodipine 5mg",
-        ]
-
-        var drugEntities: [DrugMasterEntity] = []
-
-        for (i, name) in dummyDrugs.enumerated() {
-            let drug = DrugMasterEntity(context: context)
-            drug.drug_id = Int64(9000 + i)  // Fake IDs
-            drug.drug_name = name
-            drug.ndc = "00000-0000-\(i)"
-            drugEntities.append(drug)
-        }
-
-        // 3. Create Dummy Transactions
-        for i in 0..<10 {
-            let txn = PillCountTransactionEntity(context: context)
-
-            // Randomize Data
-            let randomDrug = drugEntities.randomElement()!
-            let target = Int32(Int.random(in: 30...120))
-            let counted = Int32(Int.random(in: 0...Int(target)))
-            let daysAgo = Int.random(in: 0...6)  // Random date in last 1 weeks
-
-            txn.txn_id = Int64(Date().timeIntervalSince1970) + Int64(i * 1000)  // Unique-ish ID
-
-            // Link User Relationship
-            txn.user = currentUser
-            txn.local_id = currentUser.local_id  // Use the Int64 local_id from the user entity
-            currentUser.addToTransactions(txn)
-
-            // Link Drug Relationship
-            txn.drug = randomDrug
-            txn.drug_id = randomDrug.drug_id
-
-            // Ensure they show up in "Fixed Partial" list
-            txn.count_type = CountType.FIXED.rawValue
-            txn.status = CountStatus.PARTIAL.rawValue
-            txn.is_deleted = false
-
-            // Date logic
-            let date = Calendar.current.date(
-                byAdding: .day, value: -daysAgo, to: Date())!
-            txn.created_at = Int64(date.timeIntervalSince1970 * 1000)
-            txn.updated_at = txn.created_at
-            txn.target_count = target
-
-            // Add a "Detail" record so the counts (X / Y) work
-            let detail = PillCountTransactionDetailsEntity(context: context)
-            detail.txn_details_id = txn.txn_id + 50000
-            detail.txn_id = txn.txn_id
-            detail.pill_count = counted
-            detail.created_at = txn.created_at
-            detail.is_deleted = false
-            detail.pillCountTransaction = txn
-            txn.addToPillCountTransactionDetails(detail)
-        }
-
-        // 4. Save to Core Data
-        CoreDataManager.shared.save(context: context)
-
-        // 5. Refresh the list immediately
-        Task {
-            await getAllPartialTransactions(countType: .FIXED)
-        }
-    }
-
-    // MARK: - UPDATE TERMINAL
-
-    /// UI-only selection — no API call; persisted on Save.
-    func selectTerminal(_ terminal: UserTerminal) {
-        pendingTerminal = terminal
-    }
-
-    func updateTerminal(_ terminal: UserTerminal) async -> Bool {
-        guard let terminalId = terminal.terminalId,
-              let terminalName = terminal.terminalName else { return false }
-
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let response = try await userRepo.updateTerminal(
-                terminalId: terminalId,
-                terminalName: terminalName,
-                isActive: true,
-                accessToken: accessToken
-            )
-            if response.isSuccess ?? false {
-                selectedTerminal = terminal
-                pendingTerminal = terminal
-                AppStorageManager.shared.selectedTerminalName = terminalName
-                return true
-            }
-            return false
-        } catch {
-            print("Failed to update terminal: \(error)")
-            return false
         }
     }
 
@@ -874,6 +582,40 @@ class UserViewModel: ObservableObject {
     func clearLocalData() {
         LocalDataCleaner.shared.clearAll()
     }
+
+    // MARK: - UPDATE TERMINAL
+
+    /// UI-only selection — no API call; persisted on Save.
+    func selectTerminal(_ terminal: UserTerminal) {
+        pendingTerminal = terminal
+    }
+
+    func updateTerminal(_ terminal: UserTerminal) async -> Bool {
+        guard let terminalId = terminal.terminalId,
+              let terminalName = terminal.terminalName else { return false }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let response = try await userRepo.updateTerminal(
+                terminalId: terminalId,
+                terminalName: terminalName,
+                isActive: true,
+                accessToken: accessToken
+            )
+            if response.isSuccess ?? false {
+                selectedTerminal = terminal
+                pendingTerminal = terminal
+                AppStorageManager.shared.selectedTerminalName = terminalName
+                return true
+            }
+            return false
+        } catch {
+            print("Failed to update terminal: \(error)")
+            return false
+        }
+    }
     
     func getBatchesByDate(startDate: Date, endDate: Date) async {
 //        guard let user = userLocalDB.fetchByUserId( userID) else {
@@ -896,26 +638,14 @@ class UserViewModel: ObservableObject {
             self.filteredBatchesOfUserByDate = batches
         }
     }
-    
-    
-    func applyFilters(
-        status: HistoryStatusFilter,
-        search: String,
-        pillScanViewModel: PillScanViewModel
-    ) {
 
-        // Transactions
+    func applyFilters(status: HistoryStatusFilter, search: String, pillScanViewModel: PillScanViewModel) {
         var txns = filteredTransactionsOfUserByDate
-
         switch status {
-        case .completed:
-            txns = txns.filter { $0.status == CountStatus.COMPLETED.rawValue }
-        case .pending:
-            txns = txns.filter { $0.status == CountStatus.PARTIAL.rawValue }
-        case .all:
-            break
+        case .completed: txns = txns.filter { $0.status == CountStatus.COMPLETED.rawValue }
+        case .pending:   txns = txns.filter { $0.status == CountStatus.PARTIAL.rawValue }
+        case .all:       break
         }
-
         if !search.isEmpty {
             let q = search.lowercased()
             txns = txns.filter {
@@ -925,32 +655,22 @@ class UserViewModel: ObservableObject {
                 || ($0.drug?.ndc ?? "").contains(q)
             }
         }
-
-        self.transactionRows = txns.map { txn in
+        transactionRows = txns.map { txn in
             let count = pillScanViewModel.getTotalPillCountOfCurrentTransactionByType(
                 type: .targetVerification,
-                details: (txn.pillCountTransactionDetails?.allObjects as? [PillCountTransactionDetailsEntity] ?? [])
-                    .filter { !$0.is_deleted }
+                details: (txn.pillCountTransactionDetails?.allObjects as? [PillCountTransactionDetailsEntity] ?? []).filter { !$0.is_deleted }
             )
             return mapTransactionToRow(txn: txn, pillCount: count)
         }
 
-        
-        // 🔹 Batches
         var batches = filteredBatchesOfUserByDate
-
         switch status {
-        case .completed:
-            batches = batches.filter { $0.status == "completed" }
-        case .pending:
-            batches = batches.filter { $0.status == "partial" }
-        case .all:
-            break
+        case .completed: batches = batches.filter { $0.status == "completed" }
+        case .pending:   batches = batches.filter { $0.status == "partial" }
+        case .all:       break
         }
-        
         if !search.isEmpty {
             let q = search.lowercased()
-
             batches = batches.filter {
                 ($0.bucket_id?.lowercased().contains(q) ?? false)
                 || ($0.status?.lowercased().contains(q) ?? false)
@@ -972,53 +692,52 @@ class UserViewModel: ObservableObject {
                 isFromPms: false
             )
         }
-        print("Batches \(batchRows)")
     }
 
-    func mapTransactionToRow(
-        txn: PillCountTransactionEntity,
-        pillCount: Int
-    ) -> TransactionRowData {
-        
-        return TransactionRowData(
-            id: String(txn.txn_id),
-            ndc: txn.drug?.ndc ?? "",
+    func mapTransactionToRow(txn: PillCountTransactionEntity, pillCount: Int) -> TransactionRowData {
+        TransactionRowData(
+            id: String(txn.txn_id), ndc: txn.drug?.ndc ?? "",
             drugName: txn.drug?.drug_name ?? "Unknown Pill",
-            createdAt: txn.created_at,
-            barcodeImagePath: txn.barcode_image,
-            pillCount: pillCount,
-            targetCount: Int(txn.target_count),
-            countType: txn.count_type ?? "",
-            status: txn.status ?? "",
-            note: txn.note,
-            bucketId: "360B",
-            drugType: txn.drug?.drug_type ?? ""
+            createdAt: txn.created_at, barcodeImagePath: txn.barcode_image,
+            pillCount: pillCount, targetCount: Int(txn.target_count),
+            countType: txn.count_type ?? "", status: txn.status ?? "",
+            note: txn.note, bucketId: "360B", drugType: txn.drug?.drug_type ?? ""
         )
     }
-    
-    func getStatusCounts(for type: HistoryFilterType) -> (all: Int, completed: Int, pending: Int) {
 
+    func getStatusCounts(for type: HistoryFilterType) -> (all: Int, completed: Int, pending: Int) {
         if type == .fixed {
             let txns = filteredTransactionsOfUserByDate
-
             return (
-                all: txns.count,
+                all:       txns.count,
                 completed: txns.filter { $0.status == CountStatus.COMPLETED.rawValue }.count,
-                pending: txns.filter { $0.status == CountStatus.PARTIAL.rawValue }.count
+                pending:   txns.filter { $0.status == CountStatus.PARTIAL.rawValue }.count
             )
-
         } else {
             let batches = filteredBatchesOfUserByDate
-
             return (
-                all: batches.count,
+                all:       batches.count,
                 completed: batches.filter { $0.status == "completed" }.count,
-                pending: batches.filter { $0.status == "partial"}.count
+                pending:   batches.filter { $0.status == "partial" }.count
             )
         }
     }
-    
-    // MARK: - HARD RESET (called on logout)
+
+    // MARK: - Delete User Profile
+
+    func deleteUserProfile() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let response = try await userRepo.deleteUserProfile(accessToken: accessToken)
+            if response.isSuccess ?? false { AppStorageManager.shared.logout() }
+        } catch {
+            Log("Failed to delete user profile: \(error)")
+        }
+    }
+
+    // MARK: - Reset (called on logout)
+
     @MainActor
     func resetState() {
         // AppStorage backed vars
@@ -1059,7 +778,7 @@ class UserViewModel: ObservableObject {
         fixedCountTransactionCompletedCount = 0
         fixedCountTransactionPartialCount = 0
         regularCountTransactionCompletedCount = 0
-        regularCountTransactionPartialCount = 0
+        regularCountTransactionPartialCount   = 0
     }
 }
 

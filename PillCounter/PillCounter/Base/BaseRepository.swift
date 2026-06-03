@@ -7,7 +7,16 @@
 
 import Foundation
 
-/// A reusable base repository protocol that provides a default implementation for network requests.
+// MARK: - Shared session storage
+private enum SharedSession {
+    static let secure: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        return URLSession(configuration: config)
+    }()
+}
+
 protocol BaseRepositoryProtocol {
     static func performRequest<T: Decodable>(
         url: String,
@@ -40,45 +49,42 @@ extension BaseRepositoryProtocol {
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
 
-        // Headers
         var allHeaders = headers(accessToken)
-        if let extra = extraHeaders {
-            allHeaders.merge(extra) { (_, new) in new }  // override duplicates
+        allHeaders["Cache-Control"] = "no-store"
+        if let extra = extraHeaders?.filter({ !$0.key.isEmpty && !$0.value.isEmpty }) {
+            allHeaders.merge(extra) { _, new in new }
         }
-        request.allHTTPHeaderFields = allHeaders
+        request.allHTTPHeaderFields = allHeaders.filter { !$0.key.isEmpty && !$0.value.isEmpty }
 
-        // Body
         if let body = body {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
-        
+
         logRequest(request, body: body)
 
-        // ------------------------------------------------------------------
-        // SESSION SELECTION (SSL BYPASS LOGIC)
-        // ------------------------------------------------------------------
+        // SESSION SELECTION
         let session: URLSession
         if shouldBypassSSL {
-            // Create a custom session with the Unsafe Delegate
+            #if DEBUG
             session = URLSession(
                 configuration: .default,
                 delegate: UnsafeSSLManager(),
                 delegateQueue: nil
             )
+            #else
+            session = SharedSession.secure
+            #endif
         } else {
-            // Use the standard secure shared session
-            session = URLSession.shared
+            session = SharedSession.secure
         }
-        // ------------------------------------------------------------------
 
         var attempt = 0
         let maxRetries = 2
 
         while attempt <= maxRetries {
             do {
-                // NOTE: We use 'session' here, not 'URLSession.shared'
                 let (data, response) = try await session.data(for: request)
-               
+
                 logResponse(data, response)
 
                 guard let httpResponse = response as? HTTPURLResponse else {
@@ -102,13 +108,11 @@ extension BaseRepositoryProtocol {
                     attempt += 1
                     continue
                 case 500...599:
-                    throw APIError.serverError(
-                        statusCode: httpResponse.statusCode)
+                    throw APIError.serverError(statusCode: httpResponse.statusCode)
                 default:
-                    throw APIError.serverError(
-                        statusCode: httpResponse.statusCode)
+                    throw APIError.serverError(statusCode: httpResponse.statusCode)
                 }
-                
+
             } catch {
                 if attempt < maxRetries {
                     attempt += 1
@@ -119,17 +123,20 @@ extension BaseRepositoryProtocol {
             }
         }
 
-        throw APIError.serverError(statusCode: 500)  // failsafe
+        throw APIError.serverError(statusCode: 500)
     }
 
     // MARK: - Headers
     static func headers(_ accessToken: String?) -> [String: String] {
         var headers: [String: String] = [
             "Content-Type": "application/json",
-//            "X-Server-Key": ConfigurationManager.shared.xServerKey,
-            "Accept": "application/json",
-            "X-Server-Key": "d1ff4797acb7147205bb249cce918f23a4f8e54a8d56488d79e83abcdf1b24f6f1ccc9af5dea3c1a1b5e2b6aa247ff55ac8e12f165974f8cfce41328f7ea447e",
+            "Accept":       "application/json",
         ]
+
+        let serverKey = ConfigurationManager.shared.xServerKey
+        if !serverKey.isEmpty {
+            headers["X-Server-Key"] = serverKey
+        }
 
         if let token = accessToken, !token.isEmpty {
             headers["Authorization"] = "Bearer \(token)"
@@ -137,9 +144,10 @@ extension BaseRepositoryProtocol {
 
         return headers
     }
-    
+
+    // MARK: - Logging (DEBUG only)
     private static func logRequest(_ request: URLRequest, body: [String: Any]?) {
-//        #if DEBUG
+        #if DEBUG
         print("\n========================= 🌐 API REQUEST =========================")
         print("➡️ URL: \(request.url?.absoluteString ?? "nil")")
         print("➡️ Method: \(request.httpMethod ?? "nil")")
@@ -147,7 +155,9 @@ extension BaseRepositoryProtocol {
         if let headers = request.allHTTPHeaderFields, !headers.isEmpty {
             print("➡️ Headers:")
             headers.forEach { key, value in
-                print("   \(key): \(value)")
+                let redacted = ["X-Server-Key", "Authorization"]
+                let display = redacted.contains(key) ? String(repeating: "*", count: 8) : value
+                print("   \(key): \(display)")
             }
         }
 
@@ -162,9 +172,9 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
-//        #endif
+        #endif
     }
-    
+
     private static func logResponse(_ data: Data, _ response: URLResponse?) {
 //        #if DEBUG
         print("\n========================= 📩 API RESPONSE =========================")
@@ -189,26 +199,19 @@ extension BaseRepositoryProtocol {
 }
 
 // MARK: - SSL Bypass Delegate (Development Only)
-// This class intercepts the SSL Handshake and blindly trusts the server.
-// Equivalent to Flutter's: ..badCertificateCallback = (cert, host, port) => true
+#if DEBUG
 class UnsafeSSLManager: NSObject, URLSessionDelegate {
-    
-    func urlSession(_ session: URLSession,
-                    didReceive challenge: URLAuthenticationChallenge,
-                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        
-        // 1. Check if the challenge is for Server Trust (SSL Certificate)
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let serverTrust = challenge.protectionSpace.serverTrust {
-            
-            // 2. Create a credential from the trust object
-            let credential = URLCredential(trust: serverTrust)
-            
-            // 3. Tell URLSession to USE this credential (trusting it), regardless of validity
-            completionHandler(.useCredential, credential)
+           let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
         } else {
-            // 4. For all other auth types (like Basic Auth), perform default handling
             completionHandler(.performDefaultHandling, nil)
         }
     }
 }
+#endif

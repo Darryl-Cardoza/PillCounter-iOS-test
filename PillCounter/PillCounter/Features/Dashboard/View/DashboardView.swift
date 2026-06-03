@@ -19,11 +19,9 @@ struct DashboardView: View {
     @StateObject private var dashboardViewModel =  DashboardViewModel()
 
 
-    @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
-        Bool = true
-    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable) var isHl7Enable:
-        Bool = false
+    var userId: String { AppStorageManager.shared.userId ?? "" }
+    var isNewUser: Bool { AppStorageManager.shared.isNewUser }
+    var isHl7Enable: Bool { AppStorageManager.shared.isHl7Enabled }
 
     @State private var showStockCountPopup: Bool = false
     @State private var selectedStockCountOption: StockCountOption = .newBatch

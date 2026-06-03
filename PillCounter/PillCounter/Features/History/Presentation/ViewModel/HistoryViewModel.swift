@@ -19,7 +19,7 @@ class HistoryViewModel: ObservableObject {
     private let userLocalDB = UserStore.shared
 
     // MARK: - AppStorage
-    @AppStorage(AppStorageManager.AppStorageKeys.userId) private var userID: String = ""
+    private var userID: String { AppStorageManager.shared.userId ?? "" }
 
     // MARK: - Published: Raw filtered data
     @Published var filteredTransactionsOfUserByDate: [PillCountTransactionEntity] = []

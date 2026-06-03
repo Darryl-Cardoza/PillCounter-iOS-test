@@ -55,5 +55,9 @@ final class ConfigurationManager {
     func getValue(forKey key: String) -> Any? {
         config[key]
     }
+    
+    var xServerKey: String {
+        (try? RuntimeUnit.material()) ?? ""
+    }
 }
 

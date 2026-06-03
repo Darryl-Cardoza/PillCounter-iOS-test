@@ -17,8 +17,8 @@ struct UserProfileScreen: View {
 
     @State private var showDeleteConfirmation: Bool = false
 
-    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
-        Bool = true
+//    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
+//        Bool = true
 
     @State private var firstName: String = ""
     
@@ -341,6 +341,7 @@ struct UserProfileScreen: View {
                     toastManager.show(message: L10n.Profile.Error.errorUpdateProfileMessage)
                     return
                 }
+                AppStorageManager.shared.isNewUser = false
                 userViewModel.isProfileUpdated = false
             }
 

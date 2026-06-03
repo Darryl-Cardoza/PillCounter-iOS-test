@@ -6,14 +6,12 @@
 //
 import SwiftUI
 
-
-
 // MARK: - STEP STATE
 
 private enum StepState {
-    case completed   // white bg, dark icon
-    case current     // white bg, gray/muted icon
-    case upcoming    // white bg, low opacity (not done)
+    case completed
+    case current
+    case upcoming
 }
 
 // MARK: - MAIN STEP ROW VIEW
@@ -25,23 +23,32 @@ struct ControlledStepRow: View {
     let activeSteps: [ControlledStep]
     let currentStep: ControlledStep
 
-    var body: some View {
+    private var isIpad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
 
+    // Sizing tokens
+    private var iconSize: CGFloat       { isIpad ? 32 : 20 }
+    private var circlePadding: CGFloat  { isIpad ? 12 : 8  }
+    private var circleFrame: CGFloat    { isIpad ? 56 : 40  }
+    private var chevronSize: CGFloat    { isIpad ? 16 : 12  }
+    private var hSpacing: CGFloat       { isIpad ? 12 : 8   }
+    private var vPadding: CGFloat       { isIpad ? 20 : 15  }
+    private var strokeWidth: CGFloat    { isIpad ? 2.5 : 2  }
+
+    var body: some View {
         let items = buildSteps()
 
-        HStack(spacing: 8) {
-
+        HStack(spacing: hSpacing) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-
                 stepIcon(for: item)
-
                 if index < items.count - 1 {
                     connectorView(between: item, and: items[index + 1])
                 }
             }
         }
         .padding(.horizontal, 5)
-        .padding(.vertical, 15)
+        .padding(.vertical, vPadding)
         .animation(.easeInOut(duration: 0.25), value: currentStep)
     }
 }
@@ -51,19 +58,13 @@ struct ControlledStepRow: View {
 private extension ControlledStepRow {
 
     func buildSteps() -> [(ControlledStep, StepState)] {
-
         guard let currentIndex = activeSteps.firstIndex(of: currentStep) else {
             return activeSteps.map { ($0, .upcoming) }
         }
-
         return activeSteps.enumerated().map { index, step in
-            if index < currentIndex {
-                return (step, .completed)
-            } else if index == currentIndex {
-                return (step, .current)
-            } else {
-                return (step, .upcoming)
-            }
+            if index < currentIndex       { return (step, .completed) }
+            else if index == currentIndex { return (step, .current)   }
+            else                          { return (step, .upcoming)  }
         }
     }
 }
@@ -74,17 +75,16 @@ private extension ControlledStepRow {
 
     @ViewBuilder
     func stepIcon(for item: (ControlledStep, StepState)) -> some View {
-
         let step  = item.0
         let state = item.1
 
         Image(assetName(for: step))
             .resizable()
             .scaledToFit()
-            .frame(width: 20, height: 20)
+            .frame(width: iconSize, height: iconSize)
             .colorMultiply(appColors.text)
-            .padding(8)
-            .frame(width: 40, height: 40)
+            .padding(circlePadding)
+            .frame(width: circleFrame, height: circleFrame)
             .background(
                 Circle()
                     .fill(appColors.secondaryBackground)
@@ -92,37 +92,19 @@ private extension ControlledStepRow {
                         Circle()
                             .stroke(
                                 state == .current ? appColors.secondary : .clear,
-                                lineWidth: 2
+                                lineWidth: strokeWidth
                             )
                     )
             )
             .foregroundColor(appColors.text)
             .opacity(stateOpacity(for: state))
     }
-    
-    func iconColor(for state: StepState) -> Color {
-        switch state {
-        case .completed:
-            return appColors.text
-        case .current:
-            return appColors.text.opacity(0.7)
 
-        case .upcoming:
-            return appColors.text.opacity(0.3)
-        }
-    }
-    
     func stateOpacity(for state: StepState) -> Double {
         switch state {
-            
-        case .completed:
-            return 1
-            
-        case .current:
-            return 1
-            
-        case .upcoming:
-            return 0.65
+        case .completed: return 1.0
+        case .current:   return 1.0
+        case .upcoming:  return 0.65
         }
     }
 }
@@ -136,11 +118,9 @@ private extension ControlledStepRow {
         between current: (ControlledStep, StepState),
         and next: (ControlledStep, StepState)
     ) -> some View {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .opacity(current.1 == .upcoming ? 0.5 : 1)
-                .foregroundColor(.white)
-                .opacity(next.1 == .upcoming ? 0.5 : 1)
-
+        Image(systemName: "chevron.right")
+            .font(.system(size: chevronSize, weight: .semibold))
+            .foregroundColor(.white)
+            .opacity(next.1 == .upcoming ? 0.5 : 1)
     }
 }

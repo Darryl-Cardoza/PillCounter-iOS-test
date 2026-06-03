@@ -108,10 +108,10 @@ struct AppNavigation: View {
                   }
               }
         .onAppear {
-            appColors.updateSystemAppearance(colorScheme == .dark)
+            appColors.updateSystemAppearance(colorScheme == .light)
         }
         .onChange(of: colorScheme) { _, newScheme in
-            appColors.updateSystemAppearance(newScheme == .dark)
+            appColors.updateSystemAppearance(newScheme == .light)
         }
     }
 }

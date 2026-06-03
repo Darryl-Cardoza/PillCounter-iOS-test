@@ -34,6 +34,8 @@ struct BtScannerInputBar: UIViewRepresentable {
         tf.spellCheckingType = .no
         tf.smartDashesType = .no
         tf.smartQuotesType = .no
+        tf.keyboardType = .asciiCapable
+        tf.textContentType = .none
         tf.returnKeyType = .done
         tf.delegate = context.coordinator
         context.coordinator.uiTextField = tf

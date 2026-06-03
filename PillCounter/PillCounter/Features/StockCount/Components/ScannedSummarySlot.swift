@@ -24,18 +24,18 @@ struct ScannedSummarySlot: View {
             // ── Header — mirrors ScannedDrugDetailsSlot header row ──
             Text(L10n.StockCountSheet.scannedDrugDetails)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(appColors.text.opacity(0.4))
+                .foregroundColor(appColors.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, isIpadPortrait ? 12 : 14)
 
             // ── Scan placeholder ──
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 Image("icon_scan_stock_bottle")
                     .renderingMode(.template)
                     .foregroundColor(appColors.secondary)
 
                 Text(L10n.StockCountSheet.scanNewStockBottle)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 16, weight: .regular))
                     .foregroundColor(appColors.text)
             }
             .frame(maxWidth: .infinity)
@@ -46,26 +46,26 @@ struct ScannedSummarySlot: View {
             }
             
             // ── Summary footer ──
-            VStack(spacing: isIPhone ? 24 : 12) {
+            VStack(spacing: 24) {
                 Text(L10n.StockCountSheet.scannedSummary)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(appColors.text.opacity(0.4))
+                    .foregroundColor(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(alignment: .bottom, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    VStack(alignment: .center, spacing: 4) {
                         Text(L10n.StockCountSheet.totalNdcs)
-                            .font(.system(size: 13))
-                            .foregroundColor(appColors.text.opacity(0.6))
+                            .font(.system(size: 16))
+                            .foregroundColor(appColors.text)
                         Text("\(totalNdc)")
                             .font(.system(size: 24, weight: .semibold))
                             .foregroundColor(appColors.secondary)
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .center, spacing: 4) {
                         Text(L10n.StockCountSheet.totalPills)
-                            .font(.system(size: 13))
-                            .foregroundColor(appColors.text.opacity(0.6))
+                            .font(.system(size: 16))
+                            .foregroundColor(appColors.text)
                         Text("\(totalPill)")
                             .font(.system(size: 24, weight: .semibold))
                             .foregroundColor(appColors.secondary)
@@ -77,14 +77,14 @@ struct ScannedSummarySlot: View {
                     PillCountingButton(
                         iconName: nil, title: L10n.Stock.endCount,
                         textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
-                        font: .system(size: 13, weight: .bold),
+                        font: .system(size: 13, weight: .semibold),
                         cornerRadius: 22, horizontalPadding: 18, verticalPadding: 13, iconSize: 0,
                         action: onEndCount
                     )
                     .fixedSize()
                 }
             }
-            .padding(.bottom, isIPhone ? 0 : 14)
+            .padding(.bottom, isIPhone ? 0 : 18)
         }
         .padding(.horizontal, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

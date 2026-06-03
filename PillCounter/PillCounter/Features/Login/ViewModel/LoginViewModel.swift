@@ -136,6 +136,7 @@ class LoginViewModel: ObservableObject {
                     Date().addingTimeInterval(expiresIn).timeIntervalSince1970
 
                 await MainActor.run {
+                    SessionManager.shared.reset()
                     Hl7ServiceController.shared.evaluate()
                 }
 

@@ -19,7 +19,7 @@ struct UnifiedCameraLayout: View {
     let showStockCountPanel: Bool
     let stockCountSheetHeight: CGFloat
     let isLandscape: Bool
-    let controlledStepInstruction: String
+    let instructionText: String
     let showPillDetectionUI: Bool
     let onBack: () -> Void
     let onResume: () -> Void
@@ -63,37 +63,40 @@ struct UnifiedCameraLayout: View {
 
             // ── Header row ────────────────────────────────────────────────────
             VStack {
-                HStack {
-                    Button(action: onBack) {
-                        PillCountingIconView(
-                            imageName: "back_icon",
-                            size: 24,
-                            padding: 12,
-                            foregroundColor: appColors.primary,
-                            backgroundColor: .clear,
-                            scaleOnIpad: true
-                        )
-                    }
-                    if !isLandscape { Spacer() }
-                    if showPillCountPanel {
-                        let isIpad = UIDevice.current.userInterfaceIdiom == .pad
-                        if !controlledStepInstruction.isEmpty {
-                            PillCountInstructionOverlay(text: controlledStepInstruction)
-                                .padding(.leading, isLandscape ? (isIpad ? 220 : 100) : 0)
+                ZStack {
+                    // Back button pinned to leading edge
+                    HStack {
+                        Button(action: onBack) {
+                            PillCountingIconView(
+                                imageName: "back_icon",
+                                size: 24,
+                                padding: 12,
+                                foregroundColor: appColors.primary,
+                                backgroundColor: .clear,
+                                scaleOnIpad: true
+                            )
                         }
+                        Spacer()
+                    }
+
+                    // Instruction centered independently
+                    if !instructionText.isEmpty {
+                        PillCountInstructionOverlay(text: instructionText)
+                            .frame(maxWidth: .infinity)
                     }
                     Spacer()
-                    Color.clear.frame(width: 48, height: 48)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, isLandscape ? 10 : 40)
                 Spacer()
+                
+                Color.clear.frame(height: showPillCountPanel ? pillCountSheetHeight : showStockCountPanel ? stockCountSheetHeight : 0)
             }
 
             // ── Controlled step row ───────────────────────────────────────────
             if showPillCountPanel,
                pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
-                controlledStepRow
+               controlledStepRow
             }
 
             // ── Toast ─────────────────────────────────────────────────────────
@@ -149,9 +152,8 @@ struct UnifiedCameraLayout: View {
                 )
                 Spacer().frame(height: pillCountSheetHeight)
             }
-        }
+        }.environment(\.colorScheme, .dark)
     }
-
     // MARK: - Toast
 
 //    // ── OLD bottom toast (kept for reference) ────────────────────────────────

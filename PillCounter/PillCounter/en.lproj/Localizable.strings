@@ -365,5 +365,6 @@
 "controlled.scanBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanStockCountBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanRxLabelBarcode" = "Scan Rx Label";
+"controlled.scanNdcToCountPills" = "Scan NDC to count pills";
 
 

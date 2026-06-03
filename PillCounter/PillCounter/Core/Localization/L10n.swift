@@ -384,7 +384,6 @@ enum L10n {
     
 
     enum DispensePartial {
-
         enum Filter {
             static let all = NSLocalizedString("dispensePartial.filter.all", comment: "")
             static let pms = NSLocalizedString("dispensePartial.filter.pms", comment: "")
@@ -418,5 +417,6 @@ enum L10n {
         static let scanBarcode = NSLocalizedString("controlled.scanBarcode", comment: "")
         static let scanStockCountBarcode = NSLocalizedString("controlled.scanStockCountBarcode", comment: "")
         static let scanRxLabelBarcode = NSLocalizedString("controlled.scanRxLabelBarcode", comment: "")
+        static let scanNdcToCountPills = NSLocalizedString("controlled.scanNdcToCountPills", comment: "")
     }
 }

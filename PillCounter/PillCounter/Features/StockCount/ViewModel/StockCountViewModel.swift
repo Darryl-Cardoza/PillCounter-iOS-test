@@ -225,9 +225,21 @@ class StockCountViewModel: ObservableObject {
 
     func getScannedDrugData(rawValue: String) async {
         let decoded = decoder.decode(rawValue)
-        let gtin = decoded.gtin ?? ""
         let lotNumber = decoded.lotNumber ?? ""
         let expiryString = formatExpiry(decoded.expirationDate) ?? ""
+
+        let rawDigitsOnly = rawValue.components(separatedBy: .decimalDigits.inverted).joined()
+        let gtin: String
+        if let decoded = decoded.gtin, !decoded.isEmpty {
+            gtin = decoded
+        } else if rawDigitsOnly.count >= 8 && rawDigitsOnly.count <= 14 {
+            gtin = rawDigitsOnly
+        } else {
+            gtin = ""
+        }
+
+        print("🔵 [BT-Scan] rawValue='\(rawValue)' utf8bytes=\(Array(rawValue.utf8)) rawDigitsOnly='\(rawDigitsOnly)' resolvedGtin='\(gtin)'")
+
         await fetchDrugDataOnly(rawValue: rawValue, gtin: gtin, lotNumber: lotNumber, expiry: expiryString)
     }
 
@@ -251,7 +263,9 @@ class StockCountViewModel: ObservableObject {
         isLoading = true
 
         // 1. Local DB — only use if quantity is known; otherwise fall through to API to backfill it
-        if let localDrug = drugMasterDAO.fetchByGtin(gtin), localDrug.package_qty > 0 {
+        let localLookup = drugMasterDAO.fetchByGtin(gtin)
+        print("🔵 [BT-Scan] localDB lookup gtin='\(gtin)' found=\(localLookup != nil) pkg_qty=\(localLookup?.package_qty ?? -1)")
+        if let localDrug = localLookup, localDrug.package_qty > 0 {
             let ndc = localDrug.ndc ?? ""
             if currentBatch?.req_id_from_pms != nil, !batchNdcSet.contains(ndc) {
                 isLoading = false
@@ -320,6 +334,7 @@ class StockCountViewModel: ObservableObject {
             showStockCountScannedDetails = true
             print("Fetched response from API: \(response)")
         } catch {
+            print("🔴 [BT-Scan] API failed gtin='\(gtin)' error=\(error)")
             scannedDrugData = nil
             isLoading = false
             showScanError = true

@@ -46,24 +46,28 @@ struct StockCountBatchPanel<BottomContent: View>: View {
             HStack(spacing: 4) {
                 Text(recentLabel)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(appColors.text.opacity(0.4))
+                    .foregroundColor(appColors.text)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(appColors.primary)
+//                Image(systemName: "magnifyingglass")
+//                    .font(.system(size: 14, weight: .medium))
+//                    .foregroundColor(appColors.primary)
             }
             .padding(.horizontal, 22)
             .padding(.top, hideHeader ? 16 : 0)
             .padding(.bottom, 8)
 
-            if stockCountViewModel.groupedTransactions.isEmpty {
+            let visibleTransactions = stockCountViewModel.groupedTransactions.filter {
+                $0.ndc != stockCountViewModel.scannedDrugData?.ndc
+            }
+
+            if visibleTransactions.isEmpty {
                 emptyState
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 0) {
-                        ForEach(stockCountViewModel.groupedTransactions, id: \.ndc) { txn in
+                        ForEach(visibleTransactions, id: \.ndc) { txn in
                             countRow(txn)
                         }
                     }
@@ -100,22 +104,16 @@ struct StockCountBatchPanel<BottomContent: View>: View {
                 .font(.system(size: 28))
                 .foregroundColor(appColors.text.opacity(0.2))
             Text(L10n.StockCountSheet.noItemsAddedYet)
-                .font(.system(size: 13))
+                .font(.system(size: 16))
                 .foregroundColor(appColors.text.opacity(0.3))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private func countRow(_ txn: GroupedTransaction) -> some View {
-        let isSelected = stockCountViewModel.selectedGroupedTransaction?.ndc == txn.ndc
-        return VStack(spacing: 0) {
-            BatchCountCard(txn: txn, isSelected: isSelected) {
-                if isSelected {
-                    stockCountViewModel.selectedGroupedTransaction = nil
-                    stockCountViewModel.scannedDrugData = nil
-                } else {
-                    stockCountViewModel.selectTransaction(txn)
-                }
+        VStack(spacing: 0) {
+            BatchCountCard(txn: txn, isSelected: false) {
+                stockCountViewModel.selectTransaction(txn)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 4)

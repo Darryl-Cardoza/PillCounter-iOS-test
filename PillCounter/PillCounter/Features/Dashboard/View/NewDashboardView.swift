@@ -923,11 +923,7 @@ struct NewDashboardView: View {
                     stockCountViewModel.reloadAllState()
                     router.navigate(
                         to: .authentication(
-                            .login(
-                                .dashboard(
-                                    .pillCount(.stockCount(.stockCountBatchDetail))
-                                )
-                            )
+                            .login(.dashboard(.pillCount(.scan(.stockCount))))
                         )
                     )
                 }

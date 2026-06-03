@@ -32,61 +32,6 @@ struct KeyValueInfoCard: View {
     }
 }
 
-// MARK: - Menu option picker
-//
-//struct MenuOption<Option: Hashable>: View {
-//
-//    let options: [Option]
-//    @Binding var selectedOption: Option
-//    @Binding var isPresented: Bool
-//    let label: (Option) -> String
-//    let onSelect: (Option) -> Void
-//    @EnvironmentObject private var appColors: AppColors
-//
-//    var body: some View {
-//        VStack(alignment: .leading, spacing: 15) {
-//            Text("SELECT OPTIONS")
-//                .foregroundStyle(appColors.text)
-//                .font(.system(size: 18, weight: .bold))
-//
-//            ForEach(options, id: \.self) { option in
-//                PillCountingRadioButton(
-//                    option: option,
-//                    selectedOption: $selectedOption,
-//                    label: label(option),
-//                    selectedColor: appColors.primary,
-//                    unselectedColor: .gray.opacity(0.5),
-//                    size: 20,
-//                    lineWidth: 2,
-//                    textColor: appColors.text
-//                )
-//                .padding(.vertical)
-//            }
-//            .padding(.horizontal)
-//
-//            HStack {
-//                PillCountingButton(
-//                    iconName: nil, title: L10n.Common.cancel,
-//                    textColor: appColors.text, backgroundColor: appColors.primaryBackground,
-//                    borderColor: appColors.primary,
-//                    font: .system(size: 12, weight: .semibold),
-//                    cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
-//                    action: { isPresented = false }
-//                )
-//                PillCountingButton(
-//                    iconName: nil, title: L10n.Common.ok,
-//                    textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
-//                    font: .system(size: 12, weight: .regular),
-//                    cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
-//                    action: { isPresented = false; onSelect(selectedOption) }
-//                )
-//            }
-//        }
-//        .frame(width: 250)
-//        .padding(.vertical)
-//    }
-//}
-
 // MARK: - Step instruction overlay
 
 struct PillCountInstructionOverlay: View {

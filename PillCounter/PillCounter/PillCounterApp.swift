@@ -15,6 +15,7 @@ struct PillCounterApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var securityState = AppSecurityState()
+    @ObservedObject private var sessionManager = SessionManager.shared
 
     // FIX F-09: Tracks whether a privacy overlay should be shown.
     @State private var isObscured: Bool = false
@@ -83,7 +84,19 @@ struct PillCounterApp: App {
                             .environmentObject(stockCountViewModel)
                             .environmentObject(historyViewModel)
                             .environmentObject(toastManager)
+                            .environmentObject(sessionManager)
                             .onAppear { startSecurityMonitoring() }
+                            .onChange(of: sessionManager.isSessionExpired) { _, expired in
+                                if expired {
+                                    AppLogoutManager.performLogout(
+                                        userVM: userViewModel,
+                                        pillScanVM: pillScanViewModel,
+                                        loginViewModel: loginViewModel
+                                    )
+                                    router.navigationPath.removeLast(router.navigationPath.count)
+                                    sessionManager.reset()
+                                }
+                            }
                             .task {
                                 userViewModel.loadMobileThemeSettings()
 
@@ -175,6 +188,7 @@ extension PillCounterApp {
             } else {
                 startSecurityMonitoring()
             }
+            Task { await sessionManager.checkTokenOnForeground() }
 
         case .inactive, .background:
             //Apply the overlay before iOS takes the snapshot.

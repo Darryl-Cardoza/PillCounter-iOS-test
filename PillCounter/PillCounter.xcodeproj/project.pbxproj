@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5A67A8700F61F720CE951A3D /* Pods_PillCounterTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D047713FC8C3E6CB93B74F57 /* Pods_PillCounterTests.framework */; };
+		791DC6A72FD0134100DBB7AE /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 791DC6A62FD0134100DBB7AE /* FirebaseCore */; };
 		79F97D4A2FD00ED00054E69F /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 79F97D492FD00ED00054E69F /* ComposeApp */; };
 		88E39F8E2FB311C800D6DEA2 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 88E39F8D2FB311C800D6DEA2 /* FirebaseMessaging */; settings = {ATTRIBUTES = (Required, ); }; };
 		88E39F9D2FB31DAA00D6DEA2 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39F9C2FB31DAA00D6DEA2 /* UIKit.framework */; platformFilters = (ios, xros, ); settings = {ATTRIBUTES = (Weak, ); }; };
@@ -102,6 +103,7 @@
 				79F97D4A2FD00ED00054E69F /* ComposeApp in Frameworks */,
 				88E39FAB2FB31FA500D6DEA2 /* CoreAudio.framework in Frameworks */,
 				88E39FA92FB31DFA00D6DEA2 /* CoreVideo.framework in Frameworks */,
+				791DC6A72FD0134100DBB7AE /* FirebaseCore in Frameworks */,
 				88E39FA72FB31DF200D6DEA2 /* CoreMedia.framework in Frameworks */,
 				88E39FA52FB31DDA00D6DEA2 /* AVFoundation.framework in Frameworks */,
 				88E39FA32FB31DD400D6DEA2 /* MetalKit.framework in Frameworks */,
@@ -208,6 +210,7 @@
 			packageProductDependencies = (
 				88E39F8D2FB311C800D6DEA2 /* FirebaseMessaging */,
 				79F97D492FD00ED00054E69F /* ComposeApp */,
+				791DC6A62FD0134100DBB7AE /* FirebaseCore */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -296,8 +299,8 @@
 			mainGroup = 473A48EC2EB4F11200EEA905;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				79963B772F8543920053241C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				79F97D482FD00ED00054E69F /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
+				791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -613,7 +616,8 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
@@ -685,7 +689,8 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
@@ -850,6 +855,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.14.0;
+			};
+		};
 		88129A8F2FCEB73F00412754 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -861,6 +874,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		791DC6A62FD0134100DBB7AE /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
 		79F97D492FD00ED00054E69F /* ComposeApp */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ComposeApp;
@@ -869,11 +887,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 88129A8F2FCEB73F00412754 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
-		};
-		88129AA12FCEB84100412754 /* FirebaseCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 88129A8F2FCEB73F00412754 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

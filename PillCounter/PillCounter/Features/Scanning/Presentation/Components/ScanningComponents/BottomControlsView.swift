@@ -49,7 +49,8 @@ struct BottomControlsView: View {
         VStack(spacing: 0) {
             BottomControlsViewHeader(
                 drugName: pillScanViewModel.currentTransaction?.drug?.drug_name ?? "",
-                isLandScape: isLandscape
+                isLandScape: isLandscape,
+                isIpad: isIpad
             )
             .padding(.top, isIpad ? 42 : 24)
 
@@ -225,6 +226,7 @@ struct BottomControlsViewBodyForPillScan: View {
 struct BottomControlsViewHeader: View {
     let drugName: String
     let isLandScape: Bool
+    let isIpad: Bool
     @EnvironmentObject private var appColors: AppColors
 
     var body: some View {
@@ -233,7 +235,7 @@ struct BottomControlsViewHeader: View {
                 VStack(spacing: 2) {
                     Text(drugName)
                         .foregroundStyle(appColors.text)
-                        .font(.system(size: 16))
+                        .font(.system(size: isIpad ? 20 :16))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .padding(.horizontal, 16)
@@ -242,7 +244,7 @@ struct BottomControlsViewHeader: View {
                 ZStack {
                     Text(drugName)
                         .foregroundStyle(appColors.text)
-                        .font(.system(size: 16))
+                        .font(.system(size: isIpad ? 20 : 16))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16)
                         .lineLimit(2)

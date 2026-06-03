@@ -99,6 +99,7 @@ extension BaseRepositoryProtocol {
                         throw APIError.parsingError
                     }
                 case 401:
+                    NotificationCenter.default.post(name: .unauthorizedResponseReceived, object: nil)
                     throw APIError.unauthorized
                 case 403:
                     throw APIError.forbidden

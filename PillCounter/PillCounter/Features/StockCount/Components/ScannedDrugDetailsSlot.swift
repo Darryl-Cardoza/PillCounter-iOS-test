@@ -24,7 +24,7 @@ struct ScannedDrugDetailsSlot: View {
             HStack(alignment: .center) {
                 Text(L10n.StockCountSheet.scannedDrugDetails)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(appColors.text.opacity(0.4))
+                    .foregroundColor(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 PillCountingButton(
@@ -80,7 +80,6 @@ struct ScannedDrugDetailsSlot: View {
 
                         cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-
                         cellLabel(L10n.StockCountSheet.bucket, value: bucket.uppercased(), color: appColors.secondary, align: .trailing)
                     }
                 }
@@ -98,10 +97,10 @@ struct ScannedDrugDetailsSlot: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     cellLabel(L10n.StockCountSheet.batchNo, value: batchId, color: appColors.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    Spacer()
                     cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(.vertical, 5)
             }
@@ -115,7 +114,7 @@ struct ScannedDrugDetailsSlot: View {
         VStack(alignment: align, spacing: 4) {
             Text(label)
                 .font(.system(size: 14, weight: .regular))
-                .foregroundColor(appColors.text.opacity(0.42))
+                .foregroundColor(appColors.text)
             Text(value)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(color)
@@ -141,8 +140,8 @@ struct ScannedDrugDetailsSlot: View {
                     .contentTransition(.numericText())
                     .animation(.spring(duration: 0.25), value: newTotal)
                 Text(String(format: L10n.StockCountSheet.pillsWithCount, totalPills))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(appColors.text.opacity(0.4))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(appColors.text)
                     .contentTransition(.numericText())
                     .animation(.spring(duration: 0.25), value: totalPills)
             }
@@ -188,14 +187,14 @@ struct ScannedDrugDetailsSlot: View {
                 iconName: nil, title: L10n.StockCountSheet.clear,
                 textColor: appColors.primary, backgroundColor: .clear,
                 borderColor: appColors.primary,
-                font: .system(size: 14, weight: .bold),
+                font: .system(size: 14, weight: .semibold),
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
                 action: onCancel
             )
             PillCountingButton(
                 iconName: nil, title: L10n.StockCountSheet.add,
                 textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
-                font: .system(size: 14, weight: .bold),
+                font: .system(size: 14, weight: .semibold),
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
                 action: onAdd
             )

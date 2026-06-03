@@ -26,7 +26,11 @@ final class CameraService: NSObject, ObservableObject {
     @Published var scannedCode: String = ""
     @Published var scannedCodeType: String = ""
     private var barcodeEnabled: Bool = false
-    private var hasScanned: Bool = false
+    // The value of the barcode currently locked in frame. Non-nil means we already
+    // fired the scan event and are waiting for the physical barcode to leave the
+    // camera's field of view before we fire again. Set to nil the moment the
+    // metadata delegate reports an empty (or different-value) frame.
+    private var lockedBarcodeValue: String? = nil
 
     // MARK: - IMAGE PROCESSING
     private let detector = PillDetectionService()
@@ -153,7 +157,6 @@ final class CameraService: NSObject, ObservableObject {
         // Setting the delegate before the output is added to the session silently fails.
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            self.hasScanned = false
             self.barcodeEnabled = true
             self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
         }
@@ -163,17 +166,20 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.barcodeEnabled = false
+            // Intentionally preserve lockedBarcodeValue. If scanning is re-enabled
+            // while the same physical barcode is still in frame, the lock prevents
+            // it from immediately re-firing. The lock is only released when the
+            // frame-presence check sees the barcode has left the camera view.
             self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
         }
     }
 
     func resetBarcodeScanState() {
-        // Clear published values synchronously — caller is always on main thread.
-        // Doing this async allowed scannedCode onChange to re-fire with the stale
-        // value before the clear landed, causing repeated API calls on NDC mismatch.
-        // hasScanned is intentionally NOT reset here — only enableBarcodeScanning()
-        // re-arms it, preventing the camera delegate from re-firing haptic/sound
-        // while the barcode is still in frame between reset and the next enable call.
+        // Clears published values so the view's onChange does not re-fire with a
+        // stale value. lockedBarcodeValue is NOT cleared here — the physical barcode
+        // may still be in frame. Clearing it would re-fire the scan event on the
+        // very next metadata callback. The lock releases only when the frame-presence
+        // check confirms the barcode has physically left the camera view.
         scannedCode = ""
         scannedCodeType = ""
     }
@@ -215,6 +221,9 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async {
             guard self.session.isRunning else { return }
             self.session.stopRunning()
+            // Session is fully stopped — no barcodes are visible. Clear the lock
+            // so the next start() begins fresh rather than blocking on a stale value.
+            self.lockedBarcodeValue = nil
         }
 
         DispatchQueue.main.async {
@@ -620,13 +629,29 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        guard barcodeEnabled,
-              !hasScanned,
+        guard barcodeEnabled else { return }
+
+        // Collect all currently-visible barcode values this frame.
+        let visibleValues = metadataObjects
+            .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
+            .compactMap { $0.stringValue }
+
+        // If the previously locked barcode is no longer in the frame, release the
+        // lock immediately — no timer, no cooldown. The next real barcode can fire
+        // the moment it enters the frame.
+        if let locked = lockedBarcodeValue, !visibleValues.contains(locked) {
+            lockedBarcodeValue = nil
+        }
+
+        // Fire a scan event only when:
+        //   • there is no locked barcode (we are ready for a new scan), AND
+        //   • a barcode is actually present in the current frame.
+        guard lockedBarcodeValue == nil,
               let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               let value = object.stringValue
         else { return }
 
-        hasScanned = true
+        lockedBarcodeValue = value
         scannedCode = value
         scannedCodeType = object.type.rawValue
     }

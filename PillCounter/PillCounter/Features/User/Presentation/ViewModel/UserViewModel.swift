@@ -512,7 +512,10 @@ class UserViewModel: ObservableObject {
     }
 
     // MARK: REFRESH TOKEN
-    func refreshToken() async {
+
+    /// Returns `true` if the token was refreshed successfully.
+    @discardableResult
+    func refreshToken() async -> Bool {
         do {
             let result = try await userRepo.refreshToken(
                 refreshToken: AppStorageManager.shared.refreshToken ?? ""
@@ -523,9 +526,15 @@ class UserViewModel: ObservableObject {
                 let expiresIn = TimeInterval(result.data?.expiresIn ?? 86400)
                 AppStorageManager.shared.tokenExpiryTimestamp =
                     Date().addingTimeInterval(expiresIn).timeIntervalSince1970
+                return true
+            } else {
+                await SessionManager.shared.triggerExpiry()
+                return false
             }
         } catch {
             Log("❌ Token refresh error: \(error)")
+            await SessionManager.shared.triggerExpiry()
+            return false
         }
     }
 

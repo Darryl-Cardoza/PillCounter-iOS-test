@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5A67A8700F61F720CE951A3D /* Pods_PillCounterTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D047713FC8C3E6CB93B74F57 /* Pods_PillCounterTests.framework */; };
-		889845132FB3439200989B7C /* ComposeApp.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39F962FB31C4100D6DEA2 /* ComposeApp.xcframework */; };
+		79F97D4A2FD00ED00054E69F /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 79F97D492FD00ED00054E69F /* ComposeApp */; };
 		88E39F8E2FB311C800D6DEA2 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 88E39F8D2FB311C800D6DEA2 /* FirebaseMessaging */; settings = {ATTRIBUTES = (Required, ); }; };
 		88E39F9D2FB31DAA00D6DEA2 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39F9C2FB31DAA00D6DEA2 /* UIKit.framework */; platformFilters = (ios, xros, ); settings = {ATTRIBUTES = (Weak, ); }; };
 		88E39F9F2FB31DBA00D6DEA2 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39F9E2FB31DBA00D6DEA2 /* SwiftUI.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
@@ -46,7 +46,6 @@
 		473A48F52EB4F11200EEA905 /* PillCounter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PillCounter.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		473A490B2EB4F11300EEA905 /* PillCounterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PillCounterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		473A49152EB4F11300EEA905 /* PillCounterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PillCounterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		88E39F962FB31C4100D6DEA2 /* ComposeApp.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = ComposeApp.xcframework; path = ../../mobrite_hl7_parser_builder/hl7Core/swiftpackage/ComposeApp.xcframework; sourceTree = "<group>"; };
 		88E39F9A2FB31D9600D6DEA2 /* CoreAudioTypes.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioTypes.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/CoreAudioTypes.framework; sourceTree = DEVELOPER_DIR; };
 		88E39F9C2FB31DAA00D6DEA2 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/UIKit.framework; sourceTree = DEVELOPER_DIR; };
 		88E39F9E2FB31DBA00D6DEA2 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/SwiftUI.framework; sourceTree = DEVELOPER_DIR; };
@@ -66,10 +65,6 @@
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		47793CE82EF940640023EAD4 /* Exceptions for "PillCounter" folder in "PillCounter" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			additionalCompilerFlagsByRelativePath = {
-				Features/Scanning/Model/best.mlpackage = "xcrun coremlcompiler compile best.mlpackage ./CompiledBest \\ --encrypt-key-file /Users/riteshparekh/Documents/Darryl/Rite-Projects/PillCounterCert/best.mlmodelkey";
-				Features/Scanning/Model/trayBest.mlpackage = "xcrun coremlcompiler compile trayBest.mlpackage ./CompiledTrayBest \\ --encrypt-key-file /Users/riteshparekh/Documents/Darryl/Rite-Projects/PillCounterCert/trayBest.mlmodelkey";
-			};
 			membershipExceptions = (
 				Core/Components/Untitled.swift,
 				Info.plist,
@@ -104,6 +99,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				79F97D4A2FD00ED00054E69F /* ComposeApp in Frameworks */,
 				88E39FAB2FB31FA500D6DEA2 /* CoreAudio.framework in Frameworks */,
 				88E39FA92FB31DFA00D6DEA2 /* CoreVideo.framework in Frameworks */,
 				88E39FA72FB31DF200D6DEA2 /* CoreMedia.framework in Frameworks */,
@@ -112,7 +108,6 @@
 				88E39FA12FB31DC500D6DEA2 /* Metal.framework in Frameworks */,
 				88E39F9F2FB31DBA00D6DEA2 /* SwiftUI.framework in Frameworks */,
 				88E39F9D2FB31DAA00D6DEA2 /* UIKit.framework in Frameworks */,
-				889845132FB3439200989B7C /* ComposeApp.xcframework in Frameworks */,
 				88E39F8E2FB311C800D6DEA2 /* FirebaseMessaging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -170,7 +165,6 @@
 				88E39F9E2FB31DBA00D6DEA2 /* SwiftUI.framework */,
 				88E39F9C2FB31DAA00D6DEA2 /* UIKit.framework */,
 				88E39F9A2FB31D9600D6DEA2 /* CoreAudioTypes.framework */,
-				88E39F962FB31C4100D6DEA2 /* ComposeApp.xcframework */,
 				292E5F75DD3CDE5CF63612F1 /* Pods_PillCounter.framework */,
 				EA4C2FF88A4F1346D45E0B1B /* Pods_PillCounter_PillCounterUITests.framework */,
 				D047713FC8C3E6CB93B74F57 /* Pods_PillCounterTests.framework */,
@@ -213,6 +207,7 @@
 			name = PillCounter;
 			packageProductDependencies = (
 				88E39F8D2FB311C800D6DEA2 /* FirebaseMessaging */,
+				79F97D492FD00ED00054E69F /* ComposeApp */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -302,7 +297,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				79963B772F8543920053241C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				889845122FB3438400989B7C /* XCLocalSwiftPackageReference "../../mobrite_hl7_parser_builder/hl7Core/swiftpackage" */,
+				79F97D482FD00ED00054E69F /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -577,82 +572,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Debug.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEPLOYMENT_POSTPROCESSING = NO;
-				DEVELOPMENT_ASSET_PATHS = "\"PillCounter/Preview Content\"";
-				DEVELOPMENT_TEAM = 8H4QNV2FVL;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
-				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
-				ENABLE_USER_SELECTED_FILES = readonly;
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "x86-64";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = PillCounter/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Pill Counter";
-				INFOPLIST_KEY_NSCameraUsageDescription = "We will be using your camera to detect pills and scan the barcodes or qr codes.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app advertises and discovers HL7 services on the local network.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to tag pill count images.";
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIRequiredDeviceCapabilities = armv7;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 1.0;
-				"OTHER_LDFLAGS[arch=*]" = (
-					"-ObjC",
-					"-dead_strip",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounting;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SDKROOT = auto;
-				STRIP_INSTALLED_PRODUCT = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				XROS_DEPLOYMENT_TARGET = 2.2;
-			};
-			name = Debug;
-		};
-		473A49212EB4F11300EEA905 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = A078DF56139C6FC35DBC4443 /* Pods-PillCounter.release.xcconfig */;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Release.entitlements";
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
-				CODE_SIGN_STYLE = Manual;
-				COPY_PHASE_STRIP = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_VERSION = "compiler-default";
-				DEPLOYMENT_POSTPROCESSING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"PillCounter/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 8H4QNV2FVL;
@@ -700,12 +625,84 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounting;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = PillCountingReleaseProfile;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = PillCounterDevProfile;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				STRIP_INSTALLED_PRODUCT = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Debug;
+		};
+		473A49212EB4F11300EEA905 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A078DF56139C6FC35DBC4443 /* Pods-PillCounter.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Release.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_VERSION = "compiler-default";
+				DEPLOYMENT_POSTPROCESSING = YES;
+				DEVELOPMENT_ASSET_PATHS = "\"PillCounter/Preview Content\"";
+				DEVELOPMENT_TEAM = 8H4QNV2FVL;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "x86-64";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PillCounter/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pill Counter";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We will be using your camera to detect pills and scan the barcodes or qr codes.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app advertises and discovers HL7 services on the local network.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to tag pill count images.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = armv7;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				"OTHER_LDFLAGS[arch=*]" = (
+					"-ObjC",
+					"-dead_strip",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounting;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				XROS_DEPLOYMENT_TARGET = 2.2;
 			};
 			name = Release;
@@ -846,9 +843,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		889845122FB3438400989B7C /* XCLocalSwiftPackageReference "../../mobrite_hl7_parser_builder/hl7Core/swiftpackage" */ = {
+		79F97D482FD00ED00054E69F /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../mobrite_hl7_parser_builder/hl7Core/swiftpackage;
+			relativePath = "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage";
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -864,6 +861,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		79F97D492FD00ED00054E69F /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ComposeApp;
+		};
 		88E39F8D2FB311C800D6DEA2 /* FirebaseMessaging */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 79963B772F8543920053241C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

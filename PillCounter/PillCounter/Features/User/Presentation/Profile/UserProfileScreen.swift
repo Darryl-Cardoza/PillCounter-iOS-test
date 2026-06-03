@@ -346,7 +346,7 @@ struct UserProfileScreen: View {
             }
 
             toastManager.show(message: L10n.Profile.successUpdateMessage)
-            isNewUser = false
+            AppStorageManager.shared.isNewUser = false
             router.navigateBack()
         }
     }

@@ -120,7 +120,7 @@ class UserViewModel: ObservableObject {
     // MARK: - Get User
 
     func getUser() async {
-        let userID = AppStorageManager.shared.userId ?? ""
+        var userID = AppStorageManager.shared.userId ?? ""
         isLoading = true
         defer {
             isLoading = false
@@ -158,10 +158,10 @@ class UserViewModel: ObservableObject {
                     populateEditableFields(from: user)
                 }
 
-                print("[Terminals] data.user.terminals: \(String(describing: getUserResult.data?.user?.terminals))")
-                print("[Terminals] data.terminals: \(String(describing: getUserResult.data?.terminals))")
-                let fetchedTerminals = getUserResult.data?.user?.terminals
-                    ?? getUserResult.data?.terminals
+                print("[Terminals] data.user.terminals: \(String(describing: result.data?.user?.terminals))")
+                print("[Terminals] data.terminals: \(String(describing: result.data?.terminals))")
+                let fetchedTerminals = result.data?.user?.terminals
+                    ?? result.data?.terminals
                     ?? []
                 print("[Terminals] fetchedTerminals count: \(fetchedTerminals.count)")
                 terminals = fetchedTerminals
@@ -170,11 +170,11 @@ class UserViewModel: ObservableObject {
                     pendingTerminal = selectedTerminal
                 }
 
-                userID = getUserResult.data?.profile?.userId ?? ""
+                userID = result.data?.profile?.userId ?? ""
 
                 if let userId = userProfileDetails?.userId,
                    userLocalDB.fetchByUserId( userId) == nil {
-                    userLocalDB.save(from: getUserResult)
+                    userLocalDB.save(from: result)
                 }
 
             } else {
@@ -244,7 +244,7 @@ class UserViewModel: ObservableObject {
 
                 let previousUserProfileDetails = userProfileDetails
                 userProfileDetails =
-                    updateUserProfileResult.data?.profile
+                result.data?.profile
                     ?? previousUserProfileDetails
                 
                 if !userID.isEmpty {
@@ -333,8 +333,8 @@ class UserViewModel: ObservableObject {
         let allTransactions =
             userLocalDB.fetchTransactionsByDateRange(
                 for: user,
-                startDateTs: startTimestamp,
-                endDateTs: endTimestamp
+                startDateTs: startTs,
+                endDateTs: endTs
             )
 
         let finalTransactions: [PillCountTransactionEntity]
@@ -372,7 +372,7 @@ class UserViewModel: ObservableObject {
         transactionDAO.softDelete(txnId: transactionId)
 
         if countType == .FIXED {
-            await sendCompletionHL7(txnId: txnId)
+            await sendCompletionHL7(txnId: transactionId)
             await getAllPartialTransactions(countType: .FIXED)
         } else {
             await getAllPartialTransactions(countType: .REGULAR)
@@ -723,28 +723,15 @@ class UserViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Delete User Profile
-
-    func deleteUserProfile() async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            let response = try await userRepo.deleteUserProfile(accessToken: accessToken)
-            if response.isSuccess ?? false { AppStorageManager.shared.logout() }
-        } catch {
-            Log("Failed to delete user profile: \(error)")
-        }
-    }
-
     // MARK: - Reset (called on logout)
 
     @MainActor
     func resetState() {
         // AppStorage backed vars
-        userEmail = ""
-        userID = ""
-        pmsHostName = ""
-        pillCounterHostName = ""
+        AppStorageManager.shared.userEmail = ""
+        AppStorageManager.shared.userId = ""
+        AppStorageManager.shared.pmsHostName = ""
+        AppStorageManager.shared.pillCounterHostName = ""
 
         // Loading & flags
         isLoading = false

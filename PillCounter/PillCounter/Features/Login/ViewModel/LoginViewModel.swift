@@ -129,6 +129,7 @@ class LoginViewModel: ObservableObject {
                 AppStorageManager.shared.accessToken  = result.data?.accessToken ?? ""
                 AppStorageManager.shared.refreshToken = result.data?.refreshToken ?? ""
                 AppStorageManager.shared.userEmail    = userEmail
+                AppStorageManager.shared.userId = result.data?.user?.userId ?? ""
 
                 let expiresIn = TimeInterval(result.data?.expiresIn ?? 86400)
                 AppStorageManager.shared.tokenExpiryTimestamp =

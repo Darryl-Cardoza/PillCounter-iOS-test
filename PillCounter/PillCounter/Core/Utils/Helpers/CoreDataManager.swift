@@ -73,35 +73,4 @@ final class CoreDataManager {
     }
 
     private static let modelName = "PillCounter"
-
-    private init() {
-        guard
-            let modelURL = Bundle.main.url(
-                forResource: Self.modelName, withExtension: "momd"),
-            let model = NSManagedObjectModel(contentsOf: modelURL)
-        else {
-            fatalError("CoreDataManager: \(Self.modelName).momd not found")
-        }
-
-        container = NSPersistentContainer(name: Self.modelName, managedObjectModel: model)
-
-        let description = container.persistentStoreDescriptions.first
-        description?.setOption(
-            FileProtectionType.completeUnlessOpen as NSObject,
-            forKey: NSPersistentStoreFileProtectionKey
-        )
-        description?.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-        description?.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
-        description?.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
-
-        container.loadPersistentStores { _, error in
-            if let error {
-                Log("❌ CoreData failed to load: \(error.localizedDescription)")
-            } else {
-                Log("✅ CoreData: store loaded")
-            }
-        }
-
-        container.viewContext.automaticallyMergesChangesFromParent = true
-    }
 }

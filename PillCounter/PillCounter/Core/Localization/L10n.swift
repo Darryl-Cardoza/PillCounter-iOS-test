@@ -52,6 +52,8 @@ enum L10n {
     enum Dashboard {
         static let completed = NSLocalizedString("dashboard.completed", comment: "")
         static let pending = NSLocalizedString("dashboard.pending", comment: "")
+        static let quickActions = NSLocalizedString("dashboard.quickActions", comment: "")
+        static let pharmacyPlaceholder = NSLocalizedString("dashboard.header.pharmacyPlaceholder", comment: "")
         
         
         // MARK: - Fixed Count
@@ -64,6 +66,21 @@ enum L10n {
         enum RegularCount {
             static let title = NSLocalizedString("dashboard.regularCount.title", comment: "")
             static let subtitle = NSLocalizedString("dashboard.regularCount.subtitle", comment: "")
+        }
+        
+        // MARK: - STAT CARDS
+        enum StatCards {
+            static let highPriority = NSLocalizedString("dasboard.statCard.highPriority", comment: "")
+            static let dispensePending = NSLocalizedString("dasboard.statCard.dispensePending", comment: "")
+            static let controlledDrug = NSLocalizedString("dasboard.statCard.controlledDrug", comment: "")
+            static let hazardous = NSLocalizedString("dasboard.statCard.hazardous", comment: "")
+            static let cycleCount = NSLocalizedString("dasboard.statCard.cycleCount", comment: "")
+            static let pendingBatch = NSLocalizedString("dasboard.statCard.pendingBatch", comment: "")
+        }
+        
+        enum HeaderTabs {
+            static let todaysQueue = NSLocalizedString("dashboard.header.tabs.todaysQueue", comment: "")
+            static let recentActivity = NSLocalizedString("dashboard.header.tabs.recentActivity", comment: "")
         }
         
         enum Popup {

@@ -47,7 +47,7 @@ final class ConfigurationManager {
     /// BASE URL
     /// Returns the API base URL from bundle configuration.
     var apiBaseURL: String {
-        config["BASE_URL"] as? String ?? ""
+        config["BASE_URL"] as? String ?? "https://www.pill.ccrlindia.com"
     }
 
     /// GENERIC ACCESS

@@ -850,12 +850,12 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		79963B772F8543920053241C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+		88129A8F2FCEB73F00412754 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 12.12.0;
+				minimumVersion = 12.14.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -867,8 +867,13 @@
 		};
 		88E39F8D2FB311C800D6DEA2 /* FirebaseMessaging */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 79963B772F8543920053241C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			package = 88129A8F2FCEB73F00412754 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		88129AA12FCEB84100412754 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 88129A8F2FCEB73F00412754 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

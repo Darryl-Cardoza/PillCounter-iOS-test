@@ -14,6 +14,8 @@ private enum DashboardQueueItem: Identifiable {
     case inventory(BatchCountEntity, ndcCount: Int)
 
     var id: String {
+        
+        
         switch self {
         case .dispense(let txn, _): return "d-\(txn.txn_id)"
         case .inventory(let batch, _): return "i-\(batch.batch_id)"
@@ -28,12 +30,15 @@ private enum DashboardQueueItem: Identifiable {
     }
 }
 
-// MARK: - Stat card model
+// MARK:- Stat card model
 
 private enum StatCardFilter {
     case highPriority
     case hazardous
     case controlled
+    case dispPending
+    case cycleCount
+    case pendingBatch
 }
 
 private struct DashboardStatCard: Identifiable {
@@ -44,7 +49,7 @@ private struct DashboardStatCard: Identifiable {
     let label: String
     let filter: StatCardFilter?
 }
-
+//13847
 // MARK: - Main view
 
 struct NewDashboardView: View {
@@ -54,6 +59,7 @@ struct NewDashboardView: View {
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
+    @EnvironmentObject private var historyViewModel: HistoryViewModel
     @StateObject private var locationService = LocationService.shared
 
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
@@ -68,11 +74,12 @@ struct NewDashboardView: View {
     @State private var hasCheckedNewUser: Bool = false
     @State private var selectedQueueTab: Int = 0  // 0 = Today's Queue, 1 = Recent Activity
     @State private var dispensePartial: [PillCountTransactionEntity] = []
+    @State private var dispenseCompleted: [PillCountTransactionEntity] = []
     @State private var inventoryPartial: [BatchCountEntity] = []
+    @State private var inventoryCompleted: [BatchCountEntity] = []
     @State private var pillCounts: [Int64: Int] = [:]
     @State private var batchNdcCounts: [Int64: Int] = [:]
     @State private var activeFilterCardId: String? = nil
-    @State private var selectedIds: Set<Int64> = []
 
     private let transactionDAO = TransactionStore.shared
     private let batchDAO = BatchStore.shared
@@ -105,13 +112,8 @@ struct NewDashboardView: View {
         }
     }
 
-    private var filteredQueueItems: [DashboardQueueItem] {
-        guard let cardId = activeFilterCardId,
-              let card = statCards.first(where: { $0.id == cardId }),
-              let filter = card.filter else {
-            return mergedQueueItems
-        }
-        return mergedQueueItems.filter { item in
+    private func applyFilter(_ filter: StatCardFilter, to items: [DashboardQueueItem]) -> [DashboardQueueItem] {
+        items.filter { item in
             switch (item, filter) {
             case (.dispense(let txn, _), .highPriority):
                 let p = txn.txn_priority?.trimmingCharacters(in: .whitespaces) ?? ""
@@ -121,10 +123,43 @@ struct NewDashboardView: View {
             case (.dispense(let txn, _), .controlled):
                 let t = txn.drug?.drug_type?.trimmingCharacters(in: .whitespaces) ?? ""
                 return !t.isEmpty
+            case (.dispense, .dispPending):
+                return true
+            case (.inventory(let batch, _), .cycleCount):
+                return !((batch.req_id_from_pms ?? "").isEmpty)
+            case (.inventory(let batch, _), .pendingBatch):
+                return (batch.req_id_from_pms ?? "").isEmpty
             default:
                 return false
             }
         }
+    }
+
+    private func filtered(_ items: [DashboardQueueItem]) -> [DashboardQueueItem] {
+        guard let cardId = activeFilterCardId,
+              let card = statCards.first(where: { $0.id == cardId }),
+              let filter = card.filter else {
+            return items
+        }
+        return applyFilter(filter, to: items)
+    }
+
+    private var filteredQueueItems: [DashboardQueueItem] {
+        filtered(mergedQueueItems)
+    }
+
+    private var mergedRecentItems: [DashboardQueueItem] {
+        let dispenseItems = dispenseCompleted.map {
+            DashboardQueueItem.dispense($0, pillCount: pillCounts[$0.txn_id] ?? 0)
+        }
+        let inventoryItems = inventoryCompleted.map {
+            DashboardQueueItem.inventory($0, ndcCount: batchNdcCounts[$0.batch_id] ?? 0)
+        }
+        return (dispenseItems + inventoryItems).sorted { $0.sortDate > $1.sortDate }
+    }
+
+    private var filteredRecentItems: [DashboardQueueItem] {
+        filtered(mergedRecentItems)
     }
 
     // MARK: - Stat cards built from live data
@@ -139,16 +174,16 @@ struct NewDashboardView: View {
                     let p = $0.txn_priority?.trimmingCharacters(in: .whitespaces) ?? ""
                     return !p.isEmpty
                 }.count,
-                label: "High Priority",
+                label: L10n.Dashboard.StatCards.highPriority,
                 filter: .highPriority
             ),
             DashboardStatCard(
                 id: "disp-pending",
                 iconName: "partial",
                 iconColor: appColors.secondary,
-                count: userViewModel.fixedCountTransactionPartialCount,
-                label: "Disp. Pending",
-                filter: nil
+                count: dispensePartial.count,
+                label: L10n.Dashboard.StatCards.dispensePending,
+                filter: .dispPending
             ),
             DashboardStatCard(
                 id: "disp-cont-drugs",
@@ -158,7 +193,7 @@ struct NewDashboardView: View {
                     let t = $0.drug?.drug_type?.trimmingCharacters(in: .whitespaces) ?? ""
                     return !t.isEmpty
                 }.count,
-                label: "Cont. Drugs",
+                label: L10n.Dashboard.StatCards.controlledDrug,
                 filter: .controlled
             ),
             DashboardStatCard(
@@ -166,24 +201,24 @@ struct NewDashboardView: View {
                 iconName: "icon_hazardous",
                 iconColor: appColors.secondary,
                 count: dispensePartial.filter { $0.drug?.is_hazardous == true }.count,
-                label: "Hazardous",
+                label: L10n.Dashboard.StatCards.hazardous,
                 filter: .hazardous
             ),
             DashboardStatCard(
                 id: "inv-cycle-count",
                 iconName: "new_rx",
                 iconColor: appColors.secondary,
-                count: stockCountViewModel.totalBatchCount,
-                label: "Cycle Count",
-                filter: nil
+                count: inventoryPartial.filter { !($0.req_id_from_pms ?? "").isEmpty }.count,
+                label: L10n.Dashboard.StatCards.cycleCount,
+                filter: .cycleCount
             ),
             DashboardStatCard(
                 id: "inv-pending-batch",
                 iconName: "batch_icon",
                 iconColor: appColors.secondary,
-                count: stockCountViewModel.totalCompletedBatchCount,
-                label: "Pending Batch",
-                filter: nil
+                count: inventoryPartial.filter { ($0.req_id_from_pms ?? "").isEmpty }.count,
+                label: L10n.Dashboard.StatCards.pendingBatch,
+                filter: .pendingBatch
             ),
         ]
     }
@@ -248,19 +283,16 @@ struct NewDashboardView: View {
                     .padding(.bottom, 16)
                 statCardsSection
                     .padding(.bottom, 28)
-                Rectangle()
-                    .fill(appColors.text.opacity(0.18)) 
-                    .frame(height: 1)
-                    .padding(.bottom, 20)
+                
                 queueTabHeaders
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
 
             TabView(selection: $selectedQueueTab) {
-                queueScrollContent(items: filteredQueueItems)
+                queueScrollContent(items: filteredQueueItems) { AnyView(queueRowView(item: $0)) }
                     .tag(0)
-                queueScrollContent(items: [])
+                queueScrollContent(items: filteredRecentItems) { AnyView(recentRowView(item: $0)) }
                     .tag(1)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -274,70 +306,81 @@ struct NewDashboardView: View {
         GeometryReader { screen in
             let headerHeight = safeAreaTop + 52.0
             let panelHeight = screen.size.height - headerHeight
+            let topRowHeight: CGFloat = 40
+            let contentHeight = panelHeight - topRowHeight
+            let leftW = screen.size.width * 0.28
+            let midW = screen.size.width * 0.18
 
             VStack(spacing: 0) {
                 headerBar
                     .padding(.top, safeAreaTop)
                     .frame(height: headerHeight)
 
+                // ── Shared header row ──
+                HStack(spacing: 0) {
+                    Text(L10n.Dashboard.quickActions)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(appColors.text.opacity(0.5))
+                        .textCase(.uppercase)
+                        .tracking(1)
+                        .padding(.horizontal, 12)
+                        .frame(width: leftW, height: topRowHeight, alignment: .leading)
+
+                    Color.clear.frame(width: midW, height: topRowHeight)
+
+                    queueTabHeaders
+                        .frame(height: topRowHeight)
+                        .frame(maxWidth: .infinity)
+                }
+
+                // ── Content row ──
                 HStack(alignment: .top, spacing: 0) {
-                    // Left panel: quick action cards stacked vertically
                     VStack(spacing: 10) {
                         phoneQuickActionCard(
                             iconName: "dispense_dashboard_icon",
-                            title: "Dispense",
-                            subtitle: "Tap to scan Rx Labels",
+                            title: L10n.Dashboard.FixedCount.title,
+                            subtitle: L10n.Dashboard.FixedCount.subtitle,
                             action: navigateToDispense
                         )
                         .frame(maxHeight: .infinity)
                         phoneQuickActionCard(
                             iconName: "placeholder_history",
-                            title: "Inventory",
-                            subtitle: "Start inventory count",
+                            title: L10n.Dashboard.RegularCount.title,
+                            subtitle: L10n.Dashboard.RegularCount.subtitle,
                             action: handleInventoryTapped
                         )
                         .frame(maxHeight: .infinity)
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
-                    .frame(width: screen.size.width * 0.28)
-                    .frame(height: panelHeight)
+                    .padding(.bottom, 12)
+                    .frame(width: leftW)
+                    .frame(height: contentHeight)
 
-                    // Middle panel: stat cards vertically scrollable
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 8) {
+                        VStack(spacing: 15) {
                             ForEach(statCards) { card in
                                 statCardView(card: card)
                                     .frame(maxWidth: .infinity)
                             }
                         }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 8)
                     }
-                    .frame(width: screen.size.width * 0.18)
-                    .frame(height: panelHeight)
+                    .frame(width: midW)
+                    .frame(height: contentHeight)
 
-                    // Right panel: queue
-                    VStack(alignment: .leading, spacing: 0) {
-                        queueTabHeaders
-                            .padding(.top, 10)
-
-                        TabView(selection: $selectedQueueTab) {
-                            queueScrollContent(items: filteredQueueItems)
-                                .tag(0)
-                            queueScrollContent(items: [])
-                                .tag(1)
-                        }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .animation(
-                            .easeInOut(duration: 0.25),
-                            value: selectedQueueTab
-                        )
+                    TabView(selection: $selectedQueueTab) {
+                        queueScrollContent(items: filteredQueueItems) { AnyView(queueRowView(item: $0)) }
+                            .tag(0)
+                        queueScrollContent(items: filteredRecentItems) { AnyView(recentRowView(item: $0)) }
+                            .tag(1)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: panelHeight)
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: contentHeight)
                 }
-                .frame(height: panelHeight)
+                .frame(height: contentHeight)
             }
         }
     }
@@ -407,98 +450,95 @@ struct NewDashboardView: View {
             let headerHeight = safeAreaTop + 52.0
             let panelHeight = screen.size.height - headerHeight
             let pad: CGFloat = 10
+            let topRowHeight: CGFloat = 44
+            let contentHeight = panelHeight - topRowHeight
             let leftWidth = (screen.size.width - 1) * 0.5
             let rightWidth = screen.size.width - leftWidth - 1
-            // equal pad on all 4 sides + gap between two rows
-            let rowHeight = (panelHeight - pad * 3) / 2
-            let actionWidth = leftWidth * 0.68
-            let statsWidth = leftWidth - actionWidth - pad * 3
+            // Left panel split: action cards | stat cards (no inner divider)
+            let statsWidth = leftWidth * 0.31
+            let actionWidth = leftWidth - statsWidth
 
             VStack(spacing: 0) {
                 headerBar
                     .padding(.top, safeAreaTop)
                     .frame(height: headerHeight)
 
+                // ── Shared header row ──
+                HStack(spacing: 0) {
+                    Text(L10n.Dashboard.quickActions)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(appColors.text.opacity(0.5))
+                        .textCase(.uppercase)
+                        .tracking(1)
+                        .padding(.horizontal, pad)
+                        .frame(width: leftWidth, height: topRowHeight, alignment: .leading)
+
+                    Color.clear.frame(width: 1, height: topRowHeight)
+
+                    queueTabHeaders
+                        .padding(.horizontal, pad)
+                        .frame(width: rightWidth, height: topRowHeight)
+                }
+
+                // ── Content row ──
                 HStack(alignment: .top, spacing: 0) {
 
-                    // ── Left 50%: [Dispense | 3 stats] over [Inventory | 3 stats] ──
-                    VStack(spacing: 0) {
-                        let cardHeight = (rowHeight - pad * 2) / 3
+                    // ── Left panel: [action cards | divider | stat cards] ──
+                    HStack(alignment: .top, spacing: 0) {
 
+                        // Action cards — Dispense on top, Inventory on bottom
                         VStack(spacing: pad) {
-                            HStack(alignment: .top, spacing: pad) {
-                                landscapeQuickActionCard(
-                                    iconName: "dispense_dashboard_icon",
-                                    title: "Dispense",
-                                    subtitle: "Scan Rx Labels",
-                                    action: navigateToDispense
-                                )
-                                .frame(width: actionWidth)
-                                .frame(height: rowHeight)
+                            landscapeQuickActionCard(
+                                iconName: "dispense_dashboard_icon",
+                                title: L10n.Dashboard.FixedCount.title,
+                                subtitle: L10n.Dashboard.FixedCount.subtitle,
+                                action: navigateToDispense
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                                VStack(spacing: pad) {
-                                    ForEach(Array(statCards.prefix(3))) { card in
-                                        statCardView(card: card)
-                                            .frame(width: statsWidth)
-                                            .frame(height: cardHeight)
-                                    }
-                                }
-                                .frame(width: statsWidth)
-                                .frame(height: rowHeight)
-                            }
-
-                            HStack(alignment: .top, spacing: pad) {
-                                landscapeQuickActionCard(
-                                    iconName: "placeholder_history",
-                                    title: "Inventory",
-                                    subtitle: "Start inventory count",
-                                    action: handleInventoryTapped
-                                )
-                                .frame(width: actionWidth)
-                                .frame(height: rowHeight)
-
-                                VStack(spacing: pad) {
-                                    ForEach(Array(statCards.dropFirst(3))) { card in
-                                        statCardView(card: card)
-                                            .frame(width: statsWidth)
-                                            .frame(height: cardHeight)
-                                    }
-                                }
-                                .frame(width: statsWidth)
-                                .frame(height: rowHeight)
-                            }
+                            landscapeQuickActionCard(
+                                iconName: "placeholder_history",
+                                title: L10n.Dashboard.RegularCount.title,
+                                subtitle: L10n.Dashboard.RegularCount.subtitle,
+                                action: handleInventoryTapped
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                         .padding(pad)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .frame(width: leftWidth)
-                    .frame(height: panelHeight)
+                        .frame(width: actionWidth, height: contentHeight)
 
-                    // Divider
-                    Rectangle()
-                        .fill(appColors.text.opacity(0.18))
-                        .frame(width: 1)
-                        .frame(height: panelHeight)
-
-                    // ── Right 45%: queue tabs + list ──
-                    VStack(alignment: .leading, spacing: 0) {
-                        queueTabHeaders
-                            .padding(.top, pad)
-                            .padding(.horizontal, pad)
-
-                        TabView(selection: $selectedQueueTab) {
-                            queueScrollContent(items: filteredQueueItems)
-                                .tag(0)
-                            queueScrollContent(items: [])
-                                .tag(1)
+                        // Stat cards — all 6 in one column
+                        VStack(spacing: 0) {
+                            ForEach(statCards) { card in
+                                statCardView(card: card)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(maxHeight: .infinity)
+                            }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+                        .padding(.vertical, 5)
+                        .frame(width: statsWidth, height: contentHeight)
                     }
-                    .frame(width: rightWidth)
-                    .frame(height: panelHeight)
+                    .frame(width: leftWidth, height: contentHeight)
+
+                    // Main divider
+//                    Rectangle()
+//                        .fill(appColors.text.opacity(0.18))
+//                        .frame(width: 1, height: contentHeight)
+
+                    // ── Right panel: queue list ──
+                    // padding(.top, -2) aligns first list item with first stat card (stat card starts at pad=10, list content starts at 12)
+                    TabView(selection: $selectedQueueTab) {
+                        queueScrollContent(items: filteredQueueItems) { AnyView(queueRowView(item: $0)) }
+                            .tag(0)
+                        queueScrollContent(items: filteredRecentItems) { AnyView(recentRowView(item: $0)) }
+                            .tag(1)
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
+                        .padding(.top, -2)
+                        .frame(width: rightWidth, height: contentHeight + 2)
                 }
-                .frame(height: panelHeight)
+                .frame(height: contentHeight)
             }
         }
     }
@@ -525,7 +565,7 @@ struct NewDashboardView: View {
                             .resizable()
                             .scaledToFit()
                             .foregroundColor(appColors.secondary)
-                            .padding(circleSize * 0.22)
+                            .padding(circleSize * 0.3)
                     }
                     .frame(width: circleSize, height: circleSize)
 
@@ -534,8 +574,8 @@ struct NewDashboardView: View {
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundColor(appColors.secondary)
                         Text(subtitle)
-                            .font(.system(size: 13))
-                            .foregroundColor(appColors.text.opacity(0.6))
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(appColors.text)
                     }
                     Spacer(minLength: 0)
                 }
@@ -573,12 +613,12 @@ struct NewDashboardView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(
                         userViewModel.pharmacyName.isEmpty
-                            ? "Pharmacy" : userViewModel.pharmacyName
+                        ? L10n.Dashboard.pharmacyPlaceholder : userViewModel.pharmacyName
                     )
                     .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
                     .foregroundColor(appColors.text)
                     if !selectedTerminalName.isEmpty {
-                        Text("Terminal \(selectedTerminalName)")
+                        Text("\(L10n.Profile.terminal) \(selectedTerminalName) | \(userViewModel.fullName) ")
                             .font(.system(size: isIpad ? 15 : 13))
                             .foregroundColor(appColors.text.opacity(0.6))
                     }
@@ -612,23 +652,24 @@ struct NewDashboardView: View {
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("QUICK ACTIONS")
+            Text(L10n.Dashboard.quickActions)
                 .font(.system(size: isIpad ? 15 : 13, weight: .semibold))
                 .foregroundColor(appColors.text.opacity(0.5))
+                .textCase(.uppercase)
                 .tracking(1)
 
             if isIpad {
                 HStack(spacing: 14) {
                     quickActionCard(
                         iconName: "dispense_dashboard_icon",
-                        title: "Dispense",
-                        subtitle: "Tap to scan Rx Labels",
+                        title: L10n.Dashboard.FixedCount.title,
+                        subtitle: L10n.Dashboard.FixedCount.subtitle,
                         action: navigateToDispense
                     )
                     quickActionCard(
                         iconName: "placeholder_history",
-                        title: "Inventory",
-                        subtitle: "Start inventory count",
+                        title: L10n.Dashboard.RegularCount.title,
+                        subtitle: L10n.Dashboard.RegularCount.subtitle,
                         action: handleInventoryTapped
                     )
                 }
@@ -636,14 +677,14 @@ struct NewDashboardView: View {
                 VStack(spacing: 10) {
                     quickActionCard(
                         iconName: "dispense_dashboard_icon",
-                        title: "Dispense",
-                        subtitle: "Tap to scan Rx Labels",
+                        title: L10n.Dashboard.FixedCount.title,
+                        subtitle: L10n.Dashboard.FixedCount.subtitle,
                         action: navigateToDispense
                     )
                     quickActionCard(
                         iconName: "placeholder_history",
-                        title: "Inventory",
-                        subtitle: "Start inventory count",
+                        title: L10n.Dashboard.RegularCount.title,
+                        subtitle: L10n.Dashboard.RegularCount.subtitle,
                         action: handleInventoryTapped
                     )
                 }
@@ -682,7 +723,8 @@ struct NewDashboardView: View {
                         .foregroundColor(appColors.secondary)
                     Text(subtitle)
                         .font(.system(size: isIpad ? 16 : 14))
-                        .foregroundColor(appColors.text.opacity(0.6))
+                        .fontWeight(.semibold)
+                        .foregroundColor(appColors.text)
                 }
 
                 Spacer()
@@ -738,23 +780,24 @@ struct NewDashboardView: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 18, height: 18)
+                        .frame(width: 20, height: 20)
                         .foregroundColor(card.iconColor)
                 }
 
                 Text("\(card.count)")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundColor(appColors.primary)
                     .padding(.top, 4)
 
                 Text(card.label)
-                    .font(.system(size: 12))
-                    .foregroundColor(appColors.text.opacity(0.6))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(appColors.text)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
                     .frame(height: 32, alignment: .topLeading)
             }
-            .padding(10)
+            .padding(.top, 10)
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(appColors.secondaryBackground)
             .cornerRadius(14)
@@ -777,18 +820,29 @@ struct NewDashboardView: View {
     private var queueTabHeaders: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                queueTabHeader(title: "TODAY'S QUEUE", index: 0)
-                queueTabHeader(title: "RECENT ACTIVITY", index: 1)
+                queueTabHeader(title: L10n.Dashboard.HeaderTabs.todaysQueue, index: 0)
+                queueTabHeader(title: L10n.Dashboard.HeaderTabs.recentActivity, index: 1)
             }
             Divider()
         }
     }
 
-    private func queueScrollContent(items: [DashboardQueueItem]) -> some View {
+    private func emptyQueueMessage() -> String {
+        guard let cardId = activeFilterCardId,
+              let card = statCards.first(where: { $0.id == cardId }) else {
+            return "No pending items"
+        }
+        return card.count == 0 ? "You're all caught up!" : "No matching items"
+    }
+
+    private func queueScrollContent(
+        items: [DashboardQueueItem],
+        rowBuilder: @escaping (DashboardQueueItem) -> AnyView
+    ) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 8) {
                 if items.isEmpty {
-                    Text(activeFilterCardId != nil ? "No matching items" : "No pending items")
+                    Text(emptyQueueMessage())
                         .font(.system(size: 15))
                         .foregroundColor(appColors.text.opacity(0.4))
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -796,7 +850,7 @@ struct NewDashboardView: View {
                         .transition(.opacity)
                 } else {
                     ForEach(items) { item in
-                        queueRowView(item: item)
+                        rowBuilder(item)
                             .transition(
                                 .asymmetric(
                                     insertion: .opacity.combined(with: .move(edge: .top)),
@@ -816,22 +870,18 @@ struct NewDashboardView: View {
     private func queueTabHeader(title: String, index: Int) -> some View {
         let isSelected = selectedQueueTab == index
         return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedQueueTab = index
-            }
+            selectedQueueTab = index
         } label: {
             VStack(spacing: 6) {
                 Text(title)
                     .font(
                         .system(
-                            size: isIpad ? 14 : 13,
+                            size: isIpad ? 15 : 13,
                             weight: isSelected ? .semibold : .regular
                         )
                     )
-                    .foregroundColor(
-                        isSelected
-                            ? appColors.text : appColors.text.opacity(0.45)
-                    )
+                    .textCase(.uppercase)
+                    .foregroundColor(appColors.text)
                     .tracking(0.8)
 
                 Rectangle()
@@ -843,18 +893,14 @@ struct NewDashboardView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
+    // Today's Queue — partial transactions, navigate to active scan/count screens
     @ViewBuilder
     private func queueRowView(item: DashboardQueueItem) -> some View {
         switch item {
         case .dispense(let txn, let pillCount):
             let data = txn.toRowData(pillCount: pillCount)
-            let isSelected = selectedIds.contains(txn.txn_id)
             DispenseItemRowView(data: data, appColors: appColors)
-                .selectableEffect(isSelected: isSelected, highlightColor: appColors.primary)
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        selectedIds.insert(txn.txn_id)
-                    }
                     let countType =
                         txn.count_type?.uppercased() == CountType.REGULAR.rawValue
                         ? CountType.REGULAR : CountType.FIXED
@@ -870,25 +916,46 @@ struct NewDashboardView: View {
 
         case .inventory(let batch, let ndcCount):
             let data = batch.toStockData(ndcCount: ndcCount)
-            let isSelected = selectedIds.contains(batch.batch_id)
             StockItemRowView(data: data, appColors: appColors)
-                .selectableEffect(isSelected: isSelected, highlightColor: appColors.primary)
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        selectedIds.insert(batch.batch_id)
-                    }
+                    guard let freshBatch = batchDAO.fetchById(batch.batch_id) else { return }
+                    stockCountViewModel.currentBatch = freshBatch
+                    stockCountViewModel.reloadAllState()
                     router.navigate(
                         to: .authentication(
                             .login(
                                 .dashboard(
-                                    .pillCount(
-                                        .stockCount(
-                                            .stockCountPartialBatchListScreen
-                                        )
-                                    )
+                                    .pillCount(.stockCount(.stockCountBatchDetail))
                                 )
                             )
                         )
+                    )
+                }
+        }
+    }
+
+    // Recent Activity — completed transactions, navigate directly to history detail
+    @ViewBuilder
+    private func recentRowView(item: DashboardQueueItem) -> some View {
+        switch item {
+        case .dispense(let txn, let pillCount):
+            let data = txn.toRowData(pillCount: pillCount)
+            DispenseItemRowView(data: data, appColors: appColors)
+                .onTapGesture {
+                    historyViewModel.selectedTransactionId = txn.txn_id
+                    router.navigate(
+                        to: .authentication(.user(.userSettings(.HistoryTransactionDetail)))
+                    )
+                }
+
+        case .inventory(let batch, let ndcCount):
+            let data = batch.toStockData(ndcCount: ndcCount)
+            StockItemRowView(data: data, appColors: appColors)
+                .onTapGesture {
+                    historyViewModel.prepareBatchDetails(for: batch.batch_id)
+                    historyViewModel.selectedBatchId = batch.batch_id
+                    router.navigate(
+                        to: .authentication(.user(.userSettings(.HistoryBatchDetail)))
                     )
                 }
         }
@@ -941,16 +1008,18 @@ struct NewDashboardView: View {
     private func loadQueueData() {
         guard let user = userStore.fetchByUserId(userId) else { return }
 
+        // Partial (Today's Queue)
         let fixed = transactionDAO.fetchPartial(for: user, countType: .FIXED)
-        let regular = transactionDAO.fetchPartial(
-            for: user,
-            countType: .REGULAR
-        )
-        dispensePartial = (fixed + regular)
+        let regular = transactionDAO.fetchPartial(for: user, countType: .REGULAR)
+        dispensePartial = (fixed + regular).filter { $0.batch_id == 0 }
         printQueue(dispensePartial)
 
+        // Completed (Recent Activity) — all user transactions filtered to COMPLETED status
+        let allUserTxns = transactionDAO.fetchAll(for: user)
+        dispenseCompleted = allUserTxns.filter { $0.status == CountStatus.COMPLETED.rawValue }
+
         var counts: [Int64: Int] = [:]
-        for txn in dispensePartial {
+        for txn in dispensePartial + dispenseCompleted {
             counts[txn.txn_id] = detailDAO.totalCount(txnId: txn.txn_id)
         }
         pillCounts = counts
@@ -958,11 +1027,12 @@ struct NewDashboardView: View {
         let batches = batchDAO.fetchAllPartial()
         inventoryPartial = batches
 
+        let completedBatches = batchDAO.fetchAllCompleted()
+        inventoryCompleted = completedBatches
+
         var ndcCounts: [Int64: Int] = [:]
-        for batch in batches {
-            ndcCounts[batch.batch_id] = batchDAO.getTransactionCount(
-                for: batch.batch_id
-            )
+        for batch in batches + completedBatches {
+            ndcCounts[batch.batch_id] = batchDAO.getTransactionCount(for: batch.batch_id)
         }
         batchNdcCounts = ndcCounts
     }
@@ -992,6 +1062,8 @@ struct NewDashboardView: View {
             Task {
                 await userViewModel.getUser()
                 stockCountViewModel.getCountData()
+                // Reload after async user data is ready to ensure queue is populated
+                await MainActor.run { loadQueueData() }
             }
         }
 

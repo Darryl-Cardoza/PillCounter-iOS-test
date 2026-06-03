@@ -136,12 +136,6 @@ final class HL7BatchSyncQueue {
         }
 
         
-        // Persist the resolved requestId back to Core Data if it was generated
-        if batch.req_id_from_pms == nil {
-            print("💾 [Queue] Persisting generated requestId:", item.requestId)
-            persistGeneratedRequestId(item.requestId, for: batch)
-        }
-
         let hl7 = hl7Builder.buildInventoryMessage(batch: batch, user: user)
         print("hl7\(hl7)")
         print("📡 [HL7] Sending batch:", item.batchId,
@@ -248,10 +242,4 @@ final class HL7BatchSyncQueue {
         return String(batch.batch_id)   // batch_id is already Int64 milliseconds
     }
 
-    private func persistGeneratedRequestId(_ requestId: String, for batch: BatchCountEntity) {
-        DispatchQueue.main.async {
-            batch.req_id_from_pms = "REQ\(String(batch.batch_id))"
-            try? CoreDataManager.shared.context.save()
-        }
-    }
 }

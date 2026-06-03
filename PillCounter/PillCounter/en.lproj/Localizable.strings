@@ -46,9 +46,19 @@
 "dashboard.completed" = "Completed";
 "dashboard.pending" = "Pending";
 "dashboard.fixedCount.title" = "Dispense";
-"dashboard.fixedCount.subtitle" = "Tap.Scan.Dispense";
+"dashboard.fixedCount.subtitle" = "Scan Rx Label";
 "dashboard.regularCount.title" = "Stock Count";
 "dashboard.regularCount.subtitle" = "Start Inventory count";
+"dashboard.quickActions" = "Quick Actions";
+"dasboard.statCard.highPriority" = "High Priority";
+"dasboard.statCard.dispensePending" = "Disp. Pending";
+"dasboard.statCard.controlledDrug" = "Cont. Drugs";
+"dasboard.statCard.hazardous" = "Hazardous";
+"dasboard.statCard.cycleCount" = "Cycle Count";
+"dasboard.statCard.pendingBatch" = "Pending Batch";
+"dashboard.header.pharmacyPlaceholder" = "Pharmacy";
+"dashboard.header.tabs.todaysQueue" = "Today's Queue";
+"dashboard.header.tabs.recentActivity" = "Recent Activity";
 
 
 // MARK: - DASHBOARD POPUP

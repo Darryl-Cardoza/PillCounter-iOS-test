@@ -362,7 +362,7 @@ struct HamburgerMenuView: View {
                 )
                 PillCountingButton(
                     iconName: nil,
-                    title: "OK",
+                    title: L10n.Common.ok,
                     textColor: Color.white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
@@ -439,7 +439,7 @@ struct HamburgerMenuView: View {
                 )
                 PillCountingButton(
                     iconName: nil,
-                    title: "OK",
+                    title: L10n.Common.ok,
                     textColor: Color.white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,

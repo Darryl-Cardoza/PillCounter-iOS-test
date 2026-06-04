@@ -219,7 +219,6 @@ struct UnifiedCameraView: View {
                     onProceed: {
                         Task {
                             await pillScanViewModel.createTransactionFromRxScan()
-                            scanType = .barcode
                             restartFlow()
                         }
                     },
@@ -232,6 +231,7 @@ struct UnifiedCameraView: View {
                 .environmentObject(appColors)
             }
             .customPopup(isPresented: $pillScanViewModel.showNdcEquivalencePopup, dismissOnBackgroundTap: false) { ndcEquivalencePopup }
+            .customPopup(isPresented: $pillScanViewModel.showRxOnHoldPopup, dismissOnBackgroundTap: false) { rxOnHoldPopup }
             .onChange(of: stockCountViewModel.barcodeNotFound) { _, notFound in
                 if notFound {
                     stockCountViewModel.barcodeNotFound = false
@@ -453,6 +453,7 @@ extension UnifiedCameraView {
 
     func onAppear() {
         pillScanViewModel.showRxFlowPopup = false
+        pillScanViewModel.showRxOnHoldPopup = false
         pillScanViewModel.showNdcEquivalencePopup = false
         pillScanViewModel.showScannedDrugInfoPopoup = false
         stockCountViewModel.showStockCountScannedDetails = false
@@ -548,10 +549,6 @@ extension UnifiedCameraView {
 // MARK: - Event Handlers
 extension UnifiedCameraView {
 
-    func handleStepVoice() {
-        speakInstruction(unifiedInstructionText)
-    }
-
     func speakOnAppear() {
         speakInstruction(unifiedInstructionText)
     }
@@ -589,7 +586,7 @@ extension UnifiedCameraView {
                         cameraState = .rxDetected
                         pillScanViewModel.parseScanData(actualValue: newValue)
                     } else {
-                        pillScanViewModel.showToastMessage(text: "Invalid RX Barcode")
+                        pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.invalidRxBarcode)
                         restartFlow()
                     }
                 case .barcode:
@@ -1049,10 +1046,10 @@ extension UnifiedCameraView {
 
     var stockEndBatchPopup: some View {
         ConfirmationDialogue(
-            title: "End Batch Count?",
-            message: stockHasNoCount ? "No items have been counted. Are you sure you want to end?" : nil,
-            cancelButtonText: "No",
-            confirmButtonText: "Yes",
+            title: L10n.Stock.endBatchTitle,
+            message: stockHasNoCount ? L10n.Stock.noCountEndBatchMessage : nil,
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes,
             onCancel: { showStockEndBatchPopUp = false },
             onConfirm: { confirmStockEndBatch() }
         )
@@ -1060,20 +1057,20 @@ extension UnifiedCameraView {
 
     var stockNoteOptionPopup: some View {
         NotePopupView(
-            title: "Add a note before ending?",
+            title: L10n.Stock.addNoteQuestion,
             text: $stockCountViewModel.note,
             errorMessage: stockNoteError,
-            primaryTitle: "Yes",
+            primaryTitle: L10n.Common.yes,
             primaryAction: {
                 if stockCountViewModel.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    stockNoteError = "Please add a note"
+                    stockNoteError = L10n.PillCount.pleaseAddNote
                     return
                 }
                 stockNoteError = nil
                 showStockNoteOptions = false
                 showStockEndBatchPopUp = true
             },
-            secondaryTitle: "Skip",
+            secondaryTitle: L10n.Common.skip,
             secondaryAction: {
                 stockNoteError = nil
                 showStockNoteOptions = false

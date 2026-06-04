@@ -25,6 +25,15 @@
 "common.time" = "Time";
 "common.unselectAll" = "Unselect All";
 "common.selectAll" = "Select All";
+"common.done" = "Done";
+"common.typeHere" = "Type here";
+"common.pms" = "PMS";
+"common.confirmation" = "Confirmation";
+"common.areYouSureGoBack" = "Are you sure you want to go back?";
+"common.tapToDelete" = "Tap item(s) to delete.";
+"common.selectedCount" = "%d Selected";
+"common.switchOn" = "Switch On";
+"common.switchOff" = "Switch Off";
 
 
 // MARK: - LOGIN
@@ -178,6 +187,11 @@
 "barcodeScan.incorrectNdc" = "Incorrect NDC";
 "barcodeScan.incorrectNdcMessage" = "You have scanned an incorrect NDC. This item does not match the PMS batch.";
 "barcodeScan.proceed" = "PROCEED";
+"barcodeScan.invalidRxBarcode" = "Invalid RX Barcode";
+"barcodeScan.rxNotFound" = "Rx not found";
+"barcodeScan.rxOnHoldTitle" = "Rx On Hold";
+"barcodeScan.rxOnHoldMessage" = "This Rx has been placed on hold by PMS. Scanning is not allowed until the hold is released.";
+"barcodeScan.rxNotSentByPms" = "Rx not found on this device. Please wait for PMS to send it.";
 
 
 // MARK: - GENERIC EQUIVALENT POPUP
@@ -255,6 +269,7 @@
 "stock.startAddingItems" = "Start adding items to this batch";
 "stock.endCount" = "END COUNT";
 "stock.addItem" = "+ ADD";
+"stock.endBatchTitle" = "End Batch Count?";
 "stock.noCountEndBatchMessage" = "No transactions or counts added. Do you want to end the batch?";
 "stock.addNoteQuestion" = "Would you like to add a note?";
 "stock.deleteButton" = "Delete";
@@ -366,5 +381,27 @@
 "controlled.scanStockCountBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanRxLabelBarcode" = "Scan Rx Label";
 "controlled.scanNdcToCountPills" = "Scan NDC to count pills";
+
+
+// MARK: - SECURITY
+"security.alertTitle" = "Security Alert";
+"security.alertMessage" = "This device does not meet security requirements.\nTo protect your data, the app cannot continue.";
+"security.exitButton" = "Exit";
+
+
+// MARK: - FORCE UPDATE
+"forceUpdate.message" = "Your current version has expired - time to get a fresh prescription.\nUpdate now for the right dose of features!";
+"forceUpdate.updateButton" = "Update";
+
+
+// MARK: - PMS / HL7
+"pms.connected" = "PMS Connected";
+"pms.disconnected" = "PMS Disconnected";
+"pms.connecting" = "Connecting...";
+"pms.connectedBody" = "Connected to %@";
+
+
+// MARK: - COUNT HISTORY
+"countHistory.noTransactionsFound" = "No transactions found";
 
 

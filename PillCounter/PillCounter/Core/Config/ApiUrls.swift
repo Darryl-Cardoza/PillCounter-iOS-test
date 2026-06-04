@@ -41,6 +41,6 @@ struct APIConstants {
     }
     
     // MARK: - DRUG
-    static let getControlledDrugInfo = "\(baseURL)/drugs/ndc/new"
+    static let getControlledDrugInfo = "\(baseURL)/drugs/ndc"
     
 }

@@ -30,12 +30,22 @@ final class UserStore {
         CoreDataManager.shared.context
     }
 
-    // MARK: - Create
+    // MARK: - Upsert
 
+    /// Creates a new UserEntity or updates the existing one for the same user_id.
+    /// Existing transactions are preserved — only profile fields are refreshed.
     func save(from response: UserResponse) {
-        guard let userDetails = response.data else { return }
-        let entity = UserEntity(context: context)
-        entity.user_id = userDetails.profile?.userId ?? ""
+        guard let userDetails = response.data,
+              let userId = userDetails.profile?.userId, !userId.isEmpty else { return }
+
+        let isNew = fetchByUserId(userId) == nil
+        let entity = fetchByUserId(userId) ?? UserEntity(context: context)
+
+        if isNew {
+            entity.user_id = userId
+            entity.created_at = Date()
+        }
+
         if let profile = userDetails.profile {
             entity.fname = profile.fname
             entity.lname = profile.lname
@@ -52,9 +62,10 @@ final class UserStore {
             entity.language = settings.language ?? "en"
             entity.timezone = settings.timezone ?? "Asia/Kolkata"
         }
-        entity.created_at = Date()
+
         CoreDataManager.shared.save(context: context)
-        print("👤 [UserDAO] CREATED — userId: \(entity.user_id), email: \(entity.email ?? "-"), name: \((entity.fname ?? "") + " " + (entity.lname ?? ""))")
+        let action = isNew ? "CREATED" : "UPDATED"
+        print("👤 [UserDAO] \(action) — userId: \(userId), email: \(entity.email ?? "-"), name: \((entity.fname ?? "") + " " + (entity.lname ?? ""))")
     }
 
     // MARK: - Read

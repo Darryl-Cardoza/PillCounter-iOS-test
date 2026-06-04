@@ -175,12 +175,18 @@ class UserViewModel: ObservableObject {
                     }
                 }
 
-                userID = result.data?.profile?.userId ?? ""
-
-                if let userId = userProfileDetails?.userId,
-                   userLocalDB.fetchByUserId( userId) == nil {
-                    userLocalDB.save(from: result)
+                // Keep AppStorage in sync — verifyOTP writes userId from the auth
+                // response, but getUser may return the canonical userId from the
+                // profile endpoint. Ensure both agree before the CoreData lookup.
+                let resolvedUserId = result.data?.profile?.userId ?? ""
+                if !resolvedUserId.isEmpty {
+                    userID = resolvedUserId
+                    AppStorageManager.shared.userId = resolvedUserId
                 }
+
+                // Upsert — creates a new record for first-time users, updates
+                // profile fields for returning users while preserving their transactions.
+                userLocalDB.save(from: result)
 
             } else {
             }

@@ -14,11 +14,13 @@ final class AppLogoutManager {
         pillScanVM: PillScanViewModel,
         loginViewModel: LoginViewModel
     ) {
+        // Wipe Keychain credentials only — local CoreData is preserved so returning
+        // users find their history intact on next login.
         AppStorageManager.shared.logout()
+
         Task { @MainActor in
             userVM.resetState()
             pillScanVM.resetState()
-//            loginViewModel.resetState()
         }
     }
 }

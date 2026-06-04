@@ -78,11 +78,19 @@ struct CountHistoryView: View {
     }
 
     enum TransactionFilter: String, CaseIterable, Identifiable {
-        case all = "All"
-        case pms = "PMS"
-        case nonPms = "Non PMS"
+        case all = "all"
+        case pms = "pms"
+        case nonPms = "nonPms"
 
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .all:    return L10n.DispensePartial.Filter.all
+            case .pms:    return L10n.DispensePartial.Filter.pms
+            case .nonPms: return L10n.DispensePartial.Filter.nonPms
+            }
+        }
     }
 
     private var filterTabs: some View {
@@ -92,7 +100,7 @@ struct CountHistoryView: View {
             HStack(spacing: 12) {
                 ForEach(TransactionFilter.allCases) { filter in
                     FilterTabButton(
-                        title: filter.rawValue,
+                        title: filter.title,
                         isSelected: selectedFilter == filter
                     ) {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -170,7 +178,7 @@ struct CountHistoryView: View {
 
                                     Text(
                                         areAllSelected
-                                            ? "Deselect All" : "Select All"
+                                            ? L10n.Common.unselectAll : L10n.Common.selectAll
                                     )
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundColor(appColors.text)
@@ -186,7 +194,7 @@ struct CountHistoryView: View {
                                 Button {
                                     pendingAction = .multiDelete(selectedTxnIds)
                                 } label: {
-                                    Text("Delete")
+                                    Text(L10n.Common.delete)
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundColor(
                                             selectedTxnIds.isEmpty
@@ -202,7 +210,7 @@ struct CountHistoryView: View {
                                         selectedTxnIds.removeAll()
                                     }
                                 } label: {
-                                    Text("Cancel")
+                                    Text(L10n.Common.cancel)
                                         .font(
                                             .system(size: 16, weight: .regular)
                                         )
@@ -299,13 +307,13 @@ struct CountHistoryView: View {
 
             if isEditing {
                 HStack {
-                    Text("\(selectedTxnIds.count) Selected")
+                    Text(L10n.Common.selectedCount(selectedTxnIds.count))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(appColors.text.opacity(0.6))
 
                     Spacer()
 
-                    Text("Tap item(s) to delete.")
+                    Text(L10n.Common.tapToDelete)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(appColors.secondary)
                 }
@@ -372,7 +380,7 @@ struct CountHistoryView: View {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 40))
                                 .foregroundColor(.gray.opacity(0.5))
-                            Text("No transactions found")
+                            Text(L10n.CountHistory.noTransactionsFound)
                                 .foregroundColor(.gray)
                         }
                         .padding(.top, 60)
@@ -452,7 +460,7 @@ struct CountHistoryView: View {
                 .font(.system(size: 40))
                 .foregroundColor(.gray.opacity(0.5))
 
-            Text("No transactions found")
+            Text(L10n.CountHistory.noTransactionsFound)
                 .foregroundColor(.gray)
         }
         .padding(.top, 60)
@@ -506,7 +514,7 @@ struct CountHistoryView: View {
                         .layoutPriority(1)
 
                     if isFromPms {
-                        Text("PMS")
+                        Text(L10n.Common.pms)
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(appColors.primary)
                             .fixedSize()
@@ -621,7 +629,7 @@ struct CountHistoryView: View {
         ConfirmationDialogue(
             title: dialogTitle,
             message: dialogMessage,
-            cancelButtonText: "CANCEL",
+            cancelButtonText: L10n.Common.cancel,
             confirmButtonText: confirmButtonTitle,
             onCancel: {
                 pendingAction = nil
@@ -635,9 +643,9 @@ struct CountHistoryView: View {
     private var dialogTitle: String {
         switch pendingAction {
         case .delete:
-            return "Confirm Delete"
+            return L10n.DispensePartial.Dialog.confirmDeleteTitle
         case .multiDelete:
-            return "Delete Selected"
+            return L10n.DispensePartial.Dialog.deleteSelectedTitle
         case .none:
             return ""
         }
@@ -646,9 +654,9 @@ struct CountHistoryView: View {
     private var dialogMessage: String {
         switch pendingAction {
         case .delete:
-            return "Are you sure you want to delete this transaction?"
+            return L10n.DispensePartial.Dialog.deleteTransactionMessage
         case .multiDelete:
-            return "Are you sure you want to delete selected transactions?"
+            return L10n.DispensePartial.Dialog.deleteSelectedTransactionsMessage
         case .none:
             return ""
         }
@@ -657,7 +665,7 @@ struct CountHistoryView: View {
     private var confirmButtonTitle: String {
         switch pendingAction {
         case .delete, .multiDelete:
-            return "DELETE"
+            return L10n.Common.delete
         case .none:
             return ""
         }

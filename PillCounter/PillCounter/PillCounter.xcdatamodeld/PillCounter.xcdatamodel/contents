@@ -10,6 +10,7 @@
         <attribute name="req_id_from_pms" optional="YES" attributeType="String"/>
         <attribute name="start_date_time" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="user_id" optional="YES" attributeType="String"/>
     </entity>
     <entity name="DrugMasterEntity" representedClassName="DrugMasterEntity" syncable="YES" codeGenerationType="class">
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>

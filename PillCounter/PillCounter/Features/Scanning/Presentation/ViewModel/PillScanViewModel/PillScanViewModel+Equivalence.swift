@@ -63,7 +63,7 @@ extension PillScanViewModel {
                 let isSame = response.data?.isNdcSame ?? false
 
                 isNdcEquivalent = isEquivalent
-                updateScannedDrugData(drugName: response.data?.scannedNdc?.lookupName ?? "", ndcNo: response.data?.scannedNdc?.packageNdc ?? "")
+                updateScannedDrugData(drugName: response.data?.scannedNdc?.lookupName ?? "", ndcNo: response.data?.scannedNdc?.drugCode ?? "")
 
                 if isEquivalent && !isSame {
                     showNdcEquivalencePopup = true

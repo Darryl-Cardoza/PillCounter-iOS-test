@@ -167,7 +167,7 @@ struct KeyboardAccessoryView: View {
 
             Divider()
 
-            Button("Done") {
+            Button(L10n.Common.done) {
                 onDone()
             }
             .font(.system(size: 16, weight: .semibold))

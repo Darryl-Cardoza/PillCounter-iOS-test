@@ -253,7 +253,6 @@ final class AppStorageManager {
         // Single call removes all Keychain items — no risk of missing a key.
         Keychain.deleteAll()
 
-        // Clear any residual UserDefaults session flags.
         defaults.removeObject(forKey: AppStorageKeys.isNewUser)
     }
 }

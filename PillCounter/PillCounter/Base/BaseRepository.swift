@@ -96,6 +96,7 @@ extension BaseRepositoryProtocol {
                     do {
                         return try JSONDecoder().decode(T.self, from: data)
                     } catch {
+                        Log("⚠️ Parsing error for \(T.self): \(error)")
                         throw APIError.parsingError
                     }
                 case 401:

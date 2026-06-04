@@ -41,7 +41,7 @@ struct PillCountingToggleButton: View {
                     .padding(.vertical, 0)
             }
         }
-        .accessibilityLabel(Text(isOn ? "Switch On" : "Switch Off"))
+        .accessibilityLabel(Text(isOn ? L10n.Common.switchOn : L10n.Common.switchOff))
     }
 }
 

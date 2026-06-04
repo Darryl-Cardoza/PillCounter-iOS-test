@@ -41,7 +41,7 @@ struct NotePopupView: View {
     /// Single-button variant (e.g. "Would you like to add a note?" with just YES)
     init(
         title: String,
-        placeholder: String = "Type here",
+        placeholder: String = L10n.Common.typeHere,
         showClose: Bool = false,
         text: Binding<String>,
         errorMessage: String? = nil,
@@ -64,7 +64,7 @@ struct NotePopupView: View {
     /// Two-button variant (e.g. CANCEL + YES, or SKIP + SAVE)
     init(
         title: String,
-        placeholder: String = "Type here",
+        placeholder: String = L10n.Common.typeHere,
         showClose: Bool = false,
         text: Binding<String>,
         errorMessage: String? = nil,

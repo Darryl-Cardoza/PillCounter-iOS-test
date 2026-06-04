@@ -62,7 +62,9 @@ struct NewDashboardView: View {
     @EnvironmentObject private var historyViewModel: HistoryViewModel
     @StateObject private var locationService = LocationService.shared
 
-    @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
+    // userId is stored in Keychain via AppStorageManager — @AppStorage reads UserDefaults
+    // and would always return "". Read directly from the Keychain-backed store instead.
+    private var userId: String { AppStorageManager.shared.userId ?? "" }
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = true
     @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable) var isHl7Enable:
@@ -1007,7 +1009,7 @@ struct NewDashboardView: View {
         // Partial (Today's Queue)
         let fixed = transactionDAO.fetchPartial(for: user, countType: .FIXED)
         let regular = transactionDAO.fetchPartial(for: user, countType: .REGULAR)
-        dispensePartial = (fixed + regular).filter { $0.batch_id == 0 }
+        dispensePartial = fixed + regular
         printQueue(dispensePartial)
 
         // Completed (Recent Activity) — all user transactions filtered to COMPLETED status

@@ -295,7 +295,7 @@ class StockCountViewModel: ObservableObject {
             let response = try await controlledRepo.getControlledDrugInfo(
                 ndcValidationRequest: NdcValidationRequest(targetNdc: gtin, scannedNdc: gtin)
             )
-            let ndc = response.data?.scannedNdc?.packageNdc ?? ""
+            let ndc = response.data?.scannedNdc?.drugCode ?? ""
             if currentBatch?.req_id_from_pms != nil, !batchNdcSet.contains(ndc) {
                 isLoading = false
                 showScannedNdcDoesNotMatch = true
@@ -304,7 +304,7 @@ class StockCountViewModel: ObservableObject {
             }
             let drugName = response.data?.scannedNdc?.lookupName ?? ""
             let qty      = response.data?.scannedNdc?.safeQuantity ?? 0
-            let drugType = response.data?.scannedNdc?.deaSchedule
+            let drugType = response.data?.scannedNdc?.regulatory?.schedule
 
             // Backfill drug master so future scans resolve locally with full data
             let newDrugId = generateUniqueDrugId()

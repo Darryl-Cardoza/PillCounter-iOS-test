@@ -310,10 +310,10 @@ extension BaseView {
 
     private var confirmationPopup: some View {
         ConfirmationDialogue(
-            title: confirmTitle ?? "Confirmation",
-            message: confirmMessage ?? "Are you sure you want to go back?",
-            cancelButtonText: cancelButtonText ?? "NO",
-            confirmButtonText: confirmButtonText ?? "YES"
+            title: confirmTitle ?? L10n.Common.confirmation,
+            message: confirmMessage ?? L10n.Common.areYouSureGoBack,
+            cancelButtonText: cancelButtonText ?? L10n.Common.no,
+            confirmButtonText: confirmButtonText ?? L10n.Common.yes
         ) {
             confirmationDialogueManager.hide()
         } onConfirm: {
@@ -422,9 +422,9 @@ struct PMSConnectionButtonView: View {
     // MARK: - Computed
     private var statusText: String {
         switch pmsConnectionState {
-        case .connected:               return "PMS Connected"
-        case .disconnected, .notAvailable: return "PMS Disconnected"
-        case .connecting:              return "Connecting..."
+        case .connected:               return L10n.PMS.connected
+        case .disconnected, .notAvailable: return L10n.PMS.disconnected
+        case .connecting:              return L10n.PMS.connecting
         }
     }
 

@@ -149,4 +149,22 @@ extension UnifiedCameraView {
             onConfirm: { restartFlow() }
         )
     }
+
+    var rxOnHoldPopup: some View {
+        ConfirmationDialogue(
+            title: L10n.BarcodeScan.rxOnHoldTitle,
+            message: L10n.BarcodeScan.rxOnHoldMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.BarcodeScan.rescan,
+            showSingleConfirmButton: true,
+            onCancel: {
+                pillScanViewModel.showRxOnHoldPopup = false
+                restartFlow()
+            },
+            onConfirm: {
+                pillScanViewModel.showRxOnHoldPopup = false
+                restartFlow()
+            }
+        )
+    }
 }

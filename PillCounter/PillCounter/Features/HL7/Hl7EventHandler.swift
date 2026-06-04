@@ -71,8 +71,8 @@ final class Hl7EventHandler: Hl7EventListener {
         }
 
         HL7NotificationManager.show(
-            title: "PMS Connected",
-            body: "Connected to \(serviceName)"
+            title: L10n.PMS.connected,
+            body: L10n.PMS.connectedBody(serviceName)
         )
     }
 

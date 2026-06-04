@@ -177,6 +177,7 @@ enum CountStatus: String, Codable {
     case PARTIAL
     case COMPLETED
     case FORCE_COMPLETED
+    case ON_HOLD
 }
 
 public enum HistoryStatusFilter: String, CaseIterable, Codable {

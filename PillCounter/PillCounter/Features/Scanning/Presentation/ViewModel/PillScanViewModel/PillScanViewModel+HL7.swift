@@ -14,16 +14,16 @@ extension PillScanViewModel {
         rawHl7: String = "",
         callback: HL7SimpleCallback? = nil
     ) {
-
         guard let msgType = classifyInboundMessage(message) else {
             print("Unknown HL7 message")
             return
         }
 
         let countType: CountType =
-            (msgType == .dispenseOrder) ? .FIXED : .REGULAR
+            (msgType == .dispenseOrder || msgType == .editDispenseOrder) ? .FIXED : .REGULAR
 
         if msgType == .dispenseOrder ||
+            msgType == .editDispenseOrder ||
             msgType == .inventoryRequest {
 
             buildNotification(
@@ -35,26 +35,28 @@ extension PillScanViewModel {
         print("MSG Type \(msgType)")
 
         Task(priority: .background) {
-
-            if msgType == .dispenseOrder {
-
+            switch msgType {
+            case .dispenseOrder:
                 await createFixedHl7Transaction(
                     message: message,
                     rawHl7: rawHl7,
                     inboundType: .FIXED,
                     callback: callback
                 )
-
-            } else if msgType == .inventoryRequest {
-
+            case .editDispenseOrder:
+                await editFixedHl7Transaction(      // implement as needed
+                    message: message,
+                    rawHl7: rawHl7,
+                    inboundType: .FIXED,
+                    callback: callback
+                )
+            case .inventoryRequest:
                 await createRegularHl7Transaction(
                     message: message,
                     inboundType: .REGULAR,
                     callback: callback
                 )
-
-            } else if msgType == .cancelOrder {
-
+            case .cancelOrder:
                 await cancelOrderTransactions(
                     message: message,
                     callback: callback
@@ -65,19 +67,27 @@ extension PillScanViewModel {
     
     func classifyInboundMessage(
         _ message: CompleteHL7Message
-    ) -> Hl7MessageType? {
+    ) -> MessageType? {
 
-        // Cancel Order
+        // Cancel Order — ORC|CA
         if message.order?.orderControl == "CA",
-           !(message.order?.placerOrderId.isEmpty ?? true) {
+           !(message.order?.placerOrderId.isNullOrBlank ?? true) {
             return .cancelOrder
         }
 
-        // Dispense Request
+        // Edit Dispense Request — ORC|XO
+        if message.messageType == "RDE",
+           message.triggerEvent == "O11",
+           message.order?.orderControl == "XO",
+           !(message.order?.placerOrderId.isNullOrBlank ?? true),
+           !message.medications.isEmpty {
+            return .editDispenseOrder
+        }
+
+        // New Dispense Request — ORC|NW (or any other control)
         if message.messageType == "RDE",
            message.triggerEvent == "O11",
            !message.medications.isEmpty {
-
             return .dispenseOrder
         }
 
@@ -85,12 +95,13 @@ extension PillScanViewModel {
         if message.messageType == "INR",
            message.triggerEvent == "U04",
            !message.medications.isEmpty {
-
             return .inventoryRequest
         }
 
         return nil
     }
+    
+
     
     @MainActor
     private func createFixedHl7Transaction(
@@ -175,25 +186,160 @@ extension PillScanViewModel {
         callback?(true)
     }
 
-    
-//    private func classifyInboundMessage(
-//        _ message: CompleteHL7Message
-//    ) -> CountType? {
-//        if message.messageType == "RDE",
-//           message.triggerEvent == "O11",
-//           !message.medications.isEmpty {
-//            return .FIXED
-//        }
-//
-//        if message.messageType == "INR",
-//           message.triggerEvent == "U04",
-//           !message.medications.isEmpty {
-//            return .REGULAR
-//        }
-//        return nil
-//    }
+    @MainActor
+    private func editFixedHl7Transaction(
+        message: CompleteHL7Message,
+        rawHl7: String = "",
+        inboundType: CountType,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+        guard let rxNo = message.order?.placerOrderId, !rxNo.isEmpty else {
+            callback?(false)
+            return
+        }
+        guard let medication = message.medications.first else {
+            callback?(false)
+            return
+        }
 
-    
+        // 1. Find active transaction; restore soft-deleted one if needed
+        let currentUser = userDataLocalStorage.fetchByUserId(userId)
+        var existingTxn = currentUser.flatMap { transactionDAO.fetchByRxNo(rxNo, for: $0).first }
+        if existingTxn == nil {
+            if let currentUser, let deleted = transactionDAO.fetchDeletedByRxNo(rxNo, for: currentUser) {
+                Log("HL7 ORC|XO: restoring deleted txnId=\(deleted.txn_id) for rxNo=\(rxNo)")
+                transactionDAO.restoreDeleted(txnId: deleted.txn_id)
+                existingTxn = transactionDAO.fetchById(deleted.txn_id)
+            }
+        }
+
+        guard let txn = existingTxn else {
+            // Silently ignore status-only updates (HD/CM/CA) for orders not on this device.
+            // Only notify if it was a genuine drug/qty edit (XO with no prior txn).
+            let orderStatusRaw = message.order?.orderStatus?.uppercased()
+            let isStatusOnlyUpdate = (orderStatusRaw == "HD" || orderStatusRaw == "CM" || orderStatusRaw == "CA")
+            if !isStatusOnlyUpdate {
+                HL7NotificationManager.show(
+                    title: "Edit Rx Failed",
+                    body: "No transaction found for Rx \(rxNo)"
+                )
+            }
+            Log("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), orderStatus=\(orderStatusRaw ?? "nil") — ignoring")
+            callback?(false)
+            return
+        }
+
+        // 2. Resolve drug: local DB first, then API fallback
+        let hl7Ndc = medication.drugCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hl7DrugName = medication.drugName
+        let newTargetCount = Int32(medication.requestedQty ?? "0") ?? 0
+
+        var resolvedDrugId: Int64 = txn.drug_id
+        var resolvedDrugName: String = hl7DrugName
+
+        if let local = drugMasterDAO.fetchByNdc(hl7Ndc),
+           let localName = local.drug_name, !localName.isEmpty {
+            resolvedDrugId = local.drug_id
+            resolvedDrugName = localName
+            Log("HL7 ORC|XO: drug found locally → \(resolvedDrugName)")
+        } else {
+            let request = NdcValidationRequest(targetNdc: hl7Ndc, scannedNdc: hl7Ndc)
+            do {
+                let response = try await controlledRepo.getControlledDrugInfo(
+                    ndcValidationRequest: request
+                )
+                if let lookup = response.data?.scannedNdc?.lookupName, !lookup.isEmpty {
+                    let newId = generateUniqueDrugId()
+                    drugMasterDAO.saveManual(
+                        ndc: hl7Ndc,
+                        drugId: newId,
+                        drugName: lookup,
+                        drugType: response.data?.scannedNdc?.regulatory?.schedule,
+                        packageQty: response.data?.scannedNdc?.safeQuantity ?? 0,
+                        isHazardous: response.data?.scannedNdc?.isHazardous
+                    )
+                    resolvedDrugId = newId
+                    resolvedDrugName = lookup
+                    Log("HL7 ORC|XO: drug created via API → \(lookup)")
+                } else {
+                    Log("HL7 ORC|XO: API returned no drug name for NDC=\(hl7Ndc) — aborting edit")
+                    HL7NotificationManager.show(
+                        title: "Edit Rx Failed",
+                        body: "Drug not found for Rx \(rxNo), NDC \(hl7Ndc)"
+                    )
+                    callback?(false)
+                    return
+                }
+            } catch {
+                Log("HL7 ORC|XO: API failed for NDC=\(hl7Ndc) → \(error.localizedDescription)")
+                HL7NotificationManager.show(
+                    title: "Edit Rx Failed",
+                    body: "Drug not found for Rx \(rxNo), NDC \(hl7Ndc)"
+                )
+                callback?(false)
+                return
+            }
+        }
+
+        // 3. Parse priority from ZPR segment
+        let newPriority = Self.extractZprPriorityString(from: rawHl7)
+
+        // 4. Apply all updates atomically; resets is_synced so the result is re-sent to PMS
+        let txnId = txn.txn_id
+        transactionDAO.updateFromHL7Edit(
+            txnId: txnId,
+            drugId: resolvedDrugId,
+            targetCount: newTargetCount,
+            priority: newPriority
+        )
+
+        Log("HL7 ORC|XO applied: txnId=\(txnId), rxNo=\(rxNo), drugId=\(resolvedDrugId), targetCount=\(newTargetCount), priority=\(newPriority ?? "nil")")
+
+        // 5. Map and apply order status
+        let orderStatusRaw = message.order?.orderStatus?.uppercased()
+        let newStatus = Self.mapHl7OrderStatus(orderStatusRaw)
+        if let newStatus {
+            transactionDAO.updateStatus(txnId: txnId, status: newStatus)
+        }
+
+        // 6. If CA — soft-delete after the update, let the delete sync queue handle PMS notification
+        if orderStatusRaw == "CA" {
+            Log("HL7 ORC|XO status=CA — soft-deleting txnId=\(txnId) after update")
+            transactionDAO.softDelete(txnId: txnId)
+            callback?(true)
+            return
+        }
+
+        // 7. If COMPLETED — updateStatus already fired transactionsDidChange which auto-enqueues PMS sync
+        if newStatus == .COMPLETED {
+            Log("HL7 ORC|XO status=CM — transaction marked completed, PMS sync enqueued via transactionsDidChange")
+            callback?(true)
+            return
+        }
+
+        // 8. Refresh UI
+        getAllTransactionDetailsOfTheCurrentTransaction()
+        updateTargetCountForCurrentTransaction()
+
+        HL7NotificationManager.show(
+            title: "Rx Updated",
+            body: "Rx \(rxNo) • \(resolvedDrugName) • Qty: \(newTargetCount)"
+        )
+
+        callback?(true)
+    }
+
+    // Maps HL7 ORC-5 order status to CountStatus.
+    // CA is handled separately via soft-delete; returns nil here.
+    static func mapHl7OrderStatus(_ orderStatus: String?) -> CountStatus? {
+        switch orderStatus?.uppercased() {
+        case "IP": return .PARTIAL
+        case "CM": return .COMPLETED
+        case "HD": return .ON_HOLD
+        default:   return nil
+        }
+    }
+
     @MainActor
     func processHl7DrugAndCreateTransaction(
         ndc: String,
@@ -253,12 +399,12 @@ extension PillScanViewModel {
                         ndc: ndc,
                         drugId: newId,
                         drugName: lookup,
-                        drugType: response.data?.scannedNdc?.deaSchedule,
+                        drugType: response.data?.scannedNdc?.regulatory?.schedule,
                         packageQty: response.data?.scannedNdc?.safeQuantity ?? 0,
                         isHazardous: response.data?.scannedNdc?.isHazardous
                     )
 
-                    drugType = response.data?.scannedNdc?.deaSchedule
+                    drugType = response.data?.scannedNdc?.regulatory?.schedule
 
                     Log("HL7: Drug created via API → \(lookup)")
                 } else {
@@ -327,7 +473,8 @@ extension PillScanViewModel {
             return
         }
 
-        let txns = transactionDAO.fetchByRxNo(rxNo)
+        let currentUser = userDataLocalStorage.fetchByUserId(userId)
+        let txns = currentUser.map { transactionDAO.fetchByRxNo(rxNo, for: $0) } ?? []
         guard !txns.isEmpty else {
             Log("HL7: Cancel order — no transactions found for Rx \(rxNo)")
             callback?(false)
@@ -400,5 +547,19 @@ extension PillScanViewModel {
             title: title,
             body: body
         )
+    }
+}
+
+
+enum MessageType {
+    case dispenseOrder
+    case editDispenseOrder
+    case inventoryRequest
+    case cancelOrder
+}
+
+extension String {
+    var isNullOrBlank: Bool {
+        return self.trimmingCharacters(in: .whitespaces).isEmpty
     }
 }

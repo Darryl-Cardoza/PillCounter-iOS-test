@@ -94,9 +94,11 @@ final class TransactionStore {
         countType: CountType
     ) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        let localId = Int64(user.user_id ?? "") ?? 0
+        let completedStatuses = [CountStatus.COMPLETED.rawValue]
         request.predicate = NSPredicate(
-            format: "user == %@ AND is_deleted == false AND count_type == %@ AND status == %@",
-            user, countType.rawValue, CountStatus.PARTIAL.rawValue
+            format: "local_id == %lld AND is_deleted == false AND batch_id == 0 AND count_type == %@ AND NOT (status IN %@)",
+            localId, countType.rawValue, completedStatuses
         )
         request.sortDescriptors = [
             NSSortDescriptor(key: "is_from_pms", ascending: false),
@@ -119,10 +121,66 @@ final class TransactionStore {
         return (try? context.fetch(request)) ?? []
     }
 
-    func fetchByRxNo(_ rxNo: String) -> [PillCountTransactionEntity] {
+    func fetchAllRxNos(for user: UserEntity) -> [String] {
+        // rx_no is encrypted in SQLite — refresh each object to force re-decrypt before reading
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "rx_no == %@ AND is_deleted == false", rxNo)
-        return (try? context.fetch(request)) ?? []
+        request.predicate = NSPredicate(format: "user == %@", user)
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { context.refresh($0, mergeChanges: false) }
+        return results.compactMap { $0.rx_no }.filter { !$0.isEmpty }
+    }
+
+    func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity] {
+        // rx_no is encrypted in SQLite — refresh each object to force re-decrypt, then filter in-memory
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { context.refresh($0, mergeChanges: false) }
+        return results.filter { $0.rx_no == rxNo }
+    }
+
+    func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
+        // rx_no is encrypted in SQLite — refresh each object to force re-decrypt, then filter in-memory
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "user == %@ AND is_deleted == true", user)
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { context.refresh($0, mergeChanges: false) }
+        return results
+            .filter { $0.rx_no == rxNo }
+            .sorted { $0.updated_at > $1.updated_at }
+            .first
+    }
+
+    func restoreDeleted(txnId: Int64) {
+        guard let txn = fetchById(txnId) else { return }
+        txn.is_deleted = false
+        txn.status = CountStatus.PARTIAL.rawValue
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] RESTORED deleted — txnId: \(txnId)")
+        transactionsDidChange.send()
+    }
+
+    func updatePriority(txnId: Int64, priority: String?) {
+        guard let txn = fetchById(txnId) else { return }
+        txn.txn_priority = priority
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED priority — txnId: \(txnId), priority: \(priority ?? "nil")")
+    }
+
+    func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?) {
+        guard let txn = fetchById(txnId),
+              let drug = DrugCatalogStore.shared.fetchById(drugId) else { return }
+        txn.drug_id = drugId
+        txn.drug = drug
+        txn.target_count = targetCount
+        txn.txn_priority = priority
+        txn.is_synced = false
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] HL7 EDIT applied — txnId: \(txnId), drugId: \(drugId), targetCount: \(targetCount), priority: \(priority ?? "nil")")
+        transactionsDidChange.send()
     }
 
     func fetchByBatch(batchId: Int64) -> [PillCountTransactionEntity] {
@@ -145,27 +203,36 @@ final class TransactionStore {
         return (try? context.fetch(request)) ?? []
     }
 
-    func fetchCompletedUnsynced() -> [PillCountTransactionEntity] {
+    func fetchCompletedUnsynced(for user: UserEntity) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND is_synced == false AND status == %@ AND count_type == %@",
-            CountStatus.COMPLETED.rawValue, CountType.FIXED.rawValue
+            format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND count_type == %@",
+            user, CountStatus.COMPLETED.rawValue, CountType.FIXED.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
         return (try? context.fetch(request)) ?? []
     }
 
+    /// Convenience overload for callers without a UserEntity reference (e.g. HL7 sync queues).
+    /// Resolves the currently logged-in user from storage; returns [] when no user is active.
+    func fetchCompletedUnsynced() -> [PillCountTransactionEntity] {
+        guard let user = currentUserEntity() else { return [] }
+        return fetchCompletedUnsynced(for: user)
+    }
+
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
+        let localId = Int64(user.user_id ?? "") ?? 0
+        request.predicate = NSPredicate(format: "local_id == %lld AND is_deleted == false", localId)
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let results = (try? context.fetch(request)) ?? []
         StoreLogger.log(
             dao: "TransactionDAO", op: "fetchAll",
-            columns: ["txn_id", "drug_id", "count_type", "status", "batch_id", "target_count", "is_from_pms", "is_synced"],
+            columns: ["txn_id", "rx_no", "drug_name", "count_type", "status", "batch_id", "target_count", "is_from_pms", "is_synced"],
             rows: results.map { [
                 "\($0.txn_id)",
-                "\($0.drug_id)",
+                $0.rx_no ?? "-",
+                $0.drug?.drug_name ?? "-",
                 $0.count_type ?? "-",
                 $0.status ?? "-",
                 "\($0.batch_id)",
@@ -344,6 +411,13 @@ final class TransactionStore {
     }
 
     // MARK: - Private
+
+    /// Resolves the currently logged-in user from CoreData.
+    /// Returns nil when no user ID is stored (e.g. during or after logout).
+    private func currentUserEntity() -> UserEntity? {
+        guard let userId = AppStorageManager.shared.userId, !userId.isEmpty else { return nil }
+        return UserStore.shared.fetchByUserId(userId)
+    }
 
     private func generateUniqueId() -> Int64 {
         let key = "txnTransactionIdCounter"

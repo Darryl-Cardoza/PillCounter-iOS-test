@@ -304,6 +304,44 @@ struct UnifiedCameraView: View {
     }
     
     private var cameraLayoutWithScanObservers: some View {
+        cameraLayoutWithFirstObservers
+            .onChange(of: pillScanViewModel.showScannedDrugInfoPopoup) { _, isShowing in
+                if isShowing && scanType == .barcode {
+                    pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.qrScannedSuccessfully)
+                    handleSubstitute()
+                }
+            }
+            .onChange(of: pillScanViewModel.ndcMismatchRestartFlow) { _, triggered in
+                if triggered && currentScanType != .resumeCount {
+                    pillScanViewModel.ndcMismatchRestartFlow = false
+                    restartFlow()
+                }
+            }
+            .onChange(of: pillScanViewModel.vialDoneTriggered) { _, triggered in
+                if triggered {
+                    pillScanViewModel.vialDoneTriggered = false
+                    handleVialDone()
+                }
+            }
+            .onChange(of: showStockCountPanel) { _, visible in
+                if !visible {
+                    stockSheetCurrentHeight = stockCountSheetHeight
+                    stockSheetCurrentWidth = stockCountSheetWidth
+                    stockSheetIsExpanded = false
+                }
+            }
+            .onChange(of: cameraService.glovesConfirmed) { _, confirmed in
+                if confirmed { pillScanViewModel.updateGlovesDetected(detected: true) }
+            }
+            .onChange(of: pillScanViewModel.currentTransaction) { _, txn in
+                cameraService.isGloveDetectionEnabled =
+                    (txn?.drug?.is_hazardous == true) && AppStorageManager.shared.isHazardousDrugSetting
+            }
+    }
+
+    // Split into two properties so the Swift type-checker doesn't time out
+    // on the long onChange chain.
+    private var cameraLayoutWithFirstObservers: some View {
         UnifiedCameraLayout(
             cameraService: cameraService,
             showPillCountPanel: showPillCountPanel,
@@ -322,7 +360,6 @@ struct UnifiedCameraView: View {
                 pillScanViewModel.updateGlovesDetected(detected: false)
             }
         )
-        
         .onAppear(perform: onAppear)
         .onDisappear(perform: onDisappear)
         .onChange(of: scenePhase) { _, phase in
@@ -387,38 +424,6 @@ struct UnifiedCameraView: View {
         }
         .onChange(of: unifiedInstructionText) { _, newText in
             speakInstruction(newText)
-        }
-        .onChange(of: pillScanViewModel.showScannedDrugInfoPopoup) { _, isShowing in
-            if isShowing && scanType == .barcode {
-                pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.qrScannedSuccessfully)
-                handleSubstitute()
-            }
-        }
-        .onChange(of: pillScanViewModel.ndcMismatchRestartFlow) { _, triggered in
-            if triggered && currentScanType != .resumeCount {
-                pillScanViewModel.ndcMismatchRestartFlow = false
-                restartFlow()
-            }
-        }
-        .onChange(of: pillScanViewModel.vialDoneTriggered) { _, triggered in
-            if triggered {
-                pillScanViewModel.vialDoneTriggered = false
-                handleVialDone()
-            }
-        }
-        .onChange(of: showStockCountPanel) { _, visible in
-            if !visible {
-                stockSheetCurrentHeight = stockCountSheetHeight
-                stockSheetCurrentWidth = stockCountSheetWidth
-                stockSheetIsExpanded = false
-            }
-        }
-        .onChange(of: cameraService.glovesConfirmed) { _, confirmed in
-            if confirmed { pillScanViewModel.updateGlovesDetected(detected: true) }
-        }
-        .onChange(of: pillScanViewModel.currentTransaction) { _, txn in
-            cameraService.isGloveDetectionEnabled =
-                (txn?.drug?.is_hazardous == true) && AppStorageManager.shared.isHazardousDrugSetting
         }
     }
 

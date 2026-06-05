@@ -8,7 +8,15 @@ import Foundation
 final class AppStorageManager {
     static let shared = AppStorageManager()
     private let defaults = UserDefaults.standard
-    private init() {}
+    private init() {
+        clearKeychainOnFreshInstall()
+    }
+
+    private func clearKeychainOnFreshInstall() {
+        guard !defaults.bool(forKey: AppStorageKeys.hasLaunchedBefore) else { return }
+        Keychain.deleteAll()
+        defaults.set(true, forKey: AppStorageKeys.hasLaunchedBefore)
+    }
 
     // MARK: - Key constants
     public enum AppStorageKeys {
@@ -38,6 +46,10 @@ final class AppStorageManager {
         static let isSpeechEnabled      = "isSpeechEnabled"
         static let selectedSchedules    = "selectedSchedules"
         static let selectedTerminalName = "selected_terminal_name"
+        static let isHarzardousDrugSetting = "hazardous_pill_setting"
+
+        // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
+        static let hasLaunchedBefore    = "has_launched_before"
     }
 
     // =========================================================================
@@ -168,6 +180,11 @@ final class AppStorageManager {
     var isNewUser: Bool {
         get { defaults.bool(forKey: AppStorageKeys.isNewUser) }
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isNewUser) }
+    }
+    
+    var isHazardousDrugSetting: Bool {
+        get { defaults.bool(forKey: AppStorageKeys.isHarzardousDrugSetting) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isHarzardousDrugSetting) }
     }
 
     var isPillCountingEnabled: Bool {

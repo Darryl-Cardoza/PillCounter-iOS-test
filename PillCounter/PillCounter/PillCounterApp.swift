@@ -93,11 +93,15 @@ struct PillCounterApp: App {
                                     }
                                 }
 
-                                // Pre-warm CoreML models at launch so the first
-                                // navigation to the camera screen doesn't hang.
+                                // Pre-warm all three CoreML models at launch so the
+                                // first navigation to the camera screen doesn't hang.
+                                // Each singleton loads its .mlpackage and compiles GPU
+                                // shaders; doing this in the background avoids a visible
+                                // stall when the camera view first appears.
                                 Task.detached(priority: .background) {
-                                    _ = PillDetector.shared
-                                    _ = TrayDetectionService.shared
+                                    _ = PillDetector.shared         // pills_detector_fp16 (FP16, NeuralEngine)
+                                    _ = TrayDetectionService.shared // tray_detector_fp16 (MobileNetV2-UNet segmentation, FP16)
+                                    _ = GloveDetector.shared        // gloves_detector_fp32 (FP32, GPU)
                                 }
                             }
 

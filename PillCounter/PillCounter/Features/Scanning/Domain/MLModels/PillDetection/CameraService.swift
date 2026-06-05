@@ -29,10 +29,15 @@ final class CameraService: NSObject, ObservableObject {
     private var hasScanned: Bool = false
 
     // MARK: - IMAGE PROCESSING
-    private let detector = PillDetectionService()
-    private let trayDetector = TrayDetectionService.shared
+    // Three-model inference pipeline running on every captured camera frame:
+    //   1. GloveDetectionService  — YOLOX-Nano 320×320 (rate-limited to 400 ms after first hit)
+    //   2. TrayDetectionService   — MobileNetV2-UNet segmentation 384×384 (every frame)
+    //                               argmax → 384×384 label map → bounding boxes for TRAY / CHUTE
+    //   3. PillDetectionService   — PP-YOLOE+s 640×640 (every frame, filtered by tray rects)
+    private let detector       = PillDetectionService()
+    private let trayDetector   = TrayDetectionService.shared
+    private let gloveDetector  = GloveDetectionService()
 
-    
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
 
@@ -48,6 +53,24 @@ final class CameraService: NSObject, ObservableObject {
     @Published var stableCount: Int = 0
     @Published var detections: [DetectionResult] = []
     @Published var trayDetections: [TrayResult] = []
+
+    /// All glove detections from the most recent inference run (rate-limited to 400 ms
+    /// after the first detection).  Empty when gloves have never been checked or when
+    /// no hands are visible in the frame.
+    @Published var gloveDetections: [GloveDetectionResult] = []
+
+    /// True when at least one detected region in the current frame has a bare hand
+    /// (GloveClass.noGlove).  Drives the UI warning banner.
+    @Published var isGloveHazardous: Bool = false
+
+    /// True once gloves (GloveClass.glove) have been confirmed for the current session.
+    /// When true, glove model inference is skipped — the hand icon stays green.
+    /// Reset to false via resetGloveDetection() when the inactivity-pause resume button is tapped.
+    @Published var glovesConfirmed: Bool = false
+
+    /// Set to true by UnifiedCameraView when the current drug is hazardous (drug.is_hazardous == true).
+    /// When false, glove model inference is completely skipped and the indicator is hidden.
+    @Published var isGloveDetectionEnabled: Bool = false
 
     @Published var isAuthorized = false
     @Published var error: String?
@@ -276,15 +299,29 @@ final class CameraService: NSObject, ObservableObject {
         guard isCountingEnabled else { return }
         isCountingEnabled = false
         DispatchQueue.main.async {
-            self.stableCount = 0
-            self.detections = []
-            self.trayDetections = []
+            self.stableCount      = 0
+            self.detections       = []
+            self.trayDetections   = []
+            self.gloveDetections  = []
+            self.isGloveHazardous = false
         }
     }
 
     func resumeCounting() {
         guard !isCountingEnabled else { return }
         isCountingEnabled = true
+    }
+
+    /// Resets glove-detection state so the glove model runs again from scratch.
+    /// Call this when the user resumes from an inactivity pause (new operator may have
+    /// taken over) so gloves must be re-verified for the resumed session.
+    func resetGloveDetection() {
+        gloveDetector.reset()
+        DispatchQueue.main.async {
+            self.glovesConfirmed  = false
+            self.gloveDetections  = []
+            self.isGloveHazardous = false
+        }
     }
 
     // MARK: - ORIENTATION
@@ -397,31 +434,49 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard isCountingEnabled else { return }
 
-        // 1. Run tray detection FIRST (synchronous — no completion needed)
-        let trays = trayDetector.detect(pixelBuffer: pixelBuffer)
+        // ── Model 1: Glove safety detection (YOLOX-Nano 320×320) ──────────────
+        // Only runs when the current drug is hazardous (isGloveDetectionEnabled) AND
+        // gloves haven't been confirmed yet for this session (glovesConfirmed).
+        // GloveDetectionService applies its own 400 ms rate limiter internally;
+        // the call returns [] immediately when the throttle is active.
+        let gloves: [GloveDetectionResult] = (isGloveDetectionEnabled && !glovesConfirmed)
+            ? gloveDetector.detect(pixelBuffer: pixelBuffer)
+            : []
 
-        // 2. Run pill detection, then filter results by tray bounds
-        detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, count in
+        // ── Model 2: Tray / chute detection (RTMDet-Tiny 640×640) ────────────
+        // Returns both .tray and .chute regions; only .tray regions gate pill counts.
+        let allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
+
+        // Only TRAY regions (class 0) are used to filter pill positions.
+        // CHUTE regions (class 1) are passed to the overlay for display only.
+        let trayRects = allTrays.filter { $0.trayClass == .tray }.map { $0.rect }
+
+        // ── Model 3: Pill detection (PP-YOLOE+s 640×640) ─────────────────────
+        detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, _ in
             guard let self else { return }
 
-            // 3. Keep only pills whose centre falls inside any tray rect
+            // Keep only pills whose centre falls inside a TRAY (not CHUTE) rect.
+            // An empty trayRects list means no tray is visible → count = 0.
             let filtered: [DetectionResult]
-            if trays.isEmpty {
+            if trayRects.isEmpty {
                 filtered = []
             } else {
                 filtered = allPills.filter { pill in
-                    trays.contains { tray in
-                        tray.rect.contains(pill.center)
-                    }
+                    trayRects.contains { trayRect in trayRect.contains(pill.center) }
                 }
             }
 
+            let hazardous        = gloves.contains { $0.isHazardous }
+            let glovesNowSafe    = !self.glovesConfirmed && gloves.contains { $0.gloveClass == .glove }
+
             DispatchQueue.main.async {
                 guard self.isCountingEnabled else { return }
-                self.detections     = filtered
-                self.stableCount    = filtered.count
-                self.trayDetections = trays
-
+                self.detections       = filtered
+                self.stableCount      = filtered.count
+                self.trayDetections   = allTrays
+                self.gloveDetections  = gloves
+                self.isGloveHazardous = hazardous
+                if glovesNowSafe { self.glovesConfirmed = true }
             }
         }
     }

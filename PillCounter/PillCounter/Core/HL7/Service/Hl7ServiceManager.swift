@@ -14,7 +14,7 @@ final class Hl7ServiceManager {
     private let port: UInt16
     private let serviceName: String
     private let serviceType: String
-    private let pmsServiceType: String
+    private var pmsServiceType: String
 
     // MARK: - Server
     private let server: HL7TLSServer
@@ -218,10 +218,10 @@ final class Hl7ServiceManager {
     // MARK: - Restart browsing (called by Hl7ServiceController after settings load)
 
     /// Call this after mobile settings have been fetched and pmsHostName is populated.
-    /// Cancels any existing browser so startBrowsing() creates a fresh one with the
-    /// correct service type.
-    func restartBrowsingIfNeeded() {
+    /// Updates the stored service type and starts (or restarts) the Bonjour browser.
+    func restartBrowsingIfNeeded(pmsServiceType: String) {
         guard !pmsServiceType.isEmpty else { return }
+        self.pmsServiceType = pmsServiceType
         stopBrowsing()
         startBrowsing()
     }

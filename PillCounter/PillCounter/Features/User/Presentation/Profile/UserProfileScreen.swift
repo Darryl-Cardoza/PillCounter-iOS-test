@@ -143,9 +143,8 @@ struct UserProfileScreen: View {
                 maxLength: 10
             )
 
-            if !userViewModel.terminals.isEmpty {
-                terminalDropdown
-            }
+            terminalDropdown
+            
         }
     }
     

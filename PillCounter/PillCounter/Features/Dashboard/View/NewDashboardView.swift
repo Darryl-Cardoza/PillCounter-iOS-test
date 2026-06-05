@@ -64,8 +64,7 @@ struct NewDashboardView: View {
     @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = true
-    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable) var isHl7Enable:
-        Bool = false
+    private var isHl7Enable: Bool { AppStorageManager.shared.isHl7Enabled }
     @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
     var selectedTerminalName: String = ""
 
@@ -327,6 +326,10 @@ struct NewDashboardView: View {
             .animation(.easeInOut(duration: 0.25), value: selectedQueueTab)
         }
     }
+    
+    private func safeDimenstions(_ value: CGFloat, minimum: CGFloat = 1) -> CGFloat {
+        value.isFinite ? max(minimum, value) : minimum
+    }
 
     // MARK: - Phone landscape body
 
@@ -348,7 +351,7 @@ struct NewDashboardView: View {
                 HStack(spacing: 0) {
                     Text(L10n.Dashboard.quickActions)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(appColors.text.opacity(0.5))
+                        .foregroundColor(appColors.text)
                         .textCase(.uppercase)
                         .tracking(1)
                         .padding(.horizontal, 12)

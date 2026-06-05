@@ -36,7 +36,7 @@ struct CameraContentView: View {
 
                     if pillScanViewModel.currentControlledStep != .vial {
                         DetectionOverlay(cameraService: cameraService).ignoresSafeArea()
-                        TrayOverlay(cameraService: cameraService).ignoresSafeArea()
+//                        TrayOverlay(cameraService: cameraService).ignoresSafeArea()
                     }
                     if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                         VStack {

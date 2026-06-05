@@ -54,6 +54,10 @@ class PillScanViewModel: ObservableObject {
     @Published  var toastMessage: String = ""
     @Published  var toastAutoClose: Bool = true
 
+    // Hazardous tray
+    @Published  var showHazardousTrayPopup: Bool = false
+    @Published  var pendingHazardousTrayColor: String = ""
+
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
     @Published var currentControlledTargetCount: Int? = nil
@@ -352,6 +356,51 @@ class PillScanViewModel: ObservableObject {
         guard let txnId = currentTransaction?.txn_id else { return }
         transactionDAO.updateGlovesDetected(txnId: txnId, detected: detected)
         currentTransaction?.gloves_detected = detected
+    }
+
+    func updateHazardousTrayDetected(detected: Bool) {
+        guard let txnId = currentTransaction?.txn_id else { return }
+        transactionDAO.updateHazardousTrayDetected(txnId: txnId, detected: detected)
+        currentTransaction?.hazardous_tray_detected = detected
+    }
+
+    // MARK: - Hazardous tray flow
+
+    /// Called when the camera samples the tray colour for the current session.
+    /// Branches on whether the current drug is hazardous and whether we already
+    /// have a stored hazardous tray colour.
+    func handleTrayColorDetected(_ color: TrayColor, drugIsHazardous: Bool) {
+        let detectedName = color.displayName
+        let storedName = AppStorageManager.shared.hazardousTrayColor
+
+        if drugIsHazardous {
+            if storedName == nil {
+                // First-ever capture: ask the operator to confirm.
+                pendingHazardousTrayColor = detectedName
+                showHazardousTrayPopup = true
+            } else if storedName == detectedName {
+                // Same tray as the stored hazardous one — mark silently.
+                updateHazardousTrayDetected(detected: true)
+            }
+            // Different colour after capture: do nothing (capture-once behaviour).
+        } else {
+            // Non-hazardous flow: warn if using the hazardous tray.
+            if storedName == detectedName {
+                showToastMessage(text: "You are using a hazardous tray in a non-hazardous flow")
+            }
+        }
+    }
+
+    /// Operator tapped "Yes" on the hazardous-tray confirmation popup.
+    func confirmHazardousTray() {
+        AppStorageManager.shared.hazardousTrayColor = pendingHazardousTrayColor
+        updateHazardousTrayDetected(detected: true)
+        showHazardousTrayPopup = false
+    }
+
+    /// Operator tapped "No" — keep nothing.
+    func dismissHazardousTrayPopup() {
+        showHazardousTrayPopup = false
     }
 
 

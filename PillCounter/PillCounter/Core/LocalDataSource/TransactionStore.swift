@@ -367,6 +367,14 @@ final class TransactionStore {
         print("📋 [TransactionDAO] UPDATED glovesDetected — txnId: \(txnId), detected: \(detected)")
     }
 
+    func updateHazardousTrayDetected(txnId: Int64, detected: Bool) {
+        guard let txn = fetchById(txnId) else { return }
+        txn.hazardous_tray_detected = detected
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED hazardousTrayDetected — txnId: \(txnId), detected: \(detected)")
+    }
+
     func updateNdcVerified(txnId: Int64, verified: Bool) {
         guard let txn = fetchById(txnId) else { return }
         txn.is_ndc_verfied = verified

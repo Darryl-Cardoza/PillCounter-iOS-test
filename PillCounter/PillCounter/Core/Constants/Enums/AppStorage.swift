@@ -35,6 +35,7 @@ final class AppStorageManager {
         static let barcodeFormat        = "barcode_format"
         static let bucketList           = "bucket_list"
         static let userSavedEmails      = "user_saved_emails"
+        static let hazardousTrayColors  = "hazardous_tray_colors"
 
         // UserDefaults-backed (non-sensitive)
         static let drugIdCounter        = "drug_id_counter"
@@ -161,6 +162,32 @@ final class AppStorageManager {
                 Keychain.savePassword(json, for: AppStorageKeys.userSavedEmails)
             }
         }
+    }
+
+    /// Stored generic colour(s) of the hazardous tray. The hazardous-tray feature
+    /// captures the colour exactly once, so this list holds at most one entry.
+    /// Backed by Keychain using the same JSON pattern as `bucket` / `userSavedEmails`.
+    var hazardousTrayColors: [String] {
+        get {
+            guard let json = Keychain.getPassword(for: AppStorageKeys.hazardousTrayColors),
+                  let data = json.data(using: .utf8),
+                  let list = try? JSONDecoder().decode([String].self, from: data)
+            else { return [] }
+            return list
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                Keychain.savePassword(json, for: AppStorageKeys.hazardousTrayColors)
+            }
+        }
+    }
+
+    /// Convenience accessor for the single stored hazardous tray colour name.
+    /// Setting a non-nil value stores it as the only entry; setting nil clears it.
+    var hazardousTrayColor: String? {
+        get { hazardousTrayColors.first }
+        set { hazardousTrayColors = newValue.map { [$0] } ?? [] }
     }
 
     func addEmail(_ email: String) {

@@ -10,6 +10,21 @@ import SwiftUI
 
 extension UnifiedCameraView {
 
+    var hazardousTrayPopup: some View {
+        ConfirmationDialogue(
+            title: "\(pillScanViewModel.pendingHazardousTrayColor) Tray Detected",
+            message: "Do you want to mark this tray as hazardous?",
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes,
+            onCancel: {
+                pillScanViewModel.dismissHazardousTrayPopup()
+            },
+            onConfirm: {
+                pillScanViewModel.confirmHazardousTray()
+            }
+        )
+    }
+
     var ndcEquivalencePopup: some View {
         ConfirmationDialogue(
             title: pillScanViewModel.isNdcEquivalent

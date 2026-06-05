@@ -129,6 +129,7 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
             .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
+            .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
             .overlay {
                 if showSuccessAnimation {
                     SuccessAnimationView(count: lastAddedCount, color: appColors.secondary)
@@ -332,6 +333,13 @@ struct UnifiedCameraView: View {
             }
             .onChange(of: cameraService.glovesConfirmed) { _, confirmed in
                 if confirmed { pillScanViewModel.updateGlovesDetected(detected: true) }
+            }
+            .onChange(of: cameraService.detectedTrayColor) { _, color in
+                guard let color else { return }
+                pillScanViewModel.handleTrayColorDetected(
+                    color,
+                    drugIsHazardous: pillScanViewModel.currentTransaction?.drug?.is_hazardous == true
+                )
             }
             .onChange(of: pillScanViewModel.currentTransaction) { _, txn in
                 cameraService.isGloveDetectionEnabled =

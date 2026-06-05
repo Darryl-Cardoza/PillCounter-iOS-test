@@ -76,6 +76,14 @@ final class CameraService: NSObject, ObservableObject {
     /// When false, glove model inference is completely skipped and the indicator is hidden.
     @Published var isGloveDetectionEnabled: Bool = false
 
+    /// The generic colour of the tray, sampled once per scan session on the first
+    /// frame a TRAY region is detected. Drives the hazardous-tray flow. nil until sampled.
+    @Published var detectedTrayColor: TrayColor? = nil
+
+    /// True once the tray colour has been sampled for the current session, so we
+    /// only classify the tray once (not every frame). Reset like glove state.
+    @Published var trayColorSampled: Bool = false
+
     @Published var isAuthorized = false
     @Published var error: String?
     @Published private(set) var isPausedDueToInactivity = false
@@ -330,6 +338,8 @@ final class CameraService: NSObject, ObservableObject {
             self.glovesConfirmed  = false
             self.gloveDetections  = []
             self.isGloveHazardous = false
+            self.detectedTrayColor = nil
+            self.trayColorSampled  = false
         }
     }
 
@@ -459,6 +469,19 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         // Only TRAY regions (class 0) are used to filter pill positions.
         // CHUTE regions (class 1) are passed to the overlay for display only.
         let trayRects = allTrays.filter { $0.trayClass == .tray }.map { $0.rect }
+
+        // ── Tray colour sampling (hazardous-tray feature) ────────────────────
+        // Sample the tray's generic colour exactly once per session, the first
+        // frame a TRAY region appears. Runs regardless of isGloveDetectionEnabled
+        // because the non-hazardous flow also needs it (to warn on hazardous tray).
+        if !trayColorSampled, let firstTrayRect = trayRects.first,
+           let color = TrayColorClassifier.dominantColor(in: pixelBuffer, rect: firstTrayRect) {
+            DispatchQueue.main.async {
+                guard self.isCountingEnabled, !self.trayColorSampled else { return }
+                self.trayColorSampled  = true
+                self.detectedTrayColor = color
+            }
+        }
 
         // ── Model 3: Pill detection (PP-YOLOE+s 640×640) ─────────────────────
         detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, _ in

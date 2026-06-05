@@ -131,7 +131,8 @@ final class BatchStore {
     func getTransactionCount(for batchId: Int64) -> Int {
         let request = NSFetchRequest<NSDictionary>(entityName: "PillCountTransactionEntity")
         request.predicate = NSPredicate(
-            format: "batch_id == %lld AND is_deleted == false AND drug.ndc != nil", batchId
+            format: "user.user_id == %@ AND batch_id == %lld AND is_deleted == false AND drug.ndc != nil",
+            currentUserId, batchId
         )
         request.propertiesToFetch = ["drug.ndc"]
         request.returnsDistinctResults = true

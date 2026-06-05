@@ -98,11 +98,10 @@ final class TransactionStore {
         countType: CountType
     ) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        let localId = Int64(user.user_id ?? "") ?? 0
         let completedStatuses = [CountStatus.COMPLETED.rawValue]
         request.predicate = NSPredicate(
-            format: "local_id == %lld AND is_deleted == false AND batch_id == 0 AND count_type == %@ AND NOT (status IN %@)",
-            localId, countType.rawValue, completedStatuses
+            format: "user == %@ AND is_deleted == false AND batch_id == 0 AND count_type == %@ AND NOT (status IN %@)",
+            user, countType.rawValue, completedStatuses
         )
         request.sortDescriptors = [
             NSSortDescriptor(key: "is_from_pms", ascending: false),
@@ -195,8 +194,12 @@ final class TransactionStore {
     }
 
     func fetchByBatch(batchId: Int64) -> [PillCountTransactionEntity] {
+        guard let user = currentUserEntity() else { return [] }
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId)
+        request.predicate = NSPredicate(
+            format: "user == %@ AND batch_id == %lld AND is_deleted == false",
+            user, batchId
+        )
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
@@ -239,8 +242,7 @@ final class TransactionStore {
 
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        let localId = Int64(user.user_id ?? "") ?? 0
-        request.predicate = NSPredicate(format: "local_id == %lld AND is_deleted == false", localId)
+        request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }

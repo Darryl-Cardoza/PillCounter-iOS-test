@@ -245,13 +245,9 @@ struct StockCountBatchBottomSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 2)
                 .padding(.horizontal, 12)
-                .padding(.top, 4)
                 .gesture(iPhoneLandscapeDragGesture)
-
-                Spacer(minLength: 0)
             }
-            // Fixed dimensions — never compresses regardless of the sheet frame width
-            .frame(width: detailColWidth, height: screenH)
+            .frame(width: detailColWidth, height: screenH, alignment: .top)
             .background(appColors.primaryBackground)
 
             // ── List — RIGHT, fixed size, clipped until widthBinding grows ──
@@ -260,12 +256,11 @@ struct StockCountBatchBottomSheet: View {
             }
             .frame(width: listColWidth, height: screenH)
         }
-        // Total content is fullWidth wide, anchored to leading edge.
+        // Total content is fullWidth wide, anchored to leading/top.
         // The BottomSheet frame (widthBinding) clips from the right — list hidden until expanded.
+        // Do NOT apply clipShape here — BottomSheet.sheetView already clips with rounded corners.
         .frame(width: fullWidth, height: screenH, alignment: .leading)
         .background(appColors.primaryBackground)
-        .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .bottomLeft]))
-        .shadow(color: Color.black.opacity(0.14), radius: 20, x: -6, y: 0)
     }
 
     // MARK: - Shared detail slot

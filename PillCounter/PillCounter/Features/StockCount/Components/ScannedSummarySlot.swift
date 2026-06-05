@@ -39,14 +39,12 @@ struct ScannedSummarySlot: View {
                     .foregroundColor(appColors.text)
             }
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: isIPhone ? 150 : .infinity)
+            .frame(maxHeight: .infinity)
 
-            if isIPhone {
-                Divider()
-            }
-            
+            Divider()
+
             // ── Summary footer ──
-            VStack(spacing: 24) {
+            VStack(spacing: isIPhone ? 12 : 24) {
                 Text(L10n.StockCountSheet.scannedSummary)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(appColors.text)
@@ -55,19 +53,19 @@ struct ScannedSummarySlot: View {
                 HStack(alignment: .bottom, spacing: 8) {
                     VStack(alignment: .center, spacing: 4) {
                         Text(L10n.StockCountSheet.totalNdcs)
-                            .font(.system(size: 16))
+                            .font(.system(size: isIPhone ? 13 : 16))
                             .foregroundColor(appColors.text)
                         Text("\(totalNdc)")
-                            .font(.system(size: 24, weight: .semibold))
+                            .font(.system(size: isIPhone ? 16: 24, weight: .semibold))
                             .foregroundColor(appColors.secondary)
                     }
 
                     VStack(alignment: .center, spacing: 4) {
                         Text(L10n.StockCountSheet.totalPills)
-                            .font(.system(size: 16))
+                            .font(.system(size: isIPhone ? 13: 16))
                             .foregroundColor(appColors.text)
                         Text("\(totalPill)")
-                            .font(.system(size: 24, weight: .semibold))
+                            .font(.system(size: isIPhone ? 16: 24, weight: .semibold))
                             .foregroundColor(appColors.secondary)
                     }
                     .padding(.leading, 24)
@@ -84,7 +82,7 @@ struct ScannedSummarySlot: View {
                     .fixedSize()
                 }
             }
-            .padding(.bottom, isIPhone ? 0 : 18)
+            .padding(.bottom, isIPhone ? 12 : 18)
         }
         .padding(.horizontal, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

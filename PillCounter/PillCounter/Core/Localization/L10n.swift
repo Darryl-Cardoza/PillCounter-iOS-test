@@ -467,5 +467,20 @@ enum L10n {
         static let scanRxLabelBarcode = NSLocalizedString("controlled.scanRxLabelBarcode", comment: "")
         static let scanNdcToCountPills = NSLocalizedString("controlled.scanNdcToCountPills", comment: "")
     }
+
+    // MARK: - HL7 Notifications
+    enum Hl7Notification {
+        static let newRxTitle = NSLocalizedString("hl7Notification.newRxTitle", comment: "")
+        static let rxUpdatedTitle = NSLocalizedString("hl7Notification.rxUpdatedTitle", comment: "")
+        static let rxOnHoldTitle = NSLocalizedString("hl7Notification.rxOnHoldTitle", comment: "")
+        static let rxCancelledTitle = NSLocalizedString("hl7Notification.rxCancelledTitle", comment: "")
+        static let rxCompletedTitle = NSLocalizedString("hl7Notification.rxCompletedTitle", comment: "")
+        static let qtyLabel = NSLocalizedString("hl7Notification.qtyLabel", comment: "")
+        static let inventoryRequestTitle = NSLocalizedString("hl7Notification.inventoryRequestTitle", comment: "")
+        static let inventoryRequestBodySingle = NSLocalizedString("hl7Notification.inventoryRequestBodySingle", comment: "")
+        static func inventoryRequestBodyMultiple(_ count: Int) -> String {
+            String(format: NSLocalizedString("hl7Notification.inventoryRequestBodyMultiple", comment: ""), count)
+        }
+    }
 }
     

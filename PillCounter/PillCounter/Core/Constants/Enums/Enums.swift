@@ -85,8 +85,8 @@ public enum HamburgerMenuFLow: Hashable, Codable {
 }
 
 public enum HamburgerMenuItem: CaseIterable, Identifiable {
-    case FixedCount
-    case RegularCount
+//    case FixedCount
+//    case RegularCount
     case History
     case UnsyncedTransaction
     case Settings
@@ -97,10 +97,10 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-            case .FixedCount:
-                return L10n.Dashboard.FixedCount.title
-            case .RegularCount:
-                return L10n.Dashboard.RegularCount.title
+//            case .FixedCount:
+//                return L10n.Dashboard.FixedCount.title
+//            case .RegularCount:
+//                return L10n.Dashboard.RegularCount.title
             case .Profile: return L10n.Menu.profile
             case .History: return L10n.Menu.history
             case .UnsyncedTransaction: return L10n.Menu.unsync
@@ -112,8 +112,8 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
 
     var iconName: String {
         switch self {
-        case .FixedCount: return "target_count_step3"
-        case .RegularCount: return "placeholder_history"
+//        case .FixedCount: return "target_count_step3"
+//        case .RegularCount: return "placeholder_history"
         case .Profile: return "profile_icon"
         case .History: return "history_icon"
         case .UnsyncedTransaction: return "unsync_icon"

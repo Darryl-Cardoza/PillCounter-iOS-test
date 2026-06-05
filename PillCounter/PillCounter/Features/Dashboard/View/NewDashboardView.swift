@@ -59,6 +59,7 @@ struct NewDashboardView: View {
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @EnvironmentObject private var historyViewModel: HistoryViewModel
+    @EnvironmentObject private var toastManager: ToastManager
     @StateObject private var locationService = LocationService.shared
 
     // userId is stored in Keychain via AppStorageManager — @AppStorage reads UserDefaults
@@ -263,32 +264,18 @@ struct NewDashboardView: View {
                 portraitBody
             }
 
-            // Toast
-            if pillScanViewModel.showToast {
-                VStack {
-                    Spacer()
-                    HStack(spacing: 10) {
-                        Image("app_icon")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-                        Text(pillScanViewModel.toastMessage)
-                            .font(.subheadline)
-                            .foregroundColor(appColors.secondaryBackground)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(appColors.text.opacity(0.8))
-                    .cornerRadius(10)
-                    .padding(.bottom, 32)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                .animation(.easeInOut, value: pillScanViewModel.showToast)
-            }
         }
         .ignoresSafeArea(edges: .top)
         .onAppear(perform: onAppear)
         .onChange(of: pillScanViewModel.currentTransaction) { _, _ in
+            loadQueueData()
+        }
+        .onChange(of: pillScanViewModel.showToast) { _, isShowing in
+            if isShowing {
+                toastManager.show(message: pillScanViewModel.toastMessage)
+            }
+        }
+        .onReceive(TransactionStore.shared.transactionsDidChange) {
             loadQueueData()
         }
         .customPopup(isPresented: $showSelectBucketIdPopup) {
@@ -1094,7 +1081,9 @@ struct NewDashboardView: View {
             for: user,
             countType: .REGULAR
         )
-        dispensePartial = (fixed + regular).filter { $0.batch_id == 0 }
+        dispensePartial = (fixed + regular).filter {
+            $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue
+        }
         printQueue(dispensePartial)
 
         // Completed (Recent Activity) — all user transactions filtered to COMPLETED status
@@ -1105,7 +1094,7 @@ struct NewDashboardView: View {
 
         var counts: [Int64: Int] = [:]
         for txn in dispensePartial + dispenseCompleted {
-            counts[txn.txn_id] = detailDAO.totalCount(txnId: txn.txn_id)
+            counts[txn.txn_id] = Int(detailDAO.totalCountForStep(txnId: txn.txn_id, step: .targetVerification))
         }
         pillCounts = counts
 

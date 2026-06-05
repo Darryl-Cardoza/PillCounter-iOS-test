@@ -131,7 +131,10 @@ final class TransactionStore {
 
     func fetchAllRxNos(for user: UserEntity) -> [String] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "user == %@", user)
+        request.predicate = NSPredicate(
+            format: "user == %@ AND is_deleted == false AND status != %@",
+            user, CountStatus.COMPLETED.rawValue
+        )
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
         return results.compactMap { $0.rx_no }.filter { !$0.isEmpty }
@@ -139,7 +142,10 @@ final class TransactionStore {
 
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
+        request.predicate = NSPredicate(
+            format: "user == %@ AND is_deleted == false AND status != %@",
+            user, CountStatus.COMPLETED.rawValue
+        )
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
         return results.filter { $0.rx_no == rxNo }

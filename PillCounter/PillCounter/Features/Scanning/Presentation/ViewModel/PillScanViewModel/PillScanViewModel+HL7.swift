@@ -22,16 +22,6 @@ extension PillScanViewModel {
         let countType: CountType =
             (msgType == .dispenseOrder || msgType == .editDispenseOrder) ? .FIXED : .REGULAR
 
-        if msgType == .dispenseOrder ||
-            msgType == .editDispenseOrder ||
-            msgType == .inventoryRequest {
-
-            buildNotification(
-                message: message,
-                messageType: countType
-            )
-        }
-
         print("MSG Type \(msgType)")
 
         Task(priority: .background) {
@@ -44,7 +34,7 @@ extension PillScanViewModel {
                     callback: callback
                 )
             case .editDispenseOrder:
-                await editFixedHl7Transaction(      // implement as needed
+                await editFixedHl7Transaction(
                     message: message,
                     rawHl7: rawHl7,
                     inboundType: .FIXED,
@@ -182,7 +172,15 @@ extension PillScanViewModel {
             requestId: message.header.messageControlId,
             bucketId: ""
         )
-        
+
+        let medCount = message.medications.count
+        HL7NotificationManager.show(
+            title: L10n.Hl7Notification.inventoryRequestTitle,
+            body: medCount == 1
+                ? L10n.Hl7Notification.inventoryRequestBodySingle
+                : L10n.Hl7Notification.inventoryRequestBodyMultiple(medCount)
+        )
+
         callback?(true)
     }
 
@@ -302,28 +300,48 @@ extension PillScanViewModel {
             transactionDAO.updateStatus(txnId: txnId, status: newStatus)
         }
 
-        // 6. If CA — soft-delete after the update, let the delete sync queue handle PMS notification
+        // 6. If CA — soft-delete after the update
         if orderStatusRaw == "CA" {
             Log("HL7 ORC|XO status=CA — soft-deleting txnId=\(txnId) after update")
             transactionDAO.softDelete(txnId: txnId)
+            HL7NotificationManager.show(
+                title: L10n.Hl7Notification.rxCancelledTitle,
+                body: "Rx \(rxNo) • \(resolvedDrugName)"
+            )
             callback?(true)
             return
         }
 
-        // 7. If COMPLETED — updateStatus already fired transactionsDidChange which auto-enqueues PMS sync
+        // 7. If ON_HOLD
+        if newStatus == .ON_HOLD {
+            Log("HL7 ORC|XO status=HD — transaction placed on hold txnId=\(txnId)")
+            getAllTransactionDetailsOfTheCurrentTransaction()
+            HL7NotificationManager.show(
+                title: L10n.Hl7Notification.rxOnHoldTitle,
+                body: "Rx \(rxNo) • \(resolvedDrugName)"
+            )
+            callback?(true)
+            return
+        }
+
+        // 8. If COMPLETED — updateStatus already fired transactionsDidChange which auto-enqueues PMS sync
         if newStatus == .COMPLETED {
             Log("HL7 ORC|XO status=CM — transaction marked completed, PMS sync enqueued via transactionsDidChange")
+            HL7NotificationManager.show(
+                title: L10n.Hl7Notification.rxCompletedTitle,
+                body: "Rx \(rxNo) • \(resolvedDrugName)"
+            )
             callback?(true)
             return
         }
 
-        // 8. Refresh UI
+        // 9. Refresh UI
         getAllTransactionDetailsOfTheCurrentTransaction()
         updateTargetCountForCurrentTransaction()
 
         HL7NotificationManager.show(
-            title: "Rx Updated",
-            body: "Rx \(rxNo) • \(resolvedDrugName) • Qty: \(newTargetCount)"
+            title: L10n.Hl7Notification.rxUpdatedTitle,
+            body: "Rx \(rxNo) • \(resolvedDrugName) • \(L10n.Hl7Notification.qtyLabel): \(newTargetCount)"
         )
 
         callback?(true)
@@ -425,33 +443,49 @@ extension PillScanViewModel {
             ? ControlledStep.containerInitiate.rawValue
             : ControlledStep.targetVerification.rawValue
 
-        // MARK: 3 Create Transaction
-        await createTransaction(
-            drugId: drugIdToUse,
-            countType: countType,
-            isComingFromPms: true,
-            isControlled: true,
-            targetCount: targetCount,
-            drugName: resolvedName,
-            rxNo: rxNo,
-            priority: priority,
-            workFlowStep: initialWorkFlowStep
-        )
+        // MARK: 3 Create or update transaction (dedup by rxNo)
+        let currentUser = userDataLocalStorage.fetchByUserId(userId)
+        var isNewTxn = true
 
-        if isControlled, hasInventory, let invCount = inventoryCount,
-           let txnId = currentTransaction?.txn_id {
-
-            transactionDetailDAO.add(
-                txnId: txnId,
-                pillCount: invCount,
-                imagePath: nil,
-                type: ControlledStep.containerInitiate.rawValue,
-                isManual: true
+        if let rxNo, !rxNo.isEmpty, let user = currentUser,
+           let existing = transactionDAO.fetchByRxNo(rxNo, for: user).first {
+            // Already exists — update in place, do NOT create a duplicate
+            isNewTxn = false
+            transactionDAO.updateFromHL7Edit(
+                txnId: existing.txn_id,
+                drugId: drugIdToUse,
+                targetCount: targetCount ?? existing.target_count,
+                priority: priority ?? existing.txn_priority
+            )
+            self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
+            Log("HL7: Rx \(rxNo) already exists (txnId=\(existing.txn_id)) — updated in place, no new txn created")
+        } else {
+            await createTransaction(
+                drugId: drugIdToUse,
+                countType: countType,
+                isComingFromPms: true,
+                isControlled: true,
+                targetCount: targetCount,
+                drugName: resolvedName,
+                rxNo: rxNo,
+                priority: priority,
+                workFlowStep: initialWorkFlowStep
             )
 
-            transactionDAO.updateWorkflowStep(txnId: txnId, step: .targetVerification)
+            if isControlled, hasInventory, let invCount = inventoryCount,
+               let txnId = currentTransaction?.txn_id {
 
-            Log("HL7: Pre-filled CONTAINER_INITIATE with \(invCount) from PMS; advanced to targetVerification")
+                transactionDetailDAO.add(
+                    txnId: txnId,
+                    pillCount: invCount,
+                    imagePath: nil,
+                    type: ControlledStep.containerInitiate.rawValue,
+                    isManual: true
+                )
+
+                transactionDAO.updateWorkflowStep(txnId: txnId, step: .targetVerification)
+                Log("HL7: Pre-filled CONTAINER_INITIATE with \(invCount) from PMS; advanced to targetVerification")
+            }
         }
 
         // MARK: 4 Refresh UI / State
@@ -459,6 +493,24 @@ extension PillScanViewModel {
 
         if countType == .FIXED {
             updateTargetCountForCurrentTransaction()
+        }
+
+        // MARK: 5 Notify after successful insert/update
+        let rxLabel = rxNo ?? ""
+        if isNewTxn {
+            HL7NotificationManager.show(
+                title: L10n.Hl7Notification.newRxTitle,
+                body: rxLabel.isEmpty
+                    ? "\(resolvedName) • \(L10n.Hl7Notification.qtyLabel): \(targetCount ?? 0)"
+                    : "Rx \(rxLabel) • \(resolvedName) • \(L10n.Hl7Notification.qtyLabel): \(targetCount ?? 0)"
+            )
+        } else {
+            HL7NotificationManager.show(
+                title: L10n.Hl7Notification.rxUpdatedTitle,
+                body: rxLabel.isEmpty
+                    ? "\(resolvedName) • \(L10n.Hl7Notification.qtyLabel): \(targetCount ?? 0)"
+                    : "Rx \(rxLabel) • \(resolvedName) • \(L10n.Hl7Notification.qtyLabel): \(targetCount ?? 0)"
+            )
         }
     }
     
@@ -487,6 +539,12 @@ extension PillScanViewModel {
 
         Log("HL7: Cancelled \(txns.count) transaction(s) for Rx \(rxNo)")
         getAllTransactionDetailsOfTheCurrentTransaction()
+
+        HL7NotificationManager.show(
+            title: L10n.Hl7Notification.rxCancelledTitle,
+            body: "Rx \(rxNo)"
+        )
+
         callback?(true)
     }
 
@@ -508,46 +566,35 @@ extension PillScanViewModel {
         return nil
     }
 
-    func buildNotification(
-        message: CompleteHL7Message,
-        messageType: CountType
-    ) {
-
-        let orderId = message.order?.placerOrderId ?? ""
-        let meds = message.medications
-
-        let title: String
-        let body: String
-
-        if messageType == .FIXED {
-
-            title = "New RX Fill Request"
-
-            if meds.count == 1 {
-                let med = meds[0]
-                let name = med.drugName
-                let qty = Int(med.requestedQty ?? "0") ?? 0
-
-                body = "Rx \(orderId) • \(name) • Qty: \(qty)"
-            } else {
-                body = "Rx \(orderId) • \(meds.count) items to fill"
-            }
-
-        } else {
-            title = "Inventory Request"
-
-            if meds.count == 1 {
-                body = "\(meds.count) item need stock count"
-            } else {
-                body = "\(meds.count) items need stock count"
-            }
-        }
-
-        HL7NotificationManager.show(
-            title: title,
-            body: body
-        )
-    }
+    // buildNotification is replaced by per-action notifications fired after successful operation
+//    func buildNotification(
+//        message: CompleteHL7Message,
+//        messageType: CountType
+//    ) {
+//        let orderId = message.order?.placerOrderId ?? ""
+//        let meds = message.medications
+//        let title: String
+//        let body: String
+//        if messageType == .FIXED {
+//            title = "New RX Fill Request"
+//            if meds.count == 1 {
+//                let med = meds[0]
+//                let name = med.drugName
+//                let qty = Int(med.requestedQty ?? "0") ?? 0
+//                body = "Rx \(orderId) • \(name) • Qty: \(qty)"
+//            } else {
+//                body = "Rx \(orderId) • \(meds.count) items to fill"
+//            }
+//        } else {
+//            title = "Inventory Request"
+//            if meds.count == 1 {
+//                body = "\(meds.count) item need stock count"
+//            } else {
+//                body = "\(meds.count) items need stock count"
+//            }
+//        }
+//        HL7NotificationManager.show(title: title, body: body)
+//    }
 }
 
 

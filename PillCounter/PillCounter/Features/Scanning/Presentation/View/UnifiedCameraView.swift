@@ -462,7 +462,7 @@ struct UnifiedCameraView: View {
             isLandscape: isLandscape,
             pillScanViewModel: pillScanViewModel,
             cameraService: cameraService,
-            appColors: appColors,
+            appColors: darkAppColors,
             isAddButtonDisabled: isAddDisabled,
             onAddPill: { handleAdd() },
             onComplete: { handleComplete() },
@@ -476,6 +476,7 @@ struct UnifiedCameraView: View {
     private var vialControlBottomView: some View {
         VialBottomContentView()
             .environmentObject(cameraService)
+            .environmentObject(darkAppColors)
     }
 }
 

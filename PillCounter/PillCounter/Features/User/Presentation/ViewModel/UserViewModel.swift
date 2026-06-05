@@ -164,14 +164,29 @@ class UserViewModel: ObservableObject {
                     ?? result.data?.terminals
                     ?? []
                 print("[Terminals] fetchedTerminals count: \(fetchedTerminals.count)")
-                terminals = fetchedTerminals
-                if selectedTerminal == nil {
+
+                if !fetchedTerminals.isEmpty {
+                    // Fresh data from the API — replace list, cache it locally,
+                    // and always select THIS user's active terminal (don't keep
+                    // a previous user's stale selection).
+                    terminals = fetchedTerminals
+                    AppStorageManager.shared.storedTerminals = fetchedTerminals
                     let active = fetchedTerminals.first(where: { $0.isActive == true }) ?? fetchedTerminals.first
                     selectedTerminal = active
                     pendingTerminal = active
-                    if let name = active?.terminalName,
-                       AppStorageManager.shared.selectedTerminalName.isEmpty {
-                        AppStorageManager.shared.selectedTerminalName = name
+                    AppStorageManager.shared.selectedTerminalName = active?.terminalName ?? ""
+                } else {
+                    // API returned no terminals — fall back to the locally cached
+                    // list so the picker still works offline / on failure.
+                    let cached = AppStorageManager.shared.storedTerminals
+                    terminals = cached
+                    if selectedTerminal == nil {
+                        let active = cached.first(where: { $0.isActive == true }) ?? cached.first
+                        selectedTerminal = active
+                        pendingTerminal = active
+                        if let name = active?.terminalName {
+                            AppStorageManager.shared.selectedTerminalName = name
+                        }
                     }
                 }
 
@@ -628,6 +643,17 @@ class UserViewModel: ObservableObject {
                 selectedTerminal = terminal
                 pendingTerminal = terminal
                 AppStorageManager.shared.selectedTerminalName = terminalName
+                // Keep the cached list's active flag in sync with the new selection.
+                terminals = terminals.map {
+                    UserTerminal(
+                        terminalId: $0.terminalId,
+                        terminalName: $0.terminalName,
+                        isActive: $0.terminalId == terminalId,
+                        createdAt: $0.createdAt,
+                        updatedAt: $0.updatedAt
+                    )
+                }
+                AppStorageManager.shared.storedTerminals = terminals
                 return true
             }
             return false
@@ -771,6 +797,8 @@ class UserViewModel: ObservableObject {
         npiID = ""
         terminals = []
         selectedTerminal = nil
+        pendingTerminal = nil
+        AppStorageManager.shared.clearTerminalCache()
 
         // Transactions
         historyCountTransactions = []

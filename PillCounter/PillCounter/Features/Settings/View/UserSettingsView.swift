@@ -245,7 +245,7 @@ struct UserSettingsView: View {
                     isOn: $isHazardousDrugSettingEnabled,
                     onColor: appColors.primary
                 ) { newValue in
-                    AppStorageManager.shared.isSpeechEnabled = newValue
+                    AppStorageManager.shared.isHazardousDrugSetting = newValue
                 }
                 
                 Divider().background(appColors.primaryBackground)

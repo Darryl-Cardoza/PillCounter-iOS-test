@@ -12,6 +12,7 @@ final class AppStorageManager {
         clearKeychainOnFreshInstall()
     }
 
+    
     private func clearKeychainOnFreshInstall() {
         guard !defaults.bool(forKey: AppStorageKeys.hasLaunchedBefore) else { return }
         Keychain.deleteAll()
@@ -46,6 +47,7 @@ final class AppStorageManager {
         static let isSpeechEnabled      = "isSpeechEnabled"
         static let selectedSchedules    = "selectedSchedules"
         static let selectedTerminalName = "selected_terminal_name"
+        static let storedTerminals      = "stored_terminals"
         static let isHarzardousDrugSetting = "hazardous_pill_setting"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
@@ -250,6 +252,29 @@ final class AppStorageManager {
         }
     }
 
+    /// Locally cached terminal list for the current user. Persisted so the
+    /// terminal picker still works if /auth/me fails or the device is offline.
+    /// Cleared on logout via `logout()` / `clearTerminalCache()`.
+    var storedTerminals: [UserTerminal] {
+        get {
+            guard let data = defaults.data(forKey: AppStorageKeys.storedTerminals),
+                  let terminals = try? JSONDecoder().decode([UserTerminal].self, from: data)
+            else { return [] }
+            return terminals
+        }
+        set {
+            let data = try? JSONEncoder().encode(newValue)
+            defaults.setValue(data, forKey: AppStorageKeys.storedTerminals)
+        }
+    }
+
+    /// Clears the cached terminal list + selected terminal name.
+    /// Call on logout / user switch so the next user never sees stale terminals.
+    func clearTerminalCache() {
+        defaults.removeObject(forKey: AppStorageKeys.storedTerminals)
+        defaults.removeObject(forKey: AppStorageKeys.selectedTerminalName)
+    }
+
     // =========================================================================
     // MARK: - SESSION MANAGEMENT
     // =========================================================================
@@ -271,5 +296,6 @@ final class AppStorageManager {
         Keychain.deleteAll()
 
         defaults.removeObject(forKey: AppStorageKeys.isNewUser)
+        clearTerminalCache()
     }
 }

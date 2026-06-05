@@ -72,7 +72,7 @@ final class GloveDetectionService {
     /// Minimum sigmoid(objectness) × sigmoid(class) required to emit a detection.
     /// Tuned for YOLOX-Nano at 320×320 — lower values increase recall but add
     /// false positives from glove-shaped objects (e.g. trays).
-    private let confThreshold: Float = 0.35
+    private let confThreshold: Float = 0.80
 
     /// IoU threshold used during Non-Maximum Suppression.
     private let iouThreshold: Float = 0.45

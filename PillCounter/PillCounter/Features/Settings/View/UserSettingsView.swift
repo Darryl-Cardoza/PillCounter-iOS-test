@@ -28,6 +28,9 @@ struct UserSettingsView: View {
     @State private var selectedSchedules =
     AppStorageManager.shared.selectedSchedules
     
+    @State private var isHazardousDrugSettingEnabled =
+    AppStorageManager.shared.isHazardousDrugSetting
+    
     
     // 1. Source of Truth (The actual saved setting)
     @State private var selectedSaveHistoryOption: SaveHistoryOption =
@@ -229,6 +232,17 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: L10n.Settings.voiceInstructions,
                     isOn: $isSpeechEnabled,
+                    onColor: appColors.primary
+                ) { newValue in
+                    AppStorageManager.shared.isSpeechEnabled = newValue
+                }
+                
+                Divider().background(appColors.primaryBackground)
+                
+                // MARK: HAZARDOUS DRUG
+                ToggleRowView(
+                    title: L10n.Settings.hazardousPillSetting,
+                    isOn: $isHazardousDrugSettingEnabled,
                     onColor: appColors.primary
                 ) { newValue in
                     AppStorageManager.shared.isSpeechEnabled = newValue

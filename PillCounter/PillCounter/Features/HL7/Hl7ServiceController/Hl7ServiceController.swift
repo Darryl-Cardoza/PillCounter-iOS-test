@@ -15,18 +15,7 @@ final class Hl7ServiceController: ObservableObject {
 
     // MARK: - App Storage
 
-    @AppStorage(AppStorageManager.AppStorageKeys.isLoggedIn)
-    private var isLoggedIn: Bool = false
-
-    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable)
-    private var isHl7Enabled: Bool = false
-
-    @AppStorage(AppStorageManager.AppStorageKeys.pmsHostName)
-    private var pmsHostName: String = ""
-
-    @AppStorage(AppStorageManager.AppStorageKeys.pillCounterHostName)
-    private var pillCounterHostName: String = ""
-
+    // selectedTerminalName is UserDefaults-backed — @AppStorage is valid here.
     @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
     private var selectedTerminalName: String = ""
 
@@ -58,6 +47,12 @@ final class Hl7ServiceController: ObservableObject {
 
     // MARK: - Entry Point
     func evaluate() {
+        print("===== HL7 Service Evaluation =====")
+        print("isLoggedIn: \(AppStorageManager.shared.isLoggedIn)")
+        print("isHl7Enabled: \(AppStorageManager.shared.isHl7Enabled)")
+        print("isDeviceCompromised: \(SecurityManager.isDeviceCompromised())")
+        print("shouldStartService: \(shouldStartService)")
+        print("=================================")
         guard shouldStartService else {
             stopService()
             return
@@ -84,8 +79,8 @@ final class Hl7ServiceController: ObservableObject {
         hl7Manager = Hl7ServiceManager(
             port: 2575,
             serviceName: serviceName,
-            serviceType: pillCounterHostName,
-            pmsServiceType: pmsHostName,
+            serviceType: AppStorageManager.shared.pillCounterHostName,
+            pmsServiceType: AppStorageManager.shared.pmsHostName,
             listener: handler
         )
     }
@@ -116,9 +111,9 @@ final class Hl7ServiceController: ObservableObject {
             observeTxnChanges()
             observeBatchCompletion()
         } else {
-            // Manager exists but may have been stuck with an empty pmsServiceType —
-            // restart the browser now that we have a valid value.
-            hl7Manager?.restartBrowsingIfNeeded()
+            // Manager exists but was stuck with an empty pmsServiceType —
+            // pass the now-populated value so the browser can start.
+            hl7Manager?.restartBrowsingIfNeeded(pmsServiceType: AppStorageManager.shared.pmsHostName)
         }
     }
 

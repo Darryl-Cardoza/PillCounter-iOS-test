@@ -317,6 +317,9 @@ struct UnifiedCameraView: View {
             onResume: {
                 cameraService.resumeIfPaused()
                 cameraService.resetInactivityTimer()
+                // New operator may have taken over — re-verify gloves and clear DB flag.
+                cameraService.resetGloveDetection()
+                pillScanViewModel.updateGlovesDetected(detected: false)
             }
         )
         
@@ -409,6 +412,13 @@ struct UnifiedCameraView: View {
                 stockSheetCurrentWidth = stockCountSheetWidth
                 stockSheetIsExpanded = false
             }
+        }
+        .onChange(of: cameraService.glovesConfirmed) { _, confirmed in
+            if confirmed { pillScanViewModel.updateGlovesDetected(detected: true) }
+        }
+        .onChange(of: pillScanViewModel.currentTransaction) { _, txn in
+            cameraService.isGloveDetectionEnabled =
+                (txn?.drug?.is_hazardous == true) && AppStorageManager.shared.isHazardousDrugSetting
         }
     }
 

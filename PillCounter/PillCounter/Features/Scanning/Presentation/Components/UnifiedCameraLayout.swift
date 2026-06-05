@@ -85,6 +85,11 @@ struct UnifiedCameraLayout: View {
                             .frame(maxWidth: .infinity)
                     }
                     Spacer()
+                    if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
+                        GloveStatusIndicator(cameraService: cameraService)
+                    } else {
+                        Color.clear.frame(width: 48, height: 48)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, isLandscape ? 10 : 40)

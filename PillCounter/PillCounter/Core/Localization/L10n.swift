@@ -196,6 +196,7 @@ enum L10n {
         static let confirmHistoryMessage = NSLocalizedString("settings.confirmHistoryMessage", comment: "")
         static let clearHistoryTitle = NSLocalizedString("settings.clearHistoryTitle", comment: "")
         static let clearHistoryMessage = NSLocalizedString("settings.clearHistoryMessage", comment: "")
+        static let hazardousPillSetting = NSLocalizedString("settings.hazardousDrugSetting", comment: "")
     }
 
     // MARK: - Unsynced Transactions

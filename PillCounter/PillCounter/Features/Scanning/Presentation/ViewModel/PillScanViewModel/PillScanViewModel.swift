@@ -348,6 +348,12 @@ class PillScanViewModel: ObservableObject {
         transactionDAO.updateNote(txnId: txn_id, note: note)
     }
 
+    func updateGlovesDetected(detected: Bool) {
+        guard let txnId = currentTransaction?.txn_id else { return }
+        transactionDAO.updateGlovesDetected(txnId: txnId, detected: detected)
+        currentTransaction?.gloves_detected = detected
+    }
+
 
     func getCurrentTransaction(txnId: Int64) async {
         // Fetch transaction

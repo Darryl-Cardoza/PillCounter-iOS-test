@@ -156,6 +156,7 @@
 "settings.confirmHistoryMessage" = "Note: Data older than this period will be permanently deleted.";
 "settings.clearHistoryTitle" = "Are you sure want to clear all history?";
 "settings.clearHistoryMessage" = "This will delete all your saved data permanently.";
+"settings.hazardousDrugSetting" = "Hazardous Pill Counting";
 
 
 // MARK: - CAMERA PERMISSION

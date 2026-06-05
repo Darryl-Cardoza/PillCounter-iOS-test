@@ -116,10 +116,18 @@ extension PillScanViewModel {
                     qty:      mappedData["QTY"],
                     rawMap:   mappedData
                 )
+                fetchedRxTransaction = existingTxn
 
-                print("[RxScan] Rx popup → rxNo: \(scannedRxData?.rxNo ?? "nil"), ndc: \(scannedRxData?.ndcNo ?? "nil"), drug: \(scannedRxData?.drugName ?? "UNKNOWN"), qty: \(scannedRxData?.qty ?? "nil")")
-
-                showRxFlowPopup = true
+                if existingTxn.is_ndc_verfied {
+                    print("[RxScan] Rx \(rxNo) is_ndc_verfied=true — resuming inline")
+                    self.selectedTransaction  = existingTxn
+                    self.currentTransaction   = existingTxn
+                    self.fetchedRxTransaction = nil
+                    self.rxResumeInline       = true
+                } else {
+                    print("[RxScan] Rx popup → rxNo: \(scannedRxData?.rxNo ?? "nil"), ndc: \(scannedRxData?.ndcNo ?? "nil"), drug: \(scannedRxData?.drugName ?? "UNKNOWN"), qty: \(scannedRxData?.qty ?? "nil")")
+                    showRxFlowPopup = true
+                }
             }
 
         } catch {
@@ -139,6 +147,32 @@ extension PillScanViewModel {
     }
 
     // MARK: Proceed with Rx Transaction
+
+    /// Called when user taps PROCEED on the Rx popup.
+    /// Fetches the existing transaction for the scanned Rx and sets it as the selected transaction
+    /// so the normal barcode-scan flow (scan stock bottle → NDC match → pill count) can continue.
+    /// Does NOT modify any Rx data.
+    func proceedFromRxScan() {
+        guard let rxNo = scannedRxData?.rxNo, !rxNo.isEmpty else {
+            print("[RxScan] proceedFromRxScan — no rxNo, cannot proceed")
+            rxScanFailed = true
+            return
+        }
+
+        let currentUser = userDataLocalStorage.fetchByUserId(userId)
+        guard let currentUser,
+              let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+            print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB")
+            rxScanFailed = true
+            return
+        }
+
+        print("[RxScan] proceedFromRxScan — setting selectedTransaction txnId=\(existingTxn.txn_id) for rxNo=\(rxNo)")
+        self.selectedTransaction  = existingTxn
+        self.currentTransaction   = existingTxn
+        self.fetchedRxTransaction = nil
+        self.showRxFlowPopup      = false
+    }
 
     /// Called when user taps PROCEED on the Rx popup.
     /// Always updates the existing transaction found during parseScanData — never creates a new one.

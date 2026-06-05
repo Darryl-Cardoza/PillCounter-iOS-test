@@ -152,7 +152,7 @@ struct UnifiedCameraLayout: View {
                 )
                 Spacer().frame(height: pillCountSheetHeight)
             }
-        }.environment(\.colorScheme, .dark)
+        }
     }
     // MARK: - Toast
 
@@ -181,6 +181,7 @@ struct UnifiedCameraLayout: View {
 
     private var toastView: some View {
         VStack {
+            Spacer()
             HStack(spacing: 12) {
                 Image("app_icon")
                     .resizable()
@@ -215,11 +216,10 @@ struct UnifiedCameraLayout: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 4)
             .padding(.horizontal, 24)
-            .padding(.top, isLandscape ? 16 : 60)
-            .transition(.move(edge: .top).combined(with: .opacity))
-
-            Spacer()
+            .padding(.bottom, isLandscape ? 16 : (showPillCountPanel ? pillCountSheetHeight + 16 : showStockCountPanel ? stockCountSheetHeight + 16 : 32))
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
         .animation(.easeInOut(duration: 0.3), value: pillScanViewModel.showToast)
+        .zIndex(999)
     }
 }

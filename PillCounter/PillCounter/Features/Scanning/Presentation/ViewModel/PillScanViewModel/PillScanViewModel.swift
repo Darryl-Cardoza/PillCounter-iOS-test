@@ -83,8 +83,11 @@ class PillScanViewModel: ObservableObject {
     //MARK: RX FLow
     @Published var showRxFlowPopup: Bool = false
     @Published var showRxOnHoldPopup: Bool = false
+    @Published var showRxInProgressPopup: Bool = false
+    @Published var rxResumeInline: Bool = false
     @Published var rxScanFailed: Bool = false
     @Published var scannedRxData: ParsedScanData? = nil
+    @Published var fetchedRxTransaction: PillCountTransactionEntity? = nil
     @Published var bucketOptions: [String] = []
     @Published var selectedBucket: String = ""
     @Published var showScannedDrugInfoPopoup: Bool = false

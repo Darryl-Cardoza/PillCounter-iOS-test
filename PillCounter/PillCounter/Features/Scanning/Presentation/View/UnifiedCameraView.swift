@@ -43,6 +43,7 @@ struct UnifiedCameraView: View {
     @State var scanType: ScanType
 
     @StateObject var cameraService = CameraService()
+    @StateObject private var darkAppColors = AppColors.shared.forcedDark()
 
     // ── UI state ──────────────────────────────────────────────────────────────
     @State var cameraState: UnifiedCameraState = .scanning
@@ -190,7 +191,7 @@ struct UnifiedCameraView: View {
                 landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? nil : 280
             ) {
                 ZStack {
-                    appColors.secondaryBackground.opacity(0.6)
+                    darkAppColors.secondaryBackground.opacity(0.6)
                     if pillScanViewModel.currentControlledStep == .vial {
                         vialControlBottomView
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -198,7 +199,7 @@ struct UnifiedCameraView: View {
                         controlsContent
                     }
                 }
-                .environment(\.colorScheme, .dark)
+                .environmentObject(darkAppColors)
             }
     }
 
@@ -208,25 +209,27 @@ struct UnifiedCameraView: View {
                 isPresented: $pillScanViewModel.showRxFlowPopup,
                 onDismiss: {
                     pillScanViewModel.showRxFlowPopup = false
+                    pillScanViewModel.fetchedRxTransaction = nil
                     restartFlow()
                 }
             ) {
                 RxDetailsSheetContent(
                     onCancel: {
                         pillScanViewModel.showRxFlowPopup = false
+                        pillScanViewModel.fetchedRxTransaction = nil
                         restartFlow()
                     },
                     onProceed: {
-                        Task {
-                            await pillScanViewModel.createTransactionFromRxScan()
-                            restartFlow()
-                        }
+                        pillScanViewModel.proceedFromRxScan()
+                        userViewModel.currentTransactionTxnId = pillScanViewModel.selectedTransaction?.txn_id
+                        scanType = .barcode
+                        restartFlow()
                     },
-                    drugName: pillScanViewModel.scannedRxData?.drugName ?? "-",
-                    quantity: pillScanViewModel.scannedRxData?.qty ?? "-",
-                    ndcNumber: pillScanViewModel.scannedRxData?.ndcNo ?? "-",
-                    bucket: pillScanViewModel.selectedBucket,
-                    rxNumber: pillScanViewModel.scannedRxData?.rxNo ?? "-"
+                    drugName: pillScanViewModel.fetchedRxTransaction?.drug?.drug_name ?? "-",
+                    quantity: pillScanViewModel.fetchedRxTransaction?.target_count.description ?? "-",
+                    ndcNumber: pillScanViewModel.fetchedRxTransaction?.drug?.ndc ?? "-",
+                    bucket: pillScanViewModel.fetchedRxTransaction?.bucket_id ?? "-",
+                    rxNumber: pillScanViewModel.fetchedRxTransaction?.rx_no ?? "-"
                 )
                 .environmentObject(appColors)
             }
@@ -274,6 +277,7 @@ struct UnifiedCameraView: View {
             }
             .customPopup(isPresented: $stockCountViewModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false) { ndcMismatchPopup }
     }
+    
     // Split into two properties so the Swift type-checker doesn't time out
     // on the long onChange chain.
     private var rootContent: some View {
@@ -352,6 +356,18 @@ struct UnifiedCameraView: View {
             if failed {
                 pillScanViewModel.rxScanFailed = false
                 restartFlow()
+            }
+        }
+        .onChange(of: pillScanViewModel.rxResumeInline) { _, triggered in
+            guard triggered else { return }
+            pillScanViewModel.rxResumeInline = false
+            guard let txn = pillScanViewModel.currentTransaction else { return }
+            pillScanViewModel.getControlledStep(pillCountTxn: txn)
+            pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
+            showPillCountPanel = true
+            cameraService.disableBarcodeScanning()
+            if pillScanViewModel.currentControlledStep != .vial {
+                cameraService.resumeCounting()
             }
         }
         .onChange(of: pillScanViewModel.currentControlledStep) { _, newStep in
@@ -454,8 +470,10 @@ extension UnifiedCameraView {
     func onAppear() {
         pillScanViewModel.showRxFlowPopup = false
         pillScanViewModel.showRxOnHoldPopup = false
+        pillScanViewModel.showRxInProgressPopup = false
         pillScanViewModel.showNdcEquivalencePopup = false
         pillScanViewModel.showScannedDrugInfoPopoup = false
+        pillScanViewModel.fetchedRxTransaction = nil
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.barcodeNotFound = false
         stockCountViewModel.showScannedNdcDoesNotMatch = false
@@ -527,8 +545,11 @@ extension UnifiedCameraView {
         cameraService.disableBarcodeScanning()
         cameraService.stop()
         pillScanViewModel.showRxFlowPopup = false
+        pillScanViewModel.showRxOnHoldPopup = false
+        pillScanViewModel.showRxInProgressPopup = false
         pillScanViewModel.showNdcEquivalencePopup = false
         pillScanViewModel.showScannedDrugInfoPopoup = false
+        pillScanViewModel.fetchedRxTransaction = nil
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.barcodeNotFound = false
         stockCountViewModel.showScannedNdcDoesNotMatch = false
@@ -542,6 +563,7 @@ extension UnifiedCameraView {
         pillScanViewModel.capturedVialImage = nil
         pillScanViewModel.vialCapturedImagePath = nil
         pillScanViewModel.vialDoneTriggered = false
+        pillScanViewModel.rxResumeInline = false
         pillScanViewModel.reset()
     }
 }

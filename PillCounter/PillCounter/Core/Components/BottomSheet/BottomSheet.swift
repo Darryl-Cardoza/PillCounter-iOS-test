@@ -85,6 +85,7 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
                 sheetContent()
+                    .environment(\.colorScheme, .dark)
                     .frame(width: min(sheetWidth, size.width))
                     .frame(maxHeight: .infinity)
                     .clipShape(
@@ -107,6 +108,7 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
                         sheetContent().frame(maxWidth: .infinity)
                     }
                 }
+                .environment(\.colorScheme, .dark)
                 .clipShape(
                     RoundedCorners(radius: cornerRadius,
                                    corners: [.topLeft, .topRight])

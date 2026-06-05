@@ -74,12 +74,16 @@ final class UserStore {
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user_id == %@", userId)
         request.fetchLimit = 1
-        return try? context.fetch(request).first
+        guard let result = try? context.fetch(request).first else { return nil }
+        context.refresh(result, mergeChanges: false)
+        return result
     }
 
     func fetchAll() -> [UserEntity] {
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { context.refresh($0, mergeChanges: false) }
+        return results
     }
 
     func fetchTransactionsByDateRange(

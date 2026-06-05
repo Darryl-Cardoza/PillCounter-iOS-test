@@ -78,7 +78,9 @@ final class TransactionStore {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(format: "txn_id == %lld", txnId)
         request.fetchLimit = 1
-        return try? context.fetch(request).first
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
     }
 
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity? {
@@ -86,7 +88,9 @@ final class TransactionStore {
         request.predicate = NSPredicate(format: "user == %@", user)
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         request.fetchLimit = 1
-        return try? context.fetch(request).first
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
     }
 
     func fetchPartial(
@@ -104,7 +108,9 @@ final class TransactionStore {
             NSSortDescriptor(key: "is_from_pms", ascending: false),
             NSSortDescriptor(key: "created_at", ascending: false)
         ]
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
     }
 
     func fetchByTimeRange(
@@ -118,33 +124,32 @@ final class TransactionStore {
             user, startTime, endTime
         )
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
     }
 
     func fetchAllRxNos(for user: UserEntity) -> [String] {
-        // rx_no is encrypted in SQLite — refresh each object to force re-decrypt before reading
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user == %@", user)
         let results = (try? context.fetch(request)) ?? []
-        results.forEach { context.refresh($0, mergeChanges: false) }
+        results.forEach { refreshDecrypted($0) }
         return results.compactMap { $0.rx_no }.filter { !$0.isEmpty }
     }
 
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity] {
-        // rx_no is encrypted in SQLite — refresh each object to force re-decrypt, then filter in-memory
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
         let results = (try? context.fetch(request)) ?? []
-        results.forEach { context.refresh($0, mergeChanges: false) }
+        results.forEach { refreshDecrypted($0) }
         return results.filter { $0.rx_no == rxNo }
     }
 
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
-        // rx_no is encrypted in SQLite — refresh each object to force re-decrypt, then filter in-memory
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user == %@ AND is_deleted == true", user)
         let results = (try? context.fetch(request)) ?? []
-        results.forEach { context.refresh($0, mergeChanges: false) }
+        results.forEach { refreshDecrypted($0) }
         return results
             .filter { $0.rx_no == rxNo }
             .sorted { $0.updated_at > $1.updated_at }
@@ -187,7 +192,9 @@ final class TransactionStore {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId)
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
     }
 
     func fetchPartialFromPms(for user: UserEntity, countType: CountType) -> [PillCountTransactionEntity] {
@@ -200,7 +207,9 @@ final class TransactionStore {
             NSSortDescriptor(key: "is_from_pms", ascending: false),
             NSSortDescriptor(key: "created_at", ascending: false)
         ]
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
     }
 
     func fetchCompletedUnsynced(for user: UserEntity) -> [PillCountTransactionEntity] {
@@ -210,7 +219,9 @@ final class TransactionStore {
             user, CountStatus.COMPLETED.rawValue, CountType.FIXED.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
     }
 
     /// Convenience overload for callers without a UserEntity reference (e.g. HL7 sync queues).
@@ -226,6 +237,7 @@ final class TransactionStore {
         request.predicate = NSPredicate(format: "local_id == %lld AND is_deleted == false", localId)
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
         StoreLogger.log(
             dao: "TransactionDAO", op: "fetchAll",
             columns: ["txn_id", "rx_no", "drug_name", "count_type", "status", "batch_id", "target_count", "is_from_pms", "is_synced"],
@@ -411,6 +423,13 @@ final class TransactionStore {
     }
 
     // MARK: - Private
+
+    /// Forces a refault so awakeFromFetch re-runs and decrypts encrypted fields
+    /// (e.g. rx_no, barcode_image, lot_no, note) that were encrypted in-memory by
+    /// willSave in the same session.
+    private func refreshDecrypted(_ object: NSManagedObject) {
+        context.refresh(object, mergeChanges: false)
+    }
 
     /// Resolves the currently logged-in user from CoreData.
     /// Returns nil when no user ID is stored (e.g. during or after logout).

@@ -909,9 +909,10 @@ struct NewDashboardView: View {
                     router.selectedPillScanningType = countType
                     userViewModel.currentTransactionTxnId = txn.txn_id
                     pillScanViewModel.selectedTransaction = txn
+                    let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
                     router.navigate(
                         to: .authentication(
-                            .login(.dashboard(.pillCount(.scan(.barcode))))
+                            .login(.dashboard(.pillCount(.scan(scanType))))
                         )
                     )
                 }

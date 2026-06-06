@@ -320,14 +320,17 @@ final class TrayDetectionService {
                 let b = CGFloat(bRaw)
 
                 // Un-letterbox: 640×640 → original camera-frame space.
-                // Clamp to frame bounds — regression values can extend slightly past the
-                // letterbox edge; after dividing by scale (~0.16) those small overflows
-                // become thousands of pixels and produce normalized values >1, which
-                // causes layerRectConverted to return a rect larger than the screen.
-                let x1 = max(0,                  (cx - l - padX) / scale)
-                let y1 = max(0,                  (cy - t - padY) / scale)
-                let x2 = min(frameSize.width,    (cx + r - padX) / scale)
-                let y2 = min(frameSize.height,   (cy + b - padY) / scale)
+                // No clamping to frame bounds — return the model's box verbatim, the
+                // same way PillDetectionService does. Clamping each edge to the frame
+                // pulled the box inward whenever the model's regression slightly
+                // overshot the edge, which showed up as a gap between the drawn tray
+                // box and the real tray border (most visible on the larger landscape
+                // tray). The overlay's layerRectConverted handles any slight overshoot
+                // geometrically, exactly as it does for pills.
+                let x1 = (cx - l - padX) / scale
+                let y1 = (cy - t - padY) / scale
+                let x2 = (cx + r - padX) / scale
+                let y2 = (cy + b - padY) / scale
 
                 guard x2 > x1, y2 > y1 else { continue }
 

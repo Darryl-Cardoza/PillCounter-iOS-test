@@ -4,15 +4,12 @@
 // Draws a rounded-rectangle overlay for TRAY regions detected by
 // TrayDetectionService.
 //
-// Coordinate conversion is computed manually in the GeometryReader's
-// coordinate space (which matches the full-screen SwiftUI layout) rather
-// than using layerRectConverted, which operates in UIKit layer space and
-// can introduce a small origin offset when bridged through UIViewRepresentable.
-//
-// Camera delivers landscape frames (e.g. 1504×1128).
-// Portrait display rotates them 90° CW with resizeAspectFill:
-//   landscape x-axis (left→right) → portrait y-axis (top→bottom)
-//   landscape y-axis (top→bottom) → portrait x-axis (right→left, with crop)
+// Coordinate conversion uses AVCaptureVideoPreviewLayer.layerRectConverted,
+// the same approach DetectionOverlay (pill dots) uses. AVFoundation maps the
+// normalized metadata rect into layer space correctly for BOTH portrait and
+// landscape, accounting for the active video orientation and resizeAspectFill
+// crop. The previous manual math was hardcoded for the portrait 90° CW
+// rotation and therefore misaligned the tray box in landscape.
 
 import AVFoundation
 import SwiftUI
@@ -22,17 +19,15 @@ struct TrayOverlay: View {
     @ObservedObject var cameraService: CameraService
 
     var body: some View {
-        GeometryReader { geo in
+        GeometryReader { _ in
             ZStack(alignment: .topLeading) {
                 if let layer = cameraService.previewLayer,
                    layer.session != nil {
 
-                    let _ = debugLayerVsGeo(layer: layer, geo: geo.size)
-
                     ForEach(cameraService.trayDetections.filter { $0.trayClass == .tray }) { tray in
-                        let screenRect = portraitRect(for: tray, in: geo.size)
+                        let screenRect = getScreenRect(for: tray, using: layer)
 
-                        if screenRect != .zero {
+                        if screenRect.width > 0, screenRect.height > 0 {
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(Color(red: 0, green: 0.784, blue: 0.325), lineWidth: 2)
                                 .background(
@@ -53,60 +48,20 @@ struct TrayOverlay: View {
 
     // MARK: - Coordinate Conversion
 
-    /// Maps a TrayResult bounding box to the GeometryReader's SwiftUI coordinate
-    /// space for portrait display.
-    ///
-    /// The camera delivers a landscape pixel buffer (fw × fh).
-    /// In portrait the frame is rotated 90° CW and aspect-filled to (sw × sh):
-    ///   scale  = sh / fw          (portrait height filled by landscape width)
-    ///   cropX  = (fh·scale − sw) / 2   (horizontal crop from each side)
-    ///
-    ///   screen_y = nx · sh
-    ///   screen_h = nw · sh
-    ///   screen_x = (1 − ny − nh) · fh · scale − cropX
-    ///   screen_w = nh · fh · scale
-    private func portraitRect(for tray: TrayResult, in containerSize: CGSize) -> CGRect {
-        let fw = tray.originalFrameSize.width
-        let fh = tray.originalFrameSize.height
-        let sw = containerSize.width
-        let sh = containerSize.height
+    /// Maps a TrayResult bounding box to layer (screen) space using AVFoundation's
+    /// layerRectConverted — orientation-aware, so it works in portrait and landscape.
+    /// Draws exactly the model's box (same conversion the pill dots use); no clamp,
+    /// no smoothing, no forced adjustment.
+    private func getScreenRect(for tray: TrayResult,
+                               using layer: AVCaptureVideoPreviewLayer) -> CGRect {
 
-        let frameBounds = CGRect(origin: .zero, size: tray.originalFrameSize)
-        let clamped = tray.rect.intersection(frameBounds)
-        guard !clamped.isNull, clamped.width > 0, clamped.height > 0 else { return .zero }
+        let normalizedRect = CGRect(
+            x: tray.rect.origin.x / tray.originalFrameSize.width,
+            y: tray.rect.origin.y / tray.originalFrameSize.height,
+            width: tray.rect.width / tray.originalFrameSize.width,
+            height: tray.rect.height / tray.originalFrameSize.height
+        )
 
-        let scale = sh / fw
-        let scaledFH = fh * scale
-        let cropX = max(0, (scaledFH - sw) / 2)
-
-        let nx = clamped.minX / fw
-        let ny = clamped.minY / fh
-        let nw = clamped.width / fw
-        let nh = clamped.height / fh
-
-        let screenY = nx * sh
-        let screenH = nw * sh
-        let screenX = (1 - ny - nh) * scaledFH - cropX
-        let screenW = nh * scaledFH
-
-        let result = CGRect(x: screenX, y: screenY, width: screenW, height: screenH)
-
-        print(String(format:
-            "── [TRAY OVERLAY] norm=(%.3f,%.3f,%.3f×%.3f) → screen=(%.0f,%.0f,%.0f×%.0f) container=(%.0f×%.0f)",
-            nx, ny, nw, nh,
-            result.origin.x, result.origin.y, result.width, result.height,
-            sw, sh))
-
-        return result
-    }
-
-    /// Prints layer bounds vs GeometryReader size once per render so any
-    /// UIKit/SwiftUI origin mismatch is visible in the console.
-    @discardableResult
-    private func debugLayerVsGeo(layer: AVCaptureVideoPreviewLayer, geo: CGSize) -> Bool {
-        print(String(format:
-            "── [TRAY OVERLAY] layerBounds=(%.0f×%.0f) geoSize=(%.0f×%.0f)",
-            layer.bounds.width, layer.bounds.height, geo.width, geo.height))
-        return true
+        return layer.layerRectConverted(fromMetadataOutputRect: normalizedRect)
     }
 }

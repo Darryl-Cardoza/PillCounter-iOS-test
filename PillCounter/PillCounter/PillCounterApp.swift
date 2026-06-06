@@ -29,7 +29,7 @@ struct PillCounterApp: App {
     @StateObject private var userViewModel = UserViewModel()
     @StateObject private var stockCountViewModel = StockCountViewModel()
     @StateObject private var historyViewModel = HistoryViewModel()
-    @StateObject private var toastManager = ToastManager()
+    @StateObject private var toastManager = ToastManager.shared
 
     private let isCompromised: Bool
 

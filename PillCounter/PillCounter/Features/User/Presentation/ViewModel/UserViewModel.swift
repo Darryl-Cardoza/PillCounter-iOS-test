@@ -119,17 +119,22 @@ class UserViewModel: ObservableObject {
 
     // MARK: - Get User
 
-    func getUser() async {
+    /// Loads the user.
+    ///
+    /// Always hydrates from the local cache (no network). The `auth/me` API is only
+    /// called when `forceRemote` is true — typically right after a token refresh —
+    /// or when there is no local user yet (first launch). This prevents an `auth/me`
+    /// call on every screen visit; routine visits are served from local data.
+    func getUser(forceRemote: Bool = false) async {
         var userID = AppStorageManager.shared.userId ?? ""
         isLoading = true
         defer {
             isLoading = false
         }
 
-        if !userID.isEmpty,
-           let localUser = userLocalDB.fetchByUserId( userID) {
+        let localUser = userID.isEmpty ? nil : userLocalDB.fetchByUserId(userID)
 
-
+        if let localUser {
             let name = Formatter.segregateName(from: localUser.fname ?? "")
             firstName    = name.firstName
             lastName     = name.lastName
@@ -140,6 +145,14 @@ class UserViewModel: ObservableObject {
             // Load transactions only once we have a valid local user.
             getAllTransactionsAndFilterByCountType()
         }
+
+        // Skip the network call unless explicitly forced (e.g. after a token
+        // refresh) or we have no local user to show. Serve cached data otherwise.
+        guard forceRemote || localUser == nil else {
+            print("👤 [getUser] Served from local cache — skipping auth/me API call")
+            return
+        }
+        print("👤 [getUser] Calling auth/me API (forceRemote=\(forceRemote), hasLocalUser=\(localUser != nil))")
 
         do {
             let currentAppVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
@@ -559,11 +572,16 @@ class UserViewModel: ObservableObject {
         }
     }
 
-    func checkAndRefreshTokenIfNeeded() async {
+    /// Refreshes the access token if it's missing or within 5 minutes of expiry.
+    /// Returns `true` when a refresh was actually performed, so callers can decide
+    /// whether to re-fetch remote user data (`auth/me`) off the back of it.
+    @discardableResult
+    func checkAndRefreshTokenIfNeeded() async -> Bool {
         let storedExpiry = AppStorageManager.shared.tokenExpiryTimestamp ?? 0.0
-        if storedExpiry == 0.0 { await refreshToken(); return }
+        if storedExpiry == 0.0 { return await refreshToken() }
         let expiryDate = Date(timeIntervalSince1970: storedExpiry)
-        if Date() > expiryDate.addingTimeInterval(-300) { await refreshToken() }
+        if Date() > expiryDate.addingTimeInterval(-300) { return await refreshToken() }
+        return false
     }
 
     // MARK: - BATCH ACTIONS

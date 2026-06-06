@@ -341,6 +341,17 @@ struct UnifiedCameraView: View {
                     drugIsHazardous: pillScanViewModel.currentTransaction?.drug?.is_hazardous == true
                 )
             }
+            // Tray-colour detection runs ONLY while the pill-count bottom sheet is
+            // showing (dispense flow + stock-scan-pills). Off otherwise.
+            .onChange(of: showPillCountPanel) { _, showing in
+                cameraService.isTrayColorDetectionEnabled = showing
+                if showing { pillScanViewModel.resetTrayColorTracking() }
+            }
+            // Freeze tray-colour detection while the confirmation popup is up so the
+            // live feed can't change the captured colour; resume after confirm/dismiss.
+            .onChange(of: pillScanViewModel.showHazardousTrayPopup) { _, showingPopup in
+                cameraService.isTrayColorDetectionEnabled = showingPopup ? false : showPillCountPanel
+            }
             .onChange(of: pillScanViewModel.currentTransaction) { _, txn in
                 cameraService.isGloveDetectionEnabled =
                     (txn?.drug?.is_hazardous == true) && AppStorageManager.shared.isHazardousDrugSetting
@@ -509,6 +520,10 @@ extension UnifiedCameraView {
         stockSheetCurrentWidth = stockCountSheetWidth
         stockSheetIsExpanded = false
         pillScanViewModel.resetScanningState()
+        // Seed the tray-colour gate for flows that start with the pill-count sheet
+        // already shown (e.g. .resumeCount), since onChange won't fire on appear.
+        cameraService.isTrayColorDetectionEnabled = showPillCountPanel
+        pillScanViewModel.resetTrayColorTracking()
         cameraState = .scanning
         scannedRawValue = nil
         capturedImage = nil
@@ -567,6 +582,7 @@ extension UnifiedCameraView {
         lastSpokenInstruction = ""
         scanTimeoutTask?.cancel()
         cameraService.disableBarcodeScanning()
+        cameraService.isTrayColorDetectionEnabled = false
         cameraService.stop()
         pillScanViewModel.showRxFlowPopup = false
         pillScanViewModel.showRxOnHoldPopup = false

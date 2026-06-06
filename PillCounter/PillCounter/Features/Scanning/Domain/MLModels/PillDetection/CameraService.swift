@@ -76,13 +76,20 @@ final class CameraService: NSObject, ObservableObject {
     /// When false, glove model inference is completely skipped and the indicator is hidden.
     @Published var isGloveDetectionEnabled: Bool = false
 
-    /// The generic colour of the tray, sampled once per scan session on the first
-    /// frame a TRAY region is detected. Drives the hazardous-tray flow. nil until sampled.
+    /// The generic colour of the currently-visible tray. Re-published whenever the
+    /// classified colour CHANGES (not every frame), so the hazardous-tray flow can
+    /// react both to the first tray and to the operator swapping trays mid-session.
+    /// nil until the first tray is sampled. Drives the hazardous-tray flow.
     @Published var detectedTrayColor: TrayColor? = nil
 
-    /// True once the tray colour has been sampled for the current session, so we
-    /// only classify the tray once (not every frame). Reset like glove state.
-    @Published var trayColorSampled: Bool = false
+    /// The last colour we published to `detectedTrayColor`, used to suppress
+    /// duplicate frame-by-frame emissions and only fire on an actual colour change.
+    private var lastSampledTrayColor: TrayColor? = nil
+
+    /// Gates tray-colour sampling. The view enables this only while the pill-count
+    /// bottom sheet is showing in the dispense / stock-scan-pills flows; otherwise
+    /// the camera classifies no trays at all (hazardous-tray flow is inactive).
+    var isTrayColorDetectionEnabled: Bool = false
 
     @Published var isAuthorized = false
     @Published var error: String?
@@ -338,8 +345,8 @@ final class CameraService: NSObject, ObservableObject {
             self.glovesConfirmed  = false
             self.gloveDetections  = []
             self.isGloveHazardous = false
-            self.detectedTrayColor = nil
-            self.trayColorSampled  = false
+            self.detectedTrayColor    = nil
+            self.lastSampledTrayColor = nil
         }
     }
 
@@ -471,15 +478,19 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         let trayRects = allTrays.filter { $0.trayClass == .tray }.map { $0.rect }
 
         // ── Tray colour sampling (hazardous-tray feature) ────────────────────
-        // Sample the tray's generic colour exactly once per session, the first
-        // frame a TRAY region appears. Runs regardless of isGloveDetectionEnabled
-        // because the non-hazardous flow also needs it (to warn on hazardous tray).
-        if !trayColorSampled, let firstTrayRect = trayRects.first,
+        // Continuously classify the visible tray's generic colour and publish it
+        // only when the colour CHANGES (not every frame). This lets the flow react
+        // to the operator swapping trays mid-session. Gated by
+        // isTrayColorDetectionEnabled so it runs ONLY while the pill-count sheet is
+        // showing in the dispense / stock-scan-pills flows. Runs regardless of
+        // isGloveDetectionEnabled because the non-hazardous flow also needs it.
+        if isTrayColorDetectionEnabled, let firstTrayRect = trayRects.first,
            let color = TrayColorClassifier.dominantColor(in: pixelBuffer, rect: firstTrayRect) {
             DispatchQueue.main.async {
-                guard self.isCountingEnabled, !self.trayColorSampled else { return }
-                self.trayColorSampled  = true
-                self.detectedTrayColor = color
+                guard self.isTrayColorDetectionEnabled, self.isCountingEnabled else { return }
+                guard color != self.lastSampledTrayColor else { return }
+                self.lastSampledTrayColor = color
+                self.detectedTrayColor    = color
             }
         }
 

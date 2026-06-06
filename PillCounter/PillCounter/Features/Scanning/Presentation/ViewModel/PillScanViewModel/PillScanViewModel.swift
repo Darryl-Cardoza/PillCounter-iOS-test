@@ -58,6 +58,11 @@ class PillScanViewModel: ObservableObject {
     @Published  var showHazardousTrayPopup: Bool = false
     @Published  var pendingHazardousTrayColor: String = ""
 
+    /// The tray colour we last surfaced a toast for, so the continuous flow only
+    /// re-toasts when the colour actually CHANGES (not every emission). Reset when
+    /// a new scan session begins.
+    private var lastToastedTrayColor: String? = nil
+
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
     @Published var currentControlledTargetCount: Int? = nil
@@ -360,35 +365,71 @@ class PillScanViewModel: ObservableObject {
 
     func updateHazardousTrayDetected(detected: Bool) {
         guard let txnId = currentTransaction?.txn_id else { return }
+        print("🧪 [HazardousTray] updateHazardousTrayDetected txnId=\(txnId) detected=\(detected)")
         transactionDAO.updateHazardousTrayDetected(txnId: txnId, detected: detected)
         currentTransaction?.hazardous_tray_detected = detected
     }
 
     // MARK: - Hazardous tray flow
 
-    /// Called when the camera samples the tray colour for the current session.
-    /// Branches on whether the current drug is hazardous and whether we already
-    /// have a stored hazardous tray colour.
+    /// Called whenever the camera detects a CHANGE in the visible tray's colour
+    /// during pill counting. Branches on whether the current drug is hazardous and
+    /// whether we already have a stored hazardous tray colour. Because the camera
+    /// only emits on colour change, this fires once per distinct tray.
     func handleTrayColorDetected(_ color: TrayColor, drugIsHazardous: Bool) {
+        // While the capture popup is up, freeze on the pending colour — ignore any
+        // further colour changes so the operator confirms exactly what they saw.
+        guard !showHazardousTrayPopup else { return }
+
         let detectedName = color.displayName
         let storedName = AppStorageManager.shared.hazardousTrayColor
 
+        print("🧪 [HazardousTray] detected=\(detectedName) stored=\(storedName ?? "nil") drugIsHazardous=\(drugIsHazardous) txnDetected=\(currentTransaction?.hazardous_tray_detected == true)")
+
         if drugIsHazardous {
             if storedName == nil {
-                // First-ever capture: ask the operator to confirm.
+                // First-ever capture: ask the operator to confirm (once ever).
+                // Pause colour detection so the live feed can't change the pending
+                // colour underneath the popup; resumed on confirm/dismiss.
+                print("🧪 [HazardousTray] No stored colour — prompting capture for \(detectedName)")
                 pendingHazardousTrayColor = detectedName
                 showHazardousTrayPopup = true
             } else if storedName == detectedName {
-                // Same tray as the stored hazardous one — mark silently.
+                // Correct hazardous tray — mark the transaction.
+                print("🧪 [HazardousTray] Correct hazardous tray (\(detectedName)) — marking txn detected=true")
                 updateHazardousTrayDetected(detected: true)
+            } else {
+                // Wrong tray in a hazardous flow: ALWAYS recommend the stored colour
+                // so the operator is warned every time a different tray appears.
+                print("🧪 [HazardousTray] Wrong tray: got \(detectedName), expected \(storedName ?? "")")
+                showToastMessage(
+                    text: "Wrong tray: this is a \(detectedName) tray. Hazardous drugs must use the \(storedName ?? "") tray."
+                )
+                // Only flag NOT-detected if it isn't already confirmed true —
+                // once a txn is marked hazardous-tray-detected it stays true.
+                if currentTransaction?.hazardous_tray_detected != true {
+                    updateHazardousTrayDetected(detected: false)
+                }
             }
-            // Different colour after capture: do nothing (capture-once behaviour).
         } else {
-            // Non-hazardous flow: warn if using the hazardous tray.
-            if storedName == detectedName {
-                showToastMessage(text: "You are using a hazardous tray in a non-hazardous flow")
+            // Non-hazardous flow: only warn when using the stored hazardous tray.
+            // Toast once per distinct colour — re-toast only when the colour changes.
+            // Never write hazardous_tray_detected here (hazardous drug only).
+            if storedName == detectedName, lastToastedTrayColor != detectedName {
+                lastToastedTrayColor = detectedName
+                print("🧪 [HazardousTray] Non-hazardous drug on hazardous tray (\(detectedName)) — warning")
+                showToastMessage(text: "The \(detectedName) tray is reserved for hazardous drugs. Please use a different tray.")
+            } else if storedName != detectedName {
+                // Reset so returning to the hazardous tray re-toasts.
+                lastToastedTrayColor = detectedName
             }
         }
+    }
+
+    /// Clears the per-session tray-toast tracker. Call when a new scan session
+    /// begins so the first tray of the new session can toast again.
+    func resetTrayColorTracking() {
+        lastToastedTrayColor = nil
     }
 
     /// Operator tapped "Yes" on the hazardous-tray confirmation popup.
@@ -454,15 +495,11 @@ class PillScanViewModel: ObservableObject {
     typealias HL7SimpleCallback = (Bool) -> Void
     
     //ShowToastMessage
+    // Single source of truth: routes every scanning toast through the global
+    // ToastManager so only one toast ever shows app-wide. The old local toast in
+    // UnifiedCameraLayout has been removed.
     func showToastMessage(text: String, autoClose: Bool = true) {
-        toastMessage = text
-        toastAutoClose = autoClose
-        showToast = true
-
-        guard autoClose else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-            self.showToast = false
-        }
+        ToastManager.shared.show(message: text, duration: autoClose ? 4 : 8)
     }
 
  

@@ -270,11 +270,6 @@ struct NewDashboardView: View {
         .onChange(of: pillScanViewModel.currentTransaction) { _, _ in
             loadQueueData()
         }
-        .onChange(of: pillScanViewModel.showToast) { _, isShowing in
-            if isShowing {
-                toastManager.show(message: pillScanViewModel.toastMessage)
-            }
-        }
         .onReceive(TransactionStore.shared.transactionsDidChange) {
             loadQueueData()
         }
@@ -1065,6 +1060,7 @@ struct NewDashboardView: View {
             print("    gloves_detected : \(t.gloves_detected)")
             print("    created_at      : \(t.created_at)")
             print("    updated_at      : \(t.updated_at)")
+            print("hazardous tray detected: \(t.hazardous_tray_detected)")
             if i < transactions.count - 1 {
                 print("    \(String(repeating: "·", count: 40))")
             }
@@ -1127,16 +1123,15 @@ struct NewDashboardView: View {
     // MARK: - Lifecycle
 
     private func onAppear() {
-        Task(priority: .background) {
-            await userViewModel.checkAndRefreshTokenIfNeeded()
-        }
-
         if isNewUser && !hasCheckedNewUser {
             hasCheckedNewUser = true
             router.navigate(to: .authentication(.user(.userSettings(.profile))))
         } else {
             Task {
-                await userViewModel.getUser()
+                // Only hit auth/me when the token was actually refreshed; otherwise
+                // serve user data from the local cache to avoid an API call on every visit.
+                let didRefresh = await userViewModel.checkAndRefreshTokenIfNeeded()
+                await userViewModel.getUser(forceRemote: didRefresh)
                 stockCountViewModel.getCountData()
                 // Reload after async user data is ready to ensure queue is populated
                 await MainActor.run { loadQueueData() }

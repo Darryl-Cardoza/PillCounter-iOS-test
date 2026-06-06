@@ -157,6 +157,9 @@
 "settings.clearHistoryTitle" = "Are you sure want to clear all history?";
 "settings.clearHistoryMessage" = "This will delete all your saved data permanently.";
 "settings.hazardousDrugSetting" = "Hazardous Pill Counting";
+"settings.hazardousTrayColor" = "Hazardous Tray Color";
+"settings.resetHazardousTrayColorTitle" = "Are you sure you want to reset the hazardous tray color?";
+"settings.resetHazardousTrayColorMessage" = "You will be prompted to set a new hazardous tray color the next time one is detected.";
 
 
 // MARK: - CAMERA PERMISSION

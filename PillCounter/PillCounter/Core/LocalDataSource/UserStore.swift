@@ -64,6 +64,8 @@ final class UserStore {
         }
 
         CoreDataManager.shared.save(context: context)
+        // didSave restores plaintext in memory (see NSManagedObject+Encryption),
+        // so reading entity fields below / by callers without re-fetching is safe.
         let action = isNew ? "CREATED" : "UPDATED"
         print("👤 [UserDAO] \(action) — userId: \(userId), email: \(entity.email ?? "-"), name: \((entity.fname ?? "") + " " + (entity.lname ?? ""))")
     }
@@ -75,14 +77,14 @@ final class UserStore {
         request.predicate = NSPredicate(format: "user_id == %@", userId)
         request.fetchLimit = 1
         guard let result = try? context.fetch(request).first else { return nil }
-        context.refresh(result, mergeChanges: false)
+        result.decryptEncryptedFieldsInPlace()
         return result
     }
 
     func fetchAll() -> [UserEntity] {
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
         let results = (try? context.fetch(request)) ?? []
-        results.forEach { context.refresh($0, mergeChanges: false) }
+        results.forEach { $0.decryptEncryptedFieldsInPlace() }
         return results
     }
 

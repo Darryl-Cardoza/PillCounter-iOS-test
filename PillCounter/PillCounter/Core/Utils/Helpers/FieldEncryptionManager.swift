@@ -34,6 +34,12 @@ final class FieldEncryptionManager {
 
     /// Decrypts a string encrypted by encrypt(). Returns the original
     /// string unchanged if it was not encrypted (safe for migration).
+    ///
+    /// Important: if the value IS structured AES-GCM ciphertext but cannot be
+    /// opened (wrong/rotated/unavailable key, corruption), this returns nil —
+    /// never the raw ciphertext. Returning ciphertext here is what previously
+    /// leaked encrypted blobs into the UI. Callers should treat nil as "no
+    /// readable value" rather than rendering it.
     func decrypt(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return value }
         guard let data = Data(base64Encoded: value) else {
@@ -41,15 +47,26 @@ final class FieldEncryptionManager {
             return value
         }
 
+        // Determine whether this is genuinely GCM-structured ciphertext.
+        // If SealedBox can't even parse it, it's not our ciphertext —
+        // treat as legacy plaintext that happens to be base64 and return as-is.
+        let sealed: AES.GCM.SealedBox
+        do {
+            sealed = try AES.GCM.SealedBox(combined: data)
+        } catch {
+            return value
+        }
+
         do {
             let key = try loadOrCreateKey()
-            let sealed = try AES.GCM.SealedBox(combined: data)
             let decrypted = try AES.GCM.open(sealed, using: key)
-            return String(data: decrypted, encoding: .utf8) ?? value
+            return String(data: decrypted, encoding: .utf8)
         } catch {
-            // Decryption failed — may be plaintext data from before encryption
-            // was introduced. Return as-is so existing data is not lost.
-            return value
+            // It is real ciphertext but we cannot decrypt it (key mismatch /
+            // unavailable / corruption). Do NOT return the ciphertext — that
+            // would render an encrypted blob in the UI. Surface nil instead.
+            Log("❌ FieldEncryption: decrypt failed on ciphertext — \(error.localizedDescription)")
+            return nil
         }
     }
 

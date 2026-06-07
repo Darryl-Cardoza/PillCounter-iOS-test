@@ -72,3 +72,6 @@ Config.plist
 
 # Firebase config — contains live API key, never commit
 **/GoogleService-Info.plist
+
+# Internal security report — describes data-protection internals, keep out of VCS
+SECURITY_DATA_PROTECTION_REPORT.md

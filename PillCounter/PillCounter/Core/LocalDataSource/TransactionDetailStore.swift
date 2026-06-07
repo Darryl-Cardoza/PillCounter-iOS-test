@@ -163,10 +163,12 @@ final class TransactionDetailStore {
 
     // MARK: - Private
 
-    /// Forces a refault so awakeFromFetch re-runs and decrypts encrypted fields
-    /// (e.g. image_path) that were encrypted in-memory by willSave in the same session.
+    /// Deterministically decrypts the object's encrypted fields in place
+    /// (e.g. image_path). Replaces the old context.refresh(_, mergeChanges: false)
+    /// refault, which did NOT reliably re-run awakeFromFetch and could surface
+    /// ciphertext written by willSave in the same session.
     private func refreshDecrypted(_ object: NSManagedObject) {
-        context.refresh(object, mergeChanges: false)
+        object.decryptEncryptedFieldsInPlace()
     }
 
     private func generateUniqueId() -> Int64 {

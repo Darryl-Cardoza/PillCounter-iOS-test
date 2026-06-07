@@ -96,6 +96,7 @@ struct UnifiedCameraLayout: View {
                                 }
                                 Spacer()
                             } else {
+                                Spacer()
                                 // showPillCountPanel false: back | Spacer | instruction | 16 | glove
                                 if !instructionText.isEmpty {
                                     PillCountInstructionOverlay(text: instructionText)

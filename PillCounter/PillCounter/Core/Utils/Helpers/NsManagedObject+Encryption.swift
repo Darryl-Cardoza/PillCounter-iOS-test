@@ -69,6 +69,10 @@ extension NSManagedObject {
             original: #selector(awakeFromFetch),
             replacement: #selector(enc_awakeFromFetch)
         )
+        swizzle(
+            original: #selector(didSave),
+            replacement: #selector(enc_didSave)
+        )
     }
 
     // MARK: - Replacement implementations
@@ -97,7 +101,34 @@ extension NSManagedObject {
     @objc private func enc_awakeFromFetch() {
         // Call original awakeFromFetch first
         enc_awakeFromFetch()
+        decryptEncryptedFieldsInPlace()
+    }
 
+    /// After a save, willSave() has encrypted the registered fields in memory.
+    /// didSave() runs on the same object once the save completes, so we restore
+    /// plaintext here — this keeps every registered in-memory object readable as
+    /// plaintext regardless of which save path was used, fixing the ciphertext
+    /// that previously surfaced when a saved object was read without re-fetching.
+    @objc private func enc_didSave() {
+        // Call original didSave first
+        enc_didSave()
+
+        // A deleted object's values must not be touched.
+        guard !isDeleted else { return }
+        decryptEncryptedFieldsInPlace()
+    }
+
+    // MARK: - Deterministic decryption
+
+    /// Decrypts this object's registered encrypted fields in place, reading the
+    /// raw stored value and writing back plaintext via `setPrimitiveValue`.
+    ///
+    /// Use this instead of `context.refresh(_, mergeChanges: false)` after a fetch:
+    /// refaulting does NOT reliably re-run `awakeFromFetch` (a fault fulfilled from
+    /// the row cache can return the ciphertext snapshot written by `willSave`),
+    /// which is what leaked ciphertext into the UI. This call is deterministic and
+    /// does not depend on fault-firing behavior.
+    func decryptEncryptedFieldsInPlace() {
         guard let entityName = entity.name,
               let fields = encryptedFieldRegistry[entityName],
               !fields.isEmpty
@@ -105,12 +136,23 @@ extension NSManagedObject {
 
         let enc = FieldEncryptionManager.shared
         for field in fields {
-            guard let ciphertext = primitiveValue(forKey: field) as? String,
-                  !ciphertext.isEmpty,
-                  looksEncrypted(ciphertext)
+            guard let stored = primitiveValue(forKey: field) as? String,
+                  !stored.isEmpty,
+                  looksEncrypted(stored)
             else { continue }
-            if let plaintext = enc.decrypt(ciphertext) {
-                setPrimitiveValue(plaintext, forKey: field)
+
+            if let plaintext = enc.decrypt(stored) {
+                if plaintext != stored {
+                    setPrimitiveValue(plaintext, forKey: field)
+                }
+            } else {
+                // decrypt() returned nil — `stored` is real ciphertext we cannot
+                // open (key mismatch/unavailable/corruption). Never leave the
+                // ciphertext in place where it could render in the UI; blank it.
+                // The encrypted value on disk is untouched (setPrimitiveValue does
+                // not mark the object dirty), so a later successful key load can
+                // still decrypt it on the next fetch.
+                setPrimitiveValue("", forKey: field)
             }
         }
     }

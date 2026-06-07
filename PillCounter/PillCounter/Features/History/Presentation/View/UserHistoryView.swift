@@ -452,24 +452,49 @@ struct UserHistoryView: View {
         let dispenseCount = historyViewModel.filteredTransactionsOfUserByDate.count
         let stockCount    = historyViewModel.filteredBatchesOfUserByDate.count
 
-        return HStack(spacing: 8) {
-            FilterChip(
-                label: L10n.History.filterDispensed,
-                count: dispenseCount,
-                value: HistoryFilterType.fixed,
-                selectedValue: activeTypeFilter,
-                appColors: appColors
-            ) { activeTypeFilter = $0 }
+        return VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                TabItem(
+                    label: "\(L10n.History.filterDispensed) (\(dispenseCount))",
+                    isSelected: activeTypeFilter == .fixed
+                ) {
+                    activeTypeFilter = .fixed
+                }
 
-            FilterChip(
-                label: L10n.History.filterStockCount,
-                count: stockCount,
-                value: .regular,
-                selectedValue: activeTypeFilter,
-                appColors: appColors
-            ) { activeTypeFilter = $0 }
+                TabItem(
+                    label: "\(L10n.History.filterStockCount) (\(stockCount))",
+                    isSelected: activeTypeFilter == .regular
+                ) {
+                    activeTypeFilter = .regular
+                }
 
-            Spacer()
+                Spacer()
+            }
+
+            Divider()
         }
     }
+    
+    private struct TabItem: View {
+        let label: String
+        let isSelected: Bool
+        let onTap: () -> Void
+
+        var body: some View {
+            Button(action: onTap) {
+                VStack(spacing: 0) {
+                    Text(label)
+                        .font(.system(size: 14, weight: isSelected ? .semibold	 : .regular))
+                        .foregroundColor(isSelected ? .primary : .secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+
+                }
+            }
+            .buttonStyle(.plain)
+            .animation(.easeInOut(duration: 0.15), value: isSelected)
+            .frame(maxWidth: 150)
+        }
+    }
+        
 }

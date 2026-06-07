@@ -34,7 +34,7 @@ extension PillScanViewModel {
             if isSame {
                 print("barcode ndc same")
                 isCheckingNdc = false
-                showScannedDrugInfoPopoup = true
+                presentSameDrugConfirmation()
             } else {
                 print("Barcode not same")
                 // NDCs differ locally — fall through to API for equivalence check.
@@ -74,7 +74,7 @@ extension PillScanViewModel {
                        !scannedNdc.isEmpty {
                         drugMasterDAO.update(drugId: localDrug.drug_id,drugName: localDrug.drug_name, gtin: scannedNdc)
                     }
-                    self.showScannedDrugInfoPopoup = true
+                    self.presentSameDrugConfirmation()
                 } else {
                     isNdcEquivalent = false
                     showToastMessage(text: L10n.BarcodeScan.ndcDoesNotMatch)
@@ -92,6 +92,18 @@ extension PillScanViewModel {
         }
     }
     
+    /// Same NDC matched. If the expected drug is hazardous (and the hazardous-drug
+    /// setting is on) show the Verify Stock Bottle confirmation sheet first; the user
+    /// must tap Proceed to continue. Otherwise proceed straight to the normal flow.
+    func presentSameDrugConfirmation() {
+        let isHazardous = selectedTransaction?.drug?.is_hazardous == true
+        if isHazardous && AppStorageManager.shared.isHazardousDrugSetting {
+            showVerifyStockBottlePopup = true
+        } else {
+            showScannedDrugInfoPopoup = true
+        }
+    }
+
     func updateScannedDrugData(drugName:String, ndcNo: String){
         self.scannedRxData = ParsedScanData(ndcNo: ndcNo,drugName: drugName)
     }

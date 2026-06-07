@@ -234,6 +234,33 @@ struct UnifiedCameraView: View {
                 )
                 .environmentObject(appColors)
             }
+            .bottomSheet(
+                isPresented: $pillScanViewModel.showVerifyStockBottlePopup,
+                dismissOnBackgroundTap: false,
+                onDismiss: {
+                    pillScanViewModel.showVerifyStockBottlePopup = false
+                }
+            ) {
+                VerifyStockBottleSheetContent(
+                    onCancel: {
+                        pillScanViewModel.showVerifyStockBottlePopup = false
+                        restartFlow()
+                    },
+                    onProceed: {
+                        pillScanViewModel.showVerifyStockBottlePopup = false
+                        // Continue the same-drug flow — the existing onChange observer
+                        // on showScannedDrugInfoPopoup runs handleSubstitute() / next step.
+                        pillScanViewModel.showScannedDrugInfoPopoup = true
+                    },
+                    drugName: pillScanViewModel.selectedTransaction?.drug?.drug_name
+                        ?? pillScanViewModel.scannedRxData?.drugName ?? "-",
+                    ndcNumber: pillScanViewModel.selectedTransaction?.drug?.ndc
+                        ?? pillScanViewModel.scannedRxData?.ndcNo ?? "-",
+                    bucket: pillScanViewModel.selectedTransaction?.bucket_id
+                        ?? (pillScanViewModel.selectedBucket.isEmpty ? "-" : pillScanViewModel.selectedBucket)
+                )
+                .environmentObject(appColors)
+            }
             .customPopup(isPresented: $pillScanViewModel.showNdcEquivalencePopup, dismissOnBackgroundTap: false) { ndcEquivalencePopup }
             .customPopup(isPresented: $pillScanViewModel.showRxOnHoldPopup, dismissOnBackgroundTap: false) { rxOnHoldPopup }
             .onChange(of: stockCountViewModel.barcodeNotFound) { _, notFound in
@@ -508,6 +535,7 @@ extension UnifiedCameraView {
         pillScanViewModel.showRxInProgressPopup = false
         pillScanViewModel.showNdcEquivalencePopup = false
         pillScanViewModel.showScannedDrugInfoPopoup = false
+        pillScanViewModel.showVerifyStockBottlePopup = false
         pillScanViewModel.fetchedRxTransaction = nil
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.barcodeNotFound = false
@@ -589,6 +617,7 @@ extension UnifiedCameraView {
         pillScanViewModel.showRxInProgressPopup = false
         pillScanViewModel.showNdcEquivalencePopup = false
         pillScanViewModel.showScannedDrugInfoPopoup = false
+        pillScanViewModel.showVerifyStockBottlePopup = false
         pillScanViewModel.fetchedRxTransaction = nil
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.barcodeNotFound = false

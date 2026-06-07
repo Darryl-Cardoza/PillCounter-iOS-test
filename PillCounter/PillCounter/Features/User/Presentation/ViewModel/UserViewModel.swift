@@ -142,6 +142,10 @@ class UserViewModel: ObservableObject {
             pharmacyName = localUser.pharmacy_name ?? ""
             npiID        = localUser.npi_id ?? ""
             phoneNumber  = localUser.phone_number ?? ""
+            // Hydrate the terminal list/selection from the cached store so the
+            // dropdown is populated even when we serve from local data and skip
+            // the auth/me network call below.
+            hydrateTerminalsFromCache()
             // Load transactions only once we have a valid local user.
             getAllTransactionsAndFilterByCountType()
         }
@@ -637,6 +641,23 @@ class UserViewModel: ObservableObject {
     }
 
     // MARK: - UPDATE TERMINAL
+
+    /// Populates the in-memory terminal list/selection from the locally cached
+    /// store. Used when serving the profile from local data (no auth/me call),
+    /// so the dropdown still shows the list and the current selection.
+    func hydrateTerminalsFromCache() {
+        let cached = AppStorageManager.shared.storedTerminals
+        guard !cached.isEmpty else { return }
+        terminals = cached
+
+        let storedName = AppStorageManager.shared.selectedTerminalName
+        let active = cached.first(where: { $0.terminalName == storedName && !storedName.isEmpty })
+            ?? cached.first(where: { $0.isActive == true })
+            ?? cached.first
+
+        if selectedTerminal == nil { selectedTerminal = active }
+        if pendingTerminal == nil { pendingTerminal = active }
+    }
 
     /// UI-only selection — no API call; persisted on Save.
     func selectTerminal(_ terminal: UserTerminal) {

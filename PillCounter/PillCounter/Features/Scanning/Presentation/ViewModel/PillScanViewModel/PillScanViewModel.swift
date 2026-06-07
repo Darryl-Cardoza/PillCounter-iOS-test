@@ -100,7 +100,10 @@ class PillScanViewModel: ObservableObject {
     @Published var bucketOptions: [String] = []
     @Published var selectedBucket: String = ""
     @Published var showScannedDrugInfoPopoup: Bool = false
-    
+    /// Hazardous-drug confirmation sheet shown when the scanned bottle matches the
+    /// expected (same) drug AND that drug is hazardous. Proceed continues the flow.
+    @Published var showVerifyStockBottlePopup: Bool = false
+
     
     private func postTransactionUIUpdate(countType: CountType) {
         getAllTransactionDetailsOfTheCurrentTransaction()

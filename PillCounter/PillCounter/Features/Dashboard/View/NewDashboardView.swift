@@ -81,8 +81,6 @@ struct NewDashboardView: View {
     @State private var pillCounts: [Int64: Int] = [:]
     @State private var batchNdcCounts: [Int64: Int] = [:]
     @State private var activeFilterCardId: String? = nil
-    @State private var appearedQueueIds: Set<String> = []
-    @State private var appearedRecentIds: Set<String> = []
 
     private let transactionDAO = TransactionStore.shared
     private let batchDAO = BatchStore.shared
@@ -275,10 +273,6 @@ struct NewDashboardView: View {
         .onReceive(TransactionStore.shared.transactionsDidChange) {
             loadQueueData()
         }
-        .onChange(of: activeFilterCardId) { _, _ in
-            appearedQueueIds.removeAll()
-            appearedRecentIds.removeAll()
-        }
         .customPopup(isPresented: $showSelectBucketIdPopup) {
             selectBucketPopUp
         }
@@ -305,16 +299,14 @@ struct NewDashboardView: View {
             TabView(selection: $selectedQueueTab) {
                 queueScrollContent(
                     items: filteredQueueItems,
-                    idPrefix: "queue",
-                    appearedIds: $appearedQueueIds
+                    idPrefix: "queue"
                 ) {
                     AnyView(queueRowView(item: $0))
                 }
                 .tag(0)
                 queueScrollContent(
                     items: filteredRecentItems,
-                    idPrefix: "recent",
-                    appearedIds: $appearedRecentIds
+                    idPrefix: "recent"
                 ) {
                     AnyView(recentRowView(item: $0))
                 }
@@ -405,16 +397,14 @@ struct NewDashboardView: View {
                     TabView(selection: $selectedQueueTab) {
                         queueScrollContent(
                             items: filteredQueueItems,
-                            idPrefix: "queue",
-                            appearedIds: $appearedQueueIds
+                            idPrefix: "queue"
                         ) {
                             AnyView(queueRowView(item: $0))
                         }
                         .tag(0)
                         queueScrollContent(
                             items: filteredRecentItems,
-                            idPrefix: "recent",
-                            appearedIds: $appearedRecentIds
+                            idPrefix: "recent"
                         ) {
                             AnyView(recentRowView(item: $0))
                         }
@@ -581,16 +571,14 @@ struct NewDashboardView: View {
                     TabView(selection: $selectedQueueTab) {
                         queueScrollContent(
                             items: filteredQueueItems,
-                            idPrefix: "queue",
-                            appearedIds: $appearedQueueIds
+                            idPrefix: "queue"
                         ) {
                             AnyView(queueRowView(item: $0))
                         }
                         .tag(0)
                         queueScrollContent(
                             items: filteredRecentItems,
-                            idPrefix: "recent",
-                            appearedIds: $appearedRecentIds
+                            idPrefix: "recent"
                         ) {
                             AnyView(recentRowView(item: $0))
                         }
@@ -955,7 +943,6 @@ struct NewDashboardView: View {
     private func queueScrollContent(
         items: [DashboardQueueItem],
         idPrefix: String,
-        appearedIds: Binding<Set<String>>,
         rowBuilder: @escaping (DashboardQueueItem) -> AnyView
     ) -> some View {
         GeometryReader { geo in
@@ -966,49 +953,22 @@ struct NewDashboardView: View {
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: geo.size.height)
                     } else {
-                        // Namespace the row identity per tab so identical items
-                        // (same txn/batch in both Today's Queue and Recent Activity)
-                        // never share a view identity across the two TabView pages,
-                        // which would make a row vanish from one tab.
+                        // Each page's list gets its own structural identity via
+                        // .id(idPrefix) so the two ForEach trees stay separate and
+                        // a row shared by both tabs isn't hidden in one of them.
                         ForEach(items) { item in
-                            let didAppear = appearedIds.wrappedValue.contains(item.id)
                             rowBuilder(item)
-                                .opacity(didAppear ? 1 : 0)
-                                .offset(y: didAppear ? 0 : 20)
-                                .id("\(idPrefix)-\(item.id)")
+                                .transition(.opacity)
                         }
+                        .id(idPrefix)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .padding(.bottom, 32)
             }
-            // Drive the staggered appear at the list level so it always runs
-            // (per-row .onAppear is unreliable inside a paged TabView — off-screen
-            // pages don't fire it, leaving rows stuck at opacity 0).
-            .onChange(of: items.map(\.id)) { _, newIds in
-                animateAppearance(of: newIds, into: appearedIds)
-            }
-            .onAppear {
-                animateAppearance(of: items.map(\.id), into: appearedIds)
-            }
-        }
-    }
-
-    /// Stagger-reveals any ids not yet marked as appeared, then records them.
-    private func animateAppearance(
-        of ids: [String],
-        into appearedIds: Binding<Set<String>>
-    ) {
-        let fresh = ids.filter { !appearedIds.wrappedValue.contains($0) }
-        guard !fresh.isEmpty else { return }
-        for (offset, id) in fresh.enumerated() {
-            withAnimation(
-                .spring(response: 0.42, dampingFraction: 0.78)
-                    .delay(Double(offset) * 0.06)
-            ) {
-                appearedIds.wrappedValue.insert(id)
-            }
+            // Animate filtered-data changes; just show the data, no per-row stagger.
+            .animation(.easeInOut(duration: 0.25), value: items.map(\.id))
         }
     }
 

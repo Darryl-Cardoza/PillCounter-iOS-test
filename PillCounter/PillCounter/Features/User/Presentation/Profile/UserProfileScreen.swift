@@ -143,11 +143,12 @@ struct UserProfileScreen: View {
                 maxLength: 10
             )
 
-            terminalDropdown
-            
+            if !userViewModel.terminals.isEmpty {
+                terminalDropdown
+            }
         }
     }
-    
+
     private var landscapeProfileColums: some View {
         HStack(alignment: .top, spacing: 12) {
             leftProfileColumn

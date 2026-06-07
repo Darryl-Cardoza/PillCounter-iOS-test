@@ -9,7 +9,7 @@ import SwiftUI
 // MARK: - Reusable View
 struct StockItemRowView: View {
     let data: StockData
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
 
 
 

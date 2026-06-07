@@ -1044,7 +1044,7 @@ struct NewDashboardView: View {
         switch item {
         case .dispense(let txn, let pillCount):
             let data = txn.toRowData(pillCount: pillCount)
-            DispenseItemRowView(data: data, appColors: appColors)
+            DispenseItemRowView(data: data)
                 .onTapGesture {
                     let countType =
                         txn.count_type?.uppercased()
@@ -1063,7 +1063,7 @@ struct NewDashboardView: View {
 
         case .inventory(let batch, let ndcCount):
             let data = batch.toStockData(ndcCount: ndcCount)
-            StockItemRowView(data: data, appColors: appColors)
+            StockItemRowView(data: data)
                 .onTapGesture {
                     guard let freshBatch = batchDAO.fetchById(batch.batch_id)
                     else { return }
@@ -1084,7 +1084,7 @@ struct NewDashboardView: View {
         switch item {
         case .dispense(let txn, let pillCount):
             let data = txn.toRowData(pillCount: pillCount)
-            DispenseItemRowView(data: data, appColors: appColors)
+            DispenseItemRowView(data: data)
                 .onTapGesture {
                     historyViewModel.selectedTransactionId = txn.txn_id
                     router.navigate(
@@ -1096,7 +1096,7 @@ struct NewDashboardView: View {
 
         case .inventory(let batch, let ndcCount):
             let data = batch.toStockData(ndcCount: ndcCount)
-            StockItemRowView(data: data, appColors: appColors)
+            StockItemRowView(data: data)
                 .onTapGesture {
                     historyViewModel.prepareBatchDetails(for: batch.batch_id)
                     historyViewModel.selectedBatchId = batch.batch_id

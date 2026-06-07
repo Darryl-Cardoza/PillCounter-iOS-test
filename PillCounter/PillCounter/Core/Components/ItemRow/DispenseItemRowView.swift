@@ -11,7 +11,7 @@ import SwiftUI
 // MARK: - Reusable View
 struct DispenseItemRowView: View {
     let data: TransactionRowData
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
 
 
     private var isPartial: Bool {
@@ -93,7 +93,6 @@ struct DispenseItemRowView: View {
                 VStack(spacing: 10) {
                     DonutProgressView(
                         fraction: fillFraction,
-                        appColors: appColors,
                         size: 30
                     )
                     Text(displayText)

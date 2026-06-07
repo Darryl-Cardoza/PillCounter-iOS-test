@@ -52,8 +52,7 @@ struct DispenseCountPartialTxnList: View {
                             .animation(.easeIn(duration: 0.15), value: deletingIds.contains(txn.txn_id))
 
                         DispenseItemRowView(
-                            data: txn.toRowData(pillCount: pillCounts[txn.txn_id] ?? 0),
-                            appColors: appColors
+                            data: txn.toRowData(pillCount: pillCounts[txn.txn_id] ?? 0)
                         )
                         .listRowAnimated(
                             id: txn.txn_id,

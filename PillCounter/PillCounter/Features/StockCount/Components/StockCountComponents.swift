@@ -91,11 +91,11 @@ struct StockTransactionListView: View {
                             .padding(.horizontal, 4)
                             
                             if !sealedDetails.isEmpty {
-                                LotColumnHeader(appColors: appColors)
+                                LotColumnHeader()
                                 ForEach(sealedDetails, id: \.lot) { detail in
-                                    LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.sealedQty, appColors: appColors)
+                                    LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.sealedQty)
                                 }
-                                LotTotalRow(total: sealedTotal, appColors: appColors)
+                                LotTotalRow(total: sealedTotal)
                             }
                             
                             // ── OPENED BOTTLES SECTION ──
@@ -116,11 +116,11 @@ struct StockTransactionListView: View {
                             .padding(.horizontal, 4)
                             
                             if !openDetails.isEmpty {
-                                LotColumnHeader(appColors: appColors)
+                                LotColumnHeader()
                                 ForEach(openDetails, id: \.lot) { detail in
-                                    LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.openQty, appColors: appColors)
+                                    LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.openQty)
                                 }
-                                LotTotalRow(total: openTotal, appColors: appColors)
+                                LotTotalRow(total: openTotal)
                             }
                         }
                         .padding(.horizontal, 8)
@@ -151,7 +151,7 @@ struct LotRow: View {
     let lot: String
     let expiry: String
     let qty: Int32
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
 
     var body: some View {
         VStack(spacing: 0) {
@@ -195,7 +195,7 @@ struct LotRow: View {
 // MARK: - Lot Column Header
 
 struct LotColumnHeader: View {
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
 
     var body: some View {
         HStack {
@@ -223,7 +223,7 @@ struct LotColumnHeader: View {
 
 struct LotTotalRow: View {
     let total: Int32
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
 
     var body: some View {
         VStack(spacing: 0) {

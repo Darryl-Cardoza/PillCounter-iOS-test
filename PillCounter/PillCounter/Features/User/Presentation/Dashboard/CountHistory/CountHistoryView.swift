@@ -357,8 +357,7 @@ struct CountHistoryView: View {
                 
                         
                         DispenseItemRowView(
-                            data: txn.toRowData(pillCount: Int(counted)),
-                            appColors: appColors
+                            data: txn.toRowData(pillCount: Int(counted))
                         )
                         .selectableEffect(
                             isSelected: selectedTxnIds.contains(txn.txn_id),

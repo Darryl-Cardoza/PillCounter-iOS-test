@@ -69,6 +69,12 @@
 "dashboard.header.tabs.todaysQueue" = "Today's Queue";
 "dashboard.header.tabs.recentActivity" = "Recent Activity";
 
+// MARK: - DASHBOARD EMPTY STATE
+"dashboard.emptyState.caughtUpTitle" = "You're all caught up!";
+"dashboard.emptyState.noMatchingTitle" = "No matching items";
+"dashboard.emptyState.noPendingSubtitle" = "No pending tasks right now";
+"dashboard.emptyState.noRecentSubtitle" = "No recent activity yet";
+
 
 // MARK: - DASHBOARD POPUP
 "dashboard.popup.continueLastBatch" = "Resume Previous Batch";

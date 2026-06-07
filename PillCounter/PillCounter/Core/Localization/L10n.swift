@@ -93,6 +93,14 @@ enum L10n {
             static let todaysQueue = NSLocalizedString("dashboard.header.tabs.todaysQueue", comment: "")
             static let recentActivity = NSLocalizedString("dashboard.header.tabs.recentActivity", comment: "")
         }
+
+        // MARK: - EMPTY STATE
+        enum EmptyState {
+            static let caughtUpTitle = NSLocalizedString("dashboard.emptyState.caughtUpTitle", comment: "")
+            static let noMatchingTitle = NSLocalizedString("dashboard.emptyState.noMatchingTitle", comment: "")
+            static let noPendingSubtitle = NSLocalizedString("dashboard.emptyState.noPendingSubtitle", comment: "")
+            static let noRecentSubtitle = NSLocalizedString("dashboard.emptyState.noRecentSubtitle", comment: "")
+        }
         
         enum Popup {
             static let continueLastBatch = NSLocalizedString("dashboard.popup.continueLastBatch", comment: "")

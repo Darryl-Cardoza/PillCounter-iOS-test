@@ -480,7 +480,7 @@ struct NewDashboardView: View {
             let leftWidth = (screen.size.width - 1) * 0.5
             let rightWidth = screen.size.width - leftWidth - 1
             // Left panel split: action cards | stat cards (no inner divider)
-            let statsWidth = leftWidth * 0.31
+            let statsWidth = leftWidth * 0.25
             let actionWidth = leftWidth - statsWidth
 
             VStack(spacing: 0) {
@@ -845,7 +845,7 @@ struct NewDashboardView: View {
             .cornerRadius(14)
             .shadow(
                 color: isActive
-                    ? appColors.secondary.opacity(0.6)
+                    ? appColors.primary.opacity(0.6)
                     : appColors.text.opacity(0.05),
                 radius: isActive ? 8 : 4,
                 x: 0,
@@ -855,7 +855,7 @@ struct NewDashboardView: View {
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(
                         isActive
-                            ? appColors.secondary.opacity(0.8) : Color.clear,
+                            ? appColors.primary.opacity(0.8) : Color.clear,
                         lineWidth: 1.5
                     )
             )
@@ -881,46 +881,78 @@ struct NewDashboardView: View {
         }
     }
 
-    private func emptyQueueMessage() -> String {
+    private func emptyQueueTitle() -> String {
         guard let cardId = activeFilterCardId,
             let card = statCards.first(where: { $0.id == cardId })
         else {
-            return "No pending items"
+            return L10n.Dashboard.EmptyState.caughtUpTitle
         }
-        return card.count == 0 ? "You're all caught up!" : "No matching items"
+        return card.count == 0
+            ? L10n.Dashboard.EmptyState.caughtUpTitle
+            : L10n.Dashboard.EmptyState.noMatchingTitle
+    }
+
+    private func emptyQueueSubtitle() -> String {
+        selectedQueueTab == 0
+            ? L10n.Dashboard.EmptyState.noPendingSubtitle
+            : L10n.Dashboard.EmptyState.noRecentSubtitle
+    }
+
+    private var emptyQueueState: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Image("icon_checkmark_with_circle")
+                    .renderingMode(.template)
+                    .font(.system(size: 150, weight: .regular))
+                    .foregroundColor(appColors.secondary)
+            }
+
+            VStack(spacing: 6) {
+                Text(emptyQueueTitle())
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(appColors.secondary)
+                    .multilineTextAlignment(.center)
+
+                Text(emptyQueueSubtitle())
+                    .font(.system(size: 14))
+                    .foregroundColor(appColors.text)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .transition(.opacity)
     }
 
     private func queueScrollContent(
         items: [DashboardQueueItem],
         rowBuilder: @escaping (DashboardQueueItem) -> AnyView
     ) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 8) {
-                if items.isEmpty {
-                    Text(emptyQueueMessage())
-                        .font(.system(size: 15))
-                        .foregroundColor(appColors.text.opacity(0.4))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 32)
-                        .transition(.opacity)
-                } else {
-                    ForEach(items) { item in
-                        rowBuilder(item)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity.combined(
-                                        with: .move(edge: .top)
-                                    ),
-                                    removal: .opacity
+        GeometryReader { geo in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 8) {
+                    if items.isEmpty {
+                        emptyQueueState
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: geo.size.height)
+                    } else {
+                        ForEach(items) { item in
+                            rowBuilder(item)
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .opacity.combined(
+                                            with: .move(edge: .top)
+                                        ),
+                                        removal: .opacity
+                                    )
                                 )
-                            )
+                        }
                     }
                 }
+                .animation(.easeInOut(duration: 0.3), value: items.map(\.id))
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 32)
             }
-            .animation(.easeInOut(duration: 0.3), value: items.map(\.id))
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 32)
         }
     }
 

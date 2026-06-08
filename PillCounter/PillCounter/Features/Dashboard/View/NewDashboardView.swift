@@ -676,8 +676,11 @@ struct NewDashboardView: View {
                     .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
                     .foregroundColor(appColors.text)
                     if !selectedTerminalName.isEmpty {
+//                        Text(
+//                            "\(L10n.Profile.terminal) \(selectedTerminalName) | \(userViewModel.fullName) "
+//                        )
                         Text(
-                            "\(L10n.Profile.terminal) \(selectedTerminalName) | \(userViewModel.fullName) "
+                            "\(selectedTerminalName) | \(userViewModel.fullName) "
                         )
                         .font(.system(size: isIpad ? 15 : 13))
                         .foregroundColor(appColors.text.opacity(0.6))

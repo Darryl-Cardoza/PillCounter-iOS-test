@@ -79,6 +79,8 @@ struct UnifiedCameraView: View {
 
     @State var showNoteOption: Bool = false
     @State var showConfirmCompletionPopup: Bool = false
+    /// "Today's Queue" dispense list shown after a FIXED dispense count is confirmed complete.
+    @State var showDispenseQueueSheet: Bool = false
     // Stock count end-count popups
     @State var showStockEndBatchPopUp: Bool = false
     @State var showStockNoteOptions:   Bool = false
@@ -130,6 +132,36 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
+            .bottomSheet(
+                isPresented: $showDispenseQueueSheet,
+                dismissOnBackgroundTap: false,
+                portraitHeight: UIScreen.main.bounds.height * 0.65,
+                landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? 460 : 420
+            ) {
+                DispenseTransactionListSheetContent(
+                    onSelect: { txn in
+                        showDispenseQueueSheet = false
+                        userViewModel.currentTransactionTxnId = txn.txn_id
+                        pillScanViewModel.selectedTransaction = txn
+                        let countType: CountType =
+                            txn.count_type?.uppercased() == CountType.REGULAR.rawValue
+                            ? .REGULAR : .FIXED
+                        router.selectedPillScanningType = countType
+                        let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
+                        router.setRoot(
+                            to: .authentication(.login(.dashboard(.pillCount(.scan(scanType)))))
+                        )
+                    },
+                    onHome: {
+                        showDispenseQueueSheet = false
+                        router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+                    }
+                )
+                .environmentObject(appColors)
+                .environmentObject(router)
+                .environmentObject(userViewModel)
+                .environmentObject(pillScanViewModel)
+            }
             .overlay {
                 if showSuccessAnimation {
                     SuccessAnimationView(count: lastAddedCount, color: appColors.secondary)

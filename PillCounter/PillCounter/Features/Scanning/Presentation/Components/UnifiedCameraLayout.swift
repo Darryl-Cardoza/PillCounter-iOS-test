@@ -12,6 +12,10 @@ struct UnifiedCameraLayout: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    private var isIpad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
 
     let cameraService: CameraService
     let showPillCountPanel: Bool
@@ -91,7 +95,7 @@ struct UnifiedCameraLayout: View {
                                     PillCountInstructionOverlay(text: instructionText)
                                 }
                                 if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
-                                    Color.clear.frame(width: 200, height: 1)
+                                    Color.clear.frame(width: isIpad ? 200 : 50, height: 1)
                                     GloveStatusIndicator(cameraService: cameraService)
                                 }
                                 Spacer()

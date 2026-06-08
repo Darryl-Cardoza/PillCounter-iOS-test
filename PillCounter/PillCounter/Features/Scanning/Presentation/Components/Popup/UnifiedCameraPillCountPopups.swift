@@ -61,16 +61,18 @@ extension UnifiedCameraView {
                 showNoteOption = false
                 showConfirmCompletionPopup = false
                 if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
-                    router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+                    // Show the "Today's Queue" dispense list bottom sheet. Dismissing it
+                    // (or tapping a row) routes onward; see UnifiedCameraView.
+                    showDispenseQueueSheet = true
                 } else {
                     stockCountViewModel.updateCounts(
                         txnId: pillScanViewModel.currentTransaction?.txn_id,
                         bottleQty: nil,
                         looseQty: pillScanViewModel.addCurrentOpenPillCount
                     )
-                    router.setRoot(
-                        to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail)))))
-                    )
+//                    router.setRoot(
+//                        to: .authentication(.login(.dashboard(.pillCount(.stockCount))))
+//                    )
                 }
                 Task(priority: .background) {
                     await userViewModel.completeTheSelectedTransaction(

@@ -112,7 +112,8 @@ struct RxDetailsSheetContent: View {
                             badgeSize: badgeSize,
                             titleFontSize: titleFontSize,
                             valueFontSize: valueFontSize,
-                            verticalPadding: rowVerticalPadding)
+                            verticalPadding: rowVerticalPadding
+            )
 
             Divider()
                 .background(appColors.text.opacity(0.12))

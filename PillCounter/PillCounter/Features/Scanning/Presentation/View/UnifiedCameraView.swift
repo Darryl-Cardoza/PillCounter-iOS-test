@@ -135,7 +135,7 @@ struct UnifiedCameraView: View {
             .bottomSheet(
                 isPresented: $showDispenseQueueSheet,
                 dismissOnBackgroundTap: false,
-                portraitHeight: UIScreen.main.bounds.height * 0.65,
+                portraitHeight: UIScreen.main.bounds.height * 0.80,
                 landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? 460 : 420
             ) {
                 DispenseTransactionListSheetContent(
@@ -516,6 +516,14 @@ struct UnifiedCameraView: View {
     /// Single source of truth for voice feedback, covering every scan mode.
     var unifiedInstructionText: String {
         if showPillCountPanel {
+            // The pill-count panel opens synchronously, but the controlled step is
+            // resolved later by initializeTransaction()'s async Task. Until that lands,
+            // currentControlledStep is still the placeholder .scan ("Scan Container QR
+            // Code"), which gets spoken and then immediately replaced by the real step —
+            // two utterances. Suppress the transient placeholder until the step is set.
+            if !hasInitializedStep && pillScanViewModel.currentControlledStep == .scan {
+                return ""
+            }
             return controlledStepInstruction
         }
         if isOpenPillScanMode {
@@ -849,36 +857,40 @@ extension UnifiedCameraView {
         scannedRawValue = nil
         capturedImage = nil
         hasInitializedStep = false
-        cameraState = .scanning
+   
 
-        // Back to RX-label scan, ready underneath the sheet.
-        scanType = .rx_label
-        cameraService.start()
-        cameraService.resetBarcodeScanState()
-        cameraService.enableBarcodeScanning()
-        pillScanViewModel.resetTrayColorTracking()
+        // Surface the queue only if there's something pending. If nothing is left to
+        // dispense, leave the flow and go back to the dashboard. Scanning an RX
+        // dismisses the sheet (see onChange below); picking a row resumes that txn.
+        if hasPendingDispenseTxns() {
+            showDispenseQueueSheet = true
+            cameraState = .scanning
 
-        // Surface the queue only if there's something pending. Scanning an RX
-        // dismisses it (see onChange below); picking a row resumes that txn in place.
-        showDispenseQueueSheet = hasPendingDispenseTxns()
+            // Back to RX-label scan, ready underneath the sheet.
+            scanType = .rx_label
+            cameraService.start()
+            cameraService.resetBarcodeScanState()
+            cameraService.enableBarcodeScanning()
+            pillScanViewModel.resetTrayColorTracking()
+        } else {
+            router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+        }
     }
 
-    /// True when the operator has pending dispense txns waiting — mirrors what the
-    /// queue sheet's default PENDING tab actually shows: pending + batch_id == 0 +
-    /// not ON_HOLD + created TODAY. Without the today filter the sheet opens empty
-    /// when the only pending items are from earlier days.
+    /// True when there are pending FIXED dispense txns waiting. Builds the same list
+    /// the queue sheet's `reload()` produces: FIXED, batch_id == 0, status != ON_HOLD.
     private func hasPendingDispenseTxns() -> Bool {
         let userId = AppStorageManager.shared.userId ?? ""
-        guard let user = UserStore.shared.fetchByUserId(userId) else { return false }
-        let pending = TransactionStore.shared.fetchPartial(for: user, countType: .FIXED)
-            + TransactionStore.shared.fetchPartial(for: user, countType: .REGULAR)
-        return pending.contains {
-            $0.batch_id == 0
-                && $0.status != CountStatus.ON_HOLD.rawValue
-                && Calendar.current.isDateInToday(
-                    Date(timeIntervalSince1970: TimeInterval($0.created_at) / 1000)
-                )
+        guard let user = UserStore.shared.fetchByUserId(userId) else {
+            return false
         }
+
+        let fixed = TransactionStore.shared.fetchPartial(for: user, countType: .FIXED)
+        let fresh = fixed
+            .filter { $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue }
+            .sorted { $0.created_at < $1.created_at }
+
+        return !fresh.isEmpty
     }
 
     /// Resume a txn picked from the queue sheet — mirrors the `.resumeCount` branch of

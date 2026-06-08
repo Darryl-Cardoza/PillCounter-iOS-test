@@ -65,12 +65,12 @@ struct DispenseTransactionListSheetContent: View {
 
     // MARK: - Filtering
     /// Rows shown for the currently-selected tab.
-    /// PENDING (default) shows TODAY's pending only, oldest → newest.
-    /// The other tabs scan ALL pending so older flagged items still surface.
+    /// PENDING (default) shows ALL pending dispense txns, oldest → newest.
+    /// The other tabs filter that same set by priority / type / hazardous.
     private var visibleTransactions: [PillCountTransactionEntity] {
         switch selectedTab {
         case .pending:
-            return allPending.filter { DispenseTransactionListSheetContent.isToday($0.created_at) }
+            return allPending
         case .priority:
             return allPending.filter {
                 $0.txn_priority?
@@ -94,12 +94,6 @@ struct DispenseTransactionListSheetContent: View {
         guard newIndex >= 0, newIndex < tabs.count,
               let next = QueueTab(rawValue: newIndex) else { return }
         withAnimation(.easeInOut(duration: 0.25)) { selectedTab = next }
-    }
-
-    /// `created_at` is a millisecond epoch.
-    private static func isToday(_ timestamp: Int64) -> Bool {
-        let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
-        return Calendar.current.isDateInToday(date)
     }
 
     // MARK: - Body

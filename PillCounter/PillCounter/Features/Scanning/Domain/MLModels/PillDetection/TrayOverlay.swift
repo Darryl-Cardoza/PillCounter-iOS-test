@@ -29,7 +29,7 @@ struct TrayOverlay: View {
 
                         if screenRect.width > 0, screenRect.height > 0 {
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(red: 0, green: 0.784, blue: 0.325), lineWidth: 2)
+                                .stroke(AppColors.shared.secondary, lineWidth: 2)
                                 .background(
                                     RoundedRectangle(cornerRadius: 8)
                                         .fill(Color(red: 0, green: 0.784, blue: 0.325).opacity(0.13))

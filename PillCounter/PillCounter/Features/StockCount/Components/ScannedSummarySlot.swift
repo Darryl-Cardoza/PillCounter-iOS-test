@@ -50,7 +50,7 @@ struct ScannedSummarySlot: View {
                     .foregroundColor(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(alignment: .bottom, spacing: 12) {
+                HStack(alignment: .bottom, spacing: 10) {
                     VStack(alignment: .center, spacing: 4) {
                         Text(L10n.StockCountSheet.totalNdcs)
                             .font(.system(size: isIPhone ? 13 : 16))
@@ -76,7 +76,7 @@ struct ScannedSummarySlot: View {
                         iconName: nil, title: L10n.Stock.endCount,
                         textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
                         font: .system(size: 13, weight: .semibold),
-                        cornerRadius: 22, horizontalPadding: 18, verticalPadding: 13, iconSize: 0,
+                        cornerRadius: 22, horizontalPadding: 16, verticalPadding: 11, iconSize: 0,
                         action: onEndCount
                     )
                     .fixedSize()

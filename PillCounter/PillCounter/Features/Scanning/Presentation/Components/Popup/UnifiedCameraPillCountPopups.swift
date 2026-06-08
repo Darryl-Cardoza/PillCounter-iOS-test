@@ -69,9 +69,20 @@ extension UnifiedCameraView {
                 let completedCountType = router.selectedPillScanningType ?? .FIXED
 
                 if isFixed {
-                    // Continuous dispense — reset back to RX-scan in place and surface
-                    // the "Today's Queue" sheet over it. No navigation. See UnifiedCameraView.
-                    startContinuousDispense()
+                    // Mark COMPLETED FIRST, then start the continuous-dispense flow.
+                    // startContinuousDispense() reads the pending-txn list to decide
+                    // whether to show the queue or go to the dashboard — if we don't
+                    // await the status write first, that gate races the completion and
+                    // still sees this txn as PARTIAL (it then re-appears in the queue).
+                    Task { @MainActor in
+                        await userViewModel.completeTheSelectedTransaction(
+                            txnId: completedTxnId,
+                            countType: completedCountType
+                        )
+                        // Continuous dispense — reset back to RX-scan in place and surface
+                        // the "Today's Queue" sheet over it. No navigation. See UnifiedCameraView.
+                        startContinuousDispense()
+                    }
                 } else {
                     stockCountViewModel.updateCounts(
                         txnId: completedTxnId,
@@ -81,12 +92,12 @@ extension UnifiedCameraView {
 //                    router.setRoot(
 //                        to: .authentication(.login(.dashboard(.pillCount(.stockCount))))
 //                    )
-                }
-                Task(priority: .background) {
-                    await userViewModel.completeTheSelectedTransaction(
-                        txnId: completedTxnId,
-                        countType: completedCountType
-                    )
+                    Task(priority: .background) {
+                        await userViewModel.completeTheSelectedTransaction(
+                            txnId: completedTxnId,
+                            countType: completedCountType
+                        )
+                    }
                 }
             }
         )

@@ -443,7 +443,6 @@ struct UserHistoryView: View {
             Spacer()
         }
     }
-
     // MARK: - Type Filter Chips
     private var txnTypeFilter: some View {
         let dispenseCount = historyViewModel.filteredTransactionsOfUserByDate.count
@@ -471,7 +470,7 @@ struct UserHistoryView: View {
             Divider()
         }
     }
-    
+
     private struct TabItem: View {
         let label: String
         let isSelected: Bool
@@ -481,16 +480,20 @@ struct UserHistoryView: View {
             Button(action: onTap) {
                 VStack(spacing: 0) {
                     Text(label)
-                        .font(.system(size: 14, weight: isSelected ? .semibold	 : .regular))
+                        .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
                         .foregroundColor(isSelected ? .primary : .secondary)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 8)
+                        .lineLimit(1)
 
+                    Rectangle()
+                        .fill(isSelected ? AppColors.shared.primary : Color.clear)
+                        .frame(height: 2)
+                        .animation(.easeInOut(duration: 0.15), value: isSelected)
                 }
             }
             .buttonStyle(.plain)
-            .animation(.easeInOut(duration: 0.15), value: isSelected)
-            .frame(maxWidth: 150)
+            .fixedSize()
         }
     }
         

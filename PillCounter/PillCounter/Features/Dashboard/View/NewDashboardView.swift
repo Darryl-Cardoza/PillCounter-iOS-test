@@ -561,13 +561,7 @@ struct NewDashboardView: View {
                     }
                     .frame(width: leftWidth, height: contentHeight)
 
-                    // Main divider
-                    //                    Rectangle()
-                    //                        .fill(appColors.text.opacity(0.18))
-                    //                        .frame(width: 1, height: contentHeight)
-
-                    // ── Right panel: queue list ──
-                    // padding(.top, -2) aligns first list item with first stat card (stat card starts at pad=10, list content starts at 12)
+                   
                     TabView(selection: $selectedQueueTab) {
                         queueScrollContent(
                             items: filteredQueueItems,
@@ -1049,14 +1043,15 @@ struct NewDashboardView: View {
             let data = txn.toRowData(pillCount: pillCount)
             DispenseItemRowView(data: data)
                 .onTapGesture {
+                    // The detail screen resolves the txn from
+                    // historyViewModel.filteredTransactionsOfUserByDate. The dashboard
+                    // never populates that array (it loads its own dispenseCompleted),
+                    // so seed it with the tapped txn before navigating — otherwise the
+                    // detail screen finds nothing and shows empty.
+                    historyViewModel.filteredTransactionsOfUserByDate = [txn]
                     historyViewModel.selectedTransactionId = txn.txn_id
-                    router.navigate(
-                        to: .authentication(
-                            .user(.userSettings(.HistoryTransactionDetail))
-                        )
-                    )
+                    router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
                 }
-
         case .inventory(let batch, let ndcCount):
             let data = batch.toStockData(ndcCount: ndcCount)
             StockItemRowView(data: data)

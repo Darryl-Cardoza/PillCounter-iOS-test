@@ -25,6 +25,21 @@ extension UnifiedCameraView {
         )
     }
 
+    var hazardousTraySubstitutePopup: some View {
+        ConfirmationDialogue(
+            title: "\(pillScanViewModel.pendingHazardousTrayColor) Tray Detected",
+            message: "This \(pillScanViewModel.pendingHazardousTrayColor) tray doesn't match the saved hazardous tray. Substitute the hazardous tray with the \(pillScanViewModel.pendingHazardousTrayColor) tray?",
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.BarcodeScan.substitute,
+            onCancel: {
+                pillScanViewModel.dismissHazardousTraySubstitutePopup()
+            },
+            onConfirm: {
+                pillScanViewModel.substituteHazardousTray()
+            }
+        )
+    }
+
     var ndcEquivalencePopup: some View {
         ConfirmationDialogue(
             title: pillScanViewModel.isNdcEquivalent

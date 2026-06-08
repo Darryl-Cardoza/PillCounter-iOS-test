@@ -31,10 +31,7 @@ struct UserSettingsView: View {
     @State private var isHazardousDrugSettingEnabled =
     AppStorageManager.shared.isHazardousDrugSetting
 
-    @State private var hazardousTrayColor =
-    AppStorageManager.shared.hazardousTrayColor
 
-    
     // 1. Source of Truth (The actual saved setting)
     @State private var selectedSaveHistoryOption: SaveHistoryOption =
     AppStorageManager.shared.saveHistoryOption
@@ -45,7 +42,6 @@ struct UserSettingsView: View {
     // 3. UI State for Popup
     @State private var showConfirmationPopup: Bool = false
     @State private var showClearDataConfirmationPopup: Bool = false
-    @State private var showResetHazardousTrayColorPopup: Bool = false
     @State private var activeSubScreen: SettingsSubScreen? = nil
     
     @EnvironmentObject private var appColors: AppColors
@@ -84,26 +80,8 @@ struct UserSettingsView: View {
         .customPopup(isPresented: $showClearDataConfirmationPopup) {
             clearHistoryConfirmatioDialog
         }
-        .customPopup(isPresented: $showResetHazardousTrayColorPopup) {
-            resetHazardousTrayColorDialog
-        }
     }
 
-    private var resetHazardousTrayColorDialog: some View {
-        ConfirmationDialogue(
-            title: L10n.Settings.resetHazardousTrayColorTitle,
-            message: L10n.Settings.resetHazardousTrayColorMessage,
-            cancelButtonText: L10n.Common.no,
-            confirmButtonText: L10n.Common.yes
-        ) {
-            showResetHazardousTrayColorPopup = false
-        } onConfirm: {
-            AppStorageManager.shared.hazardousTrayColor = nil
-            hazardousTrayColor = nil
-            showResetHazardousTrayColorPopup = false
-        }
-    }
-    
     private var confirmationPopUp: some View {
         ConfirmationDialogue(
             title: String(format: L10n.Settings.confirmHistoryTitle, pendingOption?.displayText ?? selectedSaveHistoryOption.displayText),
@@ -268,30 +246,6 @@ struct UserSettingsView: View {
                     onColor: appColors.primary
                 ) { newValue in
                     AppStorageManager.shared.isHazardousDrugSetting = newValue
-                }
-
-                Divider().background(appColors.primaryBackground)
-
-                // MARK: Hazardous Tray Color
-                VStack(spacing: 15) {
-                    Text(L10n.Settings.hazardousTrayColor)
-                        .foregroundStyle(appColors.text)
-                        .fontWeight(.regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Text(hazardousTrayColor ?? "—")
-                        .foregroundColor(appColors.secondary)
-                        .fontWeight(.regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    // Only offer to reset when a hazardous tray color is set.
-                    if hazardousTrayColor != nil {
-                        showResetHazardousTrayColorPopup = true
-                    }
-                    // TODO: No hazardous tray color set yet — nothing to reset.
                 }
 
                 Divider().background(appColors.primaryBackground)

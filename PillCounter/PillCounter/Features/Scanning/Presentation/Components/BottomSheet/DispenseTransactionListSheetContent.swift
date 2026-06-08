@@ -64,11 +64,11 @@ struct DispenseTransactionListSheetContent: View {
     private var tabFontSize: CGFloat { isPad ? 14 : 12 }
 
     // MARK: - Filtering
-    /// Rows shown for the currently-selected tab.
+    /// Rows shown for the given tab.
     /// PENDING (default) shows ALL pending dispense txns, oldest → newest.
     /// The other tabs filter that same set by priority / type / hazardous.
-    private var visibleTransactions: [PillCountTransactionEntity] {
-        switch selectedTab {
+    private func transactions(for tab: QueueTab) -> [PillCountTransactionEntity] {
+        switch tab {
         case .pending:
             return allPending
         case .priority:
@@ -87,43 +87,30 @@ struct DispenseTransactionListSheetContent: View {
         }
     }
 
-    /// Move the selected tab by `offset` (clamped to the available tabs), animated.
-    private func selectTab(offset: Int) {
-        let tabs = QueueTab.allCases
-        let newIndex = selectedTab.rawValue + offset
-        guard newIndex >= 0, newIndex < tabs.count,
-              let next = QueueTab(rawValue: newIndex) else { return }
-        withAnimation(.easeInOut(duration: 0.25)) { selectedTab = next }
-    }
-
     // MARK: - Body
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             tabBar
 
-            let rows = visibleTransactions
-            Group {
-                if rows.isEmpty {
-                    emptyState
-                } else {
-                    listView(rows)
-                }
-            }
-            // Swipe horizontally anywhere over the content to move between tabs.
-            .id(selectedTab)
-            .transition(.move(edge: .trailing).combined(with: .opacity))
-            .gesture(
-                DragGesture(minimumDistance: 30)
-                    .onEnded { value in
-                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                        if value.translation.width < 0 {
-                            selectTab(offset: 1)   // swipe left → next tab
+            // Paged swipe between tabs — same mechanism as the dashboard's
+            // Today's Queue / Recent Activity. Swiping updates `selectedTab`
+            // (and the tab bar underline) automatically.
+            TabView(selection: $selectedTab) {
+                ForEach(QueueTab.allCases, id: \.rawValue) { tab in
+                    let rows = transactions(for: tab)
+                    Group {
+                        if rows.isEmpty {
+                            emptyState
                         } else {
-                            selectTab(offset: -1)  // swipe right → previous tab
+                            listView(rows)
                         }
                     }
-            )
+                    .tag(tab)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .animation(.easeInOut(duration: 0.25), value: selectedTab)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(appColors.primaryBackground)
@@ -170,7 +157,7 @@ struct DispenseTransactionListSheetContent: View {
     private func tabButton(_ tab: QueueTab) -> some View {
         let isSelected = selectedTab == tab
         return Button {
-            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
+            withAnimation(.easeInOut(duration: 0.25)) { selectedTab = tab }
         } label: {
             VStack(spacing: 4) {
                 Text(tab.title)

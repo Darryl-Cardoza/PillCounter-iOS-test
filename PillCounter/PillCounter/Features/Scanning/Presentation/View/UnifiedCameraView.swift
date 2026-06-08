@@ -132,10 +132,11 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
+            .customPopup(isPresented: $pillScanViewModel.showHazardousTraySubstitutePopup) { hazardousTraySubstitutePopup }
             .bottomSheet(
                 isPresented: $showDispenseQueueSheet,
                 dismissOnBackgroundTap: false,
-                portraitHeight: UIScreen.main.bounds.height * 0.80,
+                portraitHeight: UIScreen.main.bounds.height * 0.50,
                 landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? 460 : 420
             ) {
                 DispenseTransactionListSheetContent(
@@ -397,9 +398,12 @@ struct UnifiedCameraView: View {
                 cameraService.isTrayColorDetectionEnabled = showing
                 if showing { pillScanViewModel.resetTrayColorTracking() }
             }
-            // Freeze tray-colour detection while the confirmation popup is up so the
-            // live feed can't change the captured colour; resume after confirm/dismiss.
+            // Freeze tray-colour detection while either hazardous-tray popup is up so
+            // the live feed can't change the captured colour; resume after confirm/dismiss.
             .onChange(of: pillScanViewModel.showHazardousTrayPopup) { _, showingPopup in
+                cameraService.isTrayColorDetectionEnabled = showingPopup ? false : showPillCountPanel
+            }
+            .onChange(of: pillScanViewModel.showHazardousTraySubstitutePopup) { _, showingPopup in
                 cameraService.isTrayColorDetectionEnabled = showingPopup ? false : showPillCountPanel
             }
             .onChange(of: pillScanViewModel.currentTransaction) { _, txn in

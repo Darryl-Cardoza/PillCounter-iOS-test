@@ -57,6 +57,10 @@ class PillScanViewModel: ObservableObject {
     // Hazardous tray
     @Published  var showHazardousTrayPopup: Bool = false
     @Published  var pendingHazardousTrayColor: String = ""
+    /// Shown when a hazardous-drug txn is counted on a tray whose colour doesn't
+    /// match the stored hazardous tray. Offers to substitute the stored colour
+    /// with the currently-detected one.
+    @Published  var showHazardousTraySubstitutePopup: Bool = false
 
     /// The tray colour we last surfaced a toast for, so the continuous flow only
     /// re-toasts when the colour actually CHANGES (not every emission). Reset when
@@ -380,9 +384,9 @@ class PillScanViewModel: ObservableObject {
     /// whether we already have a stored hazardous tray colour. Because the camera
     /// only emits on colour change, this fires once per distinct tray.
     func handleTrayColorDetected(_ color: TrayColor, drugIsHazardous: Bool) {
-        // While the capture popup is up, freeze on the pending colour — ignore any
-        // further colour changes so the operator confirms exactly what they saw.
-        guard !showHazardousTrayPopup else { return }
+        // While a hazardous-tray popup is up, freeze on the pending colour — ignore
+        // any further colour changes so the operator confirms exactly what they saw.
+        guard !showHazardousTrayPopup, !showHazardousTraySubstitutePopup else { return }
 
         let detectedName = color.displayName
         let storedName = AppStorageManager.shared.hazardousTrayColor
@@ -402,12 +406,13 @@ class PillScanViewModel: ObservableObject {
                 print("🧪 [HazardousTray] Correct hazardous tray (\(detectedName)) — marking txn detected=true")
                 updateHazardousTrayDetected(detected: true)
             } else {
-                // Wrong tray in a hazardous flow: ALWAYS recommend the stored colour
-                // so the operator is warned every time a different tray appears.
-                print("🧪 [HazardousTray] Wrong tray: got \(detectedName), expected \(storedName ?? "")")
-                showToastMessage(
-                    text: "Wrong tray: this is a \(detectedName) tray. Hazardous drugs must use the \(storedName ?? "") tray."
-                )
+                // Wrong tray in a hazardous flow: prompt to substitute the stored
+                // hazardous tray colour with the currently-detected one. Pause colour
+                // detection so the live feed can't change the pending colour underneath
+                // the popup; resumed on substitute/dismiss.
+                print("🧪 [HazardousTray] Wrong tray: got \(detectedName), expected \(storedName ?? "") — prompting substitute")
+                pendingHazardousTrayColor = detectedName
+                showHazardousTraySubstitutePopup = true
                 // Only flag NOT-detected if it isn't already confirmed true —
                 // once a txn is marked hazardous-tray-detected it stays true.
                 if currentTransaction?.hazardous_tray_detected != true {
@@ -445,6 +450,19 @@ class PillScanViewModel: ObservableObject {
     /// Operator tapped "No" — keep nothing.
     func dismissHazardousTrayPopup() {
         showHazardousTrayPopup = false
+    }
+
+    /// Operator tapped "Substitute" on the wrong-tray popup — replace the stored
+    /// hazardous tray colour with the currently-detected one and mark the txn.
+    func substituteHazardousTray() {
+        AppStorageManager.shared.hazardousTrayColor = pendingHazardousTrayColor
+        updateHazardousTrayDetected(detected: true)
+        showHazardousTraySubstitutePopup = false
+    }
+
+    /// Operator dismissed the wrong-tray popup without substituting.
+    func dismissHazardousTraySubstitutePopup() {
+        showHazardousTraySubstitutePopup = false
     }
 
 

@@ -42,6 +42,74 @@ final class CameraService: NSObject, ObservableObject {
     private let trayDetector   = TrayDetectionService.shared
     private let gloveDetector  = GloveDetectionService()
 
+    /// Fraction of each tray rect's own width/height used to expand the counting
+    /// region outward. Absorbs the tray model's tendency to draw the box slightly
+    /// inside the real tray edge, so pills lying right at the border (e.g. the
+    /// landscape gap between chute and tray) still count. Chute exclusion runs
+    /// after this padding, so widening the tray can't re-add chute pills.
+    private static let trayInsetPadFraction: CGFloat = 0.06
+
+    /// Cap on how far a tray rect may be extended toward the chute, as a fraction of
+    /// the tray's size along the extension axis. Prevents a far or spurious chute
+    /// detection from ballooning the counting region across the whole frame.
+    private static let trayChuteExtendMaxFraction: CGFloat = 0.30
+
+    /// Extends `tray` toward the nearest chute rect so pills in the gap between the
+    /// chute and the tray (which sit on the tray but outside its drawn box) are
+    /// included. Only the tray edge that faces the chute is moved, up to the chute's
+    /// near edge, capped by `trayChuteExtendMaxFraction`. Orientation-independent —
+    /// it reacts to the actual chute position, so landscape and portrait match.
+    private static func extendTowardNearestChute(_ tray: CGRect,
+                                                 chuteRects: [CGRect]) -> CGRect {
+        // Nearest chute by centre distance.
+        guard let chute = chuteRects.min(by: { a, b in
+            let da = hypot(a.midX - tray.midX, a.midY - tray.midY)
+            let db = hypot(b.midX - tray.midX, b.midY - tray.midY)
+            return da < db
+        }) else { return tray }
+
+        let dx = chute.midX - tray.midX
+        let dy = chute.midY - tray.midY
+
+        var result = tray
+
+        if abs(dy) >= abs(dx) {
+            // Chute is above or below — extend the tray vertically toward it.
+            let maxExtend = tray.height * trayChuteExtendMaxFraction
+            if dy < 0 {
+                // Chute above: pull the top edge up to the chute's bottom.
+                let target = max(chute.maxY, tray.minY - maxExtend)
+                let newMinY = min(tray.minY, max(target, tray.minY - maxExtend))
+                result = CGRect(x: tray.minX, y: newMinY,
+                                width: tray.width, height: tray.maxY - newMinY)
+            } else {
+                // Chute below: push the bottom edge down to the chute's top.
+                let target = min(chute.minY, tray.maxY + maxExtend)
+                let newMaxY = max(tray.maxY, min(target, tray.maxY + maxExtend))
+                result = CGRect(x: tray.minX, y: tray.minY,
+                                width: tray.width, height: newMaxY - tray.minY)
+            }
+        } else {
+            // Chute is left or right — extend the tray horizontally toward it.
+            let maxExtend = tray.width * trayChuteExtendMaxFraction
+            if dx < 0 {
+                // Chute left: pull the left edge out to the chute's right.
+                let target = max(chute.maxX, tray.minX - maxExtend)
+                let newMinX = min(tray.minX, max(target, tray.minX - maxExtend))
+                result = CGRect(x: newMinX, y: tray.minY,
+                                width: tray.maxX - newMinX, height: tray.height)
+            } else {
+                // Chute right: push the right edge out to the chute's left.
+                let target = min(chute.minX, tray.maxX + maxExtend)
+                let newMaxX = max(tray.maxX, min(target, tray.maxX + maxExtend))
+                result = CGRect(x: tray.minX, y: tray.minY,
+                                width: newMaxX - tray.minX, height: tray.height)
+            }
+        }
+
+        return result
+    }
+
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
 
@@ -477,6 +545,32 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         // CHUTE regions (class 1) are passed to the overlay for display only.
         let trayRects = allTrays.filter { $0.trayClass == .tray }.map { $0.rect }
 
+        // CHUTE regions: pills sitting in the chute (dispenser slot) must NOT be
+        // counted even if the tray box happens to overlap them. Excluding any pill
+        // whose centre is inside a chute rect fixes the portrait case where chute
+        // pills near the tray's top lip were being counted.
+        let chuteRects = allTrays.filter { $0.trayClass == .chute }.map { $0.rect }
+
+        // Build the counting region from each tray rect in two steps:
+        //
+        //  1. Uniform pad — the tray model draws the box slightly inside the real
+        //     tray edge, so pills at the border fall just outside. Pad by a fraction
+        //     of the rect's own size to recover them.
+        //
+        //  2. Extend toward the chute — pills lying in the gap between the chute and
+        //     the tray (most visible in landscape, where the tray's top edge cuts
+        //     right below the chute lip) are on the tray but outside its box. Grow
+        //     the tray rect's chute-facing edge up to the chute's near edge so those
+        //     pills are included. This is geometric, not orientation-specific, so
+        //     portrait and landscape behave identically. Chute exclusion still runs
+        //     afterward, so anything actually in the chute is removed.
+        let countingRects = trayRects.map { rect -> CGRect in
+            let padX = rect.width  * Self.trayInsetPadFraction
+            let padY = rect.height * Self.trayInsetPadFraction
+            let padded = rect.insetBy(dx: -padX, dy: -padY)
+            return Self.extendTowardNearestChute(padded, chuteRects: chuteRects)
+        }
+
         // ── Tray colour sampling (hazardous-tray feature) ────────────────────
         // Continuously classify the visible tray's generic colour and publish it
         // only when the colour CHANGES (not every frame). This lets the flow react
@@ -498,14 +592,19 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, _ in
             guard let self else { return }
 
-            // Keep only pills whose centre falls inside a TRAY (not CHUTE) rect.
-            // An empty trayRects list means no tray is visible → count = 0.
+            // Keep only pills whose centre falls inside a (padded) TRAY rect AND is
+            // NOT inside any CHUTE rect. An empty trayRects list means no tray is
+            // visible → count = 0.
             let filtered: [DetectionResult]
-            if trayRects.isEmpty {
+            if countingRects.isEmpty {
                 filtered = []
             } else {
                 filtered = allPills.filter { pill in
-                    trayRects.contains { trayRect in trayRect.contains(pill.center) }
+                    let center = pill.center
+                    let inTray  = countingRects.contains { $0.contains(center) }
+                    guard inTray else { return false }
+                    let inChute = chuteRects.contains { $0.contains(center) }
+                    return !inChute
                 }
             }
 

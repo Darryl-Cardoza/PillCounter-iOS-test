@@ -467,9 +467,16 @@ struct UnifiedCameraView: View {
                 restartFlow()
             }
         }
+        // RX scan succeeded (RX detail popup is about to show) — only now dismiss
+        // the continuous-dispense queue sheet. Blocked/failed scans never set this.
+        .onChange(of: pillScanViewModel.showRxFlowPopup) { _, showing in
+            if showing && showDispenseQueueSheet { showDispenseQueueSheet = false }
+        }
         .onChange(of: pillScanViewModel.rxResumeInline) { _, triggered in
             guard triggered else { return }
             pillScanViewModel.rxResumeInline = false
+            // RX scan resolved to an inline resume — a success, so close the queue sheet.
+            if showDispenseQueueSheet { showDispenseQueueSheet = false }
             guard let txn = pillScanViewModel.currentTransaction else { return }
             pillScanViewModel.getControlledStep(pillCountTxn: txn)
             pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
@@ -679,9 +686,11 @@ extension UnifiedCameraView {
               !pillScanViewModel.isCheckingNdc
         else { return }
 
-        // Continuous dispense: a scan while the queue sheet is up means the operator
-        // chose to scan an RX instead of picking a txn — dismiss the sheet and let the
-        // normal scan flow take over underneath.
+        // Continuous dispense note: the queue sheet is NOT dismissed here. It is
+        // dismissed only once the RX scan actually succeeds and isn't blocked —
+        // see the showRxFlowPopup / rxResumeInline observers below. A failed or
+        // blocked scan (not found / on hold) leaves the sheet up so the operator
+        // can still pick a txn from the list.
 
         FeedbackManager.shared.triggerDetectionFeedback(
             isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
@@ -703,7 +712,6 @@ extension UnifiedCameraView {
                     if pillScanViewModel.matchesBarcodeFormat(newValue) {
                         cameraState = .rxDetected
                         pillScanViewModel.parseScanData(actualValue: newValue)
-                        if showDispenseQueueSheet { showDispenseQueueSheet = false }
                     } else {
                         pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.invalidRxBarcode)
                         restartFlow()
@@ -806,6 +814,23 @@ extension UnifiedCameraView {
         cameraService.disableBarcodeScanning()
         cameraService.pauseCounting()
 
+        // Reset the RX / NDC popup flags so the next txn gets a fresh false→true
+        // transition. onChange observers (e.g. showScannedDrugInfoPopoup driving
+        // handleSubstitute) only fire on a transition — if a flag is left true from
+        // the just-completed txn, the next scan sets it true with no change and the
+        // observer never fires, so the barcode is "accepted" but the flow stalls.
+        // Mirrors onAppear's fresh-entry reset.
+        pillScanViewModel.showScannedDrugInfoPopoup = false
+        pillScanViewModel.showRxFlowPopup = false
+        pillScanViewModel.showRxOnHoldPopup = false
+        pillScanViewModel.showRxInProgressPopup = false
+        pillScanViewModel.showNdcEquivalencePopup = false
+        pillScanViewModel.showVerifyStockBottlePopup = false
+        pillScanViewModel.ndcMismatchRestartFlow = false
+        pillScanViewModel.isNdcEquivalent = false
+        pillScanViewModel.ndcComparisonResponse = nil
+        pillScanViewModel.isDrugFound = nil
+
         // Clear all per-transaction state so the next txn starts clean.
         pillScanViewModel.resetScanningState()
         pillScanViewModel.selectedTransaction = nil
@@ -833,9 +858,27 @@ extension UnifiedCameraView {
         cameraService.enableBarcodeScanning()
         pillScanViewModel.resetTrayColorTracking()
 
-        // Surface the queue. Scanning an RX dismisses it (see onChange below);
-        // picking a row resumes that txn in place.
-        showDispenseQueueSheet = true
+        // Surface the queue only if there's something pending. Scanning an RX
+        // dismisses it (see onChange below); picking a row resumes that txn in place.
+        showDispenseQueueSheet = hasPendingDispenseTxns()
+    }
+
+    /// True when the operator has pending dispense txns waiting — mirrors what the
+    /// queue sheet's default PENDING tab actually shows: pending + batch_id == 0 +
+    /// not ON_HOLD + created TODAY. Without the today filter the sheet opens empty
+    /// when the only pending items are from earlier days.
+    private func hasPendingDispenseTxns() -> Bool {
+        let userId = AppStorageManager.shared.userId ?? ""
+        guard let user = UserStore.shared.fetchByUserId(userId) else { return false }
+        let pending = TransactionStore.shared.fetchPartial(for: user, countType: .FIXED)
+            + TransactionStore.shared.fetchPartial(for: user, countType: .REGULAR)
+        return pending.contains {
+            $0.batch_id == 0
+                && $0.status != CountStatus.ON_HOLD.rawValue
+                && Calendar.current.isDateInToday(
+                    Date(timeIntervalSince1970: TimeInterval($0.created_at) / 1000)
+                )
+        }
     }
 
     /// Resume a txn picked from the queue sheet — mirrors the `.resumeCount` branch of
@@ -906,8 +949,13 @@ extension UnifiedCameraView {
         lastAddedCount = cameraService.stableCount
         showSuccessAnimation = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+        // Re-enable Add quickly — a short lockout only guards against an accidental
+        // double-tap, it shouldn't make the operator wait. The success animation
+        // runs its own ~2.5s lifecycle and is dismissed separately below.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             isAddDisabled = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             showSuccessAnimation = false
         }
 

@@ -60,13 +60,21 @@ extension UnifiedCameraView {
             onConfirm: {
                 showNoteOption = false
                 showConfirmCompletionPopup = false
-                if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
-                    // Show the "Today's Queue" dispense list bottom sheet. Dismissing it
-                    // (or tapping a row) routes onward; see UnifiedCameraView.
-                    showDispenseQueueSheet = true
+
+                // Capture before any state reset — startContinuousDispense() clears
+                // currentTransaction, so read the id/type up front.
+                let completedTxnId = pillScanViewModel.currentTransaction?.txn_id ?? 0
+                let isFixed =
+                    pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue
+                let completedCountType = router.selectedPillScanningType ?? .FIXED
+
+                if isFixed {
+                    // Continuous dispense — reset back to RX-scan in place and surface
+                    // the "Today's Queue" sheet over it. No navigation. See UnifiedCameraView.
+                    startContinuousDispense()
                 } else {
                     stockCountViewModel.updateCounts(
-                        txnId: pillScanViewModel.currentTransaction?.txn_id,
+                        txnId: completedTxnId,
                         bottleQty: nil,
                         looseQty: pillScanViewModel.addCurrentOpenPillCount
                     )
@@ -76,8 +84,8 @@ extension UnifiedCameraView {
                 }
                 Task(priority: .background) {
                     await userViewModel.completeTheSelectedTransaction(
-                        txnId: pillScanViewModel.currentTransaction?.txn_id ?? 0,
-                        countType: router.selectedPillScanningType ?? .FIXED
+                        txnId: completedTxnId,
+                        countType: completedCountType
                     )
                 }
             }

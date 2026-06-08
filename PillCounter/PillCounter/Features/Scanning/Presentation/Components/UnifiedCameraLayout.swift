@@ -118,7 +118,7 @@ struct UnifiedCameraLayout: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 4)
                 .padding(.top, isLandscape ? 10 : 40)
 
                 Spacer()

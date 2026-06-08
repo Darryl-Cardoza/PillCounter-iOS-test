@@ -139,18 +139,9 @@ struct UnifiedCameraView: View {
                 landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? 460 : 420
             ) {
                 DispenseTransactionListSheetContent(
+                    // Continuous dispense — resume the picked txn in place, no navigation.
                     onSelect: { txn in
-                        showDispenseQueueSheet = false
-                        userViewModel.currentTransactionTxnId = txn.txn_id
-                        pillScanViewModel.selectedTransaction = txn
-                        let countType: CountType =
-                            txn.count_type?.uppercased() == CountType.REGULAR.rawValue
-                            ? .REGULAR : .FIXED
-                        router.selectedPillScanningType = countType
-                        let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
-                        router.setRoot(
-                            to: .authentication(.login(.dashboard(.pillCount(.scan(scanType)))))
-                        )
+                        resumeSelectedTransactionInline(txn)
                     },
                     onHome: {
                         showDispenseQueueSheet = false
@@ -688,6 +679,10 @@ extension UnifiedCameraView {
               !pillScanViewModel.isCheckingNdc
         else { return }
 
+        // Continuous dispense: a scan while the queue sheet is up means the operator
+        // chose to scan an RX instead of picking a txn — dismiss the sheet and let the
+        // normal scan flow take over underneath.
+
         FeedbackManager.shared.triggerDetectionFeedback(
             isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
             isSoundEnabled: AppStorageManager.shared.isSoundEnabled
@@ -708,6 +703,7 @@ extension UnifiedCameraView {
                     if pillScanViewModel.matchesBarcodeFormat(newValue) {
                         cameraState = .rxDetected
                         pillScanViewModel.parseScanData(actualValue: newValue)
+                        if showDispenseQueueSheet { showDispenseQueueSheet = false }
                     } else {
                         pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.invalidRxBarcode)
                         restartFlow()
@@ -794,6 +790,97 @@ extension UnifiedCameraView {
         pillScanViewModel.isNdcEquivalent = false
         pillScanViewModel.showNdcEquivalencePopup = false
         stockCountViewModel.reset()
+    }
+
+    // MARK: - Continuous dispense
+
+    /// Called after a FIXED dispense txn is confirmed complete. Instead of navigating
+    /// away, it resets everything back to a fresh RX-scan state IN PLACE (camera live,
+    /// barcode scanning enabled, scanType = .rx_label) and shows the "Today's Queue"
+    /// sheet on top. The operator can then scan an RX (just dismiss the sheet) or pick
+    /// a txn from the list to resume it — all without leaving UnifiedCameraView.
+    func startContinuousDispense() {
+        // Tear down the just-completed txn's pill-count session.
+        showPillCountPanel = false
+        isOpenPillScanMode = false
+        cameraService.disableBarcodeScanning()
+        cameraService.pauseCounting()
+
+        // Clear all per-transaction state so the next txn starts clean.
+        pillScanViewModel.resetScanningState()
+        pillScanViewModel.selectedTransaction = nil
+        pillScanViewModel.currentTransaction = nil
+        pillScanViewModel.currentTransactionTransactionDetails = nil
+        pillScanViewModel.scannedRxData = nil
+        pillScanViewModel.fetchedRxTransaction = nil
+        pillScanViewModel.note = ""
+        pillScanViewModel.selectedBucket = ""
+        pillScanViewModel.currentControlledStep = .scan
+        pillScanViewModel.currentControlledTargetCount = nil
+        pillScanViewModel.capturedVialImage = nil
+        pillScanViewModel.vialCapturedImagePath = nil
+        userViewModel.currentTransactionTxnId = nil
+
+        scannedRawValue = nil
+        capturedImage = nil
+        hasInitializedStep = false
+        cameraState = .scanning
+
+        // Back to RX-label scan, ready underneath the sheet.
+        scanType = .rx_label
+        cameraService.start()
+        cameraService.resetBarcodeScanState()
+        cameraService.enableBarcodeScanning()
+        pillScanViewModel.resetTrayColorTracking()
+
+        // Surface the queue. Scanning an RX dismisses it (see onChange below);
+        // picking a row resumes that txn in place.
+        showDispenseQueueSheet = true
+    }
+
+    /// Resume a txn picked from the queue sheet — mirrors the `.resumeCount` branch of
+    /// `onAppear`, but in place (no navigation). Reflects whatever state the txn is in.
+    func resumeSelectedTransactionInline(_ txn: PillCountTransactionEntity) {
+        showDispenseQueueSheet = false
+
+        let countType: CountType =
+            txn.count_type?.uppercased() == CountType.REGULAR.rawValue ? .REGULAR : .FIXED
+        router.selectedPillScanningType = countType
+        userViewModel.currentTransactionTxnId = txn.txn_id
+        pillScanViewModel.selectedTransaction = txn
+
+        // If the NDC isn't verified yet, fall back to the barcode-scan state so the
+        // operator scans the bottle first (same as the dashboard resume → .barcode path).
+        guard txn.is_ndc_verfied else {
+            scanType = .barcode
+            pillScanViewModel.currentTransaction = txn
+            showPillCountPanel = false
+            cameraState = .scanning
+            scannedRawValue = nil
+            capturedImage = nil
+            cameraService.start()
+            cameraService.resetBarcodeScanState()
+            cameraService.enableBarcodeScanning()
+            cameraService.pauseCounting()
+            return
+        }
+
+        // NDC verified — resume counting directly.
+        scanType = .resumeCount
+        pillScanViewModel.currentTransaction = txn
+        pillScanViewModel.getControlledStep(pillCountTxn: txn)
+        pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
+        pillScanViewModel.addCurrentOpenPillCount = 0
+        hasInitializedStep = true
+
+        showPillCountPanel = true
+        cameraService.start()
+        cameraService.disableBarcodeScanning()
+        if pillScanViewModel.currentControlledStep != .vial {
+            cameraService.resumeCounting()
+        } else {
+            cameraService.pauseCounting()
+        }
     }
 
     func handleAdd() {

@@ -204,6 +204,8 @@
 "barcodeScan.rxNotSentByPms" = "Rx not found on this device. Please wait for PMS to send it.";
 "barcodeScan.rxInProgressTitle" = "Rx Already In Progress";
 "barcodeScan.rxInProgressMessage" = "Pill counting for this Rx has already started. Do you want to continue from where you left off?";
+"barcodeScan.hazardousNdcDetected" = "Hazardous NDC detected.";
+"barcodeScan.wearGlovesAndProceedWithCaution" = "Wear gloves and proceed with caution.";
 
 
 // MARK: - GENERIC EQUIVALENT POPUP

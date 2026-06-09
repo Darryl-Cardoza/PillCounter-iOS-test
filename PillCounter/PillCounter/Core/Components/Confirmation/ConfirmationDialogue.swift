@@ -45,10 +45,8 @@ struct ConfirmationDialogue: View {
 
             
             
-            
-            if showSingleConfirmButton {	
+            if showSingleConfirmButton {
 
-                // single centered button
                 PillCountingButton(
                     iconName: nil,
                     title: confirmButtonText.uppercased(),
@@ -62,11 +60,11 @@ struct ConfirmationDialogue: View {
                     iconSize: 0,
                     action: onConfirm
                 )
+                .fixedSize()
                 .padding(.top, 10)
 
             } else {
 
-                // normal two buttons
                 HStack(spacing: 16) {
 
                     PillCountingButton(
@@ -82,7 +80,7 @@ struct ConfirmationDialogue: View {
                         iconSize: 0,
                         action: onCancel
                     )
-
+                    .fixedSize()
                     PillCountingButton(
                         iconName: nil,
                         title: confirmButtonText.uppercased(),
@@ -96,6 +94,7 @@ struct ConfirmationDialogue: View {
                         iconSize: 0,
                         action: onConfirm
                     )
+                    .fixedSize()
                 }
                 .padding(.top, 10)
             }
@@ -106,28 +105,4 @@ struct ConfirmationDialogue: View {
         .cornerRadius(24)
     }
 }
-
-
-//#Preview {
-//    let appColors = AppColors.shared
-//
-//    ZStack {
-//        Color.black.opacity(0.4)
-//            .ignoresSafeArea()
-//
-//        ConfirmationDialogue(
-//            title: "Confirmation",
-//            message: "Are you sure you want to go back?",
-//            onCancel: {
-//                print("Preview: Cancel tapped")
-//            },
-//            onConfirm: {
-//                print("Preview: OK tapped")
-//            }
-//        )
-//        .environmentObject(appColors)
-//        .padding()
-//    }
-//    .preferredColorScheme(.dark)
-//}
 

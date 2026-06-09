@@ -88,7 +88,7 @@ struct UnifiedCameraLayout: View {
                         }
 
                         if isLandscape {
-                            if showPillCountPanel {
+                            if showPillCountPanel   {
                                 // showPillCountPanel true: back | 16 | instruction | 16 | glove | Spacer
                                 Color.clear.frame(width: 220, height: 1)
                                 if !instructionText.isEmpty {

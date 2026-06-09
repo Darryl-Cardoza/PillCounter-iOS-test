@@ -14,11 +14,20 @@ struct VialBottomContentView: View {
     @Environment(\.isLandscape) private var isLandscape
 
     private var isCaptured: Bool { pillScanViewModel.capturedVialImage != nil }
+    
+    // MARK: - Common Size Variables
+    private var isIPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var iconSize: CGFloat { isIPad ? 64 : 40 }
+    private var captureButtonSize: CGFloat { isIPad ? 100 : 70 }
+    private var captureIconSize: CGFloat { isIPad ? 42 : 28 }
+    private var captureIconWeight: Font.Weight { .medium }
+    private var labelFont: Font { isIPad ? .title3 : .caption }
+    private var layoutSpacing: CGFloat { isIPad ? 120 : (isLandscape ? 70 : 90) }
 
     var body: some View {
         let layout = isLandscape
-            ? AnyLayout(VStackLayout(spacing: 70))
-            : AnyLayout(HStackLayout(spacing: 90))
+            ? AnyLayout(VStackLayout(spacing: layoutSpacing))
+            : AnyLayout(HStackLayout(spacing: layoutSpacing))
 
         layout {
             VStack(spacing: 10) {
@@ -26,10 +35,10 @@ struct VialBottomContentView: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 40, height: 40)
+                    .frame(width: iconSize, height: iconSize)
                     .foregroundStyle(isCaptured ? appColors.primary : appColors.primaryBackground)
                 Text(L10n.PillCount.redo)
-                    .font(.caption)
+                    .font(labelFont)
                     .foregroundColor(appColors.text)
             }
             .onTapGesture {
@@ -42,23 +51,32 @@ struct VialBottomContentView: View {
             }
 
             ZStack {
-                Circle().fill(appColors.primary).frame(width: 70, height: 70)
-                Image(systemName: "camera").font(.system(size: 28, weight: .medium)).foregroundColor(.white)
+                Circle()
+                    .fill(appColors.primary)
+                    .frame(width: captureButtonSize, height: captureButtonSize)
+                Image(systemName: "camera")
+                    .font(.system(size: captureIconSize, weight: captureIconWeight))
+                    .foregroundColor(.white)
             }
             .onTapGesture { captureVial() }
 
             VStack(spacing: 10) {
-                Image("done_icon").foregroundColor(isCaptured ? appColors.primary : .gray)
+                Image("done_icon")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+                    .foregroundColor(isCaptured ? appColors.primary : appColors.primaryBackground )
                 Text(L10n.PillCount.done)
-                    .font(.caption)
-                    .foregroundColor(isCaptured ? appColors.text : .gray)
+                    .font(labelFont)
+                    .foregroundColor(isCaptured ? appColors.text : appColors.primaryBackground)
             }
             .onTapGesture {
                 guard isCaptured else { return }
                 doneVial()
             }
         }
-        .padding(.vertical, 25)
+        .padding(.vertical, isIPad ? 35 : 25)
         .padding(.horizontal)
     }
 

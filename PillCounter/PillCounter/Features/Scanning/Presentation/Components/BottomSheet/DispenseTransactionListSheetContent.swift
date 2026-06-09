@@ -41,7 +41,6 @@ struct DispenseTransactionListSheetContent: View {
     var onSelect: ((PillCountTransactionEntity) -> Void)? = nil
     /// Optional home handler. When set, a Home button is shown in the header that
     /// should navigate back to the dashboard and clear the back stack.
-    var onHome: (() -> Void)? = nil
 
     // MARK: - Local state
     /// All pending dispense transactions (any date), sorted oldest → newest.
@@ -123,24 +122,15 @@ struct DispenseTransactionListSheetContent: View {
     // MARK: - Header
     private var header: some View {
         HStack {
-            Text("Today's Queue")
+            Text("Dispense's Queue")
                 .font(.system(size: titleSize, weight: .bold))
                 .foregroundColor(appColors.text)
             Spacer()
-            if let onHome {
-                Button(action: onHome) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(appColors.primary)
-                        .frame(width: 36, height: 36)
-                }
-            }
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.top, isLandscape ? 20 : 16)
         .padding(.bottom, 12)
     }
-
     // MARK: - Tab bar
     private var tabBar: some View {
         VStack(spacing: 0) {
@@ -149,7 +139,9 @@ struct DispenseTransactionListSheetContent: View {
                     tabButton(tab)
                 }
             }
+            .fixedSize() // shrink HStack to fit content width
             .padding(.horizontal, horizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading) // anchor to left
         }
         .padding(.bottom, 8)
     }
@@ -166,13 +158,12 @@ struct DispenseTransactionListSheetContent: View {
                     .tracking(0.4)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity)
 
                 Rectangle()
                     .fill(isSelected ? appColors.primary : Color.clear)
                     .frame(height: 2)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 8) // optional: spacing between tabs
         }
         .buttonStyle(PlainButtonStyle())
     }

@@ -136,6 +136,7 @@ struct UnifiedCameraView: View {
             .bottomSheet(
                 isPresented: $showDispenseQueueSheet,
                 dismissOnBackgroundTap: false,
+                showDim: false,
                 portraitHeight: UIScreen.main.bounds.height * 0.50,
                 landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? 460 : 420
             ) {
@@ -143,10 +144,6 @@ struct UnifiedCameraView: View {
                     // Continuous dispense — resume the picked txn in place, no navigation.
                     onSelect: { txn in
                         resumeSelectedTransactionInline(txn)
-                    },
-                    onHome: {
-                        showDispenseQueueSheet = false
-                        router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
                     }
                 )
                 .environmentObject(appColors)
@@ -419,7 +416,7 @@ struct UnifiedCameraView: View {
             cameraService: cameraService,
             showPillCountPanel: showPillCountPanel,
             pillCountSheetHeight: pillCountSheetHeight,
-            showStockCountPanel: showStockCountPanel,
+            showStockCountPanel: showStockCountPanel || showDispenseQueueSheet,
             stockCountSheetHeight: stockSheetCurrentHeight,
             isLandscape: isLandscape,
             instructionText: overlayInstructionText,
@@ -820,6 +817,15 @@ extension UnifiedCameraView {
     /// sheet on top. The operator can then scan an RX (just dismiss the sheet) or pick
     /// a txn from the list to resume it — all without leaving UnifiedCameraView.
     func startContinuousDispense() {
+        // If nothing is left to dispense, leave the flow immediately. This must run
+        // BEFORE the teardown below: flipping showPillCountPanel/currentControlledStep
+        // changes unifiedInstructionText to scanType.instructionText (still .barcode),
+        // which fires the speak observer and speaks the barcode prompt on the way out.
+        guard hasPendingDispenseTxns() else {
+            router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+            return
+        }
+
         // Tear down the just-completed txn's pill-count session.
         showPillCountPanel = false
         isOpenPillScanMode = false
@@ -863,22 +869,17 @@ extension UnifiedCameraView {
         hasInitializedStep = false
    
 
-        // Surface the queue only if there's something pending. If nothing is left to
-        // dispense, leave the flow and go back to the dashboard. Scanning an RX
-        // dismisses the sheet (see onChange below); picking a row resumes that txn.
-        if hasPendingDispenseTxns() {
-            showDispenseQueueSheet = true
-            cameraState = .scanning
+        // Surface the queue (there's pending work — checked at the top). Scanning an
+        // RX dismisses the sheet (see onChange below); picking a row resumes that txn.
+        showDispenseQueueSheet = true
+        cameraState = .scanning
 
-            // Back to RX-label scan, ready underneath the sheet.
-            scanType = .rx_label
-            cameraService.start()
-            cameraService.resetBarcodeScanState()
-            cameraService.enableBarcodeScanning()
-            pillScanViewModel.resetTrayColorTracking()
-        } else {
-            router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
-        }
+        // Back to RX-label scan, ready underneath the sheet.
+        scanType = .rx_label
+        cameraService.start()
+        cameraService.resetBarcodeScanState()
+        cameraService.enableBarcodeScanning()
+        pillScanViewModel.resetTrayColorTracking()
     }
 
     /// True when there are pending FIXED dispense txns waiting. Builds the same list

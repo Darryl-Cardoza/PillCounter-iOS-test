@@ -324,7 +324,7 @@
 "stockCountSheet.openPills" = "Open Pills";
 "stockCountSheet.lotNumber" = "Lot Number";
 "stockCountSheet.total" = "Total";
-"stockCountSheet.clear" = "CLEAR";
+"stockCountSheet.clear" = "CANCEL";
 "stockCountSheet.add" = "ADD";
 "stockCountSheet.edit" = "Edit";
 "stockCountSheet.pillsWithCount" = "%d pills";

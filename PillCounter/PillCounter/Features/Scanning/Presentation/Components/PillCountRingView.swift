@@ -65,7 +65,7 @@ struct PillCountRingView: View {
 
             Text("\(displayedCount)")
                 .font(.system(size: size * 0.28, weight: .semibold))
-                .foregroundStyle(appColors.text)
+                .foregroundStyle(Color.white)
                 .scaleEffect(popScale)
         }
         .onChange(of: count) { _, newCount in

@@ -135,12 +135,12 @@ final class PillDetectionService {
     /// iOS integration spec).  Values are direct probabilities [0, 1] — do NOT apply
     /// sigmoid again.  Reference scoreThresh from spec = 0.25; we use 0.45 to be
     /// stricter for a stable pill count.
-    private let enterConf: Float = 0.70
+    private let enterConf: Float = 0.60
 
     /// STAY hysteresis threshold: a detection overlapping a box from the previous
     /// frame is kept as long as confidence stays above this softer threshold.
     /// Lower than enterConf to avoid flickering on detections already confirmed.
-    private let stayConf: Float = 0.70
+    private let stayConf: Float = 0.60
 
     /// Minimum IoU between a new detection and a previous-frame detection to
     /// count as "the same object" for STAY-mode purposes.

@@ -4,68 +4,34 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PURPOSE
 // ───────
-// Runs the RTMDet-Tiny tray/chute detector on every camera frame and returns
-// bounding boxes annotated with the detected region class (TRAY or CHUTE).
-// Only pills whose centres fall inside a TRAY box are counted; CHUTE boxes
-// are shown in the overlay with a distinct colour so the operator can see them.
+// Runs the MobileNetV2-UNet tray/chute SEMANTIC SEGMENTATION model on every
+// camera frame and returns one bounding box per detected region class
+// (TRAY or CHUTE). Only pills whose centres fall inside a TRAY box are counted;
+// CHUTE boxes are excluded from pill filtering.
 //
-// ─────────────────────────────────────────────────────────────────────────────
-// MODEL ARCHITECTURE — tray_detector_fp16.mlpackage
-// ─────────────────────────────────────────────────────────────────────────────
-// RTMDet-Tiny is an anchor-free single-stage object detector built on:
-//   • CSPNeXt backbone — efficient multi-scale feature extraction
-//   • PAN-FPN neck — three output strides (8 / 16 / 32)
-//   • Shared detection head — classification + box regression branches
+// This is a 1:1 port of the Android `TraySegmentationDetector`, because the iOS
+// and Android tray models are the SAME exported network. The previous Swift
+// implementation here was written for an old RTMDet-Tiny object detector that
+// is no longer the model shipped in tray_detector_fp16.mlpackage — it assumed a
+// 640×640 MLMultiArray input and six FPN output tensors. The actual model is:
 //
-// Trained on two classes (⚠️ physical mapping is INVERTED from index order):
-//   Model index 0 → physically = CHUTE  (dispenser slot)
-//   Model index 1 → physically = TRAY   (pill counting surface)
+//   • Input:  "images"  — CVPixelBuffer image, 384×384, ARGB, raw [0,255] RGB.
+//             ImageNet normalisation is baked into the graph; pass raw pixels.
+//   • Output: "logits"  — MLMultiArray [1, 3, 384, 384] Float, channel-first.
+//             Per-pixel class logits. Channel order: 0 = background,
+//             1 = chute, 2 = tray (matches Android CLASS_BG/CHUTE/TRAY).
 //
-// ─────────────────────────────────────────────────────────────────────────────
-// INPUT — MLMultiArray [1, 3, 640, 640] Float32 (channel-first RGB)
-// ─────────────────────────────────────────────────────────────────────────────
-//   • Letterbox the camera frame to 640×640 (same scale as pill model).
-//   • Convert the BGRA CVPixelBuffer to a Float32 MLMultiArray with RGB channel
-//     order: plane 0 = R, plane 1 = G, plane 2 = B, values in [0, 255].
-//   • ImageNet mean / std normalisation is baked into the model's first op;
-//     raw [0, 255] pixel values are passed — no manual normalisation required.
-//   • Input name: "images"
+// DECODE (mirrors Android decodeOutputs):
+//   For each of the 384×384 pixels, argmax over the 3 class logits. Skip
+//   background. A foreground pixel is only accepted if its winning logit beats
+//   the background logit by at least FG_LOGIT_MARGIN (a cheap confidence gate,
+//   no softmax/exp needed). Accumulate the per-class pixel bounding box. A class
+//   is emitted only if it has more than MIN_CLASS_PIXELS pixels. The 384-space
+//   bbox is then un-letterboxed back to original camera-frame coordinates.
 //
-// ─────────────────────────────────────────────────────────────────────────────
-// OUTPUTS — 6 MLMultiArrays (channel-first [1, C, H, W], Float32)
-// ─────────────────────────────────────────────────────────────────────────────
-//   Stride 8  (80×80 grid — best for small / close trays):
-//     var_1480  → [1, 2, 80, 80]  — classification logits  (2 classes)
-//     var_1382  → [1, 4, 80, 80]  — box regression: (l, t, r, b) in STRIDE units
-//
-//   Stride 16 (40×40 grid — mid-range):
-//     var_1481  → [1, 2, 40, 40]  — classification logits
-//     var_1427  → [1, 4, 40, 40]  — box regression in stride units
-//
-//   Stride 32 (20×20 grid — large / wide-angle):
-//     var_1482  → [1, 2, 20, 20]  — classification logits
-//     var_1472  → [1, 4, 20, 20]  — box regression in stride units
-//
-// ─────────────────────────────────────────────────────────────────────────────
-// RTMDet BOX DECODE (per anchor)
-// ─────────────────────────────────────────────────────────────────────────────
-//   Anchor center (half-pixel aligned):
-//     cx = (col + 0.5) × stride
-//     cy = (row + 0.5) × stride
-//
-//   Class scores (apply sigmoid to raw logits):
-//     score_tray  = sigmoid(cls[0, 0, row, col])
-//     score_chute = sigmoid(cls[0, 1, row, col])
-//     best_score  = max(score_tray, score_chute)
-//
-//   Box — (l, t, r, b) are distances in LETTERBOXED PIXEL UNITS (0–640 range).
-//   ⚠️ This model exports raw pixel distances, NOT stride units — do NOT × stride:
-//     x1 = cx − box[0, 0, row, col]
-//     y1 = cy − box[0, 1, row, col]
-//     x2 = cx + box[0, 2, row, col]
-//     y2 = cy + box[0, 3, row, col]
-//
-//   Un-letterbox from 640×640 space → original camera-frame space.
+// Because the box is the bounding box of EVERY tray pixel, it always spans the
+// true tray extent in any orientation — there is no "shrunk box from a single
+// anchor" failure mode (the bug the old object-detector code had in landscape).
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -81,14 +47,15 @@ import QuartzCore   // CACurrentMediaTime()
 ///
 /// rect is in the original camera-frame pixel coordinates (un-letterboxed).
 /// trayClass indicates whether this is a TRAY (pill-counting region) or a
-/// CHUTE (dispenser opening — shown in overlay but excluded from pill filtering).
+/// CHUTE (dispenser opening — excluded from pill filtering).
 struct TrayResult: Identifiable {
     let id = UUID()
 
     /// Bounding box in original camera-frame pixel coordinates.
     let rect: CGRect
 
-    /// Detection confidence: max(sigmoid(tray_logit), sigmoid(chute_logit)).
+    /// Detection confidence. Segmentation has no per-box score, so this is 1.0
+    /// for any emitted region (it passed the per-pixel margin + min-pixel gates).
     let confidence: Float
 
     /// Pixel dimensions of the raw camera frame this result was generated from.
@@ -108,18 +75,30 @@ final class TrayDetectionService {
 
     // MARK: - Configuration
 
-    /// Input resolution for the tray_detector_fp16 model (640×640).
-    /// Same as the pill model so both models receive identically letterboxed frames.
-    private let inputSize: Int = 640
+    /// Model input/output spatial resolution. Must match the exported .mlpackage
+    /// (logits is [1, 3, 384, 384]).
+    private let inputSize: Int = 384
 
-    /// Minimum class confidence to emit a detection.
-    /// tray_detector_fp16 bakes sigmoid into the model's cls head — outputs are
-    /// already probabilities in [0, 1].  Do NOT apply sigmoid() again.
-    /// 0.60 corresponds to "at least 60% confident this cell contains a tray/chute."
-    private let confThreshold: Float = 0.80
+    /// Number of semantic classes in the output (bg / chute / tray).
+    private let numClasses: Int = 3
 
-    /// IoU threshold for Non-Maximum Suppression within each TrayClass.
-    private let iouThreshold: Float = 0.40
+    // Channel indices in the model output. Keep in sync with Android's
+    // TraySegmentationDetector (CLASS_BG / CLASS_CHUTE / CLASS_TRAY).
+    private let classBackground = 0
+    private let classChute      = 1
+    private let classTray       = 2
+
+    /// Minimum pixel count for a class to be reported as a detection. 400 px at
+    /// 384×384 is ~0.27% of the frame — well below any real tray/chute and large
+    /// enough to reject borderline noise blobs. Matches Android MIN_CLASS_PIXELS.
+    private let minClassPixels: Int = 400
+
+    /// Confidence margin between the winning foreground class's logit and the
+    /// background logit, in logit units. A pixel is only assigned to a foreground
+    /// class if `fgLogit - bgLogit >= fgLogitMargin`. Matches Android
+    /// FG_LOGIT_MARGIN = 1.5 (≈ requiring softmax(fg) > 0.82). Raise to reject
+    /// false-positive foreground pixels; lower if real boundaries are missed.
+    private let fgLogitMargin: Float = 1.0
 
     // MARK: - Model & Context
 
@@ -127,6 +106,10 @@ final class TrayDetectionService {
 
     /// GPU-backed CIContext shared across letterbox calls; allocating per-frame is expensive.
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    /// Reused 384×384 BGRA buffer for the letterboxed input. Allocated lazily on
+    /// the first frame and kept for the lifetime of the (singleton) service.
+    private var inputBuffer: CVPixelBuffer?
 
     // MARK: - Init
 
@@ -138,7 +121,7 @@ final class TrayDetectionService {
             cfg.computeUnits = .cpuAndNeuralEngine
 
             model = try tray_detector_fp16(configuration: cfg)
-            print("✅ [TRAY MODEL] Model loaded and ready")
+            print("✅ [TRAY MODEL] Segmentation model loaded and ready")
         } catch {
             print("❌ [TRAY MODEL] Failed to load — \(error)")
         }
@@ -146,232 +129,172 @@ final class TrayDetectionService {
 
     // MARK: - Public API
 
-    /// Runs the full tray detection pipeline on one camera frame.
+    /// Runs the full tray segmentation pipeline on one camera frame.
     ///
     /// - Parameter pixelBuffer: Raw camera frame (any resolution, BGRA).
-    ///   Internally letterboxed to 640×640 before being packed into a Float32
-    ///   MLMultiArray and passed to the RTMDet-Tiny model.
-    /// - Returns: All detected TRAY and CHUTE regions, NMS-filtered per class.
+    ///   Internally letterboxed to 384×384 before being passed to the model.
+    /// - Returns: At most one TRAY and one CHUTE region (the bbox of each class's
+    ///   segmentation mask), in original camera-frame coordinates.
     func detect(pixelBuffer: CVPixelBuffer) -> [TrayResult] {
         guard let model else { return [] }
 
         let frameSize = pixelBuffer.size
 
-        // ── Step 1: Letterbox to 640×640 ──────────────────────────────────
+        // ── Step 1: Letterbox to 384×384 ──────────────────────────────────
         guard let (lbBuffer, scale, padX, padY) = letterbox(pixelBuffer) else {
             return []
         }
 
-        print("""
-        ── [TRAY MODEL] INPUT ──────────────────────────
-           Frame size  : \(Int(frameSize.width))×\(Int(frameSize.height))
-           Letterbox   : \(inputSize)×\(inputSize)
-           Scale       : \(String(format: "%.4f", scale))
-           Pad (X, Y)  : (\(String(format: "%.1f", padX)), \(String(format: "%.1f", padY)))
-           Input name  : images (MLMultiArray [1, 3, 640, 640] Float32, raw [0,255])
-        ────────────────────────────────────────────────
-        """)
-
-        // ── Step 2: CVPixelBuffer → MLMultiArray [1, 3, 640, 640] Float32 ─
-        guard let inputArray = pixelBufferToMLArray(lbBuffer) else { return [] }
-
-        // ── Step 3: Run inference using typed prediction method ────────────
+        // ── Step 2: Run inference (image input) ───────────────────────────
         let inferenceStart = CACurrentMediaTime()
-        guard let output = try? model.prediction(images: inputArray) else {
+        guard let output = try? model.prediction(images: lbBuffer) else {
             print("❌ [TRAY MODEL] Inference failed")
             return []
         }
         let inferenceMs = (CACurrentMediaTime() - inferenceStart) * 1000
 
-        // ── Step 4: Decode all three FPN stride levels ─────────────────────
-        let strideLevels: [(cls: MLMultiArray, box: MLMultiArray, stride: Int)] = [
-            (output.var_1480, output.var_1382,  8),
-            (output.var_1481, output.var_1427, 16),
-            (output.var_1482, output.var_1472, 32),
-        ]
+        // ── Step 3: Decode the per-pixel logits → per-class bounding boxes ─
+        let results = decodeSegmentation(
+            logits: output.logits,
+            scale: scale, padX: padX, padY: padY,
+            frameSize: frameSize
+        )
 
-        var candidates: [TrayResult] = []
-
-        for (cls, box, stride) in strideLevels {
-            let decoded = decodeRTMDetLevel(
-                cls: cls, box: box, stride: stride,
-                scale: scale, padX: padX, padY: padY, frameSize: frameSize
-            )
-            candidates.append(contentsOf: decoded)
-        }
-
-        let trayCount  = candidates.filter { $0.trayClass == .tray  }.count
-        let chuteCount = candidates.filter { $0.trayClass == .chute }.count
-
-        guard !candidates.isEmpty else { return [] }
-
-        // ── Step 5: Per-class NMS ──────────────────────────────────────────
-        let final = nmsPerClass(candidates)
-
-        let finalTray  = final.filter { $0.trayClass == .tray  }.count
-        let finalChute = final.filter { $0.trayClass == .chute }.count
-
-        // ── Debug: print every final detection ────────────────────────────────
-        print("── [TRAY MODEL] FINAL DETECTIONS (after NMS) ──")
-        for (i, det) in final.enumerated() {
+        // ── Debug: print every detection ──────────────────────────────────
+        let trayCount  = results.filter { $0.trayClass == .tray  }.count
+        let chuteCount = results.filter { $0.trayClass == .chute }.count
+        print(String(format:
+            "── [TRAY MODEL] tray=%@ chute=%@ | infer=%.1fms frame=%.0f×%.0f",
+            trayCount  > 0 ? "yes" : "no",
+            chuteCount > 0 ? "yes" : "no",
+            inferenceMs, frameSize.width, frameSize.height))
+        for det in results {
             let cls = det.trayClass == .tray ? "TRAY" : "CHUTE"
-            let r   = det.rect
-            let nx  = r.origin.x / det.originalFrameSize.width
-            let ny  = r.origin.y / det.originalFrameSize.height
-            let nw  = r.width    / det.originalFrameSize.width
-            let nh  = r.height   / det.originalFrameSize.height
+            let r = det.rect
             print(String(format:
-                "   [%d] %@ conf=%.3f | frame=(%.0f,%.0f,%.0f×%.0f) | norm=(%.3f,%.3f,%.3f×%.3f)",
-                i, cls, det.confidence,
-                r.origin.x, r.origin.y, r.width, r.height,
-                nx, ny, nw, nh))
-        }
-        print("────────────────────────────────────────────────")
-
-        return final
-    }
-
-    // MARK: - RTMDet FPN Level Decode
-
-    /// Decodes one stride-level pair of (cls, box) tensors into TrayResult values.
-    ///
-    /// Tensor layouts (channel-first [1, C, H, W]):
-    ///   cls[0, classIdx, row, col] = class probability (sigmoid baked in, range 0–1)
-    ///   box[0, sideIdx,  row, col] = distance from anchor to box side IN PIXEL UNITS
-    ///     (letterboxed 640×640 space — NOT stride units, do NOT multiply by stride)
-    ///     sideIdx 0 = left, 1 = top, 2 = right, 3 = bottom
-    private func decodeRTMDetLevel(cls: MLMultiArray,
-                                   box: MLMultiArray,
-                                   stride: Int,
-                                   scale: CGFloat,
-                                   padX: CGFloat,
-                                   padY: CGFloat,
-                                   frameSize: CGSize) -> [TrayResult] {
-
-        let gridH = cls.shape[2].intValue
-        let gridW = cls.shape[3].intValue
-
-        // Channel-first strides: flat_index = b*s0 + c*sC + row*sH + col*sW
-        let clsSC = cls.strides[1].intValue
-        let clsSH = cls.strides[2].intValue
-        let clsSW = cls.strides[3].intValue
-
-        let boxSC = box.strides[1].intValue
-        let boxSH = box.strides[2].intValue
-        let boxSW = box.strides[3].intValue
-
-        // Runtime data-type detection: outputs may be Float32 or Float16.
-        let clsRaw  = cls.dataPointer
-        let boxRaw  = box.dataPointer
-        let clsElem = cls.dataType == .float16 ? 2 : 4
-        let boxElem = box.dataType == .float16 ? 2 : 4
-
-        let strideCG = CGFloat(stride)
-        var results: [TrayResult] = []
-
-        for row in 0..<gridH {
-            for col in 0..<gridW {
-
-                let clsBase = row * clsSH + col * clsSW
-
-                // Class scores — read directly, NO sigmoid.
-                // The model's cls head already has sigmoid baked in (outputs are [0,1]).
-                // Applying sigmoid again double-compresses: a background cell with true
-                // score 0.30 becomes sigmoid(0.30)=0.57, passing a 0.50 threshold and
-                // causing 66% of all 8,400 cells to flood through as false detections.
-                //
-                // ⚠️ Physical class mapping is INVERTED vs the training label indices:
-                //   Model output index 0 → physical CHUTE (dispenser slot)
-                //   Model output index 1 → physical TRAY  (pill counting surface)
-                // Swap here so downstream filtering (pills inside TRAY) and the overlay
-                // both operate on the correct physical region.
-                let scoreChute = readF32(clsRaw, at: clsBase + 0 * clsSC, elem: clsElem)
-                let scoreTray  = readF32(clsRaw, at: clsBase + 1 * clsSC, elem: clsElem)
-
-                let (bestScore, bestClass): (Float, TrayClass) =
-                    scoreTray >= scoreChute ? (scoreTray, .tray) : (scoreChute, .chute)
-
-                guard bestScore >= confThreshold else { continue }
-
-                // Anchor center (half-pixel aligned).
-                let cx = (CGFloat(col) + 0.5) * strideCG
-                let cy = (CGFloat(row) + 0.5) * strideCG
-
-                let boxBase = row * boxSH + col * boxSW
-
-                // Box regression: multiply by stride to convert stride units → pixels.
-                let lRaw = readF32(boxRaw, at: boxBase + 0 * boxSC, elem: boxElem)
-                let tRaw = readF32(boxRaw, at: boxBase + 1 * boxSC, elem: boxElem)
-                let rRaw = readF32(boxRaw, at: boxBase + 2 * boxSC, elem: boxElem)
-                let bRaw = readF32(boxRaw, at: boxBase + 3 * boxSC, elem: boxElem)
-
-                let cls2 = bestClass == .tray ? "TRAY" : "CHUTE"
-                print(String(format:
-                    "   [DECODE stride=%-2d row=%2d col=%2d] %@ conf=%.3f | ltrb_px=(%.1f,%.1f,%.1f,%.1f) cx=%.1f cy=%.1f",
-                    stride, row, col, cls2, bestScore,
-                    CGFloat(lRaw), CGFloat(tRaw), CGFloat(rRaw), CGFloat(bRaw),
-                    cx, cy))
-
-                // The model exports distances in letterboxed-pixel units (0–640 range),
-                // NOT in stride units — do NOT multiply by stride.
-                let l = CGFloat(lRaw)
-                let t = CGFloat(tRaw)
-                let r = CGFloat(rRaw)
-                let b = CGFloat(bRaw)
-
-                // Un-letterbox: 640×640 → original camera-frame space.
-                // No clamping to frame bounds — return the model's box verbatim, the
-                // same way PillDetectionService does. Clamping each edge to the frame
-                // pulled the box inward whenever the model's regression slightly
-                // overshot the edge, which showed up as a gap between the drawn tray
-                // box and the real tray border (most visible on the larger landscape
-                // tray). The overlay's layerRectConverted handles any slight overshoot
-                // geometrically, exactly as it does for pills.
-                let x1 = (cx - l - padX) / scale
-                let y1 = (cy - t - padY) / scale
-                let x2 = (cx + r - padX) / scale
-                let y2 = (cy + b - padY) / scale
-
-                guard x2 > x1, y2 > y1 else { continue }
-
-                results.append(TrayResult(
-                    rect: CGRect(x: x1, y: y1, width: x2 - x1, height: y2 - y1),
-                    confidence: bestScore,
-                    originalFrameSize: frameSize,
-                    trayClass: bestClass
-                ))
-            }
+                "   %@ frame=(%.0f,%.0f,%.0f×%.0f)",
+                cls, r.origin.x, r.origin.y, r.width, r.height))
         }
 
         return results
     }
 
-    // MARK: - Per-Class NMS
+    // MARK: - Segmentation Decode
 
-    private func nmsPerClass(_ items: [TrayResult]) -> [TrayResult] {
-        nmsSingle(items.filter { $0.trayClass == .tray })
-        + nmsSingle(items.filter { $0.trayClass == .chute })
-    }
+    /// Per-pixel argmax over the [1, 3, 384, 384] channel-first logits, with a
+    /// background-margin confidence gate, accumulating one bounding box per
+    /// foreground class. Mirrors Android `decodeOutputs`.
+    private func decodeSegmentation(logits: MLMultiArray,
+                                    scale: CGFloat,
+                                    padX: CGFloat,
+                                    padY: CGFloat,
+                                    frameSize: CGSize) -> [TrayResult] {
 
-    private func nmsSingle(_ items: [TrayResult]) -> [TrayResult] {
-        let sorted     = items.sorted { $0.confidence > $1.confidence }
-        var suppressed = [Bool](repeating: false, count: sorted.count)
-        var kept       = [TrayResult]()
+        // Expected shape [1, 3, 384, 384] (NCHW). Read strides so we don't assume
+        // a contiguous layout.
+        guard logits.shape.count == 4 else { return [] }
+        let gridH = logits.shape[2].intValue
+        let gridW = logits.shape[3].intValue
 
-        for i in 0..<sorted.count {
-            guard !suppressed[i] else { continue }
-            kept.append(sorted[i])
-            for j in (i + 1)..<sorted.count where !suppressed[j] {
-                if iou(sorted[i].rect, sorted[j].rect) > iouThreshold {
-                    suppressed[j] = true
+        let sC = logits.strides[1].intValue
+        let sH = logits.strides[2].intValue
+        let sW = logits.strides[3].intValue
+
+        let raw  = logits.dataPointer
+        let elem = logits.dataType == .float16 ? 2 : 4
+
+        // Per-class bbox accumulators (in 384 space).
+        var chuteMinX = gridW, chuteMinY = gridH, chuteMaxX = -1, chuteMaxY = -1
+        var trayMinX  = gridW, trayMinY  = gridH, trayMaxX  = -1, trayMaxY  = -1
+        var chutePixels = 0
+        var trayPixels  = 0
+
+        let bgBase    = classBackground * sC
+        let chuteBase = classChute * sC
+        let trayBase  = classTray * sC
+
+        for y in 0..<gridH {
+            let rowOff = y * sH
+            for x in 0..<gridW {
+                let colOff = rowOff + x * sW
+
+                let bg = readF32(raw, at: colOff + bgBase,    elem: elem)
+                let ch = readF32(raw, at: colOff + chuteBase, elem: elem)
+                let tr = readF32(raw, at: colOff + trayBase,  elem: elem)
+
+                // Argmax over {bg, chute, tray}; skip background.
+                // (Matches Android: bg>=ch&&bg>=tr -> bg; ch>=tr -> chute; else tray.)
+                if bg >= ch && bg >= tr { continue }
+
+                let isChute = ch >= tr
+                let fgLogit = isChute ? ch : tr
+
+                // Confidence gate: foreground must beat background by the margin.
+                guard fgLogit - bg >= fgLogitMargin else { continue }
+
+                if isChute {
+                    if x < chuteMinX { chuteMinX = x }
+                    if x > chuteMaxX { chuteMaxX = x }
+                    if y < chuteMinY { chuteMinY = y }
+                    if y > chuteMaxY { chuteMaxY = y }
+                    chutePixels += 1
+                } else {
+                    if x < trayMinX { trayMinX = x }
+                    if x > trayMaxX { trayMaxX = x }
+                    if y < trayMinY { trayMinY = y }
+                    if y > trayMaxY { trayMaxY = y }
+                    trayPixels += 1
                 }
             }
         }
-        return kept
+
+        var out: [TrayResult] = []
+        if trayPixels > minClassPixels {
+            out.append(buildResult(
+                cls: .tray,
+                minX: trayMinX, minY: trayMinY, maxX: trayMaxX, maxY: trayMaxY,
+                scale: scale, padX: padX, padY: padY, frameSize: frameSize))
+        }
+        if chutePixels > minClassPixels {
+            out.append(buildResult(
+                cls: .chute,
+                minX: chuteMinX, minY: chuteMinY, maxX: chuteMaxX, maxY: chuteMaxY,
+                scale: scale, padX: padX, padY: padY, frameSize: frameSize))
+        }
+        return out
     }
 
-    // MARK: - Letterbox (640×640, pad = 114)
+    /// Converts a 384-space pixel bbox back to original-frame coordinates.
+    /// Mirrors Android `buildDetection` (clamps to frame bounds).
+    private func buildResult(cls: TrayClass,
+                             minX: Int, minY: Int, maxX: Int, maxY: Int,
+                             scale: CGFloat, padX: CGFloat, padY: CGFloat,
+                             frameSize: CGSize) -> TrayResult {
+        // Un-letterbox: original = (letterboxed − pad) / scale.
+        // +1 on the max edge so the bbox spans the full last pixel.
+        let x1 = (CGFloat(minX)     - padX) / scale
+        let y1 = (CGFloat(minY)     - padY) / scale
+        let x2 = (CGFloat(maxX + 1) - padX) / scale
+        let y2 = (CGFloat(maxY + 1) - padY) / scale
 
+        let cx1 = max(0, min(x1, frameSize.width))
+        let cy1 = max(0, min(y1, frameSize.height))
+        let cx2 = max(0, min(x2, frameSize.width))
+        let cy2 = max(0, min(y2, frameSize.height))
+
+        return TrayResult(
+            rect: CGRect(x: cx1, y: cy1, width: max(0, cx2 - cx1), height: max(0, cy2 - cy1)),
+            confidence: 1.0,
+            originalFrameSize: frameSize,
+            trayClass: cls
+        )
+    }
+
+    // MARK: - Letterbox (384×384, pad = 114)
+
+    /// Letterboxes the camera frame into the reused 384×384 ARGB input buffer.
+    /// Returns the buffer plus the (scale, padX, padY) needed to un-letterbox the
+    /// output bboxes back to original-frame coordinates.
     private func letterbox(_ px: CVPixelBuffer)
         -> (buffer: CVPixelBuffer, scale: CGFloat, padX: CGFloat, padY: CGFloat)? {
 
@@ -388,18 +311,23 @@ final class TrayDetectionService {
             .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             .transformed(by: CGAffineTransform(translationX: padX, y: padY))
 
-        let attrs: [CFString: Any] = [
-            kCVPixelBufferWidthKey:           inputSize as CFNumber,
-            kCVPixelBufferHeightKey:          inputSize as CFNumber,
-            kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA as CFNumber,
-        ]
-        var outBuf: CVPixelBuffer?
-        guard CVPixelBufferCreate(kCFAllocatorDefault,
-                                  inputSize, inputSize,
-                                  kCVPixelFormatType_32BGRA,
-                                  attrs as CFDictionary,
-                                  &outBuf) == kCVReturnSuccess,
-              let out = outBuf else { return nil }
+        // (Re)allocate the input buffer only on first use; reuse thereafter.
+        if inputBuffer == nil {
+            let attrs: [CFString: Any] = [
+                kCVPixelBufferWidthKey:           inputSize as CFNumber,
+                kCVPixelBufferHeightKey:          inputSize as CFNumber,
+                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32ARGB as CFNumber,
+            ]
+            var outBuf: CVPixelBuffer?
+            guard CVPixelBufferCreate(kCFAllocatorDefault,
+                                      inputSize, inputSize,
+                                      kCVPixelFormatType_32ARGB,
+                                      attrs as CFDictionary,
+                                      &outBuf) == kCVReturnSuccess,
+                  outBuf != nil else { return nil }
+            inputBuffer = outBuf
+        }
+        guard let out = inputBuffer else { return nil }
 
         let bounds = CGRect(x: 0, y: 0, width: size, height: size)
         let grey = CIImage(color: CIColor(red: 114/255, green: 114/255, blue: 114/255))
@@ -408,45 +336,6 @@ final class TrayDetectionService {
                          colorSpace: CGColorSpaceCreateDeviceRGB())
 
         return (out, scale, padX, padY)
-    }
-
-    // MARK: - CVPixelBuffer → MLMultiArray [1, 3, 640, 640] Float32
-
-    /// Converts a 640×640 BGRA CVPixelBuffer to a [1, 3, 640, 640] Float32
-    /// MLMultiArray with RGB channel order and raw [0, 255] values.
-    private func pixelBufferToMLArray(_ px: CVPixelBuffer) -> MLMultiArray? {
-        guard let array = try? MLMultiArray(
-            shape: [1, 3,
-                    NSNumber(value: inputSize),
-                    NSNumber(value: inputSize)],
-            dataType: .float32
-        ) else { return nil }
-
-        CVPixelBufferLockBaseAddress(px, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(px, .readOnly) }
-        guard let base = CVPixelBufferGetBaseAddress(px) else { return nil }
-
-        let rowBytes    = CVPixelBufferGetBytesPerRow(px)
-        let totalPixels = inputSize * inputSize
-        let dst         = array.dataPointer.assumingMemoryBound(to: Float.self)
-
-        let rPlane = dst
-        let gPlane = dst + totalPixels
-        let bPlane = dst + 2 * totalPixels
-
-        for row in 0..<inputSize {
-            let rowPtr = base.advanced(by: row * rowBytes)
-                             .assumingMemoryBound(to: UInt8.self)
-            let rowBase = row * inputSize
-            for col in 0..<inputSize {
-                let px4 = col * 4  // BGRA: byte 0=B, 1=G, 2=R, 3=A
-                rPlane[rowBase + col] = Float(rowPtr[px4 + 2])
-                gPlane[rowBase + col] = Float(rowPtr[px4 + 1])
-                bPlane[rowBase + col] = Float(rowPtr[px4 + 0])
-            }
-        }
-
-        return array
     }
 
     // MARK: - Utilities
@@ -460,12 +349,5 @@ final class TrayDetectionService {
             return Float(Float16(bitPattern: bits))
         }
         return raw.load(fromByteOffset: index * 4, as: Float.self)
-    }
-
-    private func iou(_ a: CGRect, _ b: CGRect) -> Float {
-        let inter = a.intersection(b)
-        guard !inter.isNull, inter.width > 0, inter.height > 0 else { return 0 }
-        let ia = inter.width * inter.height
-        return Float(ia / (a.width * a.height + b.width * b.height - ia))
     }
 }

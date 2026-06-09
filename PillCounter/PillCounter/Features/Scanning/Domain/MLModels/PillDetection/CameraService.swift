@@ -54,6 +54,31 @@ final class CameraService: NSObject, ObservableObject {
     /// detection from ballooning the counting region across the whole frame.
     private static let trayChuteExtendMaxFraction: CGFloat = 0.30
 
+    /// Reject a "tray" whose bbox covers at least this fraction of the frame — a
+    /// background surface (e.g. the table) fills the frame, whereas a real tray is
+    /// a bounded object inside it. Mirrors Android TRAY_MAX_FRAME_COVERAGE.
+    private static let trayMaxFrameCoverage: CGFloat = 0.75
+
+    /// Fraction the CHUTE rect is shrunk (inward) before a pill's centre is tested
+    /// for "inside the chute". The chute mask's bounding box is a coarse rectangle
+    /// that overhangs the tray↔chute boundary, so a pill lying in the channel right
+    /// at the lip would land inside the raw chute box one frame and outside it the
+    /// next — flickering in and out of the count. Requiring the centre to be WELL
+    /// inside the chute (not just touching its bbox) keeps those border pills
+    /// counted stably while still excluding pills that are genuinely deep in the
+    /// dispenser slot.
+    private static let chuteExclusionInsetFraction: CGFloat = 0.18
+
+    /// Number of recent frames whose pill counts are kept for median smoothing.
+    /// The raw per-frame count jitters ±1–2 even on a static scene (boundary pills
+    /// crossing the confidence/region threshold); reporting the median over this
+    /// window steadies the displayed number. Markers (dots) still come from the
+    /// live frame, so they stay responsive. Mirrors Android PILL_COUNT_SMOOTH_WINDOW.
+    private static let countSmoothWindow: Int = 5
+
+    /// Rolling buffer of recent per-frame counts, oldest first. Median → stableCount.
+    private var recentCounts: [Int] = []
+
     /// Extends `tray` toward the nearest chute rect so pills in the gap between the
     /// chute and the tray (which sit on the tray but outside its drawn box) are
     /// included. Only the tray edge that faces the chute is moved, up to the chute's
@@ -396,6 +421,7 @@ final class CameraService: NSObject, ObservableObject {
             self.trayDetections   = []
             self.gloveDetections  = []
             self.isGloveHazardous = false
+            self.recentCounts.removeAll()   // start the next session's median fresh
         }
     }
 
@@ -571,6 +597,23 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             return Self.extendTowardNearestChute(padded, chuteRects: chuteRects)
         }
 
+        // ── "Complete product" gate (mirrors Android TrayGate) ───────────────
+        // A valid scene requires BOTH a tray AND a chute, and the tray must NOT
+        // fill the frame (that would be the background surface, not a tray).
+        // When the gate is closed: no pill count and no tray/chute overlay. This
+        // matches Android: a tray-only, chute-only, or table-filling-frame scene
+        // is "not a complete product" and surfaces nothing.
+        let frameSz = pixelBuffer.size
+        let frameArea = max(1, frameSz.width * frameSz.height)
+        let trayCoverage = trayRects
+            .map { ($0.width * $0.height) / frameArea }
+            .max() ?? 0
+        let trayFillsFrame = trayCoverage >= Self.trayMaxFrameCoverage
+        let isCompleteTray = !trayRects.isEmpty && !chuteRects.isEmpty && !trayFillsFrame
+
+        // Overlay shows tray/chute only when the scene is a complete product.
+        let displayTrays = isCompleteTray ? allTrays : []
+
         // ── Tray colour sampling (hazardous-tray feature) ────────────────────
         // Continuously classify the visible tray's generic colour and publish it
         // only when the colour CHANGES (not every frame). This lets the flow react
@@ -592,18 +635,26 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, _ in
             guard let self else { return }
 
-            // Keep only pills whose centre falls inside a (padded) TRAY rect AND is
-            // NOT inside any CHUTE rect. An empty trayRects list means no tray is
-            // visible → count = 0.
+            // Counting GATE: only count once the scene is a complete product
+            // (tray AND chute, tray not filling frame). Otherwise count = 0.
+            // Then keep only pills whose centre falls inside a (padded) TRAY rect
+            // AND is NOT inside any CHUTE rect.
             let filtered: [DetectionResult]
-            if countingRects.isEmpty {
+            if !isCompleteTray || countingRects.isEmpty {
                 filtered = []
             } else {
+                // Shrink each chute rect inward so only pills WELL inside the chute
+                // are excluded; pills in the channel right at the tray↔chute lip
+                // stay counted (and stop flickering frame-to-frame).
+                let chuteExclusionRects = chuteRects.map { rect -> CGRect in
+                    rect.insetBy(dx: rect.width  * Self.chuteExclusionInsetFraction,
+                                 dy: rect.height * Self.chuteExclusionInsetFraction)
+                }
                 filtered = allPills.filter { pill in
                     let center = pill.center
                     let inTray  = countingRects.contains { $0.contains(center) }
                     guard inTray else { return false }
-                    let inChute = chuteRects.contains { $0.contains(center) }
+                    let inChute = chuteExclusionRects.contains { $0.contains(center) }
                     return !inChute
                 }
             }
@@ -613,9 +664,21 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
             DispatchQueue.main.async {
                 guard self.isCountingEnabled else { return }
-                self.detections       = filtered
-                self.stableCount      = filtered.count
-                self.trayDetections   = allTrays
+
+                // Markers (dots) come from the LIVE frame so they stay responsive.
+                self.detections = filtered
+
+                // Displayed/committed count is the MEDIAN over the last few frames,
+                // so a single boundary pill blinking across the threshold doesn't
+                // jitter the number. Median (not mean) ignores the occasional spike.
+                self.recentCounts.append(filtered.count)
+                if self.recentCounts.count > Self.countSmoothWindow {
+                    self.recentCounts.removeFirst()
+                }
+                let sortedCounts = self.recentCounts.sorted()
+                self.stableCount = sortedCounts[sortedCounts.count / 2]
+
+                self.trayDetections   = displayTrays
                 self.gloveDetections  = gloves
                 self.isGloveHazardous = hazardous
                 if glovesNowSafe { self.glovesConfirmed = true }

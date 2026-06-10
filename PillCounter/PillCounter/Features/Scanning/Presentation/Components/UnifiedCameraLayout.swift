@@ -54,6 +54,23 @@ struct UnifiedCameraLayout: View {
                 }
             }
 
+            // ── Vial captured still (full screen) ─────────────────────────────
+            // During the vial step, once the operator captures the vial image we show
+            // that still full-screen, fully covering the live feed (opaque black
+            // backing so no camera background bleeds through). "Redo" clears
+            // capturedVialImage and this overlay disappears, revealing the live feed.
+            if pillScanViewModel.currentControlledStep == .vial,
+               let vialImage = pillScanViewModel.capturedVialImage {
+                Color.black.ignoresSafeArea()
+                Image(uiImage: vialImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+
             // ── Loading spinner ───────────────────────────────────────────────
             if pillScanViewModel.isCheckingNdc || stockCountViewModel.isLoading || !cameraService.isAuthorized {
                 Color.black.opacity(0.5).ignoresSafeArea()

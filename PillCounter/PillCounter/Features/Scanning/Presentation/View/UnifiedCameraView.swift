@@ -622,25 +622,24 @@ extension UnifiedCameraView {
                 pillScanViewModel.getControlledStep(pillCountTxn: selected)
                 pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
             }
-            DispatchQueue.main.asyncAfter(deadline: .now()) {
-                cameraService.start()
-                cameraService.cancelInactivityTimer()
-                initializeTransaction()
-                if pillScanViewModel.currentControlledStep != .vial {
-                    cameraService.resumeCounting()
-                }
+            // Start directly — start() runs on the session queue (serialized) and
+            // re-attaches the preview itself, so the extra main-queue hop is unneeded
+            // and only delayed the first frame.
+            cameraService.start()
+            cameraService.cancelInactivityTimer()
+            initializeTransaction()
+            if pillScanViewModel.currentControlledStep != .vial {
+                cameraService.resumeCounting()
             }
         } else {
-            DispatchQueue.main.asyncAfter(deadline: .now()) {
-                cameraService.start()
-                cameraService.cancelInactivityTimer()
-                cameraService.enableBarcodeScanning()
-                if currentScanType == .stockCount {
-                    // Stock count only needs barcode scanning; pill detection must stay off.
-                    cameraService.pauseCounting()
-                } else {
-                    startScanTimeout()
-                }
+            cameraService.start()
+            cameraService.cancelInactivityTimer()
+            cameraService.enableBarcodeScanning()
+            if currentScanType == .stockCount {
+                // Stock count only needs barcode scanning; pill detection must stay off.
+                cameraService.pauseCounting()
+            } else {
+                startScanTimeout()
             }
         }
     }
@@ -1046,12 +1045,13 @@ extension UnifiedCameraView {
             }
             return
         }
-        // Newly added to skip completion popup
+        // Newly added to skip completion popup.
+        // Clearing capturedVialImage removes the full-screen vial still overlay and
+        // reveals the live feed. The session was never stopped (vial only freezes
+        // counting), so no start()/rebind is needed — just reset the inactivity timer.
         if pillScanViewModel.capturedVialImage != nil {
             pillScanViewModel.capturedVialImage = nil
             pillScanViewModel.vialCapturedImagePath = nil
-            cameraService.start()
-            cameraService.rebindPreviewLayer()
             cameraService.resetInactivityTimer()
         }
         pillScanViewModel.handleStepCompletion()
@@ -1068,12 +1068,13 @@ extension UnifiedCameraView {
             showConfirmCompletionPopup = true
         } else {
 //            showStepCompletionPopup = true
-            // Newly added to skip completion popup
+            // Newly added to skip completion popup.
+            // Clearing capturedVialImage removes the full-screen vial still overlay and
+            // reveals the live feed. The session was never stopped (vial only freezes
+            // counting), so no start()/rebind is needed — just reset the inactivity timer.
             if pillScanViewModel.capturedVialImage != nil {
                 pillScanViewModel.capturedVialImage = nil
                 pillScanViewModel.vialCapturedImagePath = nil
-                cameraService.start()
-                cameraService.rebindPreviewLayer()
                 cameraService.resetInactivityTimer()
             }
             pillScanViewModel.handleStepCompletion()

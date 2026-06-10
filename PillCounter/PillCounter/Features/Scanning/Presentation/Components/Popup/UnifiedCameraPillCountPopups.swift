@@ -140,11 +140,12 @@ extension UnifiedCameraView {
             onCancel: { showStepCompletionPopup = false },
             onConfirm: {
                 showStepCompletionPopup = false
+                // Clearing capturedVialImage removes the full-screen vial still overlay
+                // and reveals the live feed. The session was never stopped (vial only
+                // freezes counting), so no start()/rebind is needed.
                 if pillScanViewModel.capturedVialImage != nil {
                     pillScanViewModel.capturedVialImage = nil
                     pillScanViewModel.vialCapturedImagePath = nil
-                    cameraService.start()
-                    cameraService.rebindPreviewLayer()
                     cameraService.resetInactivityTimer()
                 }
                 pillScanViewModel.handleStepCompletion()

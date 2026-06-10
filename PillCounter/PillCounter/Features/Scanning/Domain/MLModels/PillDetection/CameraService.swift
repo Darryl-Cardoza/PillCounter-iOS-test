@@ -338,14 +338,32 @@ final class CameraService: NSObject, ObservableObject {
     /// STARTS CAMERA SESSION
     func start() {
         sessionQueue.async {
-            guard !self.session.isRunning else { return }
-            self.session.startRunning()
+            if !self.session.isRunning {
+                self.session.startRunning()
+            }
+            // Always re-attach the preview layer to the session AFTER the session is
+            // confirmed running. start() is self-healing and symmetric with stop():
+            // whatever state the preview was left in (detached by a prior stop(), or
+            // never bound), calling start() guarantees the live feed shows. Doing this
+            // here — on the session queue, post-startRunning — also closes the old race
+            // where a stray `previewLayer.session = nil` from stop() could land on the
+            // main queue *after* a start() and blank a freshly-running preview.
+            DispatchQueue.main.async {
+                if self.previewLayer?.session !== self.session {
+                    self.previewLayer?.session = self.session
+                }
+            }
         }
         setZoom(zoomFactor == 0 ? 1.0 : zoomFactor)
         resetInactivityTimer()
     }
 
     /// STOPS CAMERA SESSION
+    /// Stops the running session but intentionally KEEPS the preview layer bound to it.
+    /// A stopped AVCaptureSession freezes the preview on its last frame (smooth), and
+    /// the next start() resumes instantly. Nulling previewLayer.session here is what
+    /// previously caused the permanent blank-screen-with-detection-still-working bug,
+    /// because start() never re-attached it. So we no longer detach on stop.
     func stop() {
         cancelInactivityTimer()
 
@@ -355,10 +373,6 @@ final class CameraService: NSObject, ObservableObject {
             // Session is fully stopped — no barcodes are visible. Clear the lock
             // so the next start() begins fresh rather than blocking on a stale value.
             self.lockedBarcodeValue = nil
-        }
-
-        DispatchQueue.main.async {
-            self.previewLayer?.session = nil
         }
     }
 

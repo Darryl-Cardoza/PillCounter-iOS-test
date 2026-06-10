@@ -43,10 +43,11 @@ struct VialBottomContentView: View {
             }
             .onTapGesture {
                 guard isCaptured else { return }
+                // Clearing the captured still removes the full-screen overlay and
+                // reveals the live feed again. The session was never stopped, so no
+                // restart/rebind is needed — just reset the inactivity timer.
                 pillScanViewModel.capturedVialImage = nil
                 pillScanViewModel.vialCapturedImagePath = nil
-                cameraService.start()
-                cameraService.rebindPreviewLayer()
                 cameraService.resetInactivityTimer()
             }
 
@@ -86,7 +87,10 @@ struct VialBottomContentView: View {
             return
         }
         guard let image = cameraService.captureSnapshot() else { return }
-        cameraService.stop()
+        // Do NOT stop the session — counting is already paused for the vial step. The
+        // captured still is shown full-screen by UnifiedCameraLayout while
+        // capturedVialImage is set; stopping would blank the live feed and cost a
+        // restart on redo/done.
         let normalized = image.normalized()
         pillScanViewModel.capturedVialImage = normalized
         if let path = PhotoFileManager.shared.saveImage(normalized) {

@@ -122,7 +122,7 @@ struct PillCounterApp: App {
                             VStack {
                                 Spacer()
                                 HStack(spacing: 10) {
-                                    Image("app_icon")
+                                    Image("icon_app")
                                         .resizable()
                                         .scaledToFit()
                                         .frame(width: 24, height: 24)

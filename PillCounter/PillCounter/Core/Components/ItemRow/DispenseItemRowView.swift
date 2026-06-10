@@ -106,6 +106,7 @@ struct DispenseItemRowView: View {
         .padding(.horizontal, 12)
         .background(appColors.secondaryBackground)
         .cornerRadius(12)
+        .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
     }
 
     // MARK: - Helpers

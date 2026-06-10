@@ -27,15 +27,15 @@ struct ScannedDrugDetailsSlot: View {
                     .foregroundColor(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                PillCountingButton(
-                    iconName: nil, title: L10n.StockCountSheet.edit,
-                    textColor: appColors.primary, backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 30, horizontalPadding: 4, verticalPadding: 4, iconSize: 0,
-                    action: onEditTapped
-                )
-                .frame(maxWidth: 80)
+//                PillCountingButton(
+//                    iconName: nil, title: L10n.StockCountSheet.edit,
+//                    textColor: appColors.primary, backgroundColor: .clear,
+//                    borderColor: appColors.primary,
+//                    font: .system(size: 14, weight: .semibold),
+//                    cornerRadius: 30, horizontalPadding: 4, verticalPadding: 4, iconSize: 0,
+//                    action: onEditTapped
+//                )
+//                .frame(maxWidth: 80)
             }
             .padding(.top, isIpadPortrait ? 8 : 14)
 

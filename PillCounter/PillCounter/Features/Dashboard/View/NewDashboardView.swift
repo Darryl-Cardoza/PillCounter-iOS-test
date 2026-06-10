@@ -504,7 +504,7 @@ struct NewDashboardView: View {
                 HStack(spacing: 0) {
                     Text(L10n.Dashboard.quickActions)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(appColors.text.opacity(0.5))
+                        .foregroundColor(appColors.text)
                         .textCase(.uppercase)
                         .tracking(1)
                         .padding(.horizontal, pad)
@@ -530,7 +530,7 @@ struct NewDashboardView: View {
                         // Action cards — Dispense on top, Inventory on bottom
                         VStack(spacing: pad) {
                             landscapeQuickActionCard(
-                                iconName: "dispense_dashboard_icon",
+                                iconName: "icon_dashboard_dispense",
                                 title: L10n.Dashboard.FixedCount.title,
                                 subtitle: L10n.Dashboard.FixedCount.subtitle,
                                 action: navigateToDispense
@@ -538,7 +538,7 @@ struct NewDashboardView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                             landscapeQuickActionCard(
-                                iconName: "placeholder_history",
+                                iconName: "icon_dashboard_stock",
                                 title: L10n.Dashboard.RegularCount.title,
                                 subtitle: L10n.Dashboard.RegularCount.subtitle,
                                 action: handleInventoryTapped
@@ -614,7 +614,7 @@ struct NewDashboardView: View {
                         Image(iconName)
                             .renderingMode(.template)
                             .resizable()
-                            .scaledToFit()
+                            .scaleEffect(1.5)
                             .foregroundColor(appColors.secondary)
                             .padding(circleSize * 0.3)
                     }
@@ -637,6 +637,7 @@ struct NewDashboardView: View {
             .cornerRadius(16)
             .shadow(color: appColors.text.opacity(0.05), radius: 4, x: 0, y: 2)
         }
+        .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
         .buttonStyle(PlainButtonStyle())
     }
 
@@ -656,9 +657,8 @@ struct NewDashboardView: View {
         HStack(alignment: .center) {
             // Left: pharmacy logo + name + terminal
             HStack(spacing: 10) {
-                Image("app_icon")
+                Image("icon_app")
                     .resizable()
-                    .scaledToFit()
                     .frame(width: isIpad ? 36 : 30, height: isIpad ? 36 : 30)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -711,20 +711,20 @@ struct NewDashboardView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.Dashboard.quickActions)
                 .font(.system(size: isIpad ? 15 : 13, weight: .semibold))
-                .foregroundColor(appColors.text.opacity(0.5))
+                .foregroundColor(appColors.text)
                 .textCase(.uppercase)
                 .tracking(1)
 
             if isIpad {
                 HStack(spacing: 14) {
                     quickActionCard(
-                        iconName: "dispense_dashboard_icon",
+                        iconName: "icon_dashboard_dispense",
                         title: L10n.Dashboard.FixedCount.title,
                         subtitle: L10n.Dashboard.FixedCount.subtitle,
                         action: navigateToDispense
                     )
                     quickActionCard(
-                        iconName: "placeholder_history",
+                        iconName: "icon_dashboard_stock",
                         title: L10n.Dashboard.RegularCount.title,
                         subtitle: L10n.Dashboard.RegularCount.subtitle,
                         action: handleInventoryTapped
@@ -733,13 +733,13 @@ struct NewDashboardView: View {
             } else {
                 VStack(spacing: 10) {
                     quickActionCard(
-                        iconName: "dispense_dashboard_icon",
+                        iconName: "icon_dashboard_dispense",
                         title: L10n.Dashboard.FixedCount.title,
                         subtitle: L10n.Dashboard.FixedCount.subtitle,
                         action: navigateToDispense
                     )
                     quickActionCard(
-                        iconName: "placeholder_history",
+                        iconName: "icon_dashboard_stock",
                         title: L10n.Dashboard.RegularCount.title,
                         subtitle: L10n.Dashboard.RegularCount.subtitle,
                         action: handleInventoryTapped
@@ -793,6 +793,7 @@ struct NewDashboardView: View {
             .cornerRadius(16)
             .shadow(color: appColors.text.opacity(0.05), radius: 4, x: 0, y: 2)
         }
+        .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
         .buttonStyle(PlainButtonStyle())
     }
 
@@ -876,6 +877,7 @@ struct NewDashboardView: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
     }
 
     // MARK: - Queue section

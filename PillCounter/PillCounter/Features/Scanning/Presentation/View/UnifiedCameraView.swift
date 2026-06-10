@@ -129,7 +129,7 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
             .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
-            .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
+//            .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTraySubstitutePopup) { hazardousTraySubstitutePopup }
@@ -1046,8 +1046,16 @@ extension UnifiedCameraView {
             }
             return
         }
-
-        showStepCompletionPopup = true
+        // Newly added to skip completion popup
+        if pillScanViewModel.capturedVialImage != nil {
+            pillScanViewModel.capturedVialImage = nil
+            pillScanViewModel.vialCapturedImagePath = nil
+            cameraService.start()
+            cameraService.rebindPreviewLayer()
+            cameraService.resetInactivityTimer()
+        }
+        pillScanViewModel.handleStepCompletion()
+//        showStepCompletionPopup = true
     }
 
     func handleVialDone() {
@@ -1059,7 +1067,16 @@ extension UnifiedCameraView {
         } else if nextStep == nil {
             showConfirmCompletionPopup = true
         } else {
-            showStepCompletionPopup = true
+//            showStepCompletionPopup = true
+            // Newly added to skip completion popup
+            if pillScanViewModel.capturedVialImage != nil {
+                pillScanViewModel.capturedVialImage = nil
+                pillScanViewModel.vialCapturedImagePath = nil
+                cameraService.start()
+                cameraService.rebindPreviewLayer()
+                cameraService.resetInactivityTimer()
+            }
+            pillScanViewModel.handleStepCompletion()
         }
     }
 

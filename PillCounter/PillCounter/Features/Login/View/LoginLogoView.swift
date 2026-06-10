@@ -22,7 +22,7 @@ struct LoginLogoView: View {
 
                     Spacer()
 
-                    Image("app_icon")
+                    Image("icon_app")
                         .resizable()
                         .scaledToFit()
                         .frame(

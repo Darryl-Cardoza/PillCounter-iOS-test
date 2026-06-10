@@ -162,8 +162,12 @@ struct VerifyStockBottleSheetContent: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .padding(.top, 50)
-
+            
             Spacer(minLength: 0)
+
+            HazardousWarningBanner(isIpad: true)
+                .padding(.horizontal, 16)
+
 
             VStack(spacing: 20) {
                 iPadLandscapeDetailRow(leading: VerifyFormBadge(isIpad: true),
@@ -385,19 +389,19 @@ private struct HazardousWarningBanner: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "xmark.circle")
+            Image(systemName: "exclamationmark.triangle.fill")
                 .resizable()
                 .scaledToFit()
                 .frame(width: iconSize, height: iconSize)
-                .foregroundColor(Color(red: 0.85, green: 0.33, blue: 0.18))
+                .foregroundColor(appColors.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.BarcodeScan.hazardousNdcDetected)
                     .font(.system(size: fontSize, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(appColors.text)
                 Text(L10n.BarcodeScan.wearGlovesAndProceedWithCaution)
                     .font(.system(size: fontSize, weight: .regular))
-                    .foregroundColor(.primary)
+                    .foregroundColor(appColors.text)
             }
 
             Spacer(minLength: 0)
@@ -406,7 +410,7 @@ private struct HazardousWarningBanner: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(red: 0.85, green: 0.33, blue: 0.18).opacity(0.12))
+                .fill(appColors.secondary.opacity(0.12))
         )
         .padding(.horizontal, 16)
     }

@@ -157,17 +157,13 @@ struct VerifyStockBottleSheetContent: View {
     // MARK: - iPad Landscape Layout
 
     private var iPadLandscapeLayout: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 24) {
             Text(L10n.BarcodeScan.qrScannedSuccessfully)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .padding(.top, 50)
-            
-            Spacer(minLength: 0)
 
-            HazardousWarningBanner(isIpad: true)
-                .padding(.horizontal, 16)
-
+            HazardousWarningBanner(isIpad: true, centered: true)
 
             VStack(spacing: 20) {
                 iPadLandscapeDetailRow(leading: VerifyFormBadge(isIpad: true),
@@ -225,9 +221,9 @@ struct VerifyStockBottleSheetContent: View {
         HStack(alignment: .center, spacing: 16) {
             leading.frame(width: 120, height: 120)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 16) {
                 Text(title)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 17, weight: .regular))
                     .foregroundColor(appColors.text)
                 Text(value)
                     .font(.system(size: 20, weight: .regular))
@@ -330,7 +326,7 @@ private struct VerifyFormBadge: View {
     var body: some View {
         VStack(spacing: 10) {
             Text("Form")
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: isIpad ? 17 : 12, weight: .regular))
                 .foregroundColor(appColors.text)
 
             Image("dispense_dashboard_icon")
@@ -360,7 +356,7 @@ private struct VerifyValueBadge: View {
     var body: some View {
         VStack(spacing: 10) {
             Text(label)
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: isIpad ? 17 : 12, weight: .regular))
                 .foregroundColor(appColors.text)
             Text(value)
                 .font(.system(size: isIpad ? 24 : 16, weight: .semibold))
@@ -383,26 +379,31 @@ private struct VerifyValueBadge: View {
 private struct HazardousWarningBanner: View {
     @EnvironmentObject private var appColors: AppColors
     let isIpad: Bool
+    /// When true, the icon + text are centered within the banner (used in landscape).
+    var centered: Bool = false
 
     private var iconSize: CGFloat  { isIpad ? 28 : 20 }
     private var fontSize: CGFloat  { isIpad ? 15 : 12 }
 
+    private var message: String {
+        "\(L10n.BarcodeScan.hazardousNdcDetected) \(L10n.BarcodeScan.wearGlovesAndProceedWithCaution)"
+    }
+
     var body: some View {
         HStack(spacing: 10) {
+            if centered { Spacer(minLength: 0) }
+
             Image(systemName: "exclamationmark.triangle.fill")
                 .resizable()
                 .scaledToFit()
                 .frame(width: iconSize, height: iconSize)
                 .foregroundColor(appColors.secondary)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.BarcodeScan.hazardousNdcDetected)
-                    .font(.system(size: fontSize, weight: .semibold))
-                    .foregroundColor(appColors.text)
-                Text(L10n.BarcodeScan.wearGlovesAndProceedWithCaution)
-                    .font(.system(size: fontSize, weight: .regular))
-                    .foregroundColor(appColors.text)
-            }
+            Text(message)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundColor(appColors.text)
+                .multilineTextAlignment(centered ? .center : .leading)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
         }

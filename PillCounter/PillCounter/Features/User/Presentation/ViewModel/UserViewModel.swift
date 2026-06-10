@@ -138,6 +138,10 @@ class UserViewModel: ObservableObject {
             let name = Formatter.segregateName(from: localUser.fname ?? "")
             firstName    = name.firstName
             lastName     = name.lastName
+            // Also set fullName here. Only the remote path (populateEditableFields)
+            // was setting it, so on the common cache-served dashboard visit fullName
+            // stayed "" and the header's "terminal | name" line showed a blank name.
+            fullName     = localUser.fname ?? ""
             email        = localUser.email ?? ""
             pharmacyName = localUser.pharmacy_name ?? ""
             npiID        = localUser.npi_id ?? ""

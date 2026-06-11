@@ -133,23 +133,34 @@ final class PillDetectionService {
     ///
     /// The cls output is already post-sigmoid (model has baked-in sigmoid, per the
     /// iOS integration spec).  Values are direct probabilities [0, 1] — do NOT apply
-    /// sigmoid again.  Reference scoreThresh from spec = 0.25; we use 0.45 to be
-    /// stricter for a stable pill count.
-    private let enterConf: Float = 0.60
+    /// sigmoid again.  Reference scoreThresh from spec = 0.25; we use 0.45 as a
+    /// middle ground — stricter than spec for stability, but low enough that real
+    /// pills the model scores 0.45–0.60 still ENTER. At 0.60 (the previous value)
+    /// a real pill the model was only ~0.5 confident about on its FIRST appearance
+    /// never entered and was never counted — the "tray detected, pills present, but
+    /// count = 0" symptom — because a new pill has no prior-frame box to fall back
+    /// on the softer STAY threshold. Matches Android PILL_CONF_ENTER = 0.50.
+    private let enterConf: Float = 0.50
 
     /// STAY hysteresis threshold: a detection overlapping a box from the previous
     /// frame is kept as long as confidence stays above this softer threshold.
     /// Lower than enterConf to avoid flickering on detections already confirmed.
-    private let stayConf: Float = 0.60
+    ///
+    /// MUST be < enterConf for the two-threshold hysteresis to do anything — when
+    /// stayConf == enterConf the STAY grace is a no-op and every pill is gated at a
+    /// flat threshold each frame, so a pill wavering just above/below it flickers in
+    /// and out of the count (and edge/chute-lip pills blink). Matches the design
+    /// documented in this file's header (enter strict, stay softer).
+    private let stayConf: Float = 0.35
 
     /// Minimum IoU between a new detection and a previous-frame detection to
-    /// count as "the same object" for STAY-mode purposes.
-    private let overlapIoU: Float = 0.45
+    /// count as "the same object" for STAY-mode purposes. Matches Android
+    /// HYSTERESIS_IOU = 0.40.
+    private let overlapIoU: Float = 0.40
 
-    /// IoU threshold used in final Non-Maximum Suppression after hysteresis.
-    /// 0.60 per the iOS integration spec (higher = less aggressive suppression
-    /// of tightly-packed pills that legitimately have high overlap).
-    private let nmsIoU: Float = 0.60
+    /// IoU threshold used in Non-Maximum Suppression. Matches Android
+    /// PILL_NMS_IOU = 0.45. NMS runs BEFORE hysteresis (Android order).
+    private let nmsIoU: Float = 0.45
 
     // MARK: - State
 
@@ -186,14 +197,11 @@ final class PillDetectionService {
         let mlInput = pills_detector_fp16Input(image: resized)
 
         // ── Step 3: Run inference ──────────────────────────────────────────
-        let inferenceStart = CACurrentMediaTime()
         guard let output = try? model.prediction(input: mlInput) else {
             print("❌ [PILL MODEL] Inference failed")
             completion([], 0)
             return
         }
-        let inferenceMs = (CACurrentMediaTime() - inferenceStart) * 1000
-
 
         // ── Step 4: Decode all three FPN stride levels ─────────────────────
         // Each stride level contributes a cls tensor and a box tensor.
@@ -219,13 +227,17 @@ final class PillDetectionService {
             raw.append(contentsOf: decoded)
         }
 
-        // ── Step 5: Confidence hysteresis ──────────────────────────────────
-        // Split raw candidates into ENTER (new) and STAY (seen in prev frame).
-        // Apply the appropriate threshold to each group before merging.
-        let afterHysteresis = applyHysteresis(raw)
+        // ── Step 5: Non-Maximum Suppression ────────────────────────────────
+        // Android order: decode → NMS → hysteresis. Running NMS first collapses
+        // the duplicate boxes a single pill produces across grid cells/FPN levels
+        // BEFORE the hysteresis overlap test, so the prev-frame IoU match in STAY
+        // mode compares against clean single boxes (not a cloud of duplicates).
+        let afterNms = NMS.run(detections: raw, iouThreshold: nmsIoU)
 
-        // ── Step 6: Non-Maximum Suppression ────────────────────────────────
-        let final = NMS.run(detections: afterHysteresis, iouThreshold: nmsIoU)
+        // ── Step 6: Confidence hysteresis ──────────────────────────────────
+        // New pills must clear enterConf; borderline pills (≥ stayConf) survive
+        // only if they overlap a pill from the previous frame.
+        let final = applyHysteresis(afterNms)
 
         // Update hysteresis state for the next frame.
         previousFrameBoxes = final.map { $0.rect }

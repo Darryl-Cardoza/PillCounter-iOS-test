@@ -48,10 +48,17 @@ import QuartzCore   // CACurrentMediaTime()
 /// rect is in the original camera-frame pixel coordinates (un-letterboxed).
 /// trayClass indicates whether this is a TRAY (pill-counting region) or a
 /// CHUTE (dispenser opening — excluded from pill filtering).
+///
+/// 1:1 port of Android `TrayDetection`. The crucial field is `mask`: the actual
+/// per-pixel segmentation mask in `maskSize`×`maskSize` (384) space, row-major.
+/// Pill containment is tested against this mask (see `containsPoint`), NOT the
+/// bounding box — the bbox of an angled or L-shaped tray covers large non-tray
+/// areas (including the chute), which is why bbox-based counting let chute pills
+/// through and was fragile at odd angles. The mask is exact at any orientation.
 struct TrayResult: Identifiable {
     let id = UUID()
 
-    /// Bounding box in original camera-frame pixel coordinates.
+    /// Bounding box in original camera-frame pixel coordinates (overlay/debug only).
     let rect: CGRect
 
     /// Detection confidence. Segmentation has no per-box score, so this is 1.0
@@ -63,6 +70,32 @@ struct TrayResult: Identifiable {
 
     /// Which region class was detected at this location.
     let trayClass: TrayClass
+
+    /// Packed per-pixel mask in `maskSize`×`maskSize` (384) space, row-major:
+    /// `mask[y * maskSize + x]` is true where this class won the argmax+margin gate.
+    let mask: [Bool]
+
+    /// Side length of the square mask (384). 0 if no mask (legacy/empty).
+    let maskSize: Int
+
+    /// Maps original-frame coords → mask (384) space: `x_mask = x*scale + padX`.
+    /// Mirrors Android `TrayDetection.scaleInfo` (the 384-space ScaleInfo).
+    let maskScale: CGFloat
+    let maskPadX: CGFloat
+    let maskPadY: CGFloat
+
+    /// True if the original-frame point (x, y) lands on a set mask pixel.
+    /// Direct port of Android `TrayDetection.containsPoint`. Falls back to the
+    /// bbox test only when no mask is present.
+    func containsPoint(_ x: CGFloat, _ y: CGFloat) -> Bool {
+        if maskSize > 0, !mask.isEmpty {
+            let xMask = Int(x * maskScale + maskPadX)
+            let yMask = Int(y * maskScale + maskPadY)
+            if xMask < 0 || xMask >= maskSize || yMask < 0 || yMask >= maskSize { return false }
+            return mask[yMask * maskSize + xMask]
+        }
+        return rect.contains(CGPoint(x: x, y: y))
+    }
 }
 
 // MARK: - TrayDetectionService
@@ -98,7 +131,8 @@ final class TrayDetectionService {
     /// class if `fgLogit - bgLogit >= fgLogitMargin`. Matches Android
     /// FG_LOGIT_MARGIN = 1.5 (≈ requiring softmax(fg) > 0.82). Raise to reject
     /// false-positive foreground pixels; lower if real boundaries are missed.
-    private let fgLogitMargin: Float = 1.0
+    /// Matches Android FG_LOGIT_MARGIN = 1.5 (≈ requiring softmax(fg) > 0.82).
+    private let fgLogitMargin: Float = 1.5
 
     // MARK: - Model & Context
 
@@ -203,11 +237,15 @@ final class TrayDetectionService {
         let raw  = logits.dataPointer
         let elem = logits.dataType == .float16 ? 2 : 4
 
-        // Per-class bbox accumulators (in 384 space).
+        // Per-class bbox accumulators (in 384 space) + per-pixel masks.
+        // Masks are gridW×gridH (=384²) Bool arrays, row-major, exactly like
+        // Android's chuteMaskScratch / trayMaskScratch BitSets.
         var chuteMinX = gridW, chuteMinY = gridH, chuteMaxX = -1, chuteMaxY = -1
         var trayMinX  = gridW, trayMinY  = gridH, trayMaxX  = -1, trayMaxY  = -1
         var chutePixels = 0
         var trayPixels  = 0
+        var chuteMask = [Bool](repeating: false, count: gridW * gridH)
+        var trayMask  = [Bool](repeating: false, count: gridW * gridH)
 
         let bgBase    = classBackground * sC
         let chuteBase = classChute * sC
@@ -215,6 +253,7 @@ final class TrayDetectionService {
 
         for y in 0..<gridH {
             let rowOff = y * sH
+            let maskRow = y * gridW
             for x in 0..<gridW {
                 let colOff = rowOff + x * sW
 
@@ -232,13 +271,16 @@ final class TrayDetectionService {
                 // Confidence gate: foreground must beat background by the margin.
                 guard fgLogit - bg >= fgLogitMargin else { continue }
 
+                let maskIdx = maskRow + x
                 if isChute {
+                    chuteMask[maskIdx] = true
                     if x < chuteMinX { chuteMinX = x }
                     if x > chuteMaxX { chuteMaxX = x }
                     if y < chuteMinY { chuteMinY = y }
                     if y > chuteMaxY { chuteMaxY = y }
                     chutePixels += 1
                 } else {
+                    trayMask[maskIdx] = true
                     if x < trayMinX { trayMinX = x }
                     if x > trayMaxX { trayMaxX = x }
                     if y < trayMinY { trayMinY = y }
@@ -251,22 +293,23 @@ final class TrayDetectionService {
         var out: [TrayResult] = []
         if trayPixels > minClassPixels {
             out.append(buildResult(
-                cls: .tray,
+                cls: .tray, mask: trayMask, maskSize: gridW,
                 minX: trayMinX, minY: trayMinY, maxX: trayMaxX, maxY: trayMaxY,
                 scale: scale, padX: padX, padY: padY, frameSize: frameSize))
         }
         if chutePixels > minClassPixels {
             out.append(buildResult(
-                cls: .chute,
+                cls: .chute, mask: chuteMask, maskSize: gridW,
                 minX: chuteMinX, minY: chuteMinY, maxX: chuteMaxX, maxY: chuteMaxY,
                 scale: scale, padX: padX, padY: padY, frameSize: frameSize))
         }
         return out
     }
 
-    /// Converts a 384-space pixel bbox back to original-frame coordinates.
-    /// Mirrors Android `buildDetection` (clamps to frame bounds).
+    /// Converts a 384-space pixel bbox back to original-frame coordinates and
+    /// attaches the per-pixel mask. Mirrors Android `buildDetection`.
     private func buildResult(cls: TrayClass,
+                             mask: [Bool], maskSize: Int,
                              minX: Int, minY: Int, maxX: Int, maxY: Int,
                              scale: CGFloat, padX: CGFloat, padY: CGFloat,
                              frameSize: CGSize) -> TrayResult {
@@ -286,7 +329,15 @@ final class TrayDetectionService {
             rect: CGRect(x: cx1, y: cy1, width: max(0, cx2 - cx1), height: max(0, cy2 - cy1)),
             confidence: 1.0,
             originalFrameSize: frameSize,
-            trayClass: cls
+            trayClass: cls,
+            mask: mask,
+            maskSize: maskSize,
+            // The scale/padX/padY passed in are already the 384-space values (the
+            // detector letterboxes the frame directly to 384). They map original
+            // frame coords → mask space: x_mask = x*scale + padX.
+            maskScale: scale,
+            maskPadX: padX,
+            maskPadY: padY
         )
     }
 

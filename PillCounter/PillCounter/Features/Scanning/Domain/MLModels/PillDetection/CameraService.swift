@@ -42,98 +42,35 @@ final class CameraService: NSObject, ObservableObject {
     private let trayDetector   = TrayDetectionService.shared
     private let gloveDetector  = GloveDetectionService()
 
-    /// Fraction of each tray rect's own width/height used to expand the counting
-    /// region outward. Absorbs the tray model's tendency to draw the box slightly
-    /// inside the real tray edge, so pills lying right at the border (e.g. the
-    /// landscape gap between chute and tray) still count. Chute exclusion runs
-    /// after this padding, so widening the tray can't re-add chute pills.
-    private static let trayInsetPadFraction: CGFloat = 0.06
-
-    /// Cap on how far a tray rect may be extended toward the chute, as a fraction of
-    /// the tray's size along the extension axis. Prevents a far or spurious chute
-    /// detection from ballooning the counting region across the whole frame.
-    private static let trayChuteExtendMaxFraction: CGFloat = 0.30
-
     /// Reject a "tray" whose bbox covers at least this fraction of the frame — a
     /// background surface (e.g. the table) fills the frame, whereas a real tray is
-    /// a bounded object inside it. Mirrors Android TRAY_MAX_FRAME_COVERAGE.
+    /// a bounded object inside it. Matches Android TRAY_MAX_FRAME_COVERAGE = 0.75.
     private static let trayMaxFrameCoverage: CGFloat = 0.75
 
-    /// Fraction the CHUTE rect is shrunk (inward) before a pill's centre is tested
-    /// for "inside the chute". The chute mask's bounding box is a coarse rectangle
-    /// that overhangs the tray↔chute boundary, so a pill lying in the channel right
-    /// at the lip would land inside the raw chute box one frame and outside it the
-    /// next — flickering in and out of the count. Requiring the centre to be WELL
-    /// inside the chute (not just touching its bbox) keeps those border pills
-    /// counted stably while still excluding pills that are genuinely deep in the
-    /// dispenser slot.
-    private static let chuteExclusionInsetFraction: CGFloat = 0.18
-
     /// Number of recent frames whose pill counts are kept for median smoothing.
-    /// The raw per-frame count jitters ±1–2 even on a static scene (boundary pills
-    /// crossing the confidence/region threshold); reporting the median over this
-    /// window steadies the displayed number. Markers (dots) still come from the
-    /// live frame, so they stay responsive. Mirrors Android PILL_COUNT_SMOOTH_WINDOW.
+    /// The raw per-frame count jitters ±1–2 even on a static scene; reporting the
+    /// median over this window steadies the displayed number. Markers (dots) still
+    /// come from the live frame, so they stay responsive. Matches Android
+    /// PILL_COUNT_SMOOTH_WINDOW = 5.
     private static let countSmoothWindow: Int = 5
 
     /// Rolling buffer of recent per-frame counts, oldest first. Median → stableCount.
     private var recentCounts: [Int] = []
 
-    /// Extends `tray` toward the nearest chute rect so pills in the gap between the
-    /// chute and the tray (which sit on the tray but outside its drawn box) are
-    /// included. Only the tray edge that faces the chute is moved, up to the chute's
-    /// near edge, capped by `trayChuteExtendMaxFraction`. Orientation-independent —
-    /// it reacts to the actual chute position, so landscape and portrait match.
-    private static func extendTowardNearestChute(_ tray: CGRect,
-                                                 chuteRects: [CGRect]) -> CGRect {
-        // Nearest chute by centre distance.
-        guard let chute = chuteRects.min(by: { a, b in
-            let da = hypot(a.midX - tray.midX, a.midY - tray.midY)
-            let db = hypot(b.midX - tray.midX, b.midY - tray.midY)
-            return da < db
-        }) else { return tray }
+    /// Number of consecutive frames the last-good tray/chute detections are held
+    /// after a momentary segmentation miss, so the overlay + pill gate don't blink
+    /// on an otherwise-steady scene. Matches Android TRAY_HOLD_FRAMES = 1: kept
+    /// short so the tray (and the pill markers gated by it) clear almost immediately
+    /// when the camera moves away — a longer hold leaves a visible ghost of the old
+    /// box. The COUNT is separately protected from a single dropped frame by the
+    /// median over countSmoothWindow, so a 1-frame hold is enough.
+    private static let trayHoldFrames: Int = 1
 
-        let dx = chute.midX - tray.midX
-        let dy = chute.midY - tray.midY
-
-        var result = tray
-
-        if abs(dy) >= abs(dx) {
-            // Chute is above or below — extend the tray vertically toward it.
-            let maxExtend = tray.height * trayChuteExtendMaxFraction
-            if dy < 0 {
-                // Chute above: pull the top edge up to the chute's bottom.
-                let target = max(chute.maxY, tray.minY - maxExtend)
-                let newMinY = min(tray.minY, max(target, tray.minY - maxExtend))
-                result = CGRect(x: tray.minX, y: newMinY,
-                                width: tray.width, height: tray.maxY - newMinY)
-            } else {
-                // Chute below: push the bottom edge down to the chute's top.
-                let target = min(chute.minY, tray.maxY + maxExtend)
-                let newMaxY = max(tray.maxY, min(target, tray.maxY + maxExtend))
-                result = CGRect(x: tray.minX, y: tray.minY,
-                                width: tray.width, height: newMaxY - tray.minY)
-            }
-        } else {
-            // Chute is left or right — extend the tray horizontally toward it.
-            let maxExtend = tray.width * trayChuteExtendMaxFraction
-            if dx < 0 {
-                // Chute left: pull the left edge out to the chute's right.
-                let target = max(chute.maxX, tray.minX - maxExtend)
-                let newMinX = min(tray.minX, max(target, tray.minX - maxExtend))
-                result = CGRect(x: newMinX, y: tray.minY,
-                                width: tray.maxX - newMinX, height: tray.height)
-            } else {
-                // Chute right: push the right edge out to the chute's left.
-                let target = min(chute.minX, tray.maxX + maxExtend)
-                let newMaxX = max(tray.maxX, min(target, tray.maxX + maxExtend))
-                result = CGRect(x: tray.minX, y: tray.minY,
-                                width: newMaxX - tray.minX, height: tray.height)
-            }
-        }
-
-        return result
-    }
+    /// Last-good tray/chute detections (with masks) and the miss counter, used to
+    /// bridge a single dropped segmentation frame. Mirrors Android
+    /// heldTrayDetections / trayMissFrames. Reset on counting pause/resume.
+    private var heldTrayDetections: [TrayResult] = []
+    private var trayMissFrames: Int = 0
 
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
@@ -437,6 +374,11 @@ final class CameraService: NSObject, ObservableObject {
             self.isGloveHazardous = false
             self.recentCounts.removeAll()   // start the next session's median fresh
         }
+        // Drop the held tray/chute detections so the next session re-acquires them
+        // from scratch rather than counting against a stale tray that may no longer
+        // be in frame.
+        heldTrayDetections.removeAll()
+        trayMissFrames = 0
     }
 
     func resumeCounting() {
@@ -577,56 +519,51 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             ? gloveDetector.detect(pixelBuffer: pixelBuffer)
             : []
 
-        // ── Model 2: Tray / chute detection (RTMDet-Tiny 640×640) ────────────
-        // Returns both .tray and .chute regions; only .tray regions gate pill counts.
-        let allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
+        // ── Model 2: Tray / chute segmentation (MobileNetV2-UNet 384×384) ────
+        // Returns .tray and .chute regions, each carrying a per-pixel mask. Pills
+        // are tested against the masks (not bounding boxes) — 1:1 with Android.
+        var allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
 
-        // Only TRAY regions (class 0) are used to filter pill positions.
-        // CHUTE regions (class 1) are passed to the overlay for display only.
-        let trayRects = allTrays.filter { $0.trayClass == .tray }.map { $0.rect }
-
-        // CHUTE regions: pills sitting in the chute (dispenser slot) must NOT be
-        // counted even if the tray box happens to overlap them. Excluding any pill
-        // whose centre is inside a chute rect fixes the portrait case where chute
-        // pills near the tray's top lip were being counted.
-        let chuteRects = allTrays.filter { $0.trayClass == .chute }.map { $0.rect }
-
-        // Build the counting region from each tray rect in two steps:
-        //
-        //  1. Uniform pad — the tray model draws the box slightly inside the real
-        //     tray edge, so pills at the border fall just outside. Pad by a fraction
-        //     of the rect's own size to recover them.
-        //
-        //  2. Extend toward the chute — pills lying in the gap between the chute and
-        //     the tray (most visible in landscape, where the tray's top edge cuts
-        //     right below the chute lip) are on the tray but outside its box. Grow
-        //     the tray rect's chute-facing edge up to the chute's near edge so those
-        //     pills are included. This is geometric, not orientation-specific, so
-        //     portrait and landscape behave identically. Chute exclusion still runs
-        //     afterward, so anything actually in the chute is removed.
-        let countingRects = trayRects.map { rect -> CGRect in
-            let padX = rect.width  * Self.trayInsetPadFraction
-            let padY = rect.height * Self.trayInsetPadFraction
-            let padded = rect.insetBy(dx: -padX, dy: -padY)
-            return Self.extendTowardNearestChute(padded, chuteRects: chuteRects)
+        // ── Tray temporal hold (anti-flicker) ────────────────────────────────
+        // Bridge a single dropped tray-seg frame so the overlay + pill gate don't
+        // blink on a steady scene. Clears after trayHoldFrames consecutive misses
+        // so the tray still disappears when you move away. Mirrors Android.
+        if !allTrays.isEmpty {
+            heldTrayDetections = allTrays
+            trayMissFrames = 0
+        } else if trayMissFrames < Self.trayHoldFrames {
+            trayMissFrames += 1
+            allTrays = heldTrayDetections
+        } else {
+            heldTrayDetections = []
         }
 
         // ── "Complete product" gate (mirrors Android TrayGate) ───────────────
-        // A valid scene requires BOTH a tray AND a chute, and the tray must NOT
-        // fill the frame (that would be the background surface, not a tray).
-        // When the gate is closed: no pill count and no tray/chute overlay. This
-        // matches Android: a tray-only, chute-only, or table-filling-frame scene
-        // is "not a complete product" and surfaces nothing.
+        // A valid scene requires BOTH a tray AND a chute, and the largest tray must
+        // NOT fill the frame (that would be the background surface, not a tray).
+        // When closed: no pill count, no tray/chute overlay.
+        let trayDets  = allTrays.filter { $0.trayClass == .tray }
+        let chuteDets = allTrays.filter { $0.trayClass == .chute }
+
         let frameSz = pixelBuffer.size
         let frameArea = max(1, frameSz.width * frameSz.height)
-        let trayCoverage = trayRects
-            .map { ($0.width * $0.height) / frameArea }
+        let trayCoverage = trayDets
+            .map { ($0.rect.width * $0.rect.height) / frameArea }
             .max() ?? 0
         let trayFillsFrame = trayCoverage >= Self.trayMaxFrameCoverage
-        let isCompleteTray = !trayRects.isEmpty && !chuteRects.isEmpty && !trayFillsFrame
+        let isCompleteTray = !trayDets.isEmpty && !chuteDets.isEmpty && !trayFillsFrame
+
+        let gateOpen = isCompleteTray
 
         // Overlay shows tray/chute only when the scene is a complete product.
         let displayTrays = isCompleteTray ? allTrays : []
+
+        // Tray/chute detections (with masks) used by the pill filter below.
+        let effectiveTrayDets  = trayDets
+        let effectiveChuteDets = chuteDets
+
+        // First tray rect for tray-colour sampling (display/feature only).
+        let trayRects = trayDets.map { $0.rect }
 
         // ── Tray colour sampling (hazardous-tray feature) ────────────────────
         // Continuously classify the visible tray's generic colour and publish it
@@ -649,26 +586,23 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, _ in
             guard let self else { return }
 
-            // Counting GATE: only count once the scene is a complete product
-            // (tray AND chute, tray not filling frame). Otherwise count = 0.
-            // Then keep only pills whose centre falls inside a (padded) TRAY rect
-            // AND is NOT inside any CHUTE rect.
+            // Counting GATE (mirrors Android): only count when the scene is a
+            // complete product (tray AND chute, tray not filling frame). Then keep a
+            // pill only if its CENTRE lands on the actual TRAY mask AND not on the
+            // CHUTE mask. Using the per-pixel masks (not bounding boxes) is what
+            // makes counting correct at any angle/height and keeps chute pills out —
+            // the bbox of an angled tray covers non-tray area including the chute,
+            // but the mask does not.
             let filtered: [DetectionResult]
-            if !isCompleteTray || countingRects.isEmpty {
+            if !gateOpen {
                 filtered = []
             } else {
-                // Shrink each chute rect inward so only pills WELL inside the chute
-                // are excluded; pills in the channel right at the tray↔chute lip
-                // stay counted (and stop flickering frame-to-frame).
-                let chuteExclusionRects = chuteRects.map { rect -> CGRect in
-                    rect.insetBy(dx: rect.width  * Self.chuteExclusionInsetFraction,
-                                 dy: rect.height * Self.chuteExclusionInsetFraction)
-                }
                 filtered = allPills.filter { pill in
-                    let center = pill.center
-                    let inTray  = countingRects.contains { $0.contains(center) }
+                    let cx = pill.center.x
+                    let cy = pill.center.y
+                    let inTray = effectiveTrayDets.contains { $0.containsPoint(cx, cy) }
                     guard inTray else { return false }
-                    let inChute = chuteExclusionRects.contains { $0.contains(center) }
+                    let inChute = effectiveChuteDets.contains { $0.containsPoint(cx, cy) }
                     return !inChute
                 }
             }

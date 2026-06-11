@@ -127,8 +127,22 @@ extension UIImage {
         // ── Render ───────────────────────────────────────────────────────
         let renderer = UIGraphicsImageRenderer(size: size)
 
-        return renderer.image { _ in
+        return renderer.image { ctx in
             draw(at: .zero)
+
+            // ── Full-width backing panel (0.5 black) ─────────────────────────
+            // Sits behind the metadata so both the photo and the text stay
+            // legible regardless of the underlying image content. Padded a little
+            // above/below the text block and spanning the full image width.
+            let panelPad: CGFloat = margin * 0.5
+            let panelRect = CGRect(
+                x:      0,
+                y:      blockY - panelPad,
+                width:  size.width,
+                height: blockH + panelPad * 2
+            )
+            UIColor.black.withAlphaComponent(0.5).setFill()
+            ctx.cgContext.fill(panelRect)
 
             for (i, (label, value)) in rows.enumerated() {
                 let y = blockY + CGFloat(i) * rowH

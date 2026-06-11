@@ -408,6 +408,11 @@ struct UnifiedCameraView: View {
             .onChange(of: pillScanViewModel.currentTransaction) { _, txn in
                 cameraService.isGloveDetectionEnabled =
                     (txn?.drug?.is_hazardous == true) && AppStorageManager.shared.isHazardousDrugSetting
+                // New transaction (e.g. continuous dispense): re-arm tray-colour
+                // sampling so the same physical tray re-emits its colour and the
+                // hazardous-tray check/marking runs for this transaction too.
+                cameraService.resetTrayColorSampling()
+                pillScanViewModel.resetTrayColorTracking()
             }
     }
 

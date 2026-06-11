@@ -415,6 +415,18 @@ final class CameraService: NSObject, ObservableObject {
         }
     }
 
+    /// Clears only the tray-colour sampling memory so the NEXT complete-tray frame
+    /// re-publishes its colour even if the tray is physically unchanged. Tray colour
+    /// is published only on CHANGE, so without this a new transaction on the same tray
+    /// (continuous dispense) never re-emits — and the hazardous-tray check/marking for
+    /// that transaction never runs. Call when the current transaction changes.
+    func resetTrayColorSampling() {
+        DispatchQueue.main.async {
+            self.detectedTrayColor    = nil
+            self.lastSampledTrayColor = nil
+        }
+    }
+
     // MARK: - ORIENTATION
     /// STARTS LISTENING TO DEVICE ORIENTATION CHANGES
     func startObservingOrientation() {
@@ -587,7 +599,14 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         // isTrayColorDetectionEnabled so it runs ONLY while the pill-count sheet is
         // showing in the dispense / stock-scan-pills flows. Runs regardless of
         // isGloveDetectionEnabled because the non-hazardous flow also needs it.
-        if isTrayColorDetectionEnabled, let firstTrayRect = trayRects.first,
+        //
+        // Sample ONLY on a complete-product frame (tray AND chute detected, same gate
+        // as counting/overlay). Without this, continuous dispense samples an early
+        // tray-only frame — before the chute is acquired — and pins lastSampledTrayColor
+        // to it. Because the colour is published only on CHANGE, the real complete-tray
+        // colour then never re-emits, so the hazardous-tray capture popup is missed on
+        // first entry and only reappears later when the colour happens to change again.
+        if isTrayColorDetectionEnabled, isCompleteTray, let firstTrayRect = trayRects.first,
            let color = TrayColorClassifier.dominantColor(in: pixelBuffer, rect: firstTrayRect) {
             DispatchQueue.main.async {
                 guard self.isTrayColorDetectionEnabled, self.isCountingEnabled else { return }
@@ -717,9 +736,12 @@ extension CameraService {
             // Draw oriented image (no flip needed — CIImage already handled it)
             UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: imageSize))
 
-            // Draw badges at transformed positions
+            // Draw badges at transformed positions. Badge size is fixed (relative to
+            // image width) so every pill marker is the same size regardless of the
+            // detected box, instead of scaling per-pill.
+            let badgeSize = imageSize.width * 0.04
             transformedDetections.enumerated().forEach { index, detection in
-                drawBadge(context: context, index: index, rect: detection.rect)
+                drawBadge(context: context, index: index, rect: detection.rect, badgeSize: badgeSize)
             }
         }
     }
@@ -820,9 +842,10 @@ extension CameraService {
     private func drawBadge(
         context: CGContext,
         index: Int,
-        rect: CGRect
+        rect: CGRect,
+        badgeSize: CGFloat
     ) {
-        let circleSize: CGFloat = min(rect.width, rect.height) * 0.6
+        let circleSize = badgeSize
         let center = CGPoint(x: rect.midX, y: rect.midY)
 
         let circleRect = CGRect(

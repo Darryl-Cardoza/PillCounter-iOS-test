@@ -89,24 +89,58 @@ final class ImageWebServer {
         connection.start(queue: queue)
     }
 
-    /// Receives HTTP request.
-    private func receive(on connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, _ in
+    /// Receives an HTTP request, accumulating bytes until the full header block has
+    /// arrived. A single receive() returns as soon as ≥1 byte is available, so under
+    /// packet fragmentation it can hand back a PARTIAL request line — which then
+    /// routes to 400/404 and the PMS sees an intermittent fetch failure. We are
+    /// serving GETs (no body), so the request is complete once we've seen the
+    /// "\r\n\r\n" header terminator.
+    private func receive(on connection: NWConnection, accumulated: Data = Data()) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+            guard let self else { connection.cancel(); return }
 
-            guard let self, let data,
-                  let request = String(data: data, encoding: .utf8) else {
+            var buffer = accumulated
+            if let data { buffer.append(data) }
+
+            if let error {
+                Log("Image server receive error: \(error.localizedDescription)")
                 connection.cancel()
                 return
             }
-            let response = self.handleRequest(request)
-            self.send(response, on: connection)
+
+            // Headers complete once we see the blank-line terminator.
+            let terminator = Data("\r\n\r\n".utf8)
+            if buffer.range(of: terminator) != nil {
+                guard let request = String(data: buffer, encoding: .utf8) else {
+                    self.send(self.errorResponse(400), on: connection)
+                    return
+                }
+                let response = self.handleRequest(request)
+                self.send(response, on: connection)
+                return
+            }
+
+            // Peer closed before sending a full header — give up.
+            if isComplete {
+                connection.cancel()
+                return
+            }
+
+            // Guard against an unbounded request from a misbehaving client.
+            guard buffer.count <= 65536 else {
+                self.send(self.errorResponse(431), on: connection)
+                return
+            }
+
+            // Need more bytes — keep reading on the same connection.
+            self.receive(on: connection, accumulated: buffer)
         }
     }
 
     // MARK: - Routing
 
     /// Only endpoint: GET /images/<filename>
-    private func handleRequest(_ request: String) -> String {
+    private func handleRequest(_ request: String) -> Data {
 
         let lines = request.components(separatedBy: "\r\n")
 
@@ -135,7 +169,7 @@ final class ImageWebServer {
 
     /// Decrypts the .enc file in-memory and returns a base64 JSON response.
     /// PMS always receives the plain JPEG bytes — the encrypted file is never sent directly.
-    private func serveImage(_ fileName: String) -> String {
+    private func serveImage(_ fileName: String) -> Data {
 
         guard isSafe(fileName) else { return errorResponse(400) }
 
@@ -155,21 +189,48 @@ final class ImageWebServer {
 
     // MARK: - Response
 
-    private func httpResponse(_ body: String, status: Int = 200) -> String {
-         "HTTP/1.1 \(status) OK\r\n" +
-         "Content-Type: application/json\r\n" +
-         "Content-Length: \(body.utf8.count)\r\n" +
-         "\r\n" +
-         body
-     }
+    /// Builds the full HTTP response as raw bytes. The body (a base64 JPEG) can be
+    /// several MB; assembling the header+body as Data and using the exact byte count
+    /// for Content-Length avoids a String round-trip and, critically, prevents a
+    /// Content-Length / body-length mismatch (interpolating multi-MB base64 into a
+    /// Swift String and counting .utf8 separately is fragile) that makes the C#
+    /// client read a truncated body and fail the fetch.
+    private func httpResponse(_ body: String, status: Int = 200) -> Data {
+        let bodyData = Data(body.utf8)
+        let header =
+            "HTTP/1.1 \(status) \(Self.reasonPhrase(status))\r\n" +
+            "Content-Type: application/json\r\n" +
+            "Content-Length: \(bodyData.count)\r\n" +
+            "Connection: close\r\n" +
+            "\r\n"
+        var response = Data(header.utf8)
+        response.append(bodyData)
+        return response
+    }
 
-    private func errorResponse(_ code: Int) -> String {
+    private static func reasonPhrase(_ status: Int) -> String {
+        switch status {
+        case 200: return "OK"
+        case 400: return "Bad Request"
+        case 404: return "Not Found"
+        case 405: return "Method Not Allowed"
+        case 431: return "Request Header Fields Too Large"
+        default:  return "Error"
+        }
+    }
+
+    private func errorResponse(_ code: Int) -> Data {
         httpResponse(#"{"success":false}"#, status: code)
     }
 
-    private func send(_ response: String, on connection: NWConnection) {
-        connection.send(content: response.data(using: .utf8),
-        completion: .contentProcessed { _ in connection.cancel() })
+    private func send(_ response: Data, on connection: NWConnection) {
+        connection.send(content: response,
+        completion: .contentProcessed { error in
+            if let error {
+                Log("Image server send error: \(error.localizedDescription)")
+            }
+            connection.cancel()
+        })
     }
 }
 

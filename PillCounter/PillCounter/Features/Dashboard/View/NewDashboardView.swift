@@ -95,13 +95,23 @@ struct NewDashboardView: View {
             .first?.interfaceOrientation.isLandscape ?? false
     }
 
+    /// REGULAR-count transactions are inventory/stock counts surfaced as their own
+    /// batch rows — they must never appear as dispense rows in either dashboard tab,
+    /// under any stat-card filter. Excluded at the merge source so both the lists and
+    /// the filtered views drop them.
+    private func isRegular(_ txn: PillCountTransactionEntity) -> Bool {
+        txn.count_type?.uppercased() == CountType.REGULAR.rawValue
+    }
+
     private var mergedQueueItems: [DashboardQueueItem] {
-        let dispenseItems = dispensePartial.map {
-            DashboardQueueItem.dispense(
-                $0,
-                pillCount: pillCounts[$0.txn_id] ?? 0
-            )
-        }
+        let dispenseItems = dispensePartial
+            .filter { !isRegular($0) }
+            .map {
+                DashboardQueueItem.dispense(
+                    $0,
+                    pillCount: pillCounts[$0.txn_id] ?? 0
+                )
+            }
         let inventoryItems = inventoryPartial.map {
             DashboardQueueItem.inventory(
                 $0,
@@ -158,12 +168,14 @@ struct NewDashboardView: View {
     }
 
     private var mergedRecentItems: [DashboardQueueItem] {
-        let dispenseItems = dispenseCompleted.map {
-            DashboardQueueItem.dispense(
-                $0,
-                pillCount: pillCounts[$0.txn_id] ?? 0
-            )
-        }
+        let dispenseItems = dispenseCompleted
+            .filter { !isRegular($0) }
+            .map {
+                DashboardQueueItem.dispense(
+                    $0,
+                    pillCount: pillCounts[$0.txn_id] ?? 0
+                )
+            }
         let inventoryItems = inventoryCompleted.map {
             DashboardQueueItem.inventory(
                 $0,
@@ -182,12 +194,15 @@ struct NewDashboardView: View {
     // MARK: - Stat cards built from live data
 
     private var statCards: [DashboardStatCard] {
-        [
+        // Counts must match the dispense rows shown in the tabs, which exclude
+        // REGULAR (inventory) transactions — so count against the same slice.
+        let dispensePartialFixed = dispensePartial.filter { !isRegular($0) }
+        return [
             DashboardStatCard(
                 id: "disp-high-priority",
                 iconName: "icon_priority",
                 iconColor: appColors.secondary,
-                count: dispensePartial.filter {
+                count: dispensePartialFixed.filter {
                     let p =
                         $0.txn_priority?.trimmingCharacters(in: .whitespaces)
                         .lowercased() == "high"
@@ -200,7 +215,7 @@ struct NewDashboardView: View {
                 id: "disp-pending",
                 iconName: "partial",
                 iconColor: appColors.secondary,
-                count: dispensePartial.count,
+                count: dispensePartialFixed.count,
                 label: L10n.Dashboard.StatCards.dispensePending,
                 filter: .dispPending
             ),
@@ -208,7 +223,7 @@ struct NewDashboardView: View {
                 id: "disp-cont-drugs",
                 iconName: "icon_controlled",
                 iconColor: appColors.secondary,
-                count: dispensePartial.filter {
+                count: dispensePartialFixed.filter {
                     let t =
                         $0.drug?.drug_type?.trimmingCharacters(in: .whitespaces)
                         ?? ""
@@ -221,7 +236,7 @@ struct NewDashboardView: View {
                 id: "disp-hazardous",
                 iconName: "icon_hazardous",
                 iconColor: appColors.secondary,
-                count: dispensePartial.filter { $0.drug?.is_hazardous == true }
+                count: dispensePartialFixed.filter { $0.drug?.is_hazardous == true }
                     .count,
                 label: L10n.Dashboard.StatCards.hazardous,
                 filter: .hazardous

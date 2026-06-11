@@ -59,8 +59,9 @@ struct ScannedDrugDetailsSlot: View {
         let packageQty = Int(drug?.quantity ?? 0)
         // After auto-add, pendingBottleCount reflects the committed bottle count.
         let newTotal   = stockCountViewModel.pendingBottleCount
-        let totalPills = newTotal * packageQty
         let openPills  = stockCountViewModel.existingOpenPillCount(for: drug?.ndc ?? "")
+        // Displayed pill total = pills from sealed bottles + loose open-scan pills.
+        let totalPills = newTotal * packageQty + openPills
 
         return VStack(spacing: 16) {
             if isIpadPortrait {

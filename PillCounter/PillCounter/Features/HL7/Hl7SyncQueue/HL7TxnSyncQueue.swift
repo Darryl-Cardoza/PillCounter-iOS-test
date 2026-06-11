@@ -114,6 +114,22 @@ final class HL7TxnSyncQueue {
             return
         }
 
+        // Only commit to "in-flight" (set isSending + arm the ACK timeout) once the
+        // message has actually been handed to a live connection. If the PMS isn't
+        // connected, sendClientHL7 returns false and silently drops it — previously we
+        // had already set isSending=true and armed a 10s ACK timeout, so the queue sat
+        // BLOCKED for the full timeout. The reconnect path (onClientConnected →
+        // enqueueUnsynced → processNext) then early-returned on `guard !isSending`, so
+        // even reconnecting didn't flush the txn until the timeout expired — the "not
+        // sent immediately" symptom. Now: not connected → stay idle at the head of the
+        // queue, and the reconnect re-trigger sends it right away.
+        guard manager.isClientConnected else {
+            print("⏸️ [TxnQueue] PMS not connected — holding txn \(item.txnId) at head; will retry on reconnect")
+            isSending = false
+            pendingRequestId = nil
+            return
+        }
+
         isSending = true
         pendingRequestId = item.requestId
 

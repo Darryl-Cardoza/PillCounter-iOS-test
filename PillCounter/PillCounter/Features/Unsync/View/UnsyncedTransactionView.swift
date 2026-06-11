@@ -182,7 +182,9 @@ private extension UnsyncedTransactionView {
             if viewModel.batches.isEmpty {
                 Text(L10n.Unsync.pmsNotConnected)
                     .font(.system(size: 12))
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(                                 userViewModel.pmsConnectionState == .disconnected
+                                                                      ? Color.black : appColors.text
+                    )
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(appColors.secondaryBackground)
@@ -201,7 +203,7 @@ private extension UnsyncedTransactionView {
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(
                                 userViewModel.pmsConnectionState == .disconnected
-                                    ? .white.opacity(0.5)
+                                ? appColors.text
                                     : .white
                             )
                     }

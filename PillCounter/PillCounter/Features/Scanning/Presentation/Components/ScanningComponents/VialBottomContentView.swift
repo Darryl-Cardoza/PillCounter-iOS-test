@@ -36,10 +36,10 @@ struct VialBottomContentView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: iconSize, height: iconSize)
-                    .foregroundStyle(isCaptured ? appColors.primary : appColors.primaryBackground)
+                    .foregroundStyle(isCaptured ? appColors.primary : Color.white.opacity(0.5))
                 Text(L10n.PillCount.redo)
                     .font(labelFont)
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(isCaptured ? appColors.text :Color.white.opacity(0.5))
             }
             .onTapGesture {
                 guard isCaptured else { return }
@@ -67,10 +67,10 @@ struct VialBottomContentView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: iconSize, height: iconSize)
-                    .foregroundColor(isCaptured ? appColors.primary : appColors.primaryBackground )
+                    .foregroundColor(isCaptured ? appColors.primary : Color.white.opacity(0.5) )
                 Text(L10n.PillCount.done)
                     .font(labelFont)
-                    .foregroundColor(isCaptured ? appColors.text : appColors.primaryBackground)
+                    .foregroundColor(isCaptured ? appColors.text : Color.white.opacity(0.5))
             }
             .onTapGesture {
                 guard isCaptured else { return }

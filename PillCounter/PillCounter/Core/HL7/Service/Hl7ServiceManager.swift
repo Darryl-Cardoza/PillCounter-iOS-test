@@ -331,10 +331,14 @@ final class Hl7ServiceManager {
 
     // MARK: - Sending
 
-    func sendClientHL7(_ hl7: String) {
+    /// Sends an MLLP-framed HL7 message to the connected PMS.
+    /// - Returns: `true` if the message was handed to the connection for sending,
+    ///   `false` if there is no live connection (caller must NOT treat it as in-flight).
+    @discardableResult
+    func sendClientHL7(_ hl7: String) -> Bool {
         guard isClientConnected, let connection = clientConnection else {
             print("[HL7][CLIENT] Send skipped — not connected")
-            return
+            return false
         }
 
         let framed = MLLP.frame(hl7)
@@ -342,6 +346,7 @@ final class Hl7ServiceManager {
             if let error { print("[HL7][CLIENT] Send FAILED: \(error)") }
             else         { print("[HL7][CLIENT] Send SUCCESS") }
         })
+        return true
     }
 
     // MARK: - Heartbeat

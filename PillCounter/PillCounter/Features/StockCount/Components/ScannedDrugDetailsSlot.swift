@@ -60,6 +60,7 @@ struct ScannedDrugDetailsSlot: View {
         // After auto-add, pendingBottleCount reflects the committed bottle count.
         let newTotal   = stockCountViewModel.pendingBottleCount
         let totalPills = newTotal * packageQty
+        let openPills  = stockCountViewModel.existingOpenPillCount(for: drug?.ndc ?? "")
 
         return VStack(spacing: 16) {
             if isIpadPortrait {
@@ -75,10 +76,10 @@ struct ScannedDrugDetailsSlot: View {
                     Divider()
 
                     HStack(alignment: .top, spacing: 12) {
-                        cellLabel(L10n.StockCountSheet.batchNo, value: batchId, color: appColors.secondary)
+                        cellLabel(L10n.StockCountSheet.batchNo, value: drug?.lotNumber ?? "-", color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                        cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
+                        cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry ?? "—", color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         cellLabel(L10n.StockCountSheet.bucket, value: bucket.uppercased(), color: appColors.secondary, align: .trailing)
                     }
@@ -107,6 +108,21 @@ struct ScannedDrugDetailsSlot: View {
 
             bottleStepper(newTotal: newTotal, totalPills: totalPills)
                 .padding(.vertical, isIPhone ? 0 : 6)
+
+//            openPillsRow(openPills: openPills)
+        }
+    }
+
+    private func openPillsRow(openPills: Int) -> some View {
+        HStack {
+            Text(L10n.StockCountSheet.openPills)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(appColors.text)
+            Spacer()
+            Text("\(openPills)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(appColors.secondary)
+                .monospacedDigit()
         }
     }
 

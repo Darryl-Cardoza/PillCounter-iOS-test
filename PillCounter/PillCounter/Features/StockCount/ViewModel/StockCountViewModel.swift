@@ -384,6 +384,14 @@ class StockCountViewModel: ObservableObject {
         return txns.reduce(0) { $0 + Int($1.open_bottle_qty) }
     }
 
+    /// Returns the existing open (loose) pill count for an NDC in the current batch.
+    /// Displayed alongside the bottle stepper so the user sees scanned open pills.
+    func existingOpenPillCount(for ndc: String) -> Int {
+        guard let batchId = currentBatch?.batch_id else { return 0 }
+        let txns = transactionDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
+        return txns.reduce(0) { $0 + Int($1.loose_qty) }
+    }
+
     /// Finds the transaction for the given NDC in the current batch (used by open pill flow).
     func existingTxn(for ndc: String) -> PillCountTransactionEntity? {
         guard let batchId = currentBatch?.batch_id else { return nil }

@@ -57,6 +57,20 @@ final class CameraService: NSObject, ObservableObject {
     /// Rolling buffer of recent per-frame counts, oldest first. Median → stableCount.
     private var recentCounts: [Int] = []
 
+    /// Number of consecutive empty frames (gate closed OR model found 0 pills) the
+    /// last non-zero count is held before it is allowed to drain toward zero. The
+    /// median over countSmoothWindow only tolerates ±1–2 jitter — it flips to 0 as
+    /// soon as a short burst of empty frames (a momentary segmentation/gate flicker
+    /// or a blurred frame) fills the window with zeros, which is the "count suddenly
+    /// drops to 0 even though pills are still there" symptom. While we are inside the
+    /// hold the empty frame is NOT pushed into the median, so stableCount stays put.
+    /// Once empties persist past the hold the zeros flow in normally, so the count
+    /// still falls to 0 when the tray is genuinely emptied or removed.
+    private static let countHoldFrames: Int = 5
+
+    /// Consecutive empty-frame counter feeding the countHoldFrames hold.
+    private var emptyCountFrames: Int = 0
+
     /// Number of consecutive frames the last-good tray/chute detections are held
     /// after a momentary segmentation miss, so the overlay + pill gate don't blink
     /// on an otherwise-steady scene. Matches Android TRAY_HOLD_FRAMES = 1: kept
@@ -373,6 +387,7 @@ final class CameraService: NSObject, ObservableObject {
             self.gloveDetections  = []
             self.isGloveHazardous = false
             self.recentCounts.removeAll()   // start the next session's median fresh
+            self.emptyCountFrames = 0
         }
         // Drop the held tray/chute detections so the next session re-acquires them
         // from scratch rather than counting against a stale tray that may no longer
@@ -619,12 +634,37 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
                 // Displayed/committed count is the MEDIAN over the last few frames,
                 // so a single boundary pill blinking across the threshold doesn't
                 // jitter the number. Median (not mean) ignores the occasional spike.
-                self.recentCounts.append(filtered.count)
-                if self.recentCounts.count > Self.countSmoothWindow {
-                    self.recentCounts.removeFirst()
+                //
+                // Empty-frame hold: a momentary gate/segmentation flicker or a blurred
+                // frame yields 0 pills for a frame or two even though the tray is still
+                // full. Feeding those zeros straight into the median collapses it to 0
+                // (the "count drops to zero" symptom). So while we have a non-zero
+                // count and only a short burst of empties has elapsed, DON'T record the
+                // zero — hold the median window. Once empties persist past the hold the
+                // zeros flow in normally, so the count still drains to 0 when the tray
+                // is genuinely emptied or removed.
+                let frameCount = filtered.count
+                let holdingEmpty: Bool
+                if frameCount == 0 {
+                    self.emptyCountFrames += 1
+                    holdingEmpty = self.stableCount > 0
+                        && self.emptyCountFrames <= Self.countHoldFrames
+                } else {
+                    self.emptyCountFrames = 0
+                    holdingEmpty = false
                 }
-                let sortedCounts = self.recentCounts.sorted()
-                self.stableCount = sortedCounts[sortedCounts.count / 2]
+
+                // While holding, leave recentCounts/stableCount untouched so a brief
+                // burst of empty frames can't collapse the median to 0; other overlay
+                // state below still updates normally.
+                if !holdingEmpty {
+                    self.recentCounts.append(frameCount)
+                    if self.recentCounts.count > Self.countSmoothWindow {
+                        self.recentCounts.removeFirst()
+                    }
+                    let sortedCounts = self.recentCounts.sorted()
+                    self.stableCount = sortedCounts[sortedCounts.count / 2]
+                }
 
                 self.trayDetections   = displayTrays
                 self.gloveDetections  = gloves

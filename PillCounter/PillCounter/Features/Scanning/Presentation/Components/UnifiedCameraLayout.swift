@@ -61,14 +61,21 @@ struct UnifiedCameraLayout: View {
             // capturedVialImage and this overlay disappears, revealing the live feed.
             if pillScanViewModel.currentControlledStep == .vial,
                let vialImage = pillScanViewModel.capturedVialImage {
-                Color.black.ignoresSafeArea()
-                Image(uiImage: vialImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
+                // Match the live camera framing exactly: a full-bleed container
+                // (GeometryReader sized to the whole screen) with the still filling it
+                // via scaledToFill + clipped — same as the preview's .resizeAspectFill.
+                // This keeps the overlaid UI (header, controls) aligned identically
+                // whether the live feed or the captured still is showing.
+                GeometryReader { geo in
+                    Image(uiImage: vialImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+                .ignoresSafeArea()
+                .background(Color.black.ignoresSafeArea())
+                .allowsHitTesting(false)
             }
 
             // ── Loading spinner ───────────────────────────────────────────────

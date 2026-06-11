@@ -229,6 +229,7 @@ struct UnifiedCameraView: View {
         rootContent
             .bottomSheet(
                 isPresented: $pillScanViewModel.showRxFlowPopup,
+                showDim: false,
                 onDismiss: {
                     pillScanViewModel.showRxFlowPopup = false
                     pillScanViewModel.fetchedRxTransaction = nil
@@ -258,6 +259,7 @@ struct UnifiedCameraView: View {
             .bottomSheet(
                 isPresented: $pillScanViewModel.showVerifyStockBottlePopup,
                 dismissOnBackgroundTap: false,
+                showDim: false,
                 onDismiss: {
                     pillScanViewModel.showVerifyStockBottlePopup = false
                 }
@@ -1340,12 +1342,17 @@ extension UnifiedCameraView {
     var stockEndBatchPopup: some View {
         ConfirmationDialogue(
             title: L10n.Stock.endBatchTitle,
-            message: stockHasNoCount ? L10n.Stock.noCountEndBatchMessage : nil,
+            message: stockHasNoCount ? L10n.Stock.noCountEndBatchMessage : L10n.Stock.confirmEndBatch,
             cancelButtonText: L10n.Common.no,
             confirmButtonText: L10n.Common.yes,
             onCancel: { showStockEndBatchPopUp = false },
             onConfirm: { confirmStockEndBatch() }
         )
+        // Force the standard (light) palette so the dialog's buttons match every
+        // other ConfirmationDialogue. Without this it inherits the camera screen's
+        // forced-dark appColors, making the Yes/No buttons render with a different
+        // background/text colour than the rest of the app.
+        .environmentObject(appColors)
     }
 
     var stockNoteOptionPopup: some View {

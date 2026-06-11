@@ -283,7 +283,7 @@
 "stock.startAddingItems" = "Start adding items to this batch";
 "stock.endCount" = "END COUNT";
 "stock.addItem" = "+ ADD";
-"stock.endBatchTitle" = "End Batch Count?";
+"stock.endBatchTitle" = "End Batch Count";
 "stock.noCountEndBatchMessage" = "No transactions or counts added. Do you want to end the batch?";
 "stock.addNoteQuestion" = "Would you like to add a note?";
 "stock.deleteButton" = "Delete";

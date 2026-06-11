@@ -406,18 +406,25 @@ class PillScanViewModel: ObservableObject {
                 print("🧪 [HazardousTray] Correct hazardous tray (\(detectedName)) — marking txn detected=true")
                 updateHazardousTrayDetected(detected: true)
             } else {
-                // Wrong tray in a hazardous flow: prompt to substitute the stored
-                // hazardous tray colour with the currently-detected one. Pause colour
-                // detection so the live feed can't change the pending colour underneath
-                // the popup; resumed on substitute/dismiss.
-                print("🧪 [HazardousTray] Wrong tray: got \(detectedName), expected \(storedName ?? "") — prompting substitute")
+                // Wrong tray in a hazardous flow: instead of prompting to substitute
+                // the stored hazardous tray colour, just surface a toast that a
+                // different tray was detected. The substitute popup flow is kept
+                // commented out below in case we need to restore it.
+                print("🧪 [HazardousTray] Wrong tray: got \(detectedName), expected \(storedName ?? "") — toast only")
                 pendingHazardousTrayColor = detectedName
-                showHazardousTraySubstitutePopup = true
+                showToastMessage(text: "Wrong tray. Use the saved \(storedName ?? "") tray for hazardous drugs.")
                 // Only flag NOT-detected if it isn't already confirmed true —
                 // once a txn is marked hazardous-tray-detected it stays true.
                 if currentTransaction?.hazardous_tray_detected != true {
                     updateHazardousTrayDetected(detected: false)
                 }
+
+                // ── Previous substitute-popup flow (kept for reference) ──────────
+                // pendingHazardousTrayColor = detectedName
+                // showHazardousTraySubstitutePopup = true
+                // if currentTransaction?.hazardous_tray_detected != true {
+                //     updateHazardousTrayDetected(detected: false)
+                // }
             }
         } else {
             // Non-hazardous flow: only warn when using the stored hazardous tray.

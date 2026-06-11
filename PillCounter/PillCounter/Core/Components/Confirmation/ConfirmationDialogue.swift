@@ -53,7 +53,7 @@ struct ConfirmationDialogue: View {
                     textColor: appColors.text,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
-                    font: .system(size: 12, weight: .regular),
+                    font: .system(size: 20, weight: .semibold),
                     cornerRadius: 30,
                     horizontalPadding: 40,
                     verticalPadding: 14,
@@ -66,40 +66,39 @@ struct ConfirmationDialogue: View {
             } else {
 
                 HStack(spacing: 16) {
-
                     PillCountingButton(
                         iconName: nil,
                         title: cancelButtonText.uppercased(),
-                        textColor: appColors.text,
+                        textColor: appColors.primary,
                         backgroundColor: appColors.primaryBackground,
                         borderColor: appColors.primary,
-                        font: .system(size: 12, weight: .semibold),
+                        font: .system(size: 20, weight: .semibold),
                         cornerRadius: 30,
-                        horizontalPadding: 32,
+                        horizontalPadding: 8,
                         verticalPadding: 14,
                         iconSize: 0,
                         action: onCancel
                     )
-                    .fixedSize()
+                    .frame(maxWidth: .infinity)
                     PillCountingButton(
                         iconName: nil,
                         title: confirmButtonText.uppercased(),
                         textColor: Color.white,
                         backgroundColor: appColors.primary,
                         borderColor: .clear,
-                        font: .system(size: 12, weight: .regular),
+                        font: .system(size: 20, weight: .semibold),
                         cornerRadius: 30,
-                        horizontalPadding: 32,
+                        horizontalPadding: 8,
                         verticalPadding: 14,
                         iconSize: 0,
                         action: onConfirm
                     )
-                    .fixedSize()
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(.top, 10)
             }
         }
-        .frame(width: 275)
+        .frame(maxWidth: .infinity)
         .padding()
         .background(appColors.primaryBackground)
         .cornerRadius(24)

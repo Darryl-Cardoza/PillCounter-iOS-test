@@ -1227,7 +1227,7 @@ struct NewDashboardView: View {
                 PillCountingButton(
                     iconName: nil,
                     title: L10n.Common.cancel,
-                    textColor: appColors.text,
+                    textColor: appColors.primary,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
                     font: .system(size: 16, weight: .semibold),

@@ -10,6 +10,7 @@ import SwiftUI
 struct EditableLotRow: Identifiable {
     let id = UUID()
     let txnId: Int64
+    let txnIds: [Int64]           // all transactions in this lot group
     var lot: String
     var expiry: String
     var sealedBottles: Int        // editable
@@ -36,6 +37,11 @@ struct StockCountEditDetailsSheet: View {
     @State private var lotRows: [EditableLotRow] = []
     @State private var isInitialized = false
 
+    // Shared layout metrics so headers and rows line up exactly.
+    private let stepperWidth: CGFloat = 160
+    private let deleteWidth: CGFloat = 44
+    private let columnGap: CGFloat = 12
+
     var body: some View {
         dialogPanel
             .onAppear { buildRows() }
@@ -46,17 +52,16 @@ struct StockCountEditDetailsSheet: View {
     private var dialogPanel: some View {
         VStack(spacing: 0) {
             dialogHeader
-            Divider()
             if isIPad && isLandscape {
                 landscapeContent
             } else {
                 portraitContent
             }
-            Divider()
             dialogFooter
+                .background(appColors.secondaryBackground)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(appColors.secondaryBackground)
+        .background(appColors.primaryBackground)
     }
 
     // MARK: - Header
@@ -70,8 +75,8 @@ struct StockCountEditDetailsSheet: View {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(appColors.text.opacity(0.5))
-                    .frame(width: 32, height: 32)
+                    .foregroundColor(appColors.primary)
+                    .frame(width: 40, height: 40)
                     .background(appColors.primaryBackground)
                     .clipShape(Circle())
             }
@@ -81,21 +86,32 @@ struct StockCountEditDetailsSheet: View {
     }
 
     // MARK: - Layouts
-
     private var landscapeContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
                 drugInfoSection
                 sealedBottlesSection
+                Divider()
                 openPillsSection
             }
             .padding(20)
         }
+        .background(appColors.secondaryBackground)
+        .clipShape(UnevenRoundedRectangle(
+            topLeadingRadius: 16,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 16,
+            style: .continuous
+        ))
+        .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+        .shadow(color: Color.black.opacity(0.12), radius: 8, x: -4, y: -6)
+        .shadow(color: Color.black.opacity(0.06), radius: 16, x: 0, y: -12)
     }
 
     private var portraitContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 24) {
                 drugInfoSection
                 sealedBottlesSection
                 openPillsSection
@@ -105,34 +121,32 @@ struct StockCountEditDetailsSheet: View {
     }
 
     // MARK: - Drug Info Section
-
     private var drugInfoSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             sectionLabel(L10n.StockCountSheet.scannedDrugDetails)
 
             VStack(alignment: .leading, spacing: 10) {
                 infoRow(label: L10n.StockCountSheet.drugName, value: txn.drugName, valueColor: appColors.secondary)
                 Divider()
-                HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .top) {
                     infoCell(label: L10n.StockCountSheet.ndcNumber, value: txn.ndc, valueColor: appColors.secondary)
+                    Spacer()
                     infoCell(label: L10n.StockCountSheet.bucket, value: (stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL").uppercased(), valueColor: appColors.secondary)
-                }
+                }.frame(maxWidth: .infinity)
+                Divider()
             }
-            .padding(16)
-            .background(appColors.primaryBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 
     // MARK: - Sealed Bottles Section
 
     private var sealedBottlesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 20) {
             HStack {
                 sectionLabel(L10n.StockCountSheet.sealedBottles)
                 Spacer()
                 Text("\(lotRows.reduce(0) { $0 + $1.sealedBottles })")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(appColors.secondary)
             }
 
@@ -147,37 +161,49 @@ struct StockCountEditDetailsSheet: View {
     }
 
     private func lotColumnHeader() -> some View {
-        HStack(spacing: 0) {
+        HStack(spacing: columnGap) {
             Text(L10n.StockCountSheet.batchNo)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(L10n.StockCountSheet.expiryDate)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text("")
-                .frame(width: 130)
+            // Reserve the exact trailing area used by the stepper + delete icon.
+            Color.clear.frame(width: stepperWidth + columnGap + deleteWidth, height: 0)
         }
-        .font(.system(size: 12, weight: .regular))
+        .font(.system(size: 14, weight: .regular))
         .foregroundColor(appColors.text.opacity(0.45))
-        .padding(.horizontal, 4)
     }
 
     private func sealedLotRow(row: Binding<EditableLotRow>) -> some View {
-        HStack(spacing: 0) {
+        lotRow(row: row, value: row.sealedBottles)
+    }
+
+    // Shared row used by both sections — keeps spacing/alignment identical.
+    private func lotRow(row: Binding<EditableLotRow>, value: Binding<Int>) -> some View {
+        HStack(spacing: columnGap) {
             Text(row.wrappedValue.lot.isEmpty ? "—" : row.wrappedValue.lot)
-                .font(.system(size: 14))
+                .font(.system(size: 15))
                 .foregroundColor(appColors.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(row.wrappedValue.expiry.isEmpty ? "—" : row.wrappedValue.expiry)
-                .font(.system(size: 14))
+                .font(.system(size: 15))
                 .foregroundColor(appColors.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            inlineStepper(value: row.sealedBottles, minValue: 0)
+            inlineStepper(value: value, minValue: 0)
+
+            deleteButton(for: row.wrappedValue.id)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .background(appColors.primaryBackground.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func deleteButton(for rowId: UUID) -> some View {
+        Button(action: { deleteRow(rowId) }) {
+            Image(systemName: "trash")
+                .font(.system(size: 16, weight: .regular))
+                .foregroundColor(appColors.primary)
+                .frame(width: deleteWidth, height: 36)
+                .contentShape(Rectangle())
+        }
     }
 
     // MARK: - Open Pills Section
@@ -188,7 +214,7 @@ struct StockCountEditDetailsSheet: View {
                 sectionLabel(L10n.StockCountSheet.openPills)
                 Spacer()
                 Text("\(lotRows.reduce(0) { $0 + $1.openPills })")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(appColors.secondary)
             }
 
@@ -197,29 +223,9 @@ struct StockCountEditDetailsSheet: View {
 
             // Rows
             ForEach($lotRows) { $row in
-                openPillsLotRow(row: $row)
+                lotRow(row: $row, value: $row.openPills)
             }
         }
-    }
-
-    private func openPillsLotRow(row: Binding<EditableLotRow>) -> some View {
-        HStack(spacing: 0) {
-            Text(row.wrappedValue.lot.isEmpty ? "—" : row.wrappedValue.lot)
-                .font(.system(size: 14))
-                .foregroundColor(appColors.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(row.wrappedValue.expiry.isEmpty ? "—" : row.wrappedValue.expiry)
-                .font(.system(size: 14))
-                .foregroundColor(appColors.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            inlineStepper(value: row.openPills, minValue: 0)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .background(appColors.primaryBackground.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     // MARK: - Inline Stepper
@@ -232,34 +238,49 @@ struct StockCountEditDetailsSheet: View {
                 }
             }) {
                 Image(systemName: "minus")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(value.wrappedValue > minValue ? appColors.primary : appColors.primary.opacity(0.3))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 48, height: 48)
                     .background(appColors.primaryBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(UnevenRoundedRectangle(
+                        topLeadingRadius: 8,
+                        bottomLeadingRadius: 8,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 0,
+                        style: .continuous
+                    ))
             }
 
-            TextField("0", value: value, format: .number)
-                .keyboardType(.numberPad)
+            // Read-only count — value changes only via the stepper buttons.
+            Text("\(value.wrappedValue)")
                 .multilineTextAlignment(.center)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(appColors.secondary)
-                .frame(width: 52, height: 36)
+                .frame(width: 64, height: 48)
                 .background(appColors.secondaryBackground)
+                .overlay(
+                    Rectangle()
+                        .strokeBorder(appColors.primaryBackground, lineWidth: 1)
+                )
 
             Button(action: {
                 value.wrappedValue += 1
             }) {
                 Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(appColors.primary)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 48, height: 48)
                     .background(appColors.primaryBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(UnevenRoundedRectangle(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 8,
+                        topTrailingRadius: 8,
+                        style: .continuous
+                    ))
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .frame(width: 130)
+        .frame(width: stepperWidth)
     }
 
     // MARK: - Footer
@@ -282,7 +303,7 @@ struct StockCountEditDetailsSheet: View {
                 action: saveChanges
             )
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 60)
         .padding(.vertical, 16)
     }
 
@@ -290,17 +311,17 @@ struct StockCountEditDetailsSheet: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: 16, weight: .semibold))
             .foregroundColor(appColors.secondary)
     }
 
     private func infoRow(label: String, value: String, valueColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 13, weight: .regular))
+                .font(.system(size: 14, weight: .regular))
                 .foregroundColor(appColors.text.opacity(0.42))
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundColor(valueColor)
                 .lineLimit(1)
         }
@@ -341,6 +362,7 @@ struct StockCountEditDetailsSheet: View {
             let openPills = lotTxns.reduce(0) { $0 + Int($1.loose_qty) }
             rows.append(EditableLotRow(
                 txnId: first.txn_id,
+                txnIds: lotTxns.map { $0.txn_id },
                 lot: first.lot_no ?? "",
                 expiry: first.expiry ?? "",
                 sealedBottles: sealedBottles,
@@ -351,6 +373,16 @@ struct StockCountEditDetailsSheet: View {
 
         // Sort by lot for stable ordering
         lotRows = rows.sorted { $0.lot < $1.lot }
+    }
+
+    private func deleteRow(_ rowId: UUID) {
+        guard let row = lotRows.first(where: { $0.id == rowId }) else { return }
+        for txnId in row.txnIds {
+            stockCountViewModel.transactionDAO.softDelete(txnId: txnId)
+        }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            lotRows.removeAll { $0.id == rowId }
+        }
     }
 
     private func saveChanges() {

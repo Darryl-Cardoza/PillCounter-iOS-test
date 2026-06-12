@@ -60,6 +60,7 @@
         <attribute name="refill_no" optional="YES" attributeType="String"/>
         <attribute name="req_id" optional="YES" attributeType="String"/>
         <attribute name="rx_no" optional="YES" attributeType="String"/>
+        <attribute name="serial_no" optional="YES" attributeType="String"/>
         <attribute name="status" optional="YES" attributeType="String"/>
         <attribute name="substitute_drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="target_count" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>

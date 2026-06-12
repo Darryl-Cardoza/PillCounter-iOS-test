@@ -1163,6 +1163,19 @@ extension UnifiedCameraView {
         // BT scanners often emit a plain NDC (no GS1 envelope), so fall back to
         // stripping non-digit characters from rawValue when the decoder finds nothing.
         let decoded = stockCountViewModel.decoder.decode(rawValue)
+
+        #if DEBUG
+        let expiryString = decoded.expirationDate.map {
+            ISO8601DateFormatter().string(from: $0)
+        } ?? "-"
+        print("🔍 STOCK SCAN DECODE")
+        print("    rawValue      : \(rawValue)")
+        print("    gtin          : \(decoded.gtin ?? "-")")
+        print("    serialNumber  : \(decoded.serialNumber ?? "-")")
+        print("    lotNumber     : \(decoded.lotNumber ?? "-")")
+        print("    expirationDate: \(expiryString)")
+        #endif
+
         let rawDigitsOnly = rawValue.components(separatedBy: .decimalDigits.inverted).joined()
         let scannedGtin: String = {
             if let g = decoded.gtin, !g.isEmpty { return g }

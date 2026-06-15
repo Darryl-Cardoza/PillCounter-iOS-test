@@ -42,9 +42,9 @@ final class HL7CompletionBuilder {
         let now = DateUtils.currentTimestamp()
         let messageId = "\(Int64(Date().timeIntervalSince1970 * 1000))"
 
-        let details = pillCountDetails(from: txn)
+        let allDetails = pillCountDetails(from: txn)
+        let details = allDetails.filter { !$0.is_deleted }
         let totalCount = details
-            .filter { !$0.is_deleted }
             .map { Int($0.pill_count) }
             .reduce(0, +)
 
@@ -467,7 +467,7 @@ private extension HL7CompletionBuilder {
             
             let fileName = (barcodePath as NSString).lastPathComponent
             
-            let barcodeObx = ObservationData(
+            let barcodeObx = ObservationData(   
                 setId: "\(obxList.count + 1)",
                 valueType: "ST",
                 observationId: observationId,

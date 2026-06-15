@@ -42,7 +42,7 @@ class PillScanViewModel: ObservableObject {
     @Published var selectedTransaction: PillCountTransactionEntity?
 
     // get the user id
-    @AppStorage(AppStorageManager.AppStorageKeys.userId) var userId: String = ""
+    var userId: String { AppStorageManager.shared.userId ?? "" }
         
     private var cancellables = Set<AnyCancellable>()
     
@@ -52,6 +52,16 @@ class PillScanViewModel: ObservableObject {
     //Toast
     @Published  var showToast: Bool = false
     @Published  var toastMessage: String = ""
+    @Published  var toastAutoClose: Bool = true
+
+    // Hazardous tray
+    @Published  var showHazardousTrayPopup: Bool = false
+    @Published  var pendingHazardousTrayColor: String = ""
+
+    /// The tray colour we last surfaced a toast for, so the continuous flow only
+    /// re-toasts when the colour actually CHANGES (not every emission). Reset when
+    /// a new scan session begins.
+    private var lastToastedTrayColor: String? = nil
 
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
@@ -81,12 +91,19 @@ class PillScanViewModel: ObservableObject {
 
     //MARK: RX FLow
     @Published var showRxFlowPopup: Bool = false
+    @Published var showRxOnHoldPopup: Bool = false
+    @Published var showRxInProgressPopup: Bool = false
+    @Published var rxResumeInline: Bool = false
     @Published var rxScanFailed: Bool = false
     @Published var scannedRxData: ParsedScanData? = nil
+    @Published var fetchedRxTransaction: PillCountTransactionEntity? = nil
     @Published var bucketOptions: [String] = []
     @Published var selectedBucket: String = ""
     @Published var showScannedDrugInfoPopoup: Bool = false
-    
+    /// Hazardous-drug confirmation sheet shown when the scanned bottle matches the
+    /// expected (same) drug AND that drug is hazardous. Proceed continues the flow.
+    @Published var showVerifyStockBottlePopup: Bool = false
+
     
     private func postTransactionUIUpdate(countType: CountType) {
         getAllTransactionDetailsOfTheCurrentTransaction()
@@ -343,6 +360,93 @@ class PillScanViewModel: ObservableObject {
         transactionDAO.updateNote(txnId: txn_id, note: note)
     }
 
+    func updateGlovesDetected(detected: Bool) {
+        guard let txnId = currentTransaction?.txn_id else { return }
+        transactionDAO.updateGlovesDetected(txnId: txnId, detected: detected)
+        currentTransaction?.gloves_detected = detected
+    }
+
+    func updateHazardousTrayDetected(detected: Bool) {
+        guard let txnId = currentTransaction?.txn_id else { return }
+        print("🧪 [HazardousTray] updateHazardousTrayDetected txnId=\(txnId) detected=\(detected)")
+        transactionDAO.updateHazardousTrayDetected(txnId: txnId, detected: detected)
+        currentTransaction?.hazardous_tray_detected = detected
+    }
+
+    // MARK: - Hazardous tray flow
+
+    /// Called whenever the camera detects a CHANGE in the visible tray's colour
+    /// during pill counting. Branches on whether the current drug is hazardous and
+    /// whether we already have a stored hazardous tray colour. Because the camera
+    /// only emits on colour change, this fires once per distinct tray.
+    func handleTrayColorDetected(_ color: TrayColor, drugIsHazardous: Bool) {
+        // While the capture popup is up, freeze on the pending colour — ignore any
+        // further colour changes so the operator confirms exactly what they saw.
+        guard !showHazardousTrayPopup else { return }
+
+        let detectedName = color.displayName
+        let storedName = AppStorageManager.shared.hazardousTrayColor
+
+        print("🧪 [HazardousTray] detected=\(detectedName) stored=\(storedName ?? "nil") drugIsHazardous=\(drugIsHazardous) txnDetected=\(currentTransaction?.hazardous_tray_detected == true)")
+
+        if drugIsHazardous {
+            if storedName == nil {
+                // First-ever capture: ask the operator to confirm (once ever).
+                // Pause colour detection so the live feed can't change the pending
+                // colour underneath the popup; resumed on confirm/dismiss.
+                print("🧪 [HazardousTray] No stored colour — prompting capture for \(detectedName)")
+                pendingHazardousTrayColor = detectedName
+                showHazardousTrayPopup = true
+            } else if storedName == detectedName {
+                // Correct hazardous tray — mark the transaction.
+                print("🧪 [HazardousTray] Correct hazardous tray (\(detectedName)) — marking txn detected=true")
+                updateHazardousTrayDetected(detected: true)
+            } else {
+                // Wrong tray in a hazardous flow: ALWAYS recommend the stored colour
+                // so the operator is warned every time a different tray appears.
+                print("🧪 [HazardousTray] Wrong tray: got \(detectedName), expected \(storedName ?? "")")
+                showToastMessage(
+                    text: "Wrong tray: this is a \(detectedName) tray. Hazardous drugs must use the \(storedName ?? "") tray."
+                )
+                // Only flag NOT-detected if it isn't already confirmed true —
+                // once a txn is marked hazardous-tray-detected it stays true.
+                if currentTransaction?.hazardous_tray_detected != true {
+                    updateHazardousTrayDetected(detected: false)
+                }
+            }
+        } else {
+            // Non-hazardous flow: only warn when using the stored hazardous tray.
+            // Toast once per distinct colour — re-toast only when the colour changes.
+            // Never write hazardous_tray_detected here (hazardous drug only).
+            if storedName == detectedName, lastToastedTrayColor != detectedName {
+                lastToastedTrayColor = detectedName
+                print("🧪 [HazardousTray] Non-hazardous drug on hazardous tray (\(detectedName)) — warning")
+                showToastMessage(text: "The \(detectedName) tray is reserved for hazardous drugs. Please use a different tray.")
+            } else if storedName != detectedName {
+                // Reset so returning to the hazardous tray re-toasts.
+                lastToastedTrayColor = detectedName
+            }
+        }
+    }
+
+    /// Clears the per-session tray-toast tracker. Call when a new scan session
+    /// begins so the first tray of the new session can toast again.
+    func resetTrayColorTracking() {
+        lastToastedTrayColor = nil
+    }
+
+    /// Operator tapped "Yes" on the hazardous-tray confirmation popup.
+    func confirmHazardousTray() {
+        AppStorageManager.shared.hazardousTrayColor = pendingHazardousTrayColor
+        updateHazardousTrayDetected(detected: true)
+        showHazardousTrayPopup = false
+    }
+
+    /// Operator tapped "No" — keep nothing.
+    func dismissHazardousTrayPopup() {
+        showHazardousTrayPopup = false
+    }
+
 
     func getCurrentTransaction(txnId: Int64) async {
         // Fetch transaction
@@ -394,13 +498,11 @@ class PillScanViewModel: ObservableObject {
     typealias HL7SimpleCallback = (Bool) -> Void
     
     //ShowToastMessage
-    func showToastMessage(text: String) {
-        toastMessage = text
-        showToast = true
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-            self.showToast = false
-        }
+    // Single source of truth: routes every scanning toast through the global
+    // ToastManager so only one toast ever shows app-wide. The old local toast in
+    // UnifiedCameraLayout has been removed.
+    func showToastMessage(text: String, autoClose: Bool = true) {
+        ToastManager.shared.show(message: text, duration: autoClose ? 4 : 8)
     }
 
  

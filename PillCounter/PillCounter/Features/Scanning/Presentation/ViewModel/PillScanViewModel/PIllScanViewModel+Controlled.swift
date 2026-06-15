@@ -197,14 +197,14 @@ extension PillScanViewModel{
         // (local path is taken when getControlledDrugInfo resolved from cache and
         // never populated ndcComparisonResponse).
         let actualDrugId: Int64
-        if let apiNdc = ndcComparisonResponse?.data?.scannedNdc?.packageNdc, !apiNdc.isEmpty {
+        if let apiNdc = ndcComparisonResponse?.data?.scannedNdc?.drugCode, !apiNdc.isEmpty {
             let newDrugId = generateUniqueDrugId()
             drugMasterDAO.saveManual(
                 ndc:         apiNdc,
                 gtin:        gtin,
                 drugId:      newDrugId,
                 drugName:    ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
-                drugType:    ndcComparisonResponse?.data?.scannedNdc?.deaSchedule ?? "",
+                drugType:    ndcComparisonResponse?.data?.scannedNdc?.regulatory?.schedule ?? "",
                 packageQty:  ndcComparisonResponse?.data?.scannedNdc?.safeQuantity ?? 0,
                 isHazardous: ndcComparisonResponse?.data?.scannedNdc?.isHazardous
             )

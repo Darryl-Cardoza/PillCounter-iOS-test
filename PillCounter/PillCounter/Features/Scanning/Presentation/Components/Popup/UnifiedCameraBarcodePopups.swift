@@ -10,6 +10,21 @@ import SwiftUI
 
 extension UnifiedCameraView {
 
+    var hazardousTrayPopup: some View {
+        ConfirmationDialogue(
+            title: "\(pillScanViewModel.pendingHazardousTrayColor) Tray Detected",
+            message: "Mark the \(pillScanViewModel.pendingHazardousTrayColor) tray as the hazardous tray? It will then be required for all hazardous drugs.",
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes,
+            onCancel: {
+                pillScanViewModel.dismissHazardousTrayPopup()
+            },
+            onConfirm: {
+                pillScanViewModel.confirmHazardousTray()
+            }
+        )
+    }
+
     var ndcEquivalencePopup: some View {
         ConfirmationDialogue(
             title: pillScanViewModel.isNdcEquivalent
@@ -35,18 +50,6 @@ extension UnifiedCameraView {
                     restartFlow()
                 }
             }
-        )
-    }
-
-    var barcodeNotFoundPopup: some View {
-        ConfirmationDialogue(
-            title: L10n.BarcodeScan.drugNotFound,
-            message: L10n.BarcodeScan.drugNotFoundMessage,
-            cancelButtonText: L10n.Common.cancel,
-            confirmButtonText: L10n.BarcodeScan.rescan,
-            showSingleConfirmButton: true,
-            onCancel: { restartFlow() },
-            onConfirm: { restartFlow() }
         )
     }
 
@@ -161,4 +164,23 @@ extension UnifiedCameraView {
             onConfirm: { restartFlow() }
         )
     }
+
+    var rxOnHoldPopup: some View {
+        ConfirmationDialogue(
+            title: L10n.BarcodeScan.rxOnHoldTitle,
+            message: L10n.BarcodeScan.rxOnHoldMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.BarcodeScan.rescan,
+            showSingleConfirmButton: true,
+            onCancel: {
+                pillScanViewModel.showRxOnHoldPopup = false
+                restartFlow()
+            },
+            onConfirm: {
+                pillScanViewModel.showRxOnHoldPopup = false
+                restartFlow()
+            }
+        )
+    }
+
 }

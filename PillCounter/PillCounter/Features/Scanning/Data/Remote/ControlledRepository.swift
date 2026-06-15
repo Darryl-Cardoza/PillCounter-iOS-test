@@ -27,7 +27,8 @@ final class ControlledRepository: ControlledRepositoryProtocol, BaseRepositoryPr
             url: "\(APIConstants.getControlledDrugInfo)",
             method: .post,
             body: body,
-            responseType: NdcComparisonResponse.self
+            responseType: NdcComparisonResponse.self,
+            extraHeaders: ["Cache-Control": "no-store"]
         )
     }
 }

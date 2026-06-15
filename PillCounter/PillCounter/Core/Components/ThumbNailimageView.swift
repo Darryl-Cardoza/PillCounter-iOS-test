@@ -77,7 +77,7 @@ struct ThumbnailImageView: View {
                         .stroke(appColors.text.opacity(0.8), lineWidth: borderWidth)
                         .frame(width: width, height: height)
                         .overlay(
-                            Text("PMS")
+                            Text(L10n.Common.pms)
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(appColors.secondary)
                         )

@@ -1,20 +1,22 @@
+// TrayOverlay.swift
+// PillCounter
 //
-//  TrayOverlay.swift
-//  PillCounter
+// Draws a rounded-rectangle overlay for TRAY regions detected by
+// TrayDetectionService.
 //
-//  Created by Bhushan Patil on 18/03/26.
-//
+// Coordinate conversion uses AVCaptureVideoPreviewLayer.layerRectConverted,
+// the same approach DetectionOverlay (pill dots) uses. AVFoundation maps the
+// normalized metadata rect into layer space correctly for BOTH portrait and
+// landscape, accounting for the active video orientation and resizeAspectFill
+// crop. The previous manual math was hardcoded for the portrait 90° CW
+// rotation and therefore misaligned the tray box in landscape.
 
 import AVFoundation
 import SwiftUI
 
-/// Draws a rounded-rectangle overlay for every detected tray.
-/// Coordinate conversion is identical to DetectionOverlay — uses
-/// AVCaptureVideoPreviewLayer.layerRectConverted(fromMetadataOutputRect:).
 struct TrayOverlay: View {
 
     @ObservedObject var cameraService: CameraService
-    @EnvironmentObject var appColors: AppColors
 
     var body: some View {
         GeometryReader { _ in
@@ -22,19 +24,21 @@ struct TrayOverlay: View {
                 if let layer = cameraService.previewLayer,
                    layer.session != nil {
 
-                    ForEach(cameraService.trayDetections) { tray in
-                        let screenRect = layerRect(for: tray, layer: layer)
+                    ForEach(cameraService.trayDetections.filter { $0.trayClass == .tray }) { tray in
+                        let screenRect = getScreenRect(for: tray, using: layer)
 
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(appColors.secondary, lineWidth: 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(appColors.secondary.opacity(0.08))
-                            )
-                            .frame(width: screenRect.width,
-                                   height: screenRect.height)
-                            .position(x: screenRect.midX,
-                                      y: screenRect.midY)
+                        if screenRect.width > 0, screenRect.height > 0 {
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(red: 0, green: 0.784, blue: 0.325), lineWidth: 2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color(red: 0, green: 0.784, blue: 0.325).opacity(0.13))
+                                )
+                                .frame(width: screenRect.width,
+                                       height: screenRect.height)
+                                .position(x: screenRect.midX,
+                                          y: screenRect.midY)
+                        }
                     }
                 }
             }
@@ -42,16 +46,22 @@ struct TrayOverlay: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: - Coordinate conversion (same logic as DetectionOverlay)
+    // MARK: - Coordinate Conversion
 
-    private func layerRect(for tray: TrayResult,
-                           layer: AVCaptureVideoPreviewLayer) -> CGRect {
-        let normalised = CGRect(
+    /// Maps a TrayResult bounding box to layer (screen) space using AVFoundation's
+    /// layerRectConverted — orientation-aware, so it works in portrait and landscape.
+    /// Draws exactly the model's box (same conversion the pill dots use); no clamp,
+    /// no smoothing, no forced adjustment.
+    private func getScreenRect(for tray: TrayResult,
+                               using layer: AVCaptureVideoPreviewLayer) -> CGRect {
+
+        let normalizedRect = CGRect(
             x: tray.rect.origin.x / tray.originalFrameSize.width,
             y: tray.rect.origin.y / tray.originalFrameSize.height,
-            width:  tray.rect.width  / tray.originalFrameSize.width,
+            width: tray.rect.width / tray.originalFrameSize.width,
             height: tray.rect.height / tray.originalFrameSize.height
         )
-        return layer.layerRectConverted(fromMetadataOutputRect: normalised)
+
+        return layer.layerRectConverted(fromMetadataOutputRect: normalizedRect)
     }
 }

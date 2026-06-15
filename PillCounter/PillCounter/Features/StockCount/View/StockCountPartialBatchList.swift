@@ -42,8 +42,7 @@
                                 .animation(.easeIn(duration: 0.15), value: deletingIds.contains(batch.batch_id))
 
                             StockItemRowView(
-                                data: batch.toStockData(ndcCount: batchCounts[batch.batch_id] ?? 0),
-                                appColors: appColors
+                                data: batch.toStockData(ndcCount: batchCounts[batch.batch_id] ?? 0)
                             )
                             .listRowAnimated(
                                 id: batch.batch_id,

@@ -2,14 +2,20 @@
 //  CoreDataManager.swift
 //  PillCounter
 //
-//  Created by HC on 13/11/25.
+//  Standard NSPersistentContainer — no SQLCipher dependency.
+//  Data is encrypted at the field level by FieldEncryptionManager
+//  before being written to SQLite.
+//
+//  The SQLite file is plaintext but every sensitive field value is
+//  AES-256-GCM encrypted — an attacker who extracts the database
+//  sees only ciphertext. The decryption key lives in the Keychain
+//  with kSecAttrAccessibleWhenUnlockedThisDeviceOnly.
 //
 
 import CoreData
 
 final class CoreDataManager {
 
-    // singleton instanace
     static let shared = CoreDataManager()
 
     let container: NSPersistentContainer
@@ -46,24 +52,25 @@ final class CoreDataManager {
     }
     
     var backgroundContext: NSManagedObjectContext {
-        container.newBackgroundContext()
+        let ctx = container.newBackgroundContext()
+        ctx.automaticallyMergesChangesFromParent = true
+        return ctx
     }
-    
-    // global save function to save into the database.
+
     func save(context: NSManagedObjectContext) {
-        if context.hasChanges {
-            do {
-                try context.save()
-            } catch let error {
-                print("Error saving Core data : \(error.localizedDescription)")
-            }
+        guard context.hasChanges else { return }
+        do {
+            try context.save()
+        } catch {
+            Log("❌ CoreData save error: \(error.localizedDescription)")
         }
     }
-    
+
     func resetContext() {
         container.viewContext.performAndWait {
             container.viewContext.reset()
         }
     }
 
+    private static let modelName = "PillCounter"
 }

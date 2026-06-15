@@ -2,222 +2,272 @@
 //  AppStorage.swift
 //  PillCounter
 //
-//  Created by HC on 11/11/25.
-//
 
 import Foundation
 
 final class AppStorageManager {
-    static let shared = AppStorageManager()  // Singleton instance
+    static let shared = AppStorageManager()
     private let defaults = UserDefaults.standard
-    private init() {}
+    private init() {
+        clearKeychainOnFreshInstall()
+    }
 
-    // MARK: - AppStorageKeys
-    public enum AppStorageKeys {
-        static let accessToken = "access_token"
-        static let refreshToken = "refresh_token"
-        static let userId = "user_id"
-        static let rememberMe = "remember_me"
-        static let userSavedEmails = "user_saved_emails"
-        static let isLoggedIn = "is_logged_in"
-        static let userEmail = "user_email"
-        static let drugIdCounter = "drug_id_counter"
-        static let isNewUser = "is_new_user"
-        static let tokenExpiryTimestamp = "token_expiry_timestamp"
-        static let saveHistoryOption = "save_history_option"
-        
-        static let isHl7Enable: String = "is_hl7_enable"
-        static let pmsHostName = "pms_host_name"
-        static let pillCounterHostName = "pillcounter_host_name"
-        static let selectedTerminalName = "selected_terminal_name"
-        static let barcodeFormat = "barcode_format"
-        static let bucketList = "bucket_list"
     
-       static let isPillCountingEnabled = "isPillCountingEnabled"
-       static let isBackCountRequired = "isBackCountRequired"
-       static let isHapticEnabled = "isHapticEnabled"
-       static let isSoundEnabled = "isSoundEnabled"
-       static let isSpeechEnabled = "isSpeechEnabled"
-       static let selectedSchedules = "selectedSchedules"
+    private func clearKeychainOnFreshInstall() {
+        guard !defaults.bool(forKey: AppStorageKeys.hasLaunchedBefore) else { return }
+        Keychain.deleteAll()
+        defaults.set(true, forKey: AppStorageKeys.hasLaunchedBefore)
     }
 
-    // MARK: - Access Token
+    // MARK: - Key constants
+    public enum AppStorageKeys {
+        // Keychain-backed (sensitive)
+        static let accessToken          = "access_token"
+        static let refreshToken         = "refresh_token"
+        static let userId               = "user_id"
+        static let userEmail            = "user_email"
+        static let isLoggedIn           = "is_logged_in"
+        static let rememberMe           = "remember_me"
+        static let tokenExpiryTimestamp = "token_expiry_timestamp"
+        static let isHl7Enable          = "is_hl7_enable"
+        static let pmsHostName          = "pms_host_name"
+        static let pillCounterHostName  = "pillcounter_host_name"
+        static let barcodeFormat        = "barcode_format"
+        static let bucketList           = "bucket_list"
+        static let userSavedEmails      = "user_saved_emails"
+        static let hazardousTrayColors  = "hazardous_tray_colors"
+
+        // UserDefaults-backed (non-sensitive)
+        static let drugIdCounter        = "drug_id_counter"
+        static let isNewUser            = "is_new_user"
+        static let saveHistoryOption    = "save_history_option"
+        static let isPillCountingEnabled = "isPillCountingEnabled"
+        static let isBackCountRequired  = "isBackCountRequired"
+        static let isHapticEnabled      = "isHapticEnabled"
+        static let isSoundEnabled       = "isSoundEnabled"
+        static let isSpeechEnabled      = "isSpeechEnabled"
+        static let selectedSchedules    = "selectedSchedules"
+        static let selectedTerminalName = "selected_terminal_name"
+        static let storedTerminals      = "stored_terminals"
+        static let isHarzardousDrugSetting = "hazardous_pill_setting"
+
+        // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
+        static let hasLaunchedBefore    = "has_launched_before"
+    }
+
+    // =========================================================================
+    // MARK: - KEYCHAIN-BACKED
+    // =========================================================================
+
     var accessToken: String? {
-        get { defaults.string(forKey: AppStorageKeys.accessToken) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.accessToken) }
-    }
-
-    // MARK: DRUG ID COUNTER.
-    var drugIdCounter: Int? {
-        get { defaults.integer(forKey: AppStorageKeys.drugIdCounter) }
+        get { Keychain.getPassword(for: AppStorageKeys.accessToken) }
         set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.drugIdCounter)
+            if let v = newValue { Keychain.savePassword(v, for: AppStorageKeys.accessToken) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.accessToken) }
         }
     }
 
-    // MARK: - Refresh Token
     var refreshToken: String? {
-        get { defaults.string(forKey: AppStorageKeys.refreshToken) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.refreshToken) }
+        get { Keychain.getPassword(for: AppStorageKeys.refreshToken) }
+        set {
+            if let v = newValue { Keychain.savePassword(v, for: AppStorageKeys.refreshToken) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.refreshToken) }
+        }
+    }
+
+    var userId: String? {
+        get { Keychain.getPassword(for: AppStorageKeys.userId) }
+        set {
+            if let v = newValue { Keychain.savePassword(v, for: AppStorageKeys.userId) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.userId) }
+        }
     }
 
     var userEmail: String? {
-        get { defaults.string(forKey: AppStorageKeys.userEmail) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.userEmail) }
+        get { Keychain.getPassword(for: AppStorageKeys.userEmail) }
+        set {
+            if let v = newValue { Keychain.savePassword(v, for: AppStorageKeys.userEmail) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.userEmail) }
+        }
     }
 
-    // MARK: IS LOGGED IN
-    var isLoggedIn: Bool? {
-        get { defaults.bool(forKey: AppStorageKeys.isLoggedIn) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.isLoggedIn) }
+    var isLoggedIn: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.isLoggedIn) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isLoggedIn) }
     }
-    
-    // MARK: IS NEW USER
-    var isNewUser: Bool? {
+
+    var rememberMe: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.rememberMe) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.rememberMe) }
+    }
+
+    var tokenExpiryTimestamp: Double? {
+        get {
+            guard let s = Keychain.getPassword(for: AppStorageKeys.tokenExpiryTimestamp) else { return nil }
+            return Double(s)
+        }
+        set {
+            if let v = newValue { Keychain.savePassword(String(v), for: AppStorageKeys.tokenExpiryTimestamp) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.tokenExpiryTimestamp) }
+        }
+    }
+
+    var isHl7Enabled: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.isHl7Enable) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isHl7Enable) }
+    }
+
+    var pmsHostName: String {
+        get { Keychain.getPassword(for: AppStorageKeys.pmsHostName) ?? "" }
+        set { Keychain.savePassword(newValue, for: AppStorageKeys.pmsHostName) }
+    }
+
+    var pillCounterHostName: String {
+        get { Keychain.getPassword(for: AppStorageKeys.pillCounterHostName) ?? "" }
+        set { Keychain.savePassword(newValue, for: AppStorageKeys.pillCounterHostName) }
+    }
+
+    var barcodeFormat: String {
+        get { Keychain.getPassword(for: AppStorageKeys.barcodeFormat) ?? "" }
+        set { Keychain.savePassword(newValue, for: AppStorageKeys.barcodeFormat) }
+    }
+
+    var bucket: [String] {
+        get {
+            guard let json = Keychain.getPassword(for: AppStorageKeys.bucketList),
+                  let data = json.data(using: .utf8),
+                  let list = try? JSONDecoder().decode([String].self, from: data)
+            else { return [] }
+            return list
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                Keychain.savePassword(json, for: AppStorageKeys.bucketList)
+            }
+        }
+    }
+
+    var userSavedEmails: [String] {
+        get {
+            guard let json = Keychain.getPassword(for: AppStorageKeys.userSavedEmails),
+                  let data = json.data(using: .utf8),
+                  let list = try? JSONDecoder().decode([String].self, from: data)
+            else { return [] }
+            return list
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                Keychain.savePassword(json, for: AppStorageKeys.userSavedEmails)
+            }
+        }
+    }
+
+    /// Stored generic colour(s) of the hazardous tray. The hazardous-tray feature
+    /// captures the colour exactly once, so this list holds at most one entry.
+    /// Backed by Keychain using the same JSON pattern as `bucket` / `userSavedEmails`.
+    var hazardousTrayColors: [String] {
+        get {
+            guard let json = Keychain.getPassword(for: AppStorageKeys.hazardousTrayColors),
+                  let data = json.data(using: .utf8),
+                  let list = try? JSONDecoder().decode([String].self, from: data)
+            else { return [] }
+            return list
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                Keychain.savePassword(json, for: AppStorageKeys.hazardousTrayColors)
+            }
+        }
+    }
+
+    /// Convenience accessor for the single stored hazardous tray colour name.
+    /// Setting a non-nil value stores it as the only entry; setting nil clears it.
+    var hazardousTrayColor: String? {
+        get { hazardousTrayColors.first }
+        set { hazardousTrayColors = newValue.map { [$0] } ?? [] }
+    }
+
+    func addEmail(_ email: String) {
+        guard !userSavedEmails.contains(email) else { return }
+        userSavedEmails.append(email)
+    }
+
+    func clearEmails() { userSavedEmails = [] }
+
+    // =========================================================================
+    // MARK: - USERDEFAULTS-BACKED (non-sensitive)
+    // =========================================================================
+
+    var drugIdCounter: Int? {
+        get { defaults.integer(forKey: AppStorageKeys.drugIdCounter) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.drugIdCounter) }
+    }
+
+    var isNewUser: Bool {
         get { defaults.bool(forKey: AppStorageKeys.isNewUser) }
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isNewUser) }
     }
-
-    // MARK: - User ID
-    var userId: String? {
-        get { defaults.string(forKey: AppStorageKeys.userId) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.userId) }
-    }
-
-    // MARK: - User Saved Emails
-    var userSavedEmails: [String] {
-        get {
-            if let data = defaults.data(forKey: AppStorageKeys.userSavedEmails),
-                let emails = try? JSONDecoder().decode(
-                    [String].self, from: data)
-            {
-                return emails
-            }
-            return []
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                defaults.setValue(data, forKey: AppStorageKeys.userSavedEmails)
-            }
-        }
-    }
     
-    // MARK: - Pill Counting Toggle
+    var isHazardousDrugSetting: Bool {
+        get { defaults.bool(forKey: AppStorageKeys.isHarzardousDrugSetting) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isHarzardousDrugSetting) }
+    }
+
     var isPillCountingEnabled: Bool {
-        get {
-            // defaults.bool returns false if key is missing
-            defaults.bool(forKey: AppStorageKeys.isPillCountingEnabled)
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isPillCountingEnabled)
-        }
+        get { defaults.bool(forKey: AppStorageKeys.isPillCountingEnabled) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isPillCountingEnabled) }
     }
-    
-    
+
     var isBackCountRequired: Bool {
         get {
-            if defaults.object(forKey: AppStorageKeys.isBackCountRequired) == nil {
-                return true
-            }
+            guard defaults.object(forKey: AppStorageKeys.isBackCountRequired) != nil else { return true }
             return defaults.bool(forKey: AppStorageKeys.isBackCountRequired)
         }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isBackCountRequired)
-        }
-    }
-    
-    var isHapticEnabled: Bool {
-        get {
-            if defaults.object(forKey: AppStorageKeys.isHapticEnabled) == nil {
-                return true
-            }
-            return defaults.bool(forKey: AppStorageKeys.isHapticEnabled)
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isHapticEnabled)
-        }
-    }
-    
-    var isSoundEnabled: Bool {
-        get {
-            if defaults.object(forKey: AppStorageKeys.isSoundEnabled) == nil {
-                return true
-            }
-            return defaults.bool(forKey: AppStorageKeys.isSoundEnabled)
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isSoundEnabled)
-        }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isBackCountRequired) }
     }
 
-    
+    var isHapticEnabled: Bool {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.isHapticEnabled) != nil else { return true }
+            return defaults.bool(forKey: AppStorageKeys.isHapticEnabled)
+        }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isHapticEnabled) }
+    }
+
+    var isSoundEnabled: Bool {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.isSoundEnabled) != nil else { return true }
+            return defaults.bool(forKey: AppStorageKeys.isSoundEnabled)
+        }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isSoundEnabled) }
+    }
+
     var isSpeechEnabled: Bool {
         get {
-            if defaults.object(forKey: AppStorageKeys.isSpeechEnabled) == nil {
-                return true
-            }
+            guard defaults.object(forKey: AppStorageKeys.isSpeechEnabled) != nil else { return true }
             return defaults.bool(forKey: AppStorageKeys.isSpeechEnabled)
         }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isSpeechEnabled)
-        }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isSpeechEnabled) }
     }
-    
+
     var selectedSchedules: Set<DrugSchedule> {
         get {
             let stored = defaults.stringArray(forKey: AppStorageKeys.selectedSchedules) ?? []
             return Set(stored.compactMap { DrugSchedule(rawValue: $0) })
         }
-        set {
-            let rawValues = newValue.map { $0.rawValue }
-            defaults.setValue(rawValues, forKey: AppStorageKeys.selectedSchedules)
-        }
-    }
-    
-    var barcodeFormat: String {
-        get {
-            defaults.string(forKey: AppStorageKeys.barcodeFormat) ?? ""
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.barcodeFormat)
-        }
-    }
-    
-    var bucket: [String] {
-        get {
-            defaults.stringArray(forKey: AppStorageKeys.bucketList) ?? []
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.bucketList)
-        }
-    }
-    
-    //MARK: - Pill Counting HL7 enabled
-    var isHl7Enabled: Bool {
-        get {
-            defaults.bool(forKey: AppStorageKeys.isHl7Enable)
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.isHl7Enable)
-        }
-    }
-    
-    var pmsHostName: String {
-        get {
-            defaults.string(forKey: AppStorageKeys.pmsHostName) ?? ""
-        }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.pmsHostName)
-        }
+        set { defaults.setValue(newValue.map { $0.rawValue }, forKey: AppStorageKeys.selectedSchedules) }
     }
 
-    var pillCounterHostName: String {
+    var saveHistoryOption: SaveHistoryOption {
         get {
-            defaults.string(forKey: AppStorageKeys.pillCounterHostName) ?? ""
+            guard let raw = defaults.string(forKey: AppStorageKeys.saveHistoryOption),
+                  let opt = SaveHistoryOption(rawValue: raw) else { return .default }
+            return opt
         }
-        set {
-            defaults.setValue(newValue, forKey: AppStorageKeys.pillCounterHostName)
-        }
+        set { defaults.setValue(newValue.rawValue, forKey: AppStorageKeys.saveHistoryOption) }
     }
 
     var selectedTerminalName: String {
@@ -229,73 +279,50 @@ final class AppStorageManager {
         }
     }
 
-    // MARK: - Add email
-    func addEmail(_ email: String) {
-        guard !userSavedEmails.contains(email) else { return }
-        userSavedEmails.append(email)
-    }
-
-    // MARK: - Clear emails
-    func clearEmails() {
-        userSavedEmails.removeAll()
-    }
-
-    // MARK: - Remember Me
-    var rememberMe: Bool? {
-        get { defaults.bool(forKey: AppStorageKeys.rememberMe) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.rememberMe) }
-    }
-
-    // MARK: - Save History Option (New Implementation)
-    var saveHistoryOption: SaveHistoryOption {
+    /// Locally cached terminal list for the current user. Persisted so the
+    /// terminal picker still works if /auth/me fails or the device is offline.
+    /// Cleared on logout via `logout()` / `clearTerminalCache()`.
+    var storedTerminals: [UserTerminal] {
         get {
-            // 1. Try to get the string from UserDefaults
-            guard
-                let rawValue = defaults.string(
-                    forKey: AppStorageKeys.saveHistoryOption),
-                // 2. Try to convert string back to Enum
-                let option = SaveHistoryOption(rawValue: rawValue)
-            else {
-                // 3. If missing or invalid, return default
-                return .default
-            }
-            return option
+            guard let data = defaults.data(forKey: AppStorageKeys.storedTerminals),
+                  let terminals = try? JSONDecoder().decode([UserTerminal].self, from: data)
+            else { return [] }
+            return terminals
         }
         set {
-            // 4. Save the String representation (rawValue) of the enum
-            defaults.setValue(
-                newValue.rawValue, forKey: AppStorageKeys.saveHistoryOption)
+            let data = try? JSONEncoder().encode(newValue)
+            defaults.setValue(data, forKey: AppStorageKeys.storedTerminals)
         }
     }
-    
-    // MARK: - Token Expiry
-    // We store this as a Double (TimeIntervalSince1970)
-    var tokenExpiryTimestamp: Double? {
-        get { defaults.double(forKey: AppStorageKeys.tokenExpiryTimestamp) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.tokenExpiryTimestamp) }
-    }
 
-    // MARK: - Utility
-    func clearUserSession() {
-        defaults.removeObject(forKey: AppStorageKeys.accessToken)
-        defaults.removeObject(forKey: AppStorageKeys.refreshToken)
-        defaults.removeObject(forKey: AppStorageKeys.userId)
-        defaults.removeObject(forKey: AppStorageKeys.rememberMe)
-        defaults.removeObject(forKey: AppStorageKeys.userSavedEmails)
-    }
-
-    // MARK: Logout
-    func logout() {
-        defaults.removeObject(forKey: AppStorageKeys.accessToken)
-        defaults.removeObject(forKey: AppStorageKeys.refreshToken)
-        defaults.removeObject(forKey: AppStorageKeys.rememberMe)
-        defaults.removeObject(forKey: AppStorageKeys.userEmail)
-        defaults.removeObject(forKey: AppStorageKeys.userId)
-        defaults.removeObject(forKey: AppStorageKeys.isLoggedIn)
-        defaults.removeObject(forKey: AppStorageKeys.tokenExpiryTimestamp)
-        defaults.removeObject(forKey: AppStorageKeys.isHl7Enable)
-        defaults.removeObject(forKey: AppStorageKeys.pmsHostName)
-        defaults.removeObject(forKey: AppStorageKeys.pillCounterHostName)
+    /// Clears the cached terminal list + selected terminal name.
+    /// Call on logout / user switch so the next user never sees stale terminals.
+    func clearTerminalCache() {
+        defaults.removeObject(forKey: AppStorageKeys.storedTerminals)
         defaults.removeObject(forKey: AppStorageKeys.selectedTerminalName)
+    }
+
+    // =========================================================================
+    // MARK: - SESSION MANAGEMENT
+    // =========================================================================
+
+    /// Clears auth credentials only — used on 401 / forced re-login.
+    func clearUserSession() {
+        Keychain.deletePassword(for: AppStorageKeys.accessToken)
+        Keychain.deletePassword(for: AppStorageKeys.refreshToken)
+        Keychain.deletePassword(for: AppStorageKeys.userId)
+        Keychain.deletePassword(for: AppStorageKeys.userEmail)
+        Keychain.deletePassword(for: AppStorageKeys.isLoggedIn)
+        Keychain.deletePassword(for: AppStorageKeys.tokenExpiryTimestamp)
+    }
+
+    /// Full logout — atomically wipes every Keychain item for this app,
+    /// then clears non-sensitive UserDefaults session flags.
+    func logout() {
+        // Single call removes all Keychain items — no risk of missing a key.
+        Keychain.deleteAll()
+
+        defaults.removeObject(forKey: AppStorageKeys.isNewUser)
+        clearTerminalCache()
     }
 }

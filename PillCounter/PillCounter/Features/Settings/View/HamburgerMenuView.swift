@@ -110,12 +110,9 @@ struct HamburgerMenuView: View {
                     }
                 }
             }
-            // Add global top/bottom padding to the scroll view content
-            .padding(.top, 20)
             .padding(.bottom, 40)
         }
-        // BaseView header offset
-        .padding(.top, 45)
+        .padding(.top, 64)
         .padding(
             .horizontal,
             isLandscape ? SafeAreaInsets.leading : 0
@@ -130,7 +127,8 @@ struct HamburgerMenuView: View {
         let monthDuration: Int = 3
 
         // Logic: Is this a "complex" row with buttons?
-        let isCountItem = (item == .FixedCount || item == .RegularCount)
+//        let isCountItem = (item == .FixedCount || item == .RegularCount)
+        let isCountItem = false
 
         Button {
             handleMenuSelection(item)
@@ -210,43 +208,43 @@ struct HamburgerMenuView: View {
                 .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
               
-        case .FixedCount:
-            countButtonsRow(
-                completedCount: userViewModel.fixedCountTransactionCompletedCount,
-                partialCount: userViewModel.fixedCountTransactionPartialCount,
-                completedColor: appColors.primary,
-                partialColor: appColors.primary,
-                completedBg: appColors.primaryBackground,
-                partialBg: appColors.primaryBackground,
-                primaryIconColor: appColors.primary,
-                isLandscape: isLandscape,
-                isFixed: true,
-                onPartialTap: {
-                        router.selectedPillScanningType = .FIXED
-                        router.navigate(
-                            to: .authentication(
-                                .login(.dashboard(.fixedCountPartial))))
-                }
-            ).padding(.horizontal,0)
-
-        case .RegularCount:
-            countButtonsRow(
-                completedCount: stockCountViewModel.totalCompletedBatchCount,
-                partialCount:stockCountViewModel.totalBatchCount,
-                completedColor: appColors.primary,
-                partialColor: appColors.primary,
-                completedBg: appColors.primaryBackground,
-                partialBg: appColors.primaryBackground,
-                primaryIconColor: appColors.primary,
-                isLandscape: isLandscape,
-                isFixed: false,
-                onPartialTap: {
-                        router.selectedPillScanningType = .REGULAR
-                        router.navigate(
-                            to: .authentication(
-                                .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
-                }
-            )
+//        case .FixedCount:
+//            countButtonsRow(
+//                completedCount: userViewModel.fixedCountTransactionCompletedCount,
+//                partialCount: userViewModel.fixedCountTransactionPartialCount,
+//                completedColor: appColors.primary,
+//                partialColor: appColors.primary,
+//                completedBg: appColors.primaryBackground,
+//                partialBg: appColors.primaryBackground,
+//                primaryIconColor: appColors.primary,
+//                isLandscape: isLandscape,
+//                isFixed: true,
+//                onPartialTap: {
+//                        router.selectedPillScanningType = .FIXED
+//                        router.navigate(
+//                            to: .authentication(
+//                                .login(.dashboard(.fixedCountPartial))))
+//                }
+//            ).padding(.horizontal,0)
+//
+//        case .RegularCount:
+//            countButtonsRow(
+//                completedCount: stockCountViewModel.totalCompletedBatchCount,
+//                partialCount:stockCountViewModel.totalBatchCount,
+//                completedColor: appColors.primary,
+//                partialColor: appColors.primary,
+//                completedBg: appColors.primaryBackground,
+//                partialBg: appColors.primaryBackground,
+//                primaryIconColor: appColors.primary,
+//                isLandscape: isLandscape,
+//                isFixed: false,
+//                onPartialTap: {
+//                        router.selectedPillScanningType = .REGULAR
+//                        router.navigate(
+//                            to: .authentication(
+//                                .login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))))
+//                }
+//            )
 
         default:
             EmptyView()
@@ -362,7 +360,7 @@ struct HamburgerMenuView: View {
                 )
                 PillCountingButton(
                     iconName: nil,
-                    title: "OK",
+                    title: L10n.Common.ok,
                     textColor: Color.white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
@@ -439,7 +437,7 @@ struct HamburgerMenuView: View {
                 )
                 PillCountingButton(
                     iconName: nil,
-                    title: "OK",
+                    title: L10n.Common.ok,
                     textColor: Color.white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
@@ -463,12 +461,12 @@ struct HamburgerMenuView: View {
     // MARK: - MENU ACTION HANDLER
     private func handleMenuSelection(_ item: HamburgerMenuItem) {
         switch item {
-        case .FixedCount:
-            router.selectedPillScanningType = .FIXED
-            router.navigate(
-                to: .authentication(
-                    .login(.dashboard(.pillCount(.scan(.rx_label))))))
-            
+//        case .FixedCount:
+//            router.selectedPillScanningType = .FIXED
+//            router.navigate(
+//                to: .authentication(
+//                    .login(.dashboard(.pillCount(.scan(.rx_label))))))
+//            
         case .UnsyncedTransaction:
             router.navigate(
                 to: .authentication(.user(.userSettings(.unsyncedTransaction))))
@@ -477,10 +475,10 @@ struct HamburgerMenuView: View {
             router.navigate(
                 to: .authentication(.user(.userSettings(.settings))))
 
-        case .RegularCount:
-            router.selectedPillScanningType = .REGULAR
-            showStockCountPopup = true
-            selectedStockCountOption = .newBatch
+//        case .RegularCount:
+//            router.selectedPillScanningType = .REGULAR
+//            showStockCountPopup = true
+//            selectedStockCountOption = .newBatch
 
         case .Logout:
             Task {

@@ -2,55 +2,52 @@
 //  AppDelegate.swift
 //  PillCounter
 //
-//  Created by Bhushan Patil on 07/04/26.
-//
+
 import UIKit
 import FirebaseMessaging
 import Firebase
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
 
-//    func application(
-//        _ application: UIApplication,
-//        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
-//    ) -> Bool {
-//
-//        FirebaseApp.configure()
-//
-//        //  Notification permission FIRST
-//        let center = UNUserNotificationCenter.current()
-//        center.delegate = self
-//
-//        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-//            print("Permission granted:", granted)
-//
-//            DispatchQueue.main.async {
-//                UIApplication.shared.registerForRemoteNotifications()
-//            }
-//        }
-//
-//        // 🔥 Firebase delegate
-//        Messaging.messaging().delegate = self
-//
-//        return true
-//    }
-//
-//    // APNS TOKEN RECEIVED
-//    func application(
-//        _ application: UIApplication,
-//        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
-//    ) {
-//        print("APNs Token received")
-//
-//        Messaging.messaging().apnsToken = deviceToken
-//    }
-//
-//    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-//        guard let token = fcmToken else { return }
-//
-//        print("FCM Token:", token)
-//
-//        //SAVE + RESUME ANY WAITERS
-//        FCMManager.shared.updateToken(token)
-//    }
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
+
+        Messaging.messaging().delegate = self
+        return true
+    }
+
+    // MARK: - APNs token forwarding
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        Messaging.messaging().apnsToken = deviceToken
+        #if DEBUG
+        print("APNs token forwarded to Firebase Messaging")
+        #endif
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+    
+        #if DEBUG
+        print("APNs registration failed:", error.localizedDescription)
+        #endif
+    }
+
+    // MARK: - FCM token refresh
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        guard let token = fcmToken else { return }
+        #if DEBUG
+        print("FCM token refreshed")
+        #endif
+        FCMManager.shared.updateToken(token)
+    }
 }

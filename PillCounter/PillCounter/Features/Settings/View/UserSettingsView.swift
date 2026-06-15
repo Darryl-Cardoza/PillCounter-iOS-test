@@ -28,6 +28,12 @@ struct UserSettingsView: View {
     @State private var selectedSchedules =
     AppStorageManager.shared.selectedSchedules
     
+    @State private var isHazardousDrugSettingEnabled =
+    AppStorageManager.shared.isHazardousDrugSetting
+
+    @State private var hazardousTrayColor =
+    AppStorageManager.shared.hazardousTrayColor
+
     
     // 1. Source of Truth (The actual saved setting)
     @State private var selectedSaveHistoryOption: SaveHistoryOption =
@@ -39,6 +45,7 @@ struct UserSettingsView: View {
     // 3. UI State for Popup
     @State private var showConfirmationPopup: Bool = false
     @State private var showClearDataConfirmationPopup: Bool = false
+    @State private var showResetHazardousTrayColorPopup: Bool = false
     @State private var activeSubScreen: SettingsSubScreen? = nil
     
     @EnvironmentObject private var appColors: AppColors
@@ -76,6 +83,24 @@ struct UserSettingsView: View {
         }
         .customPopup(isPresented: $showClearDataConfirmationPopup) {
             clearHistoryConfirmatioDialog
+        }
+        .customPopup(isPresented: $showResetHazardousTrayColorPopup) {
+            resetHazardousTrayColorDialog
+        }
+    }
+
+    private var resetHazardousTrayColorDialog: some View {
+        ConfirmationDialogue(
+            title: L10n.Settings.resetHazardousTrayColorTitle,
+            message: L10n.Settings.resetHazardousTrayColorMessage,
+            cancelButtonText: L10n.Common.no,
+            confirmButtonText: L10n.Common.yes
+        ) {
+            showResetHazardousTrayColorPopup = false
+        } onConfirm: {
+            AppStorageManager.shared.hazardousTrayColor = nil
+            hazardousTrayColor = nil
+            showResetHazardousTrayColorPopup = false
         }
     }
     
@@ -236,6 +261,41 @@ struct UserSettingsView: View {
                 
                 Divider().background(appColors.primaryBackground)
                 
+                // MARK: HAZARDOUS DRUG
+                ToggleRowView(
+                    title: L10n.Settings.hazardousPillSetting,
+                    isOn: $isHazardousDrugSettingEnabled,
+                    onColor: appColors.primary
+                ) { newValue in
+                    AppStorageManager.shared.isHazardousDrugSetting = newValue
+                }
+
+                Divider().background(appColors.primaryBackground)
+
+                // MARK: Hazardous Tray Color
+                VStack(spacing: 15) {
+                    Text(L10n.Settings.hazardousTrayColor)
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.regular)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(hazardousTrayColor ?? "—")
+                        .foregroundColor(appColors.secondary)
+                        .fontWeight(.regular)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Only offer to reset when a hazardous tray color is set.
+                    if hazardousTrayColor != nil {
+                        showResetHazardousTrayColorPopup = true
+                    }
+                    // TODO: No hazardous tray color set yet — nothing to reset.
+                }
+
+                Divider().background(appColors.primaryBackground)
+
                 HStack{
                     Text(L10n.Settings.clearLocalData)
                         .foregroundStyle(appColors.text)
@@ -417,6 +477,7 @@ struct ToggleRowView: View {
         HStack {
             Text(title)
                 .fontWeight(Font.Weight.regular)
+                .foregroundColor(AppColors.shared.text)
             Spacer()
             PillCountingToggleButton(
                 isOn: Binding(

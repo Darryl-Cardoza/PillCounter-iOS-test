@@ -246,11 +246,11 @@ struct HistoryBatchDetailView: View {
                         .padding(.horizontal, 4)
 
                         if !sealedDetails.isEmpty {
-                            LotColumnHeader(appColors: appColors)
+                            LotColumnHeader()
                             ForEach(sealedDetails, id: \.lot) { detail in
-                                LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.sealedQty, appColors: appColors)
+                                LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.sealedQty)
                             }
-                            LotTotalRow(total: sealedTotal, appColors: appColors)
+                            LotTotalRow(total: sealedTotal)
                         }
 
                         // Opened Bottles Section
@@ -268,11 +268,11 @@ struct HistoryBatchDetailView: View {
                         .padding(.horizontal, 4)
 
                         if !openDetails.isEmpty {
-                            LotColumnHeader(appColors: appColors)
+                            LotColumnHeader()
                             ForEach(openDetails, id: \.lot) { detail in
-                                LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.openQty, appColors: appColors)
+                                LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.openQty)
                             }
-                            LotTotalRow(total: openTotal, appColors: appColors)
+                            LotTotalRow(total: openTotal)
                         }
                     }
                     .padding(.horizontal, 8)

@@ -25,6 +25,15 @@
 "common.time" = "Time";
 "common.unselectAll" = "Unselect All";
 "common.selectAll" = "Select All";
+"common.done" = "Done";
+"common.typeHere" = "Type here";
+"common.pms" = "PMS";
+"common.confirmation" = "Confirmation";
+"common.areYouSureGoBack" = "Are you sure you want to go back?";
+"common.tapToDelete" = "Tap item(s) to delete.";
+"common.selectedCount" = "%d Selected";
+"common.switchOn" = "Switch On";
+"common.switchOff" = "Switch Off";
 
 
 // MARK: - LOGIN
@@ -46,9 +55,25 @@
 "dashboard.completed" = "Completed";
 "dashboard.pending" = "Pending";
 "dashboard.fixedCount.title" = "Dispense";
-"dashboard.fixedCount.subtitle" = "Tap.Scan.Dispense";
+"dashboard.fixedCount.subtitle" = "Scan Rx Label";
 "dashboard.regularCount.title" = "Stock Count";
 "dashboard.regularCount.subtitle" = "Start Inventory count";
+"dashboard.quickActions" = "Quick Actions";
+"dasboard.statCard.highPriority" = "High Priority";
+"dasboard.statCard.dispensePending" = "Disp. Pending";
+"dasboard.statCard.controlledDrug" = "Cont. Drugs";
+"dasboard.statCard.hazardous" = "Hazardous";
+"dasboard.statCard.cycleCount" = "Cycle Count";
+"dasboard.statCard.pendingBatch" = "Pending Batch";
+"dashboard.header.pharmacyPlaceholder" = "Pharmacy";
+"dashboard.header.tabs.todaysQueue" = "Today's Queue";
+"dashboard.header.tabs.recentActivity" = "Recent Activity";
+
+// MARK: - DASHBOARD EMPTY STATE
+"dashboard.emptyState.caughtUpTitle" = "You're all caught up!";
+"dashboard.emptyState.noMatchingTitle" = "No matching items";
+"dashboard.emptyState.noPendingSubtitle" = "No pending tasks right now";
+"dashboard.emptyState.noRecentSubtitle" = "No recent activity yet";
 
 
 // MARK: - DASHBOARD POPUP
@@ -137,6 +162,10 @@
 "settings.confirmHistoryMessage" = "Note: Data older than this period will be permanently deleted.";
 "settings.clearHistoryTitle" = "Are you sure want to clear all history?";
 "settings.clearHistoryMessage" = "This will delete all your saved data permanently.";
+"settings.hazardousDrugSetting" = "Hazardous Pill Counting";
+"settings.hazardousTrayColor" = "Hazardous Tray Color";
+"settings.resetHazardousTrayColorTitle" = "Are you sure you want to reset the hazardous tray color?";
+"settings.resetHazardousTrayColorMessage" = "You will be prompted to set a new hazardous tray color the next time one is detected.";
 
 
 // MARK: - CAMERA PERMISSION
@@ -168,6 +197,13 @@
 "barcodeScan.incorrectNdc" = "Incorrect NDC";
 "barcodeScan.incorrectNdcMessage" = "You have scanned an incorrect NDC. This item does not match the PMS batch.";
 "barcodeScan.proceed" = "PROCEED";
+"barcodeScan.invalidRxBarcode" = "Invalid RX Barcode";
+"barcodeScan.rxNotFound" = "Rx not found";
+"barcodeScan.rxOnHoldTitle" = "Rx On Hold";
+"barcodeScan.rxOnHoldMessage" = "This Rx has been placed on hold by PMS. Scanning is not allowed until the hold is released.";
+"barcodeScan.rxNotSentByPms" = "Rx not found on this device. Please wait for PMS to send it.";
+"barcodeScan.rxInProgressTitle" = "Rx Already In Progress";
+"barcodeScan.rxInProgressMessage" = "Pill counting for this Rx has already started. Do you want to continue from where you left off?";
 
 
 // MARK: - GENERIC EQUIVALENT POPUP
@@ -245,6 +281,7 @@
 "stock.startAddingItems" = "Start adding items to this batch";
 "stock.endCount" = "END COUNT";
 "stock.addItem" = "+ ADD";
+"stock.endBatchTitle" = "End Batch Count?";
 "stock.noCountEndBatchMessage" = "No transactions or counts added. Do you want to end the batch?";
 "stock.addNoteQuestion" = "Would you like to add a note?";
 "stock.deleteButton" = "Delete";
@@ -259,6 +296,36 @@
 "unsync.stocks" = "STOCKS";
 "unsync.dispenses" = "DISPENSES";
 "unsync.syncAll" = "SYNC ALL";
+
+
+// MARK: - STOCK COUNT SHEET
+"stockCountSheet.batchStockCount" = "Batch Stock Count";
+"stockCountSheet.scanPills" = "SCAN PILLS";
+"stockCountSheet.recentBatchCount" = "RECENT BATCH COUNT";
+"stockCountSheet.recentBatchCountWithN" = "RECENT BATCH COUNT (%d)";
+"stockCountSheet.noItemsAddedYet" = "No items added yet";
+"stockCountSheet.scannedDrugDetails" = "SCANNED DRUG DETAILS";
+"stockCountSheet.scannedSummary" = "SCANNED SUMMARY";
+"stockCountSheet.scanNewStockBottle" = "Scan a new Stock bottle";
+"stockCountSheet.totalNdcs" = "Total NDCs";
+"stockCountSheet.totalPills" = "Total Pills";
+"stockCountSheet.pills" = "Pills";
+"stockCountSheet.bottles" = "Bottles";
+"stockCountSheet.sealedBottles" = "Sealed Bottles";
+"stockCountSheet.openedBottles" = "Opened Bottles";
+"stockCountSheet.editDetails" = "Edit Details";
+"stockCountSheet.drugName" = "Drug Name";
+"stockCountSheet.ndcNumber" = "NDC Number";
+"stockCountSheet.bucket" = "Bucket";
+"stockCountSheet.batchNo" = "Batch No.";
+"stockCountSheet.expiryDate" = "Expiry Date";
+"stockCountSheet.openPills" = "Open Pills";
+"stockCountSheet.lotNumber" = "Lot Number";
+"stockCountSheet.total" = "Total";
+"stockCountSheet.clear" = "CLEAR";
+"stockCountSheet.add" = "ADD";
+"stockCountSheet.edit" = "Edit";
+"stockCountSheet.pillsWithCount" = "%d pills";
 
 
 // MARK: - STOCK COUNT PARTIAL BATCH LIST
@@ -325,5 +392,40 @@
 "controlled.scanBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanStockCountBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanRxLabelBarcode" = "Scan Rx Label";
+"controlled.scanNdcToCountPills" = "Scan NDC to count pills";
+
+
+// MARK: - SECURITY
+"security.alertTitle" = "Security Alert";
+"security.alertMessage" = "This device does not meet security requirements.\nTo protect your data, the app cannot continue.";
+"security.exitButton" = "Exit";
+
+
+// MARK: - FORCE UPDATE
+"forceUpdate.message" = "Your current version has expired - time to get a fresh prescription.\nUpdate now for the right dose of features!";
+"forceUpdate.updateButton" = "Update";
+
+
+// MARK: - PMS / HL7
+"pms.connected" = "PMS Connected";
+"pms.disconnected" = "PMS Disconnected";
+"pms.connecting" = "Connecting...";
+"pms.connectedBody" = "Connected to %@";
+
+
+// MARK: - HL7 Notifications
+"hl7Notification.newRxTitle" = "New Rx Received";
+"hl7Notification.rxUpdatedTitle" = "Rx Updated";
+"hl7Notification.rxOnHoldTitle" = "Rx On Hold";
+"hl7Notification.rxCancelledTitle" = "Rx Cancelled";
+"hl7Notification.rxCompletedTitle" = "Rx Completed";
+"hl7Notification.qtyLabel" = "Qty";
+"hl7Notification.inventoryRequestTitle" = "Inventory Request";
+"hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
+"hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
+
+
+// MARK: - COUNT HISTORY
+"countHistory.noTransactionsFound" = "No transactions found";
 
 

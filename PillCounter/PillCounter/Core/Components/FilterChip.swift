@@ -12,7 +12,7 @@ struct FilterChip<T: Hashable>: View {
     let count: Int
     let value: T
     let selectedValue: T
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
     let onSelect: (T) -> Void
 
     private var isActive: Bool {

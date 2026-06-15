@@ -86,10 +86,10 @@ struct HistoryTransactionDetailView: View {
         }
         .customPopup(isPresented: $showDeleteConfirmation) {
             ConfirmationDialogue(
-                title: NSLocalizedString("CONFIRM_DELETE", comment: ""),
+                title: L10n.History.confirmDelete,
                 message: nil,
-                cancelButtonText: "NO",
-                confirmButtonText: "YES",
+                cancelButtonText: L10n.Common.no,
+                confirmButtonText: L10n.Common.yes,
                 onCancel: {
                     showDeleteConfirmation = false
                 },

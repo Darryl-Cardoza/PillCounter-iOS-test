@@ -66,22 +66,68 @@ extension PillScanViewModel {
                 let resolvedDrugName = await resolveDrugName(for: ndc)
 
                 guard let drugName = resolvedDrugName else {
-                    showToastMessage(text: "Rx not found")
+                    showToastMessage(text: L10n.BarcodeScan.rxNotFound)
                     rxScanFailed = true
                     return
                 }
 
+                let rawRxNo = mappedData["RXNO"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let rxNo: String? = rawRxNo.isEmpty ? nil : rawRxNo
+
+                // Rx must exist in local DB — if not found, abort with a toast
+                guard let rxNo, !rxNo.isEmpty else {
+                    print("[RxScan] No RXNO in barcode — cannot proceed")
+                    showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                    rxScanFailed = true
+                    return
+                }
+
+                let currentUser = userDataLocalStorage.fetchByUserId(userId)
+                guard let currentUser else {
+                    print("[RxScan] No current user — cannot look up Rx")
+                    rxScanFailed = true
+                    return
+                }
+
+                let allStoredRxNos = transactionDAO.fetchAllRxNos(for: currentUser)
+                print("[RxScan] All rx_no values in DB: \(allStoredRxNos)")
+                print("[RxScan] Looking up rxNo: '\(rxNo)'")
+
+                let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser)
+                print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
+
+                guard let existingTxn else {
+                    print("[RxScan] Rx \(rxNo) not found in DB — aborting")
+                    showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
+                    rxScanFailed = true
+                    return
+                }
+
+                if existingTxn.status == CountStatus.ON_HOLD.rawValue {
+                    print("[RxScan] Rx \(rxNo) is ON HOLD — showing hold popup")
+                    showRxOnHoldPopup = true
+                    return
+                }
+
                 scannedRxData = ParsedScanData(
-                    rxNo:     mappedData["RXNO"],
+                    rxNo:     rxNo,
                     ndcNo:    ndc.isEmpty ? nil : ndc,
                     drugName: drugName,
                     qty:      mappedData["QTY"],
                     rawMap:   mappedData
                 )
+                fetchedRxTransaction = existingTxn
 
-                print("[RxScan] Rx popup → rxNo: \(scannedRxData?.rxNo ?? "nil"), ndc: \(scannedRxData?.ndcNo ?? "nil"), drug: \(scannedRxData?.drugName ?? "UNKNOWN"), qty: \(scannedRxData?.qty ?? "nil")")
-
-                showRxFlowPopup = true
+                if existingTxn.is_ndc_verfied {
+                    print("[RxScan] Rx \(rxNo) is_ndc_verfied=true — resuming inline")
+                    self.selectedTransaction  = existingTxn
+                    self.currentTransaction   = existingTxn
+                    self.fetchedRxTransaction = nil
+                    self.rxResumeInline       = true
+                } else {
+                    print("[RxScan] Rx popup → rxNo: \(scannedRxData?.rxNo ?? "nil"), ndc: \(scannedRxData?.ndcNo ?? "nil"), drug: \(scannedRxData?.drugName ?? "UNKNOWN"), qty: \(scannedRxData?.qty ?? "nil")")
+                    showRxFlowPopup = true
+                }
             }
 
         } catch {
@@ -91,9 +137,45 @@ extension PillScanViewModel {
         }
     }
 
-    // MARK: Create Transaction from Scanned Rx Data
+    /// Looks up the transaction for the given Rx number. Checks active transactions first;
+    /// falls back to the most-recently deleted one (which can be restored).
+    func fetchRxTransaction(rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
+        if let txn = transactionDAO.fetchByRxNo(rxNo, for: user).first {
+            return txn
+        }
+        return transactionDAO.fetchDeletedByRxNo(rxNo, for: user)
+    }
+
+    // MARK: Proceed with Rx Transaction
 
     /// Called when user taps PROCEED on the Rx popup.
+    /// Fetches the existing transaction for the scanned Rx and sets it as the selected transaction
+    /// so the normal barcode-scan flow (scan stock bottle → NDC match → pill count) can continue.
+    /// Does NOT modify any Rx data.
+    func proceedFromRxScan() {
+        guard let rxNo = scannedRxData?.rxNo, !rxNo.isEmpty else {
+            print("[RxScan] proceedFromRxScan — no rxNo, cannot proceed")
+            rxScanFailed = true
+            return
+        }
+
+        let currentUser = userDataLocalStorage.fetchByUserId(userId)
+        guard let currentUser,
+              let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+            print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB")
+            rxScanFailed = true
+            return
+        }
+
+        print("[RxScan] proceedFromRxScan — setting selectedTransaction txnId=\(existingTxn.txn_id) for rxNo=\(rxNo)")
+        self.selectedTransaction  = existingTxn
+        self.currentTransaction   = existingTxn
+        self.fetchedRxTransaction = nil
+        self.showRxFlowPopup      = false
+    }
+
+    /// Called when user taps PROCEED on the Rx popup.
+    /// Always updates the existing transaction found during parseScanData — never creates a new one.
     func createTransactionFromRxScan(countType: CountType = .FIXED) async {
         guard let rxData = scannedRxData else {
             print("[RxScan] No scanned Rx data available")
@@ -101,39 +183,49 @@ extension PillScanViewModel {
         }
 
         let ndc       = rxData.ndcNo  ?? ""
-        let name      = rxData.drugName ?? ""
-        let rxNo      = rxData.rxNo
+        let rxNo      = rxData.rxNo?.trimmingCharacters(in: .whitespacesAndNewlines)
         let targetQty = Int32(rxData.qty ?? "") ?? 0
 
         guard let drug = drugMasterDAO.fetchByNdc(ndc) else {
-            print("[RxScan] Drug not found in local DB — cannot create transaction")
-            showToastMessage(text: "Rx not found")
+            print("[RxScan] Drug not found in local DB — cannot proceed")
+            showToastMessage(text: L10n.BarcodeScan.rxNotFound)
             return
         }
 
-        print("[RxScan] Creating transaction → NDC: \(ndc), Name: \(name.isEmpty ? "UNKNOWN" : name), Qty: \(targetQty), RxNo: \(rxNo ?? "nil"), Bucket: \(selectedBucket)")
-
-        let workFlowStep: String
-        if let type = drug.drug_type, !type.trimmingCharacters(in: .whitespaces).isEmpty {
-            workFlowStep = ControlledStep.containerInitiate.rawValue
-        } else {
-            workFlowStep = ControlledStep.targetVerification.rawValue
+        guard let rxNo, !rxNo.isEmpty else {
+            print("[RxScan] No rxNo on scannedRxData — cannot proceed")
+            showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+            return
         }
 
-        await createTransaction(
-            drugId:          drug.drug_id,
-            countType:       countType,
-            barcodeImage:    nil,
-            isComingFromPms: false,
-            targetCount:     targetQty > 0 ? targetQty : nil,
-            drugName:        name,
-            rxNo:            rxNo,
-            bucketId:        selectedBucket,
-            workFlowStep:    workFlowStep
+        let currentUser = userDataLocalStorage.fetchByUserId(userId)
+        guard let currentUser,
+              let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+            print("[RxScan] Rx \(rxNo) no longer found in DB on proceed — aborting")
+            showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
+            return
+        }
+
+        // Restore soft-deleted transaction if needed
+        if existingTxn.is_deleted {
+            transactionDAO.restoreDeleted(txnId: existingTxn.txn_id)
+        }
+
+        let txnId = existingTxn.txn_id
+        print("[RxScan] Updating existing txnId=\(txnId) for rxNo=\(rxNo)")
+
+        transactionDAO.updateFromHL7Edit(
+            txnId: txnId,
+            drugId: drug.drug_id,
+            targetCount: targetQty,
+            priority: existingTxn.txn_priority
         )
 
         await MainActor.run {
+            self.currentTransaction  = transactionDAO.fetchById(txnId)
             self.selectedTransaction = self.currentTransaction
+
+            getAllTransactionDetailsOfTheCurrentTransaction()
 
             if targetQty > 0 {
                 let digits = String(targetQty).map { String($0) }
@@ -240,7 +332,7 @@ extension PillScanViewModel {
                 ndc:          ndc,
                 drugId:       generateUniqueDrugId(),
                 drugName:     resolvedName,
-                drugType:     data.scannedNdc?.deaSchedule,
+                drugType:     data.scannedNdc?.regulatory?.schedule,
                 packageQty:   data.scannedNdc?.safeQuantity ?? 0,
                 isHazardous:  data.scannedNdc?.isHazardous
             )

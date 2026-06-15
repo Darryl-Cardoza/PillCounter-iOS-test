@@ -9,78 +9,43 @@ import SwiftUI
 
 @MainActor
 class LoginViewModel: ObservableObject {
-    // MARK: PROPERTIES
+
+    // MARK: - Published UI state
     @Published var userEmail: String = ""
     @Published var isChecked: Bool = false
-    @Published var userSavedEmails: [String] = []  // saved emaiils should be in the database ? or because it is small we can keep it in app storage or shared prefs.
+    @Published var userSavedEmails: [String] = []
     @Published var otp: [String] = Array(repeating: "", count: 4)
-
-    // error message
     @Published var errorMessage: String?
-
     @Published var resendOTPSent: Bool = false
-
-    // App storage values -- used when after logging
-    @AppStorage(AppStorageManager.AppStorageKeys.accessToken) var accessToken:
-        String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.refreshToken) var refreshToken:
-        String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.userEmail)
-    var userEmailToSaveInUserDefaults: String = ""
-    @AppStorage(AppStorageManager.AppStorageKeys.rememberMe) var isRememberMe:
-        Bool = false
-    @AppStorage(AppStorageManager.AppStorageKeys.isLoggedIn) var isLoggedIn:
-        Bool = false
-    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
-        Bool = false
-    
-    @AppStorage(AppStorageManager.AppStorageKeys.isHl7Enable)
-    
-
-    
-    var isHl7Enabled: Bool = false
-
-    // for successful sending of the otp and navigate to the next screen.
-    // successful otp sent to the email.
     @Published var isOtpSent: Bool = false
-
-    // for successful verification of otp
     @Published var isOtpVerificationSuccess: Bool = false
-
-    // for loading handling of the api calls.
     @Published var isLoading: Bool = false
-
-    // for logout
     @Published var isLogoutSucces: Bool = false
 
-    // MARK: - RESEND TIMER
+    // MARK: - Resend timer
     @Published var resendCooldown: Int = 60
     @Published var isResendDisabled: Bool = true
-
     private var resendTimer: Timer?
 
-    // MARK: - DERVIED
-    var resendTimerText: String {
-        "\(resendCooldown) s"
+    // MARK: - Derived
+    var resendTimerText: String { "\(resendCooldown) s" }
+    var isOtpComplete: Bool { otp.joined().count == 4 }
+
+    // MARK: - Repository
+    private let loginrepo = LoginRepository.shared
+
+    // MARK: - Init
+    init() {
+        userSavedEmails = AppStorageManager.shared.userSavedEmails
     }
 
-    var isOtpComplete: Bool {
-        otp.joined().count == 4
-    }
-    
-    // MARK: - TIMER CONTROL
+    // MARK: - Timer
     func startResendTimer() {
         resendTimer?.invalidate()
-        
         resendCooldown = 60
         isResendDisabled = true
-        
-        resendTimer = Timer.scheduledTimer(
-            withTimeInterval: 1,
-            repeats: true
-        ) { [weak self] timer in
+        resendTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
             guard let self else { return }
-            
             if self.resendCooldown > 0 {
                 self.resendCooldown -= 1
             } else {
@@ -90,142 +55,93 @@ class LoginViewModel: ObservableObject {
         }
     }
 
-    // MARK: INIT
-    init() {
-        // initialise this with the user defaults saved emails.
-        userSavedEmails = AppStorageManager.shared.userSavedEmails
-    }
-
-    // repo
-    private let loginrepo = LoginRepository.shared
-
-    // MARK: REMEMBER ME
+    // MARK: - Remember Me
     func rememberMe() {
-
-        // one more if remember me then user stays logged in always.
-
-        // For now saving the emails into the userSavedEmails, the last 5 emails.
-        // This function to be called at the time of login only if the user has set the isChecked boolean to true.
-
-        // Trim whitespace just in case.
-        let trimmedEmail = userEmail.trimmingCharacters(
-            in: .whitespacesAndNewlines)
+        let trimmedEmail = userEmail.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedEmail.isEmpty else { return }
 
-        DispatchQueue.main.async {
-            if let index = self.userSavedEmails.firstIndex(of: trimmedEmail) {
-                self.userSavedEmails.remove(at: index)
-            }
+        if let index = userSavedEmails.firstIndex(of: trimmedEmail) {
+            userSavedEmails.remove(at: index)
         }
-
-        DispatchQueue.main.async {
-            self.userSavedEmails.append(trimmedEmail)
-        }
+        userSavedEmails.append(trimmedEmail)
 
         if userSavedEmails.count > 5 {
             userSavedEmails.removeFirst(userSavedEmails.count - 5)
         }
 
         AppStorageManager.shared.userSavedEmails = userSavedEmails
-
     }
 
-    // MARK: SEND OTP
+    // MARK: - Send OTP
     func sendOTP() async {
-
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
 
         if isChecked {
             rememberMe()
-            DispatchQueue.main.async {
-                self.isRememberMe = true
-            }
+            AppStorageManager.shared.rememberMe = true
         }
-        // calling the sendOTP repo call and accordingly updating the state of the ui.
-
-        defer { isLoading = false }
 
         do {
-            let sendOTPResult = try await loginrepo.sendOTP(email: userEmail)
-
-            if sendOTPResult.isSuccess ?? false {
+            let result = try await loginrepo.sendOTP(email: userEmail)
+            if result.isSuccess ?? false {
                 errorMessage = nil
-                // isOtpSent becomes true only when the sendOTPResult has a success.
                 isOtpSent = true
-                isNewUser = sendOTPResult.data?.isNewUser ?? true
+                AppStorageManager.shared.isNewUser = result.data?.isNewUser ?? true
             } else {
                 resendOTPSent = false
-                errorMessage =
-                    sendOTPResult.message
-                    ?? "Something went wrong. Please try again later."
+                errorMessage = result.message ?? "Something went wrong. Please try again later."
             }
-
-        } catch let error {
-            isLoading = false
+        } catch {
             isOtpSent = false
             resendOTPSent = false
             errorMessage = "Something went wrong."
-            print("Error: \(error)")
+            Log("sendOTP error: \(error)")
         }
     }
 
-    // MARK: VERIFY OTP
+    // MARK: - Verify OTP
     func verifyOTP() async {
         errorMessage = nil
         let otpString = otp.joined()
 
-        if otpString.isEmpty {
-            errorMessage = "Please enter the OTP."
-            return
-        }
-
-        if otpString.count < 4 {
-            errorMessage = "Invalid OTP."
-            return
-        }
+        guard !otpString.isEmpty else { errorMessage = "Please enter the OTP."; return }
+        guard otpString.count == 4 else { errorMessage = "Invalid OTP."; return }
 
         isLoading = true
+        defer { isLoading = false }
 
         do {
-            defer { isLoading = false }
-
-//            let fcmToken = await FCMManager.shared.getToken()
-
-            let verifyOTPresult = try await loginrepo.verifyOTP(
+            let result = try await loginrepo.verifyOTP(
                 email: userEmail,
                 otp: otpString,
                 fcmToken: ""
             )
 
-            if verifyOTPresult.isSuccess ?? false {
-
-
+            if result.isSuccess ?? false {
                 otp = ["", "", "", ""]
-
                 isOtpVerificationSuccess = true
-                isLoggedIn = true
-                isHl7Enabled = verifyOTPresult.data?.user?.isHl7Enabled ?? false
 
-                accessToken = verifyOTPresult.data?.accessToken ?? ""
-                refreshToken = verifyOTPresult.data?.refreshToken ?? ""
-                userEmailToSaveInUserDefaults = userEmail
+                // All sensitive values written to Keychain via AppStorageManager
+                AppStorageManager.shared.isLoggedIn   = true
+                AppStorageManager.shared.isHl7Enabled = result.data?.user?.isHl7Enabled ?? false
+                AppStorageManager.shared.accessToken  = result.data?.accessToken ?? ""
+                AppStorageManager.shared.refreshToken = result.data?.refreshToken ?? ""
+                AppStorageManager.shared.userEmail    = userEmail
+                AppStorageManager.shared.userId       = result.data?.user?.userId ?? ""
 
-                let expiresInSeconds = TimeInterval(
-                    verifyOTPresult.data?.expiresIn ?? 86400
-                )
-                let expiryDate = Date().addingTimeInterval(expiresInSeconds)
+                let expiresIn = TimeInterval(result.data?.expiresIn ?? 86400)
                 AppStorageManager.shared.tokenExpiryTimestamp =
-                    expiryDate.timeIntervalSince1970
+                    Date().addingTimeInterval(expiresIn).timeIntervalSince1970
 
                 await MainActor.run {
+                    SessionManager.shared.reset()
                     Hl7ServiceController.shared.evaluate()
                 }
 
             } else {
-                errorMessage =
-                    verifyOTPresult.message
-                    ?? "Invalid OTP. Please try again."
+                errorMessage = result.message ?? "Invalid OTP. Please try again."
             }
 
         } catch {
@@ -233,16 +149,18 @@ class LoginViewModel: ObservableObject {
             errorMessage = "Unable to verify OTP. Please try again."
         }
     }
-    // MARK: LOGOUT
+
+    // MARK: - Logout
     func logout() async {
         isLoading = true
-
         defer { isLoading = false }
-        do {
-            let logoutResult = try await loginrepo.logout(
-                refreshToken: refreshToken)
 
-            if logoutResult.isSuccess ?? false {
+        do {
+            let result = try await loginrepo.logout(
+                refreshToken: AppStorageManager.shared.refreshToken ?? ""
+            )
+
+            if result.isSuccess ?? false {
                 errorMessage = nil
                 isLogoutSucces = true
             }
@@ -250,25 +168,19 @@ class LoginViewModel: ObservableObject {
             Task { @MainActor in
                 Hl7ServiceController.shared.evaluate()
             }
-        } catch let error {
-            isLoading = false
-            print("Error: \(error)")
+        } catch {
+            Log("logout error: \(error)")
         }
     }
 
-    // MARK: RESEND OTP
+    // MARK: - Resend OTP
     func resendOTP() async {
-
         isLoading = true
-
         errorMessage = nil
-
-
         defer { isLoading = false }
-        // show some toast message to user to confirm that otp was resent.
+
         do {
             let result = try await loginrepo.resendOTP(email: userEmail)
-
             if result.isSuccess ?? false {
                 resendOTPSent = true
                 errorMessage = "A new OTP has been sent."
@@ -277,7 +189,7 @@ class LoginViewModel: ObservableObject {
             } else {
                 errorMessage = result.message ?? "Something went wrong!"
             }
-        } catch _ {
+        } catch {
             errorMessage = "Something went wrong!"
         }
     }

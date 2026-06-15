@@ -9,7 +9,7 @@ import SwiftUI
 // MARK: - Donut Progress View
 struct DonutProgressView: View {
     let fraction: Double
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
     let size: CGFloat
 
     @State private var animatedFraction: Double = 0

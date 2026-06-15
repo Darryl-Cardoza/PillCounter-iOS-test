@@ -320,7 +320,7 @@ struct UserHistoryView: View {
             ForEach(Array(historyViewModel.transactionRows.enumerated()), id: \.element.id) { index, row in
                 let didAppear = appearedTxnIds.contains(row.id)
 
-                DispenseItemRowView(data: row, appColors: appColors)
+                DispenseItemRowView(data: row)
                     .onTapGesture {
                         historyViewModel.selectedTransactionId = Int64(row.id) ?? 0
                         router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
@@ -360,7 +360,7 @@ struct UserHistoryView: View {
         } else {
             ForEach(Array(historyViewModel.batchRows.enumerated()), id: \.element.batchId) { index, row in
                 let hasAppeared = appearedBatchIds.contains(row.batchId)
-                StockItemRowView(data: row, appColors: appColors)
+                StockItemRowView(data: row)
                     .onTapGesture {
                         historyViewModel.selectedBatchId = row.batchId
                         router.navigate(to: .authentication(.user(.userSettings(.HistoryBatchDetail))))
@@ -423,24 +423,21 @@ struct UserHistoryView: View {
                 label: L10n.History.filterAll,
                 count: counts.all,
                 value: HistoryStatusFilter.all,
-                selectedValue: activeStatusFilter,
-                appColors: appColors
+                selectedValue: activeStatusFilter
             ) { activeStatusFilter = $0 }
 
             FilterChip(
                 label: L10n.History.filterCompleted,
                 count: counts.completed,
                 value: .completed,
-                selectedValue: activeStatusFilter,
-                appColors: appColors
+                selectedValue: activeStatusFilter
             ) { activeStatusFilter = $0 }
 
             FilterChip(
                 label: L10n.History.filterPending,
                 count: counts.pending,
                 value: .pending,
-                selectedValue: activeStatusFilter,
-                appColors: appColors
+                selectedValue: activeStatusFilter
             ) { activeStatusFilter = $0 }
 
             Spacer()
@@ -452,24 +449,49 @@ struct UserHistoryView: View {
         let dispenseCount = historyViewModel.filteredTransactionsOfUserByDate.count
         let stockCount    = historyViewModel.filteredBatchesOfUserByDate.count
 
-        return HStack(spacing: 8) {
-            FilterChip(
-                label: L10n.History.filterDispensed,
-                count: dispenseCount,
-                value: HistoryFilterType.fixed,
-                selectedValue: activeTypeFilter,
-                appColors: appColors
-            ) { activeTypeFilter = $0 }
+        return VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                TabItem(
+                    label: "\(L10n.History.filterDispensed) (\(dispenseCount))",
+                    isSelected: activeTypeFilter == .fixed
+                ) {
+                    activeTypeFilter = .fixed
+                }
 
-            FilterChip(
-                label: L10n.History.filterStockCount,
-                count: stockCount,
-                value: .regular,
-                selectedValue: activeTypeFilter,
-                appColors: appColors
-            ) { activeTypeFilter = $0 }
+                TabItem(
+                    label: "\(L10n.History.filterStockCount) (\(stockCount))",
+                    isSelected: activeTypeFilter == .regular
+                ) {
+                    activeTypeFilter = .regular
+                }
 
-            Spacer()
+                Spacer()
+            }
+
+            Divider()
         }
     }
+    
+    private struct TabItem: View {
+        let label: String
+        let isSelected: Bool
+        let onTap: () -> Void
+
+        var body: some View {
+            Button(action: onTap) {
+                VStack(spacing: 0) {
+                    Text(label)
+                        .font(.system(size: 14, weight: isSelected ? .semibold	 : .regular))
+                        .foregroundColor(isSelected ? .primary : .secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+
+                }
+            }
+            .buttonStyle(.plain)
+            .animation(.easeInOut(duration: 0.15), value: isSelected)
+            .frame(maxWidth: 150)
+        }
+    }
+        
 }

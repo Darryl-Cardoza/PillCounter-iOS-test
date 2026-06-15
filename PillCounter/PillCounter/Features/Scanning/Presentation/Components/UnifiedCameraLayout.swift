@@ -16,8 +16,11 @@ struct UnifiedCameraLayout: View {
     let cameraService: CameraService
     let showPillCountPanel: Bool
     let pillCountSheetHeight: CGFloat
+    let showStockCountPanel: Bool
+    let stockCountSheetHeight: CGFloat
     let isLandscape: Bool
-    let controlledStepInstruction: String
+    let instructionText: String
+    let showPillDetectionUI: Bool
     let onBack: () -> Void
     let onResume: () -> Void
 
@@ -32,17 +35,19 @@ struct UnifiedCameraLayout: View {
                 NoCameraPermissionView()
             }
 
-            DetectionOverlay(cameraService: cameraService)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+            if showPillDetectionUI {
+                DetectionOverlay(cameraService: cameraService)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
-            TrayOverlay(cameraService: cameraService)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+                TrayOverlay(cameraService: cameraService)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
-            // ── Pill count ring (barcode-scan phase only) ─────────────────────
-            if !showPillCountPanel {
-                PillCountRingView(count: cameraService.stableCount)
+                // ── Pill count ring (barcode-scan phase only) ─────────────────
+                if !showPillCountPanel {
+                    PillCountRingView(count: cameraService.stableCount, isLandscape: isLandscape)
+                }
             }
 
             // ── Loading spinner ───────────────────────────────────────────────
@@ -58,43 +63,74 @@ struct UnifiedCameraLayout: View {
 
             // ── Header row ────────────────────────────────────────────────────
             VStack {
-                HStack {
-                    Button(action: onBack) {
-                        PillCountingIconView(
-                            imageName: "back_icon",
-                            size: 24,
-                            padding: 12,
-                            foregroundColor: appColors.primary,
-                            backgroundColor: .clear,
-                            scaleOnIpad: true
-                        )
+                ZStack {
+                    // ── Portrait: instruction centered independently ──
+                    if !isLandscape && !instructionText.isEmpty {
+                        PillCountInstructionOverlay(text: instructionText)
+                            .frame(maxWidth: .infinity)
                     }
-                    if !isLandscape { Spacer() }
-                    if showPillCountPanel {
-                        let isIpad = UIDevice.current.userInterfaceIdiom == .pad
-                        if !controlledStepInstruction.isEmpty {
-                            PillCountInstructionOverlay(text: controlledStepInstruction)
-                                .padding(.leading, isLandscape ? (isIpad ? 220 : 100) : 0)
+
+                    HStack(spacing: 0) {
+                        // Back button — always leading
+                        Button(action: onBack) {
+                            PillCountingIconView(
+                                imageName: "back_icon",
+                                size: 24,
+                                padding: 12,
+                                foregroundColor: appColors.primary,
+                                backgroundColor: .clear,
+                                scaleOnIpad: true
+                            )
+                        }
+
+                        if isLandscape {
+                            if showPillCountPanel {
+                                // showPillCountPanel true: back | 16 | instruction | 16 | glove | Spacer
+                                Color.clear.frame(width: 220, height: 1)
+                                if !instructionText.isEmpty {
+                                    PillCountInstructionOverlay(text: instructionText)
+                                }
+                                if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
+                                    Color.clear.frame(width: 200, height: 1)
+                                    GloveStatusIndicator(cameraService: cameraService)
+                                }
+                                Spacer()
+                            } else {
+                                Spacer()
+                                // showPillCountPanel false: back | Spacer | instruction | 16 | glove
+                                if !instructionText.isEmpty {
+                                    PillCountInstructionOverlay(text: instructionText)
+                                        .frame(maxWidth: .infinity).frame(alignment: .center)
+                                }
+                            }
+                        } else {
+                            // Portrait: glove pinned trailing, instruction handled by ZStack
+                            Spacer()
+                            if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
+                                GloveStatusIndicator(cameraService: cameraService)
+                            } else {
+                                Color.clear.frame(width: 48, height: 48)
+                            }
                         }
                     }
-                    Spacer()
-                    Color.clear.frame(width: 48, height: 48)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, isLandscape ? 10 : 40)
-                Spacer()
-            }
 
+                Spacer()
+
+                Color.clear.frame(height: showPillCountPanel ? pillCountSheetHeight : showStockCountPanel ? stockCountSheetHeight : 0)
+            }
+            
             // ── Controlled step row ───────────────────────────────────────────
             if showPillCountPanel,
                pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
-                controlledStepRow
+               controlledStepRow
             }
 
             // ── Toast ─────────────────────────────────────────────────────────
-            if pillScanViewModel.showToast {
-                toastView
-            }
+            // Toasts are shown via the global ToastManager (see PillScanViewModel
+            // .showToastMessage). No local toast here to avoid duplicate toasts.
         }
         .ignoresSafeArea()
         .onTapGesture {
@@ -145,27 +181,5 @@ struct UnifiedCameraLayout: View {
                 Spacer().frame(height: pillCountSheetHeight)
             }
         }
-    }
-
-    private var toastView: some View {
-        VStack {
-            Spacer()
-            HStack(spacing: 10) {
-                Image("app_icon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 24, height: 24)
-                Text(pillScanViewModel.toastMessage)
-                    .font(.subheadline)
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.black.opacity(0.8))
-            .cornerRadius(10)
-            .padding(.bottom, isLandscape ? 10 : showPillCountPanel ? pillCountSheetHeight + 16 : 32)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-        }
-        .animation(.easeInOut, value: pillScanViewModel.showToast)
     }
 }

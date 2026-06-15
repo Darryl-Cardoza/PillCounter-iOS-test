@@ -46,6 +46,11 @@ struct StockTransactionListView: View {
                             set: { newValue in
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     expandedNdc = newValue ? txn.ndc : nil
+                                    if newValue {
+                                        selectedIds = [txn.ndc]
+                                    } else {
+                                        selectedIds.remove(txn.ndc)
+                                    }
                                 }
                             }
                         )
@@ -74,7 +79,7 @@ struct StockTransactionListView: View {
                             let sealedTotal = sealedDetails.reduce(Int32(0)) { $0 + $1.sealedQty }
                             
                             HStack {
-                                Text("Sealed Bottles")
+                                Text(L10n.StockCountSheet.sealedBottles)
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(appColors.text)
                                 Spacer()
@@ -86,11 +91,11 @@ struct StockTransactionListView: View {
                             .padding(.horizontal, 4)
                             
                             if !sealedDetails.isEmpty {
-                                LotColumnHeader(appColors: appColors)
+                                LotColumnHeader()
                                 ForEach(sealedDetails, id: \.lot) { detail in
-                                    LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.sealedQty, appColors: appColors)
+                                    LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.sealedQty)
                                 }
-                                LotTotalRow(total: sealedTotal, appColors: appColors)
+                                LotTotalRow(total: sealedTotal)
                             }
                             
                             // ── OPENED BOTTLES SECTION ──
@@ -98,7 +103,7 @@ struct StockTransactionListView: View {
                             let openTotal = openDetails.reduce(Int32(0)) { $0 + $1.openQty }
                             
                             HStack {
-                                Text("Opened Bottles")
+                                Text(L10n.StockCountSheet.openedBottles)
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(appColors.text)
                                 Spacer()
@@ -111,23 +116,19 @@ struct StockTransactionListView: View {
                             .padding(.horizontal, 4)
                             
                             if !openDetails.isEmpty {
-                                LotColumnHeader(appColors: appColors)
+                                LotColumnHeader()
                                 ForEach(openDetails, id: \.lot) { detail in
-                                    LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.openQty, appColors: appColors)
+                                    LotRow(lot: detail.lot, expiry: detail.expiry, qty: detail.openQty)
                                 }
-                                LotTotalRow(total: openTotal, appColors: appColors)
+                                LotTotalRow(total: openTotal)
                             }
                         }
                         .padding(.horizontal, 8)
                         .padding(.bottom, 8)
                     }
                 }
-                .listRowAnimated(
-                    id: Int64(index),
-                    index: index,
-                    isEditing: isEditing,
+                .selectableEffect(
                     isSelected: selectedIds.contains(txn.ndc),
-                    isDeleting: false,
                     highlightColor: appColors.secondary
                 )
             }
@@ -150,7 +151,7 @@ struct LotRow: View {
     let lot: String
     let expiry: String
     let qty: Int32
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
 
     var body: some View {
         VStack(spacing: 0) {
@@ -194,21 +195,21 @@ struct LotRow: View {
 // MARK: - Lot Column Header
 
 struct LotColumnHeader: View {
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
 
     var body: some View {
         HStack {
-            Text("Lot Number")
+            Text(L10n.StockCountSheet.lotNumber)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("Expiry Date")
+            Text(L10n.StockCountSheet.expiryDate)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .frame(width: 110, alignment: .leading)
 
-            Text("Pills")
+            Text(L10n.StockCountSheet.pills)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(appColors.text)
                 .frame(minWidth: 50, alignment: .trailing)
@@ -222,7 +223,7 @@ struct LotColumnHeader: View {
 
 struct LotTotalRow: View {
     let total: Int32
-    let appColors: AppColors
+    @EnvironmentObject private var appColors: AppColors
 
     var body: some View {
         VStack(spacing: 0) {
@@ -230,7 +231,7 @@ struct LotTotalRow: View {
                 .padding(.vertical, 5)
 
             HStack {
-                Text("Total")
+                Text(L10n.StockCountSheet.total)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)

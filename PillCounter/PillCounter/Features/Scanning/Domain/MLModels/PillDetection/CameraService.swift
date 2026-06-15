@@ -26,13 +26,22 @@ final class CameraService: NSObject, ObservableObject {
     @Published var scannedCode: String = ""
     @Published var scannedCodeType: String = ""
     private var barcodeEnabled: Bool = false
-    private var hasScanned: Bool = false
+    // The value of the barcode currently locked in frame. Non-nil means we already
+    // fired the scan event and are waiting for the physical barcode to leave the
+    // camera's field of view before we fire again. Set to nil the moment the
+    // metadata delegate reports an empty (or different-value) frame.
+    private var lockedBarcodeValue: String? = nil
 
     // MARK: - IMAGE PROCESSING
-    private let detector = PillDetectionService()
-    private let trayDetector = TrayDetectionService.shared
+    // Three-model inference pipeline running on every captured camera frame:
+    //   1. GloveDetectionService  — YOLOX-Nano 320×320 (rate-limited to 400 ms after first hit)
+    //   2. TrayDetectionService   — MobileNetV2-UNet segmentation 384×384 (every frame)
+    //                               argmax → 384×384 label map → bounding boxes for TRAY / CHUTE
+    //   3. PillDetectionService   — PP-YOLOE+s 640×640 (every frame, filtered by tray rects)
+    private let detector       = PillDetectionService()
+    private let trayDetector   = TrayDetectionService.shared
+    private let gloveDetector  = GloveDetectionService()
 
-    
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
 
@@ -48,6 +57,39 @@ final class CameraService: NSObject, ObservableObject {
     @Published var stableCount: Int = 0
     @Published var detections: [DetectionResult] = []
     @Published var trayDetections: [TrayResult] = []
+
+    /// All glove detections from the most recent inference run (rate-limited to 400 ms
+    /// after the first detection).  Empty when gloves have never been checked or when
+    /// no hands are visible in the frame.
+    @Published var gloveDetections: [GloveDetectionResult] = []
+
+    /// True when at least one detected region in the current frame has a bare hand
+    /// (GloveClass.noGlove).  Drives the UI warning banner.
+    @Published var isGloveHazardous: Bool = false
+
+    /// True once gloves (GloveClass.glove) have been confirmed for the current session.
+    /// When true, glove model inference is skipped — the hand icon stays green.
+    /// Reset to false via resetGloveDetection() when the inactivity-pause resume button is tapped.
+    @Published var glovesConfirmed: Bool = false
+
+    /// Set to true by UnifiedCameraView when the current drug is hazardous (drug.is_hazardous == true).
+    /// When false, glove model inference is completely skipped and the indicator is hidden.
+    @Published var isGloveDetectionEnabled: Bool = false
+
+    /// The generic colour of the currently-visible tray. Re-published whenever the
+    /// classified colour CHANGES (not every frame), so the hazardous-tray flow can
+    /// react both to the first tray and to the operator swapping trays mid-session.
+    /// nil until the first tray is sampled. Drives the hazardous-tray flow.
+    @Published var detectedTrayColor: TrayColor? = nil
+
+    /// The last colour we published to `detectedTrayColor`, used to suppress
+    /// duplicate frame-by-frame emissions and only fire on an actual colour change.
+    private var lastSampledTrayColor: TrayColor? = nil
+
+    /// Gates tray-colour sampling. The view enables this only while the pill-count
+    /// bottom sheet is showing in the dispense / stock-scan-pills flows; otherwise
+    /// the camera classifies no trays at all (hazardous-tray flow is inactive).
+    var isTrayColorDetectionEnabled: Bool = false
 
     @Published var isAuthorized = false
     @Published var error: String?
@@ -153,7 +195,6 @@ final class CameraService: NSObject, ObservableObject {
         // Setting the delegate before the output is added to the session silently fails.
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            self.hasScanned = false
             self.barcodeEnabled = true
             self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
         }
@@ -163,19 +204,22 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.barcodeEnabled = false
+            // Intentionally preserve lockedBarcodeValue. If scanning is re-enabled
+            // while the same physical barcode is still in frame, the lock prevents
+            // it from immediately re-firing. The lock is only released when the
+            // frame-presence check sees the barcode has left the camera view.
             self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
         }
     }
 
     func resetBarcodeScanState() {
-        // Clear published values synchronously — caller is always on main thread.
-        // Doing this async allowed scannedCode onChange to re-fire with the stale
-        // value before the clear landed, causing repeated API calls on NDC mismatch.
+        // Clears published values so the view's onChange does not re-fire with a
+        // stale value. lockedBarcodeValue is NOT cleared here — the physical barcode
+        // may still be in frame. Clearing it would re-fire the scan event on the
+        // very next metadata callback. The lock releases only when the frame-presence
+        // check confirms the barcode has physically left the camera view.
         scannedCode = ""
         scannedCodeType = ""
-        sessionQueue.async { [weak self] in
-            self?.hasScanned = false
-        }
     }
 
     // MARK: - ZOOM CONTROL
@@ -215,6 +259,9 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async {
             guard self.session.isRunning else { return }
             self.session.stopRunning()
+            // Session is fully stopped — no barcodes are visible. Clear the lock
+            // so the next start() begins fresh rather than blocking on a stale value.
+            self.lockedBarcodeValue = nil
         }
 
         DispatchQueue.main.async {
@@ -276,15 +323,31 @@ final class CameraService: NSObject, ObservableObject {
         guard isCountingEnabled else { return }
         isCountingEnabled = false
         DispatchQueue.main.async {
-            self.stableCount = 0
-            self.detections = []
-            self.trayDetections = []
+            self.stableCount      = 0
+            self.detections       = []
+            self.trayDetections   = []
+            self.gloveDetections  = []
+            self.isGloveHazardous = false
         }
     }
 
     func resumeCounting() {
         guard !isCountingEnabled else { return }
         isCountingEnabled = true
+    }
+
+    /// Resets glove-detection state so the glove model runs again from scratch.
+    /// Call this when the user resumes from an inactivity pause (new operator may have
+    /// taken over) so gloves must be re-verified for the resumed session.
+    func resetGloveDetection() {
+        gloveDetector.reset()
+        DispatchQueue.main.async {
+            self.glovesConfirmed  = false
+            self.gloveDetections  = []
+            self.isGloveHazardous = false
+            self.detectedTrayColor    = nil
+            self.lastSampledTrayColor = nil
+        }
     }
 
     // MARK: - ORIENTATION
@@ -397,31 +460,66 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard isCountingEnabled else { return }
 
-        // 1. Run tray detection FIRST (synchronous — no completion needed)
-        let trays = trayDetector.detect(pixelBuffer: pixelBuffer)
+        // ── Model 1: Glove safety detection (YOLOX-Nano 320×320) ──────────────
+        // Only runs when the current drug is hazardous (isGloveDetectionEnabled) AND
+        // gloves haven't been confirmed yet for this session (glovesConfirmed).
+        // GloveDetectionService applies its own 400 ms rate limiter internally;
+        // the call returns [] immediately when the throttle is active.
+        let gloves: [GloveDetectionResult] = (isGloveDetectionEnabled && !glovesConfirmed)
+            ? gloveDetector.detect(pixelBuffer: pixelBuffer)
+            : []
 
-        // 2. Run pill detection, then filter results by tray bounds
-        detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, count in
+        // ── Model 2: Tray / chute detection (RTMDet-Tiny 640×640) ────────────
+        // Returns both .tray and .chute regions; only .tray regions gate pill counts.
+        let allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
+
+        // Only TRAY regions (class 0) are used to filter pill positions.
+        // CHUTE regions (class 1) are passed to the overlay for display only.
+        let trayRects = allTrays.filter { $0.trayClass == .tray }.map { $0.rect }
+
+        // ── Tray colour sampling (hazardous-tray feature) ────────────────────
+        // Continuously classify the visible tray's generic colour and publish it
+        // only when the colour CHANGES (not every frame). This lets the flow react
+        // to the operator swapping trays mid-session. Gated by
+        // isTrayColorDetectionEnabled so it runs ONLY while the pill-count sheet is
+        // showing in the dispense / stock-scan-pills flows. Runs regardless of
+        // isGloveDetectionEnabled because the non-hazardous flow also needs it.
+        if isTrayColorDetectionEnabled, let firstTrayRect = trayRects.first,
+           let color = TrayColorClassifier.dominantColor(in: pixelBuffer, rect: firstTrayRect) {
+            DispatchQueue.main.async {
+                guard self.isTrayColorDetectionEnabled, self.isCountingEnabled else { return }
+                guard color != self.lastSampledTrayColor else { return }
+                self.lastSampledTrayColor = color
+                self.detectedTrayColor    = color
+            }
+        }
+
+        // ── Model 3: Pill detection (PP-YOLOE+s 640×640) ─────────────────────
+        detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, _ in
             guard let self else { return }
 
-            // 3. Keep only pills whose centre falls inside any tray rect
+            // Keep only pills whose centre falls inside a TRAY (not CHUTE) rect.
+            // An empty trayRects list means no tray is visible → count = 0.
             let filtered: [DetectionResult]
-            if trays.isEmpty {
+            if trayRects.isEmpty {
                 filtered = []
             } else {
                 filtered = allPills.filter { pill in
-                    trays.contains { tray in
-                        tray.rect.contains(pill.center)
-                    }
+                    trayRects.contains { trayRect in trayRect.contains(pill.center) }
                 }
             }
 
+            let hazardous        = gloves.contains { $0.isHazardous }
+            let glovesNowSafe    = !self.glovesConfirmed && gloves.contains { $0.gloveClass == .glove }
+
             DispatchQueue.main.async {
                 guard self.isCountingEnabled else { return }
-                self.detections     = filtered
-                self.stableCount    = filtered.count
-                self.trayDetections = trays
-
+                self.detections       = filtered
+                self.stableCount      = filtered.count
+                self.trayDetections   = allTrays
+                self.gloveDetections  = gloves
+                self.isGloveHazardous = hazardous
+                if glovesNowSafe { self.glovesConfirmed = true }
             }
         }
     }
@@ -620,14 +718,29 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        guard barcodeEnabled,
-              !hasScanned,
+        guard barcodeEnabled else { return }
+
+        // Collect all currently-visible barcode values this frame.
+        let visibleValues = metadataObjects
+            .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
+            .compactMap { $0.stringValue }
+
+        // If the previously locked barcode is no longer in the frame, release the
+        // lock immediately — no timer, no cooldown. The next real barcode can fire
+        // the moment it enters the frame.
+        if let locked = lockedBarcodeValue, !visibleValues.contains(locked) {
+            lockedBarcodeValue = nil
+        }
+
+        // Fire a scan event only when:
+        //   • there is no locked barcode (we are ready for a new scan), AND
+        //   • a barcode is actually present in the current frame.
+        guard lockedBarcodeValue == nil,
               let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               let value = object.stringValue
         else { return }
 
-        hasScanned = true
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        lockedBarcodeValue = value
         scannedCode = value
         scannedCodeType = object.type.rawValue
     }

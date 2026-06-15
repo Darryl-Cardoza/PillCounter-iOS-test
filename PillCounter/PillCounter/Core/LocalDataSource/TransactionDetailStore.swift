@@ -64,14 +64,18 @@ final class TransactionDetailStore {
         let request: NSFetchRequest<PillCountTransactionDetailsEntity> = PillCountTransactionDetailsEntity.fetchRequest()
         request.predicate = NSPredicate(format: "txn_details_id == %lld", detailId)
         request.fetchLimit = 1
-        return try? context.fetch(request).first
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
     }
 
     func fetchAll(txnId: Int64) -> [PillCountTransactionDetailsEntity] {
         let request: NSFetchRequest<PillCountTransactionDetailsEntity> = PillCountTransactionDetailsEntity.fetchRequest()
         request.predicate = NSPredicate(format: "txn_id == %lld AND is_deleted == false", txnId)
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
     }
 
     func fetchForStep(txnId: Int64, step: ControlledStep) -> [PillCountTransactionDetailsEntity] {
@@ -81,7 +85,9 @@ final class TransactionDetailStore {
             txnId, step.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
     }
 
     func totalCount(txnId: Int64) -> Int {
@@ -156,6 +162,14 @@ final class TransactionDetailStore {
     }
 
     // MARK: - Private
+
+    /// Deterministically decrypts the object's encrypted fields in place
+    /// (e.g. image_path). Replaces the old context.refresh(_, mergeChanges: false)
+    /// refault, which did NOT reliably re-run awakeFromFetch and could surface
+    /// ciphertext written by willSave in the same session.
+    private func refreshDecrypted(_ object: NSManagedObject) {
+        object.decryptEncryptedFieldsInPlace()
+    }
 
     private func generateUniqueId() -> Int64 {
         let key = "txnDetailIdCounter"

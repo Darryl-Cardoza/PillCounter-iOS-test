@@ -104,8 +104,7 @@ private extension UnsyncedTransactionView {
 
                 ForEach(Array(viewModel.batches.enumerated()), id: \.offset) { index, batch in
                     StockItemRowView(
-                        data: batch,
-                        appColors: appColors
+                        data: batch
                     )
                     .listRowAnimated(
                         id: Int64(index),
@@ -133,8 +132,7 @@ private extension UnsyncedTransactionView {
 
                 ForEach(Array(viewModel.transactions.enumerated()), id: \.offset) { index, txn in
                     DispenseItemRowView(
-                        data: txn,
-                        appColors: appColors
+                        data: txn
                     )
                     .listRowAnimated(
                         id: Int64(index),

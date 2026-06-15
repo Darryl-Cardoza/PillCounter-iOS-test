@@ -18,10 +18,19 @@ final class BatchStore {
     // Fired after every write that affects batches. Subscribers reload derived state automatically.
     let transactionsDidChange = PassthroughSubject<Void, Never>()
 
+    private var currentUserId: String {
+        AppStorageManager.shared.userId ?? ""
+    }
+
     // MARK: - Create
 
     @discardableResult
     func create(bucketId: String, requestId: String? = nil) -> BatchCountEntity? {
+        let userId = currentUserId
+        guard !userId.isEmpty else {
+            print("📦 [BatchDAO] CREATE skipped — no logged-in user")
+            return nil
+        }
         let batchId = Int64(Date().timeIntervalSince1970 * 1000)
         let batch = BatchCountEntity(context: context)
         batch.batch_id = batchId
@@ -31,9 +40,10 @@ final class BatchStore {
         batch.bucket_id = bucketId
         batch.req_id_from_pms = requestId
         batch.is_synced = false
+        batch.user_id = userId
         CoreDataManager.shared.save(context: context)
         transactionsDidChange.send()
-        print("📦 [BatchDAO] CREATED — batchId: \(batchId), bucketId: \(bucketId), requestId: \(requestId ?? "-")")
+        print("📦 [BatchDAO] CREATED — batchId: \(batchId), bucketId: \(bucketId), userId: \(userId), requestId: \(requestId ?? "-")")
         return batch
     }
 
@@ -47,7 +57,9 @@ final class BatchStore {
     }
 
     func fetchAll() -> [BatchCountEntity] {
+        let userId = currentUserId
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "user_id == %@", userId)
         let results = (try? context.fetch(request)) ?? []
         StoreLogger.log(
             dao: "BatchDAO", op: "fetchAll",
@@ -68,7 +80,8 @@ final class BatchStore {
     func fetchAllPartial() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND status == %@", CountStatus.PARTIAL.rawValue
+            format: "user_id == %@ AND is_deleted == false AND status == %@",
+            currentUserId, CountStatus.PARTIAL.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
         return (try? context.fetch(request)) ?? []
@@ -77,7 +90,8 @@ final class BatchStore {
     func fetchAllCompleted() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND status == %@", CountStatus.COMPLETED.rawValue
+            format: "user_id == %@ AND is_deleted == false AND status == %@",
+            currentUserId, CountStatus.COMPLETED.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
         return (try? context.fetch(request)) ?? []
@@ -86,7 +100,8 @@ final class BatchStore {
     func fetchLastCreated() -> BatchCountEntity? {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND status == %@", CountStatus.PARTIAL.rawValue
+            format: "user_id == %@ AND is_deleted == false AND status == %@",
+            currentUserId, CountStatus.PARTIAL.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
         request.fetchLimit = 1
@@ -96,8 +111,8 @@ final class BatchStore {
     func fetchByDateRange(startTs: Int64, endTs: Int64) -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
-            startTs, endTs
+            format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
+            currentUserId, startTs, endTs
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
         return (try? context.fetch(request)) ?? []
@@ -106,8 +121,8 @@ final class BatchStore {
     func fetchCompletedUnsynced() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND status == %@ AND is_synced == false",
-            CountStatus.COMPLETED.rawValue
+            format: "user_id == %@ AND is_deleted == false AND status == %@ AND is_synced == false",
+            currentUserId, CountStatus.COMPLETED.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: true)]
         return (try? context.fetch(request)) ?? []
@@ -116,7 +131,8 @@ final class BatchStore {
     func getTransactionCount(for batchId: Int64) -> Int {
         let request = NSFetchRequest<NSDictionary>(entityName: "PillCountTransactionEntity")
         request.predicate = NSPredicate(
-            format: "batch_id == %lld AND is_deleted == false AND drug.ndc != nil", batchId
+            format: "user.user_id == %@ AND batch_id == %lld AND is_deleted == false AND drug.ndc != nil",
+            currentUserId, batchId
         )
         request.propertiesToFetch = ["drug.ndc"]
         request.returnsDistinctResults = true

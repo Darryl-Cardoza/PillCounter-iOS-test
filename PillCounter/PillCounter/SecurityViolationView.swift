@@ -17,22 +17,17 @@ struct SecurityViolationView: View {
                 .font(.system(size: 48))
                 .foregroundColor(.red)
 
-            Text("Security Alert")
+            Text(L10n.Security.alertTitle)
                 .font(.title2)
                 .bold()
 
-            Text(
-                """
-                This device does not meet security requirements.
-                To protect your data, the app cannot continue.
-                """
-            )
+            Text(L10n.Security.alertMessage)
             .multilineTextAlignment(.center)
             .foregroundColor(.secondary)
 
             PillCountingButton(
                 iconName: nil,
-                title: "Exit",
+                title: L10n.Security.exitButton,
                 textColor: appColors.text,
                 backgroundColor: appColors.secondary,
                 borderColor: .clear,

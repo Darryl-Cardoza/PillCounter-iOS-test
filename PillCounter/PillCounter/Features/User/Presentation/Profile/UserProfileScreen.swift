@@ -17,8 +17,8 @@ struct UserProfileScreen: View {
 
     @State private var showDeleteConfirmation: Bool = false
 
-    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
-        Bool = true
+//    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
+//        Bool = true
 
     @State private var firstName: String = ""
     
@@ -148,7 +148,7 @@ struct UserProfileScreen: View {
             }
         }
     }
-    
+
     private var landscapeProfileColums: some View {
         HStack(alignment: .top, spacing: 12) {
             leftProfileColumn
@@ -341,11 +341,12 @@ struct UserProfileScreen: View {
                     toastManager.show(message: L10n.Profile.Error.errorUpdateProfileMessage)
                     return
                 }
+                AppStorageManager.shared.isNewUser = false
                 userViewModel.isProfileUpdated = false
             }
 
             toastManager.show(message: L10n.Profile.successUpdateMessage)
-            isNewUser = false
+            AppStorageManager.shared.isNewUser = false
             router.navigateBack()
         }
     }

@@ -19,7 +19,7 @@ class HistoryViewModel: ObservableObject {
     private let userLocalDB = UserStore.shared
 
     // MARK: - AppStorage
-    @AppStorage(AppStorageManager.AppStorageKeys.userId) private var userID: String = ""
+    private var userID: String { AppStorageManager.shared.userId ?? "" }
 
     // MARK: - Published: Raw filtered data
     @Published var filteredTransactionsOfUserByDate: [PillCountTransactionEntity] = []
@@ -315,6 +315,7 @@ class HistoryViewModel: ObservableObject {
                 total: totalSealed + totalOpen,
                 sealedBottles: totalSealed,
                 sealedBottleQty: txnList.first?.bottle_qty ?? 0,
+                packageQty: txnList.first?.drug?.package_qty ?? 0,
                 openPills: totalOpen,
                 lotDetails: lotDetails
             )

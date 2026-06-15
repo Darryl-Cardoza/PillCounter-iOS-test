@@ -13,10 +13,10 @@ final class AppColors: ObservableObject {
     static let shared = AppColors()
 
     // MARK: - State
-    @Published private var colorScheme: AppColorScheme?
+    @Published fileprivate(set) var colorScheme: AppColorScheme?
     @Published var isDarkMode: Bool = false
 
-    private init() {}
+    private init(forceDark: Bool = false) { isDarkMode = forceDark }
 
     // MARK: - Public API
 
@@ -90,6 +90,16 @@ final class AppColors: ObservableObject {
             currentPalette?.statusChipBackgroundOnSecondary,
             fallback: fallback
         )
+    }
+
+    // MARK: - Dark-forced snapshot (for overlays that must always be dark)
+
+    /// Returns a new AppColors instance with isDarkMode forced to true,
+    /// sharing the same color scheme data. Use only as a scoped environmentObject.
+    func forcedDark() -> AppColors {
+        let copy = AppColors(forceDark: true)
+        copy.colorScheme = self.colorScheme
+        return copy
     }
 }
 

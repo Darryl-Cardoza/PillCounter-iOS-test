@@ -40,12 +40,7 @@ struct ForceUpdateView: View {
                     )
             }
 
-            Text(
-                """
-                Your current version has expired - time to get a fresh prescription.
-                Update now for the right dose of features!
-                """
-            )
+            Text(L10n.ForceUpdate.message)
             .font(.body)
             .multilineTextAlignment(.center)
             .foregroundColor(appColors.text.opacity(0.8))
@@ -54,7 +49,7 @@ struct ForceUpdateView: View {
             EqualWidthHStackButtons {
                 PillCountingButton(
                     iconName: nil,
-                    title: "Update",
+                    title: L10n.ForceUpdate.updateButton,
                     textColor: appColors.text,
                     backgroundColor: appColors.secondary,
                     borderColor: .clear,

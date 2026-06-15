@@ -10,6 +10,7 @@
         <attribute name="req_id_from_pms" optional="YES" attributeType="String"/>
         <attribute name="start_date_time" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="user_id" optional="YES" attributeType="String"/>
     </entity>
     <entity name="DrugMasterEntity" representedClassName="DrugMasterEntity" syncable="YES" codeGenerationType="class">
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -44,6 +45,7 @@
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="expiry" optional="YES" attributeType="String"/>
         <attribute name="gloves_detected" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="hazardous_tray_detected" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_deleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_from_pms" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_ndc_verfied" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
@@ -53,6 +55,7 @@
         <attribute name="loose_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="lot_no" optional="YES" attributeType="String"/>
         <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="open_bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="patient_name" optional="YES" attributeType="String"/>
         <attribute name="refill_no" optional="YES" attributeType="String"/>
         <attribute name="req_id" optional="YES" attributeType="String"/>

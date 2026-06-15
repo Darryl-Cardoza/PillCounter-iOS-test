@@ -7,6 +7,7 @@ import SwiftUI
 
 struct PillCountRingView: View {
     let count: Int
+    var isLandscape: Bool = false
     @EnvironmentObject private var appColors: AppColors
 
     @State private var animationID = UUID()
@@ -18,38 +19,62 @@ struct PillCountRingView: View {
     @State private var isAnimating: Bool = false
     @State private var stabilityWorkItem: DispatchWorkItem?
 
-    private let size: CGFloat = 120
+    private let baseSize: CGFloat = 120
+
+    private var uiScale: CGFloat {
+        let isIpad = UIDevice.current.userInterfaceIdiom == .pad
+        guard isIpad else { return 1.0 }
+        return isLandscape ? 2.0 : 1.5
+    }
+
+    private var size: CGFloat { baseSize * uiScale }
 
     var body: some View {
-        VStack {
-            Spacer()
-            ZStack {
-                Circle()
-                    .trim(from: 0, to: trimValue)
-                    .stroke(
-                        appColors.secondary,
-                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(90))
-                    .frame(width: size, height: size)
-                    .id(animationID)
-                    .onAppear { updateAnimationState() }
-                    .onChange(of: isAnimating) { _, _ in updateAnimationState() }
+        if count > 0 {
+            if isLandscape {
+                // Landscape: pin ring to the right edge, vertically centered
+                HStack {
+                    Spacer()
+                    ringContent
+                        .padding(.trailing, 32)
+                }
+            } else {
+                // Portrait: pin ring to the bottom center
+                VStack {
+                    Spacer()
+                    ringContent
+                        .padding(.bottom, 48)
+                }
+            }
+        }
+    }
 
-                Text("\(displayedCount)")
-                    .font(.system(size: size * 0.28, weight: .semibold))
-                    .foregroundStyle(appColors.text)
-                    .scaleEffect(popScale)
-            }
-            .onChange(of: count) { _, newCount in
-                scheduleAnimatingOff()
-                if newCount == 0 { snapToZero() } else { animateCount(to: newCount) }
-            }
-            .onAppear {
-                displayedCount = count
-                scheduleAnimatingOff()
-            }
-            .padding(.bottom, 48)
+    private var ringContent: some View {
+        ZStack {
+            Circle()
+                .trim(from: 0, to: trimValue)
+                .stroke(
+                    appColors.secondary,
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                )
+                .rotationEffect(.degrees(90))
+                .frame(width: size, height: size)
+                .id(animationID)
+                .onAppear { updateAnimationState() }
+                .onChange(of: isAnimating) { _, _ in updateAnimationState() }
+
+            Text("\(displayedCount)")
+                .font(.system(size: size * 0.28, weight: .semibold))
+                .foregroundStyle(appColors.text)
+                .scaleEffect(popScale)
+        }
+        .onChange(of: count) { _, newCount in
+            scheduleAnimatingOff()
+            if newCount == 0 { snapToZero() } else { animateCount(to: newCount) }
+        }
+        .onAppear {
+            displayedCount = count
+            scheduleAnimatingOff()
         }
     }
 

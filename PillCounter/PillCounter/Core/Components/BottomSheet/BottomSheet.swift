@@ -1,0 +1,172 @@
+//
+//  BottomSheet.swift
+//  Android-style BottomSheet for SwiftUI
+//  • Portrait  -> slides up from bottom
+//  • Landscape -> slides in from the right
+//
+//  Uses GeometryReader (width > height) to detect landscape reliably
+//  across all iPhones and iPads.
+//
+
+import SwiftUI
+
+// MARK: - Bottom Sheet Modifier
+struct BottomSheetModifier<SheetContent: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    let dismissOnBackgroundTap: Bool
+    let onDismiss: (() -> Void)?
+    let showDim: Bool
+    /// Fixed portrait height. Nil = size-to-content (existing default behaviour).
+    let portraitHeight: CGFloat?
+    /// Width of the side sheet in landscape. Nil = 380 (existing default behaviour).
+    let landscapeWidth: CGFloat?
+    /// When non-nil, the portrait sheet height is driven by this binding (for drag-to-expand).
+    /// Falls back to portraitHeight when nil.
+    let heightBinding: Binding<CGFloat>?
+    /// When non-nil, the landscape sheet width is driven by this binding (for drag-to-expand).
+    /// Falls back to landscapeWidth when nil.
+    let widthBinding: Binding<CGFloat>?
+    let sheetContent: () -> SheetContent
+
+    private let defaultSideSheetWidth: CGFloat = 380
+
+    /// Corner radius of the sheet
+    private let cornerRadius: CGFloat = 20
+
+    /// Backdrop dim
+    private let dimOpacity: Double = 0.45
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    let isLandscape = geo.size.width > geo.size.height
+
+                    ZStack {
+                        if isPresented {
+                            // Dim background (optional)
+                            if showDim {
+                                Color.black
+                                    .opacity(dimOpacity)
+                                    .ignoresSafeArea()
+                                    .transition(.opacity)
+                                    .onTapGesture {
+                                        if dismissOnBackgroundTap {
+                                            dismiss()
+                                        }
+                                    }
+                            }
+
+                            // Sheet
+                            sheetView(isLandscape: isLandscape, size: geo.size)
+                                .transition(isLandscape ? .move(edge: .trailing)
+                                                        : .move(edge: .bottom))
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .animation(.easeInOut(duration: 0.28), value: isPresented)
+                }
+                .ignoresSafeArea()
+            )
+            // Fire onDismiss whenever the sheet transitions to hidden
+            .onChange(of: isPresented) { newValue in
+                if newValue == false {
+                    onDismiss?()
+                }
+            }
+    }
+
+    // MARK: - Sheet placement
+    @ViewBuilder
+    private func sheetView(isLandscape: Bool, size: CGSize) -> some View {
+        if isLandscape {
+            // Right side sheet — full screen height, edge-to-edge
+            let sheetWidth = widthBinding?.wrappedValue ?? landscapeWidth ?? defaultSideSheetWidth
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                sheetContent()
+                    .environment(\.colorScheme, .dark)
+                    .frame(width: min(sheetWidth, size.width))
+                    .frame(maxHeight: .infinity)
+                    .clipShape(
+                        RoundedCorners(radius: cornerRadius,
+                                       corners: [.topLeft, .bottomLeft])
+                    )
+                    .shadow(color: .black.opacity(0.2),
+                            radius: 10, x: -2, y: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
+        } else {
+            // Bottom sheet — full width
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Group {
+                    if let h = heightBinding?.wrappedValue ?? portraitHeight {
+                        sheetContent().frame(maxWidth: .infinity).frame(height: h)
+                    } else {
+                        sheetContent().frame(maxWidth: .infinity)
+                    }
+                }
+                .environment(\.colorScheme, .dark)
+                .clipShape(
+                    RoundedCorners(radius: cornerRadius,
+                                   corners: [.topLeft, .topRight])
+                )
+                .shadow(color: .black.opacity(0.2),
+                        radius: 10, x: 0, y: -2)
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private func dismiss() {
+        withAnimation { isPresented = false }
+    }
+}
+
+// MARK: - Rounded Corners Shape (selective corners)
+struct RoundedCorners: Shape {
+    var radius: CGFloat = 20
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
+    }
+}
+
+// MARK: - View Extension
+extension View {
+    /// Android-style bottom sheet.
+    /// Slides up from the bottom in portrait, in from the right in landscape.
+    func bottomSheet<Content: View>(
+        isPresented: Binding<Bool>,
+        dismissOnBackgroundTap: Bool = true,
+        showDim: Bool = true,
+        portraitHeight: CGFloat? = nil,
+        landscapeWidth: CGFloat? = nil,
+        heightBinding: Binding<CGFloat>? = nil,
+        widthBinding: Binding<CGFloat>? = nil,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        self.modifier(
+            BottomSheetModifier(
+                isPresented: isPresented,
+                dismissOnBackgroundTap: dismissOnBackgroundTap,
+                onDismiss: onDismiss,
+                showDim: showDim,
+                portraitHeight: portraitHeight,
+                landscapeWidth: landscapeWidth,
+                heightBinding: heightBinding,
+                widthBinding: widthBinding,
+                sheetContent: content
+            )
+        )
+    }
+}

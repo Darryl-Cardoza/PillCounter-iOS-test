@@ -1,0 +1,911 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5A67A8700F61F720CE951A3D /* Pods_PillCounterTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D047713FC8C3E6CB93B74F57 /* Pods_PillCounterTests.framework */; };
+		791DC6A72FD0134100DBB7AE /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 791DC6A62FD0134100DBB7AE /* FirebaseCore */; };
+		791DCB032FD2D67E00DBB7AE /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 791DCB022FD2D67E00DBB7AE /* ComposeApp */; };
+		791DCB062FD2D68E00DBB7AE /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 791DCB052FD2D68E00DBB7AE /* ComposeApp */; };
+		791DCB082FD2D6BB00DBB7AE /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 791DCB072FD2D6BB00DBB7AE /* FirebaseMessaging */; };
+		79F97D4A2FD00ED00054E69F /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 79F97D492FD00ED00054E69F /* ComposeApp */; };
+		88D04D8D2FD02CC10079ED80 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 88D04D8C2FD02CC10079ED80 /* ComposeApp */; };
+		88D04D902FD02CEB0079ED80 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		88E39F8E2FB311C800D6DEA2 /* (null) in Frameworks */ = {isa = PBXBuildFile; settings = {ATTRIBUTES = (Required, ); }; };
+		88E39F9D2FB31DAA00D6DEA2 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39F9C2FB31DAA00D6DEA2 /* UIKit.framework */; platformFilters = (ios, xros, ); settings = {ATTRIBUTES = (Weak, ); }; };
+		88E39F9F2FB31DBA00D6DEA2 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39F9E2FB31DBA00D6DEA2 /* SwiftUI.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		88E39FA12FB31DC500D6DEA2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39FA02FB31DC500D6DEA2 /* Metal.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		88E39FA32FB31DD400D6DEA2 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39FA22FB31DD400D6DEA2 /* MetalKit.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		88E39FA52FB31DDA00D6DEA2 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39FA42FB31DDA00D6DEA2 /* AVFoundation.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		88E39FA72FB31DF200D6DEA2 /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39FA62FB31DF200D6DEA2 /* CoreMedia.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		88E39FA92FB31DFA00D6DEA2 /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39FA82FB31DFA00D6DEA2 /* CoreVideo.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		88E39FAB2FB31FA500D6DEA2 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39FAA2FB31FA500D6DEA2 /* CoreAudio.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		CB32C68390329FB194AF13AA /* Pods_PillCounter_PillCounterUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA4C2FF88A4F1346D45E0B1B /* Pods_PillCounter_PillCounterUITests.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		473A490C2EB4F11300EEA905 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 473A48ED2EB4F11200EEA905 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 473A48F42EB4F11200EEA905;
+			remoteInfo = PillCounter;
+		};
+		473A49162EB4F11300EEA905 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 473A48ED2EB4F11200EEA905 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 473A48F42EB4F11200EEA905;
+			remoteInfo = PillCounter;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		1890CE19D0B44D04A2FBF0C4 /* Pods-PillCounterTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-PillCounterTests.debug.xcconfig"; path = "Target Support Files/Pods-PillCounterTests/Pods-PillCounterTests.debug.xcconfig"; sourceTree = "<group>"; };
+		1DFB72BEB43DF3A49E1650A8 /* Pods-PillCounter-PillCounterUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-PillCounter-PillCounterUITests.debug.xcconfig"; path = "Target Support Files/Pods-PillCounter-PillCounterUITests/Pods-PillCounter-PillCounterUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		292E5F75DD3CDE5CF63612F1 /* Pods_PillCounter.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_PillCounter.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		309AB8A5B2EC64BCF3520D45 /* Pods-PillCounter.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-PillCounter.debug.xcconfig"; path = "Target Support Files/Pods-PillCounter/Pods-PillCounter.debug.xcconfig"; sourceTree = "<group>"; };
+		473A48F52EB4F11200EEA905 /* PillCounter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PillCounter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		473A490B2EB4F11300EEA905 /* PillCounterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PillCounterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		473A49152EB4F11300EEA905 /* PillCounterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PillCounterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		88E39F9A2FB31D9600D6DEA2 /* CoreAudioTypes.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioTypes.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/CoreAudioTypes.framework; sourceTree = DEVELOPER_DIR; };
+		88E39F9C2FB31DAA00D6DEA2 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/UIKit.framework; sourceTree = DEVELOPER_DIR; };
+		88E39F9E2FB31DBA00D6DEA2 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/SwiftUI.framework; sourceTree = DEVELOPER_DIR; };
+		88E39FA02FB31DC500D6DEA2 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/Metal.framework; sourceTree = DEVELOPER_DIR; };
+		88E39FA22FB31DD400D6DEA2 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/MetalKit.framework; sourceTree = DEVELOPER_DIR; };
+		88E39FA42FB31DDA00D6DEA2 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/AVFoundation.framework; sourceTree = DEVELOPER_DIR; };
+		88E39FA62FB31DF200D6DEA2 /* CoreMedia.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMedia.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/CoreMedia.framework; sourceTree = DEVELOPER_DIR; };
+		88E39FA82FB31DFA00D6DEA2 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/CoreVideo.framework; sourceTree = DEVELOPER_DIR; };
+		88E39FAA2FB31FA500D6DEA2 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/CoreAudio.framework; sourceTree = DEVELOPER_DIR; };
+		A078DF56139C6FC35DBC4443 /* Pods-PillCounter.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-PillCounter.release.xcconfig"; path = "Target Support Files/Pods-PillCounter/Pods-PillCounter.release.xcconfig"; sourceTree = "<group>"; };
+		D047713FC8C3E6CB93B74F57 /* Pods_PillCounterTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_PillCounterTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		EA4C2FF88A4F1346D45E0B1B /* Pods_PillCounter_PillCounterUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_PillCounter_PillCounterUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		FAD330812BDA1ACBA69461CE /* Pods-PillCounterTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-PillCounterTests.release.xcconfig"; path = "Target Support Files/Pods-PillCounterTests/Pods-PillCounterTests.release.xcconfig"; sourceTree = "<group>"; };
+		FFFD515AFA3839EA5C283D7B /* Pods-PillCounter-PillCounterUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-PillCounter-PillCounterUITests.release.xcconfig"; path = "Target Support Files/Pods-PillCounter-PillCounterUITests/Pods-PillCounter-PillCounterUITests.release.xcconfig"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		47793CE82EF940640023EAD4 /* Exceptions for "PillCounter" folder in "PillCounter" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Components/Untitled.swift,
+				Info.plist,
+			);
+			target = 473A48F42EB4F11200EEA905 /* PillCounter */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		473A48F72EB4F11200EEA905 /* PillCounter */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				47793CE82EF940640023EAD4 /* Exceptions for "PillCounter" folder in "PillCounter" target */,
+			);
+			path = PillCounter;
+			sourceTree = "<group>";
+		};
+		473A490E2EB4F11300EEA905 /* PillCounterTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PillCounterTests;
+			sourceTree = "<group>";
+		};
+		473A49182EB4F11300EEA905 /* PillCounterUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PillCounterUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		473A48F22EB4F11200EEA905 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				791DCB082FD2D6BB00DBB7AE /* FirebaseMessaging in Frameworks */,
+				88D04D8D2FD02CC10079ED80 /* ComposeApp in Frameworks */,
+				79F97D4A2FD00ED00054E69F /* ComposeApp in Frameworks */,
+				88E39FAB2FB31FA500D6DEA2 /* CoreAudio.framework in Frameworks */,
+				88E39FA92FB31DFA00D6DEA2 /* CoreVideo.framework in Frameworks */,
+				791DC6A72FD0134100DBB7AE /* FirebaseCore in Frameworks */,
+				88E39FA72FB31DF200D6DEA2 /* CoreMedia.framework in Frameworks */,
+				88E39FA52FB31DDA00D6DEA2 /* AVFoundation.framework in Frameworks */,
+				88E39FA32FB31DD400D6DEA2 /* MetalKit.framework in Frameworks */,
+				791DCB062FD2D68E00DBB7AE /* ComposeApp in Frameworks */,
+				88E39FA12FB31DC500D6DEA2 /* Metal.framework in Frameworks */,
+				88E39F9F2FB31DBA00D6DEA2 /* SwiftUI.framework in Frameworks */,
+				88E39F9D2FB31DAA00D6DEA2 /* UIKit.framework in Frameworks */,
+				88D04D902FD02CEB0079ED80 /* (null) in Frameworks */,
+				88E39F8E2FB311C800D6DEA2 /* (null) in Frameworks */,
+				791DCB032FD2D67E00DBB7AE /* ComposeApp in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		473A49082EB4F11300EEA905 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A67A8700F61F720CE951A3D /* Pods_PillCounterTests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		473A49122EB4F11300EEA905 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CB32C68390329FB194AF13AA /* Pods_PillCounter_PillCounterUITests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		473A48EC2EB4F11200EEA905 = {
+			isa = PBXGroup;
+			children = (
+				473A48F72EB4F11200EEA905 /* PillCounter */,
+				473A490E2EB4F11300EEA905 /* PillCounterTests */,
+				473A49182EB4F11300EEA905 /* PillCounterUITests */,
+				790300062F6986C300A4FDB7 /* Frameworks */,
+				473A48F62EB4F11200EEA905 /* Products */,
+				F1575D325949144E68E5EC52 /* Pods */,
+			);
+			sourceTree = "<group>";
+		};
+		473A48F62EB4F11200EEA905 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				473A48F52EB4F11200EEA905 /* PillCounter.app */,
+				473A490B2EB4F11300EEA905 /* PillCounterTests.xctest */,
+				473A49152EB4F11300EEA905 /* PillCounterUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		790300062F6986C300A4FDB7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				88E39FAA2FB31FA500D6DEA2 /* CoreAudio.framework */,
+				88E39FA82FB31DFA00D6DEA2 /* CoreVideo.framework */,
+				88E39FA62FB31DF200D6DEA2 /* CoreMedia.framework */,
+				88E39FA42FB31DDA00D6DEA2 /* AVFoundation.framework */,
+				88E39FA22FB31DD400D6DEA2 /* MetalKit.framework */,
+				88E39FA02FB31DC500D6DEA2 /* Metal.framework */,
+				88E39F9E2FB31DBA00D6DEA2 /* SwiftUI.framework */,
+				88E39F9C2FB31DAA00D6DEA2 /* UIKit.framework */,
+				88E39F9A2FB31D9600D6DEA2 /* CoreAudioTypes.framework */,
+				292E5F75DD3CDE5CF63612F1 /* Pods_PillCounter.framework */,
+				EA4C2FF88A4F1346D45E0B1B /* Pods_PillCounter_PillCounterUITests.framework */,
+				D047713FC8C3E6CB93B74F57 /* Pods_PillCounterTests.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		F1575D325949144E68E5EC52 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				309AB8A5B2EC64BCF3520D45 /* Pods-PillCounter.debug.xcconfig */,
+				A078DF56139C6FC35DBC4443 /* Pods-PillCounter.release.xcconfig */,
+				1DFB72BEB43DF3A49E1650A8 /* Pods-PillCounter-PillCounterUITests.debug.xcconfig */,
+				FFFD515AFA3839EA5C283D7B /* Pods-PillCounter-PillCounterUITests.release.xcconfig */,
+				1890CE19D0B44D04A2FBF0C4 /* Pods-PillCounterTests.debug.xcconfig */,
+				FAD330812BDA1ACBA69461CE /* Pods-PillCounterTests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		473A48F42EB4F11200EEA905 /* PillCounter */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 473A491F2EB4F11300EEA905 /* Build configuration list for PBXNativeTarget "PillCounter" */;
+			buildPhases = (
+				37DAD3A84D05AE189BE9CD9D /* [CP] Check Pods Manifest.lock */,
+				473A48F12EB4F11200EEA905 /* Sources */,
+				473A48F22EB4F11200EEA905 /* Frameworks */,
+				473A48F32EB4F11200EEA905 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				473A48F72EB4F11200EEA905 /* PillCounter */,
+			);
+			name = PillCounter;
+			packageProductDependencies = (
+				79F97D492FD00ED00054E69F /* ComposeApp */,
+				791DC6A62FD0134100DBB7AE /* FirebaseCore */,
+				791DCB022FD2D67E00DBB7AE /* ComposeApp */,
+				791DCB052FD2D68E00DBB7AE /* ComposeApp */,
+				791DCB072FD2D6BB00DBB7AE /* FirebaseMessaging */,
+			);
+			productName = PillCounter;
+			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
+			productType = "com.apple.product-type.application";
+		};
+		473A490A2EB4F11300EEA905 /* PillCounterTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 473A49222EB4F11300EEA905 /* Build configuration list for PBXNativeTarget "PillCounterTests" */;
+			buildPhases = (
+				99C999C3F11DD202F6BFCBE6 /* [CP] Check Pods Manifest.lock */,
+				473A49072EB4F11300EEA905 /* Sources */,
+				473A49082EB4F11300EEA905 /* Frameworks */,
+				473A49092EB4F11300EEA905 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				473A490D2EB4F11300EEA905 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				473A490E2EB4F11300EEA905 /* PillCounterTests */,
+			);
+			name = PillCounterTests;
+			productName = PillCounterTests;
+			productReference = 473A490B2EB4F11300EEA905 /* PillCounterTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		473A49142EB4F11300EEA905 /* PillCounterUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 473A49252EB4F11300EEA905 /* Build configuration list for PBXNativeTarget "PillCounterUITests" */;
+			buildPhases = (
+				0F23AEF8AE35BC24D0A91148 /* [CP] Check Pods Manifest.lock */,
+				473A49112EB4F11300EEA905 /* Sources */,
+				473A49122EB4F11300EEA905 /* Frameworks */,
+				473A49132EB4F11300EEA905 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				473A49172EB4F11300EEA905 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				473A49182EB4F11300EEA905 /* PillCounterUITests */,
+			);
+			name = PillCounterUITests;
+			productName = PillCounterUITests;
+			productReference = 473A49152EB4F11300EEA905 /* PillCounterUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		473A48ED2EB4F11200EEA905 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					473A48F42EB4F11200EEA905 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					473A490A2EB4F11300EEA905 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 473A48F42EB4F11200EEA905;
+					};
+					473A49142EB4F11300EEA905 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 473A48F42EB4F11200EEA905;
+					};
+				};
+			};
+			buildConfigurationList = 473A48F02EB4F11200EEA905 /* Build configuration list for PBXProject "PillCounter" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				fr,
+				es,
+				hi,
+				"fr-CA",
+				"en-CA",
+				"en-US",
+			);
+			mainGroup = 473A48EC2EB4F11200EEA905;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				791DCB042FD2D68E00DBB7AE /* XCLocalSwiftPackageReference "../../swiftpackage" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				473A48F42EB4F11200EEA905 /* PillCounter */,
+				473A490A2EB4F11300EEA905 /* PillCounterTests */,
+				473A49142EB4F11300EEA905 /* PillCounterUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		473A48F32EB4F11200EEA905 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		473A49092EB4F11300EEA905 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		473A49132EB4F11300EEA905 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0F23AEF8AE35BC24D0A91148 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-PillCounter-PillCounterUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		37DAD3A84D05AE189BE9CD9D /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-PillCounter-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		99C999C3F11DD202F6BFCBE6 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-PillCounterTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		473A48F12EB4F11200EEA905 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		473A49072EB4F11300EEA905 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		473A49112EB4F11300EEA905 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		473A490D2EB4F11300EEA905 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 473A48F42EB4F11200EEA905 /* PillCounter */;
+			targetProxy = 473A490C2EB4F11300EEA905 /* PBXContainerItemProxy */;
+		};
+		473A49172EB4F11300EEA905 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 473A48F42EB4F11200EEA905 /* PillCounter */;
+			targetProxy = 473A49162EB4F11300EEA905 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		473A491D2EB4F11300EEA905 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "We will be using your camera to detect pills and scan the barcodes or qr codes.";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		473A491E2EB4F11300EEA905 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "We will be using your camera to detect pills and scan the barcodes or qr codes.";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		473A49202EB4F11300EEA905 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 309AB8A5B2EC64BCF3520D45 /* Pods-PillCounter.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Debug.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEPLOYMENT_POSTPROCESSING = NO;
+				DEVELOPMENT_ASSET_PATHS = "\"PillCounter/Preview Content\"";
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 8H4QNV2FVL;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "x86-64";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PillCounter/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pill Counter";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We will be using your camera to detect pills and scan the barcodes or qr codes.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app advertises and discovers HL7 services on the local network.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to tag pill count images.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = armv7;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				"OTHER_LDFLAGS[arch=*]" = (
+					"-ObjC",
+					"-dead_strip",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounting;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = PillCounterDevProfile;
+				SDKROOT = auto;
+				STRIP_INSTALLED_PRODUCT = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Debug;
+		};
+		473A49212EB4F11300EEA905 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A078DF56139C6FC35DBC4443 /* Pods-PillCounter.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Release.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_VERSION = "compiler-default";
+				DEPLOYMENT_POSTPROCESSING = YES;
+				DEVELOPMENT_ASSET_PATHS = "\"PillCounter/Preview Content\"";
+				DEVELOPMENT_TEAM = 8H4QNV2FVL;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "x86-64";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PillCounter/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pill Counter";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We will be using your camera to detect pills and scan the barcodes or qr codes.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app advertises and discovers HL7 services on the local network.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to tag pill count images.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = armv7;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				"OTHER_LDFLAGS[arch=*]" = (
+					"-ObjC",
+					"-dead_strip",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounting;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Release;
+		};
+		473A49232EB4F11300EEA905 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1890CE19D0B44D04A2FBF0C4 /* Pods-PillCounterTests.debug.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PillCounter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PillCounter";
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Debug;
+		};
+		473A49242EB4F11300EEA905 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FAD330812BDA1ACBA69461CE /* Pods-PillCounterTests.release.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PillCounter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PillCounter";
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Release;
+		};
+		473A49262EB4F11300EEA905 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1DFB72BEB43DF3A49E1650A8 /* Pods-PillCounter-PillCounterUITests.debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounterUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = PillCounter;
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Debug;
+		};
+		473A49272EB4F11300EEA905 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FFFD515AFA3839EA5C283D7B /* Pods-PillCounter-PillCounterUITests.release.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounterUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = PillCounter;
+				XROS_DEPLOYMENT_TARGET = 2.2;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		473A48F02EB4F11200EEA905 /* Build configuration list for PBXProject "PillCounter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				473A491D2EB4F11300EEA905 /* Debug */,
+				473A491E2EB4F11300EEA905 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		473A491F2EB4F11300EEA905 /* Build configuration list for PBXNativeTarget "PillCounter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				473A49202EB4F11300EEA905 /* Debug */,
+				473A49212EB4F11300EEA905 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		473A49222EB4F11300EEA905 /* Build configuration list for PBXNativeTarget "PillCounterTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				473A49232EB4F11300EEA905 /* Debug */,
+				473A49242EB4F11300EEA905 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		473A49252EB4F11300EEA905 /* Build configuration list for PBXNativeTarget "PillCounterUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				473A49262EB4F11300EEA905 /* Debug */,
+				473A49272EB4F11300EEA905 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		791DCB042FD2D68E00DBB7AE /* XCLocalSwiftPackageReference "../../swiftpackage" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../swiftpackage;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.14.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		791DC6A62FD0134100DBB7AE /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		791DCB022FD2D67E00DBB7AE /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = ComposeApp;
+		};
+		791DCB052FD2D68E00DBB7AE /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ComposeApp;
+		};
+		791DCB072FD2D6BB00DBB7AE /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+		79F97D492FD00ED00054E69F /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ComposeApp;
+		};
+		88D04D8C2FD02CC10079ED80 /* ComposeApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ComposeApp;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 473A48ED2EB4F11200EEA905 /* Project object */;
+}

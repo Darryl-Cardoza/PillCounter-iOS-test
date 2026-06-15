@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>pill.ccrlindia.com</key>
+			<dict/>
+			<key>www.pill.ccrlindia.com</key>
+			<dict/>
+		</dict>
+	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>Terminal-5._pillcounting._tcp</string>
+		<string>Terminal-4._pillcounting._tcp</string>
+		<string>Terminal-3._pillcounting._tcp.</string>
+		<string>Terminal-2._pillcounting._tcp.</string>
+		<string>Terminal-1._pillcounting._tcp
+</string>
+		<string>_ritepmsserver._tcp</string>
+		<string>_pillcounting1._tcp</string>
+		<string>_pillcounting._tcp</string>
+	</array>
+</dict>
+</plist>

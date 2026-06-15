@@ -1,0 +1,323 @@
+/*
+  Localizable.strings (Hindi)
+  PillCounter
+
+  Created by HC on 05/11/25.
+*/
+// MARK: - COMMON / GENERAL
+"common.appName" = "पिल काउंटर";
+"common.companyName" = "राइट टेक्नोलॉजीज़";
+"common.version" = "संस्करण";
+"common.cancel" = "रद्द करें";
+"common.ok" = "ठीक है";
+"common.add" = "जोड़ें";
+"common.no" = "नहीं";
+"common.yes" = "हाँ";
+"common.save" = "सहेजें";
+"common.delete" = "हटाएँ";
+"common.skip" = "छोड़ें";
+"common.email" = "ईमेल";
+"common.note" = "नोट";
+"common.date" = "तारीख";
+"common.time" = "समय";
+"common.unselectAll" = "सभी चयन हटाएँ";
+"common.selectAll" = "सभी चुनें";
+
+
+// MARK: - LOGIN
+"login.rememberMe" = "मुझे याद रखें";
+"login.button" = "लॉगिन";
+"login.email.placeholder" = "ईमेल";
+"login.email.error.empty" = "कृपया अपना ईमेल पता दर्ज करें।";
+"login.email.error.invalid" = "कृपया सही ईमेल पता दर्ज करें।";
+
+
+// MARK: - OTP VERIFICATION
+"otp.codeSentText" = "सुरक्षा कोड भेज दिया गया है";
+"otp.resendCode" = "कोड पुनः भेजें";
+"otp.verifyButton" = "सत्यापित करें";
+"otp.error.invalid" = "अमान्य ओटीपी";
+
+
+// MARK: - DASHBOARD
+"dashboard.completed" = "पूर्ण";
+"dashboard.pending" = "लंबित";
+"dashboard.fixedCount.title" = "डिस्पेंस";
+"dashboard.fixedCount.subtitle" = "टैप.स्कैन.डिस्पेंस";
+"dashboard.regularCount.title" = "स्टॉक काउंट";
+"dashboard.regularCount.subtitle" = "इन्वेंटरी गिनती शुरू करें";
+
+
+// MARK: - DASHBOARD POPUP
+"dashboard.popup.continueLastBatch" = "पिछला बैच फिर शुरू करें";
+"dashboard.popup.createNewBatch" = "नया बैच शुरू करें";
+"dashboard.popup.whatWouldYouDo" = "स्टॉक काउंट कार्रवाई चुनें";
+"dashboard.popup.selectBucket" = "इन्वेंटरी बकेट चुनें";
+
+
+// MARK: - PILL COUNT VIEW
+"pillCount.total" = "कुल";
+"pillCount.header" = "गोलियों की गिनती";
+"pillCount.pausedDueToInactivity" = "निष्क्रियता के कारण गिनती रोक दी गई है।";
+"pillCount.resume" = "फिर शुरू करें";
+"pillCount.confirmDeletion" = "हटाने की पुष्टि करें";
+"pillCount.deleteAllTransactionsMessage" = "क्या आप वाकई इस वर्तमान लेनदेन के सभी ट्रांज़ैक्शन हटाना चाहते हैं?";
+"pillCount.invalidCount" = "अमान्य गिनती";
+"pillCount.zeroPillsMessage" = "0 गोलियों के साथ बैच नहीं जोड़ा जा सकता।\nकृपया सुनिश्चित करें कि कैमरा गोलियों का पता लगा रहा है।";
+"pillCount.confirmCompletionTitle" = "पूर्णता की पुष्टि करें";
+"pillCount.confirmCompletionMessage" = "क्या आप वाकई इस लेनदेन को पूर्ण के रूप में चिह्नित करना चाहते हैं?";
+"pillCount.countMismatchTitle" = "गिनती मेल नहीं खाती";
+"pillCount.countMismatchMessage" = "गिनी गई मात्रा लक्ष्य संख्या से मेल नहीं खाती। क्या आप आगे बढ़ना चाहते हैं?";
+"pillCount.confirmStepCompletionTitle" = "चरण पूर्णता की पुष्टि करें";
+"pillCount.confirmStepCompletionMessage" = "क्या आप वाकई इस चरण को पूरा करना चाहते हैं?";
+"pillCount.addNote" = "नोट जोड़ें";
+"pillCount.pleaseAddNote" = "कृपया एक नोट जोड़ें";
+"pillCount.skipStepTitle" = "चरण छोड़ें";
+"pillCount.skipStepMessage" = "शेष गिनती 0 है। क्या आप कंटेनर लंबित चरण छोड़ना चाहते हैं?";
+"pillCount.totalCountExceedsTarget" = "कुल ट्रांज़ैक्शन गिनती लक्ष्य से अधिक है।";
+"pillCount.imageAlreadyCaptured" = "छवि पहले ही कैप्चर की जा चुकी है। फिर से कैप्चर करने के लिए Redo दबाएँ।";
+"pillCount.countLessThanTarget" = "गिनती लक्ष्य से कम है।";
+"pillCount.addButton" = "जोड़ें";
+"pillCount.addButtonWait" = "प्रतीक्षा करें...";
+"pillCount.allDone" = "सब हो गया";
+"pillCount.totalCount" = "कुल गिनती";
+"pillCount.redo" = "फिर से करें";
+"pillCount.done" = "हो गया";
+"pillCount.transactionDetail" = "ट्रांज़ैक्शन विवरण %d";
+
+
+// MARK: - HAMBURGER MENU
+"menu.history" = "इतिहास";
+"menu.profile" = "प्रोफ़ाइल";
+"menu.settings" = "सेटिंग्स";
+"menu.logout" = "लॉगआउट";
+"menu.unsync" = "अनसिंक्ड ट्रांज़ैक्शन";
+"menu.history.duration.month" = "महीना";
+"menu.history.duration.months" = "महीने";
+"menu.confirmLogoutTitle" = "लॉगआउट की पुष्टि करें";
+"menu.confirmLogoutMessage" = "क्या आप वाकई लॉगआउट करना चाहते हैं?";
+"menu.logoutButton" = "लॉगआउट";
+"menu.toast.noLastBatchFound" = "कोई पिछला बैच नहीं मिला";
+
+
+// MARK: - PROFILE
+"profile.firstName" = "पहला नाम";
+"profile.lastName" = "अंतिम नाम";
+"profile.pharmacyName" = "फार्मेसी का नाम";
+"profile.npiId" = "एनपीआई नंबर";
+"profile.phoneNumber" = "फ़ोन नंबर";
+"profile.terminal" = "टर्मिनल";
+
+"profile.popup.confirmDeleteTitle" = "हटाने की पुष्टि करें";
+"profile.popup.confirmDeleteMessage" = "क्या आप वाकई अपनी प्रोफ़ाइल हटाना चाहते हैं? यह क्रिया वापस नहीं की जा सकती।";
+
+"profile.error.errorPhoneLengthMessage" = "फ़ोन नंबर ठीक 10 अंकों का होना चाहिए।";
+"profile.error.errorPhoneDigitsMessage" = "फ़ोन नंबर में केवल अंक होने चाहिए।";
+"profile.error.errorUpdateTerminalMessage" = "टर्मिनल अपडेट करने में विफल। कृपया पुनः प्रयास करें।";
+"profile.error.errorUpdateProfileMessage" = "प्रोफ़ाइल अपडेट करने में विफल। कृपया पुनः प्रयास करें।";
+"profile.error.successUpdateMessage" = "प्रोफ़ाइल सफलतापूर्वक अपडेट हो गई।";
+
+
+// MARK: - USER SETTINGS
+"settings.alwaysAskNotes" = "हमेशा नोट जोड़ने के लिए पूछें";
+"settings.saveHistory" = "इतिहास सहेजें";
+"settings.requireDoubleCount" = "डबल काउंट आवश्यक करें";
+"settings.requireBackCount" = "नियंत्रित दवा के लिए बैक काउंट आवश्यक करें";
+"settings.requireAdjustReason" = "समायोजन कारण आवश्यक करें";
+"settings.hapticFeedback" = "पिल काउंट हैप्टिक फीडबैक";
+"settings.soundFeedback" = "पिल काउंट ध्वनि फीडबैक";
+"settings.voiceInstructions" = "वॉइस फीडबैक";
+"settings.clearLocalData" = "सभी लोकल डेटा साफ़ करें";
+"settings.saveHistoryScreenTitle" = "इतिहास सहेजें";
+"settings.scheduleScreenTitle" = "शेड्यूल चुनें";
+"settings.confirmHistoryTitle" = "क्या आप वाकई %@ के लिए इतिहास रखना चाहते हैं?";
+"settings.confirmHistoryMessage" = "नोट: इस अवधि से पुराना डेटा स्थायी रूप से हटा दिया जाएगा।";
+"settings.clearHistoryTitle" = "क्या आप वाकई पूरा इतिहास साफ़ करना चाहते हैं?";
+"settings.clearHistoryMessage" = "यह आपका सभी सहेजा गया डेटा स्थायी रूप से हटा देगा।";
+
+
+// MARK: - HISTORY SCREEN
+"history.pillCount" = "गोलियों की गिनती";
+"history.initialContainerCount" = "प्रारंभिक कंटेनर गिनती";
+"history.substitutedDrugDetails" = "प्रतिस्थापित दवा विवरण";
+"history.requestedDrugDetails" = "अनुरोधित दवा विवरण";
+"history.dispensedDrugDetails" = "वितरित दवा विवरण";
+"history.pillRecount" = "गोलियों की पुनर्गणना";
+"history.dispensedVial" = "वितरित वायल";
+"history.remainingContainerCount" = "स्टॉक बोतल में शेष गोलियों की गिनती";
+"history.totalCount" = "कुल गिनती";
+"history.substitutedDrug" = "प्रतिस्थापित दवा";
+"history.drugName" = "दवा का नाम";
+"history.ndc" = "एनडीसी";
+"history.expiryNo" = "समाप्ति संख्या";
+"history.lotNo" = "लॉट नंबर";
+"history.title" = "इतिहास";
+"history.confirmDelete" = "हटाने की पुष्टि करें";
+"history.deleteConfirmMessage" = "क्या आप वाकई चयनित तारीख के रिकॉर्ड हटाना चाहते हैं? यह क्रिया वापस नहीं की जा सकती।";
+"history.noItemsToDelete" = "हटाने के लिए कोई आइटम नहीं";
+"history.noHistory" = "कोई इतिहास नहीं";
+"history.noTransactionsFound" = "इस अवधि के लिए कोई ट्रांज़ैक्शन नहीं मिला।";
+"history.noResults" = "कोई परिणाम नहीं";
+"history.noTransactionsMatch" = "आपकी खोज से मेल खाने वाले कोई ट्रांज़ैक्शन नहीं मिले।";
+"history.noBatchesFound" = "इस अवधि के लिए कोई बैच नहीं मिला।";
+"history.noBatchesMatch" = "आपकी खोज से मेल खाने वाले कोई बैच नहीं मिले।";
+"history.filterAll" = "सभी";
+"history.filterCompleted" = "पूर्ण";
+"history.filterPending" = "लंबित";
+"history.filterDispensed" = "वितरित";
+"history.filterStockCount" = "स्टॉक गिनती";
+"history.batchIdTitle" = "बैच आईडी %d";
+"history.noTransactions" = "कोई ट्रांज़ैक्शन नहीं";
+"history.noItemsInBatch" = "इस बैच में कोई आइटम नहीं मिला";
+"history.totalNdcCount" = "कुल एनडीसी गिनती";
+"history.completedOn" = "पूर्ण किया गया";
+"history.sealedBottles" = "सीलबंद बोतलें";
+"history.openedBottles" = "खुली बोतलें";
+"history.deleteButton" = "हटाएँ";
+"history.okButton" = "ठीक है";
+"history.unknownDrug" = "अज्ञात दवा";
+
+// MARK: - PILL SCAN DETAIL
+"pillScan.deleteTransaction" = "ट्रांज़ैक्शन हटाएँ";
+"pillScan.totalCount" = "कुल गिनती";
+"pillScan.noScansYet" = "अभी तक कोई स्कैन नहीं";
+"pillScan.deleteScans" = "स्कैन हटाएँ";
+"pillScan.deleteScansMessage" = "क्या आप वाकई चयनित स्कैन हटाना चाहते हैं?";
+"pillScan.unselectAll" = "सभी चयन हटाएँ";
+"pillScan.selectAll" = "सभी चुनें";
+
+
+// MARK: - LOCATION
+"location.fetching" = "प्राप्त किया जा रहा है...";
+"location.unavailable" = "स्थान उपलब्ध नहीं है";
+
+
+// MARK: - STOCK
+"stock.confirmEndBatch" = "क्या आप वाकई इस बैच काउंट को समाप्त करना चाहते हैं?";
+"stock.confirmExport" = "क्या आप इस बैच इन्वेंटरी विवरण को एक्सपोर्ट करना चाहते हैं?";
+"stock.endBatch" = "बैच समाप्त करें";
+"stock.ndcs" = "एनडीसी";
+"stock.pendingBatches" = "लंबित बैच";
+"stock.confirmDeleteTitle" = "हटाने की पुष्टि करें";
+"stock.deleteSelectedTitle" = "चयनित हटाएँ";
+"stock.deleteBatchMessage" = "क्या आप वाकई इस बैच को हटाना चाहते हैं?";
+"stock.deleteSelectedBatchesMessage" = "क्या आप वाकई चयनित बैच हटाना चाहते हैं?";
+"stock.noTransactionsYet" = "अभी तक कोई ट्रांज़ैक्शन नहीं";
+"stock.startAddingItems" = "इस बैच में आइटम जोड़ना शुरू करें";
+"stock.endCount" = "गिनती समाप्त करें";
+"stock.addItem" = "+ जोड़ें";
+"stock.noCountEndBatchMessage" = "कोई ट्रांज़ैक्शन या गिनती नहीं जोड़ी गई। क्या आप बैच समाप्त करना चाहते हैं?";
+"stock.addNoteQuestion" = "क्या आप एक नोट जोड़ना चाहते हैं?";
+"stock.deleteButton" = "हटाएँ";
+"stock.cancelButton" = "रद्द करें";
+"stock.deselectAll" = "सभी का चयन हटाएँ";
+"stock.selectAll" = "सभी चुनें";
+
+
+// MARK: - UNSYNCED TRANSACTIONS
+"unsync.screenTitle" = "अनसिंक्ड ट्रांज़ैक्शन";
+"unsync.allSynced" = "सभी ट्रांज़ैक्शन सिंक हो चुके हैं";
+"unsync.pmsNotConnected" = "PMS कनेक्ट नहीं है";
+"unsync.stocks" = "स्टॉक्स";
+"unsync.dispenses" = "डिस्पेंसेस";
+"unsync.syncAll" = "सभी सिंक करें";
+
+
+// MARK: - STOCK COUNT PARTIAL BATCH LIST
+"stockCountBatchList.pendingBatches" = "लंबित बैच";
+"stockCountBatchList.batchPrefix" = "बैच %@";
+"stockCountBatchList.confirmDeleteTitle" = "हटाने की पुष्टि करें";
+"stockCountBatchList.deleteSelectedTitle" = "चयनित हटाएँ";
+"stockCountBatchList.deleteBatchMessage" = "क्या आप वाकई इस बैच को हटाना चाहते हैं?";
+"stockCountBatchList.deleteSelectedBatchesMessage" = "क्या आप वाकई चयनित बैच हटाना चाहते हैं?";
+
+
+// MARK: - STOCK COUNT BATCH DETAIL
+"stockCountBatchDetail.batchIdTitle" = "बैच आईडी %lld";
+"stockCountBatchDetail.noTransactionsYet" = "अभी तक कोई ट्रांज़ैक्शन नहीं";
+"stockCountBatchDetail.startAddingItems" = "शुरू करने के लिए आइटम जोड़ें";
+"stockCountBatchDetail.endCount" = "गिनती समाप्त करें";
+"stockCountBatchDetail.addItem" = "आइटम जोड़ें";
+"stockCountBatchDetail.confirmEndBatch" = "क्या आप वाकई इस बैच को समाप्त करना चाहते हैं?";
+"stockCountBatchDetail.noCountEndBatchMessage" = "इस बैच में कोई गिनी गई आइटम नहीं है। क्या आप इसे समाप्त करना चाहते हैं?";
+"stockCountBatchDetail.confirmExport" = "क्या आप वाकई एक्सपोर्ट करना चाहते हैं?";
+"stockCountBatchDetail.addNoteQuestion" = "क्या आप एक नोट जोड़ना चाहते हैं?";
+"stockCountBatchDetail.pleaseAddNote" = "कृपया एक नोट जोड़ें";
+"stockCountBatchDetail.skip" = "छोड़ें";
+
+// MARK: - BARCODE / QR SCANNER
+"barcodeScan.batchOverlay" = "बैच %d";
+"barcodeScan.pillsRequired" = "आवश्यक गोलियाँ";
+"barcodeScan.copy" = "कॉपी करें";
+"barcodeScan.rescanRequired" = "पुनः स्कैन आवश्यक";
+"barcodeScan.ndcDoesNotMatch" = "स्कैन किया गया एनडीसी मेल नहीं खाता";
+"barcodeScan.substitute" = "प्रतिस्थापित करें";
+"barcodeScan.rescan" = "पुनः स्कैन करें";
+"barcodeScan.qrScannedSuccessfully" = "स्टॉक बोतल विवरण सत्यापित करें";
+"barcodeScan.labelScannedSuccessfully" = "Rx विवरण सत्यापित करें";
+"barcodeScan.ndcNumber" = "एनडीसी नंबर";
+"barcodeScan.drugName" = "दवा का नाम";
+"barcodeScan.quantity" = "मात्रा";
+"barcodeScan.rxNumber" = "Rx नंबर";
+"barcodeScan.bucket" = "बकेट";
+"barcodeScan.selectContainerStatus" = "कंटेनर स्थिति चुनें";
+"barcodeScan.sealed" = "सीलबंद";
+"barcodeScan.opened" = "खुला";
+"barcodeScan.drugNotFound" = "दवा नहीं मिली";
+"barcodeScan.drugNotFoundMessage" = "स्कैन किया गया बारकोड पहचाना नहीं गया। कृपया पुनः प्रयास करें।";
+"barcodeScan.incorrectNdc" = "गलत एनडीसी";
+"barcodeScan.incorrectNdcMessage" = "आपने गलत एनडीसी स्कैन किया है। यह आइटम PMS बैच से मेल नहीं खाता।";
+"barcodeScan.proceed" = "आगे बढ़ें";
+
+// MARK: - CAMERA PERMISSION
+"camera.accessRequired" = "कैमरा एक्सेस आवश्यक है";
+"camera.accessMessage" = "बारकोड स्कैन करने के लिए कृपया सेटिंग्स में कैमरा एक्सेस सक्षम करें।";
+"camera.openSettings" = "सेटिंग्स खोलें";
+
+
+// MARK: - DISPENSE COUNT PARTIAL TRANSACTION LIST
+"dispensePartial.filter.all" = "सभी";
+"dispensePartial.filter.pms" = "PMS";
+"dispensePartial.filter.nonPms" = "नॉन-PMS";
+"dispensePartial.dialog.confirmDeleteTitle" = "हटाने की पुष्टि करें";
+"dispensePartial.dialog.deleteSelectedTitle" = "चयनित हटाएँ";
+"dispensePartial.dialog.deleteTransactionMessage" = "क्या आप वाकई इस ट्रांज़ैक्शन को हटाना चाहते हैं?";
+"dispensePartial.dialog.deleteSelectedTransactionsMessage" = "क्या आप वाकई चयनित ट्रांज़ैक्शन हटाना चाहते हैं?";
+
+
+// MARK: - GENERIC LIST SCREEN
+"genericList.deleteBatches" = "बैच हटाएँ";
+"genericList.noPendingCountsAvailable" = "कोई लंबित गिनती उपलब्ध नहीं है";
+"genericList.noResultsFound" = "कोई परिणाम नहीं मिला";
+
+// MARK: - GENERIC EQUIVALENT POPUP
+"genericEquivalent.scanned" = "जेनेरिक समकक्ष स्कैन किया गया";
+"genericEquivalent.subtitle" = "स्कैन किया गया आइटम निर्दिष्ट दवा का जेनेरिक समकक्ष है";
+"genericEquivalent.doYouWantSubstitute" = "क्या आप प्रतिस्थापित करना चाहते हैं?";
+
+
+// MARK: - STEP
+"controlled.scan" = "कंटेनर QR कोड स्कैन करें";
+"controlled.containerInitiate" = "स्टॉक बोतल की मात्रा गिनें";
+"controlled.targetVerification" = "निर्धारित मात्रा गिनें";
+"controlled.targetReverification" = "निर्धारित मात्रा पुनः गिनें";
+"controlled.vial" = "भरी हुई वायल की छवि कैप्चर करें";
+"controlled.containerPending" = "कंटेनर में बची सभी गोलियाँ गिनें";
+"controlled.regularTargetReverification" = "खुली बोतल से गोलियाँ गिनें";
+"controlled.scanBarcode" = "स्टॉक बोतल बारकोड / QR कोड स्कैन करें";
+"controlled.scanStockCountBarcode" = "स्टॉक बोतल बारकोड / QR कोड स्कैन करें";
+"controlled.scanRxLabelBarcode" = "Rx लेबल स्कैन करें";
+
+
+// MARK: - HL7 Notifications
+"hl7Notification.newRxTitle" = "New Rx Received";
+"hl7Notification.rxUpdatedTitle" = "Rx Updated";
+"hl7Notification.rxOnHoldTitle" = "Rx On Hold";
+"hl7Notification.rxCancelledTitle" = "Rx Cancelled";
+"hl7Notification.rxCompletedTitle" = "Rx Completed";
+"hl7Notification.qtyLabel" = "Qty";
+"hl7Notification.inventoryRequestTitle" = "Inventory Request";
+"hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
+"hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
+"barcodeScan.hazardousNdcDetected" = "खतरनाक NDC का पता चला।";
+"barcodeScan.wearGlovesAndProceedWithCaution" = "दस्ताने पहनें और सावधानी से आगे बढ़ें।";

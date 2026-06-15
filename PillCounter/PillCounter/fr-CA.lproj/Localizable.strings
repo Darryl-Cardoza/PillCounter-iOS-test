@@ -1,0 +1,290 @@
+/*
+  Localizable.strings
+  PillCounter
+
+  Created by HC on 05/11/25.
+  French (fr) localization
+*/
+
+
+
+// MARK: - COMMON / GENERAL
+"common.appName" = "Compte-pilules";
+"common.companyName" = "RITE TECHNOLOGIES";
+"common.version" = "Version";
+"common.cancel" = "ANNULER";
+"common.ok" = "OK";
+"common.add" = "AJOUTER";
+"common.no" = "NON";
+"common.yes" = "OUI";
+"common.save" = "ENREGISTRER";
+"common.delete" = "SUPPRIMER";
+"common.skip" = "PASSER";
+"common.email" = "E-mail";
+"common.note" = "NOTE";
+"common.date" = "Date";
+"common.time" = "Heure";
+
+
+// MARK: - LOGIN
+"login.rememberMe" = "Se souvenir de moi";
+"login.button" = "CONNEXION";
+"login.email.placeholder" = "Adresse e-mail";
+"login.email.error.empty" = "Veuillez entrer votre adresse e-mail.";
+"login.email.error.invalid" = "Veuillez entrer une adresse e-mail valide.";
+
+
+// MARK: - OTP VERIFICATION
+"otp.codeSentText" = "Le code de sécurité a été envoyé à";
+"otp.resendCode" = "Renvoyer le code";
+"otp.verifyButton" = "VÉRIFIER";
+"otp.error.invalid" = "";
+
+
+// MARK: - DASHBOARD
+"dashboard.completed" = "Terminé";
+"dashboard.pending" = "En attente";
+"dashboard.fixedCount.title" = "Distribuer";
+"dashboard.fixedCount.subtitle" = "Touchez. Scannez. Distribuez.";
+"dashboard.regularCount.title" = "Comptage de stock";
+"dashboard.regularCount.subtitle" = "Démarrer le comptage d’inventaire";
+
+
+// MARK: - DASHBOARD POPUP
+"dashboard.popup.continueLastBatch" = "Reprendre le lot précédent";
+"dashboard.popup.createNewBatch" = "Démarrer un nouveau lot";
+"dashboard.popup.whatWouldYouDo" = "Choisir une action de comptage de stock";
+"dashboard.popup.selectBucket" = "Sélectionner le panier d’inventaire";
+
+
+// MARK: - PILL COUNT VIEW
+"pillCount.total" = "TOTAL";
+"pillCount.header" = "COMPTAGE DES COMPRIMÉS";
+"pillCount.pausedDueToInactivity" = "COMPTAGE EN PAUSE EN RAISON D’INACTIVITÉ.";
+"pillCount.resume" = "Reprendre";
+"pillCount.confirmDeletion" = "CONFIRMER LA SUPPRESSION";
+"pillCount.deleteAllTransactionsMessage" = "Êtes-vous sûr de vouloir supprimer toutes les transactions de la transaction en cours ?";
+"pillCount.invalidCount" = "COMPTAGE INVALIDE";
+"pillCount.zeroPillsMessage" = "Impossible d’ajouter un lot avec 0 comprimé.\nVeuillez vous assurer que les comprimés sont détectés par la caméra.";
+"pillCount.confirmCompletionTitle" = "Confirmer l’achèvement";
+"pillCount.countMismatchTitle" = "Comptage incohérent";
+"pillCount.countMismatchMessage" = "La quantité comptée ne correspond pas au comptage cible. Voulez-vous continuer ?";
+"pillCount.confirmStepCompletionTitle" = "Confirmer l’achèvement de l’étape";
+"pillCount.confirmStepCompletionMessage" = "Êtes-vous sûr de vouloir terminer cette étape ?";
+"pillCount.addNote" = "AJOUTER UNE NOTE";
+"pillCount.pleaseAddNote" = "Veuillez ajouter une note";
+"pillCount.skipStepTitle" = "Passer l’étape";
+"pillCount.skipStepMessage" = "Le comptage restant est 0. Voulez-vous passer l’étape en attente du contenant ?";
+"pillCount.totalCountExceedsTarget" = "Le comptage total de la transaction dépasse la cible.";
+"pillCount.imageAlreadyCaptured" = "Image déjà capturée. Appuyez sur Refaire pour capturer à nouveau.";
+"pillCount.countLessThanTarget" = "Le comptage est inférieur à la cible.";
+
+
+// MARK: - HAMBURGER MENU
+"menu.history" = "Historique";
+"menu.profile" = "Profil";
+"menu.settings" = "Paramètres";
+"menu.logout" = "Déconnexion";
+"menu.unsync" = "Transactions non synchronisées";
+"menu.history.duration.month" = "mois";
+"menu.history.duration.months" = "mois";
+"menu.confirmLogoutTitle" = "Confirmer la déconnexion";
+"menu.confirmLogoutMessage" = "Êtes-vous sûr de vouloir vous déconnecter ?";
+"menu.logoutButton" = "Déconnexion";
+"menu.toast.noLastBatchFound" = "Aucun lot précédent trouvé";
+
+
+// MARK: - PROFILE
+"profile.firstName" = "Prénom";
+"profile.lastName" = "Nom";
+"profile.pharmacyName" = "Nom de la pharmacie";
+"profile.npiId" = "Numéro NPI";
+"profile.phoneNumber" = "Numéro de téléphone";
+"profile.terminal" = "Terminal";
+
+"profile.popup.confirmDeleteTitle" = "Confirmer la suppression";
+"profile.popup.confirmDeleteMessage" = "Êtes-vous sûr de vouloir supprimer votre profil ? Cette action est irréversible.";
+
+"profile.error.errorPhoneLengthMessage" = "Le numéro de téléphone doit comporter exactement 10 chiffres.";
+"profile.error.errorPhoneDigitsMessage" = "Le numéro de téléphone ne doit contenir que des chiffres.";
+"profile.error.errorUpdateTerminalMessage" = "Échec de la mise à jour du terminal. Veuillez réessayer.";
+"profile.error.errorUpdateProfileMessage" = "Échec de la mise à jour du profil. Veuillez réessayer.";
+"profile.error.successUpdateMessage" = "Profil mis à jour avec succès.";
+
+
+// MARK: - USER SETTINGS
+"settings.alwaysAskNotes" = "Toujours demander pour ajouter des notes";
+"settings.saveHistory" = "Sauvegarder l’historique pendant";
+"settings.requireDoubleCount" = "Exiger un double comptage";
+"settings.requireBackCount" = "Exiger un recomptage pour les médicaments contrôlés";
+"settings.requireAdjustReason" = "Exiger des motifs d’ajustement";
+"settings.hapticFeedback" = "Retour haptique du comptage";
+"settings.soundFeedback" = "Retour sonore du comptage";
+"settings.voiceInstructions" = "Retour vocal";
+"settings.clearLocalData" = "Effacer toutes les données locales";
+"settings.saveHistoryScreenTitle" = "SAUVEGARDER L’HISTORIQUE PENDANT";
+"settings.scheduleScreenTitle" = "SÉLECTIONNER LA PLANIFICATION";
+"settings.confirmHistoryTitle" = "Êtes-vous sûr de vouloir conserver l’historique pendant %@ ?";
+"settings.confirmHistoryMessage" = "Remarque : les données antérieures à cette période seront supprimées définitivement.";
+"settings.clearHistoryTitle" = "Êtes-vous sûr de vouloir effacer tout l’historique ?";
+"settings.clearHistoryMessage" = "Cela supprimera toutes vos données sauvegardées de façon permanente.";
+
+
+// MARK: - CAMERA PERMISSION
+"camera.accessRequired" = "Accès à la caméra requis";
+"camera.accessMessage" = "Veuillez activer l’accès à la caméra dans les Réglages pour scanner les codes-barres.";
+"camera.openSettings" = "Ouvrir les Réglages";
+
+
+// MARK: - BARCODE / QR SCANNER
+"barcodeScan.batchOverlay" = "Lot %d";
+"barcodeScan.pillsRequired" = "COMPRIMÉS REQUIS";
+"barcodeScan.copy" = "Copier";
+"barcodeScan.rescanRequired" = "Nouveau scan requis";
+"barcodeScan.ndcDoesNotMatch" = "Le NDC scanné ne correspond pas";
+"barcodeScan.substitute" = "Substituer";
+"barcodeScan.rescan" = "Scanner à nouveau";
+"barcodeScan.qrScannedSuccessfully" = "Vérifier les détails du flacon de stock";
+"barcodeScan.labelScannedSuccessfully" = "Vérifier les détails de l’ordonnance";
+"barcodeScan.ndcNumber" = "Numéro NDC";
+"barcodeScan.drugName" = "Nom du médicament";
+"barcodeScan.quantity" = "Quantité";
+"barcodeScan.rxNumber" = "Numéro d’ordonnance";
+"barcodeScan.bucket" = "Panier";
+"barcodeScan.selectContainerStatus" = "Sélectionner l’état du contenant";
+"barcodeScan.sealed" = "Scellé";
+"barcodeScan.opened" = "Ouvert";
+"barcodeScan.drugNotFound" = "Médicament introuvable";
+"barcodeScan.drugNotFoundMessage" = "Le code-barres scanné n’est pas reconnu. Veuillez réessayer.";
+"barcodeScan.incorrectNdc" = "NDC incorrect";
+"barcodeScan.incorrectNdcMessage" = "Vous avez scanné un NDC incorrect. Cet article ne correspond pas au lot PMS.";
+"barcodeScan.proceed" = "CONTINUER";
+
+
+// MARK: - GENERIC EQUIVALENT POPUP
+"genericEquivalent.scanned" = "ÉQUIVALENT GÉNÉRIQUE SCANNÉ";
+"genericEquivalent.subtitle" = "L’article scanné est un équivalent générique du médicament spécifié";
+"genericEquivalent.doYouWantSubstitute" = "Voulez-vous substituer ?";
+
+
+// MARK: - HISTORY SCREEN
+"history.pillCount" = "COMPTAGE DES COMPRIMÉS";
+"history.initialContainerCount" = "COMPTAGE INITIAL DU CONTENANT";
+"history.substitutedDrugDetails" = "DÉTAILS DU MÉDICAMENT SUBSTITUÉ";
+"history.requestedDrugDetails" = "DÉTAILS DU MÉDICAMENT DEMANDÉ";
+"history.dispensedDrugDetails" = "DÉTAILS DU MÉDICAMENT DISTRIBUÉ";
+"history.pillRecount" = "RECOMPTAGE DES COMPRIMÉS";
+"history.dispensedVial" = "FLACON DISTRIBUÉ";
+"history.remainingContainerCount" = "COMPRIMÉS RESTANTS DANS LE FLACON DE STOCK";
+"history.totalCount" = "COMPTAGE TOTAL";
+"history.substitutedDrug" = "Médicament substitué";
+"history.drugName" = "Nom du médicament";
+"history.ndc" = "NDC";
+"history.expiryNo" = "N° d’expiration";
+"history.lotNo" = "N° de lot";
+"history.title" = "HISTORIQUE";
+"history.confirmDelete" = "Confirmer la suppression";
+"history.deleteConfirmMessage" = "Êtes-vous sûr de vouloir supprimer les enregistrements pour la date sélectionnée ? Cette action est irréversible.";
+"history.noItemsToDelete" = "Aucun élément à supprimer";
+"history.noHistory" = "Aucun historique";
+"history.noTransactionsFound" = "Aucune transaction trouvée pour cette période.";
+"history.noResults" = "Aucun résultat";
+"history.noTransactionsMatch" = "Aucune transaction ne correspond à votre recherche.";
+"history.noBatchesFound" = "Aucun lot trouvé pour cette période.";
+"history.noBatchesMatch" = "Aucun lot ne correspond à votre recherche.";
+"history.filterAll" = "Tous";
+"history.filterCompleted" = "Terminés";
+"history.filterPending" = "En attente";
+"history.filterDispensed" = "Distribués";
+"history.filterStockCount" = "Comptage de stock";
+"history.batchIdTitle" = "LOT N° %d";
+"history.noTransactions" = "Aucune transaction";
+"history.noItemsInBatch" = "Aucun article trouvé dans ce lot";
+"history.totalNdcCount" = "NOMBRE TOTAL DE NDC";
+"history.completedOn" = "Terminé le";
+"history.sealedBottles" = "Flacons scellés";
+"history.openedBottles" = "Flacons ouverts";
+"history.deleteButton" = "SUPPRIMER";
+"history.okButton" = "OK";
+"history.unknownDrug" = "Médicament inconnu";
+
+
+// MARK: - PILL SCAN DETAIL
+"pillScan.deleteTransaction" = "SUPPRIMER LA TRANSACTION";
+"pillScan.totalCount" = "COMPTAGE TOTAL";
+"pillScan.noScansYet" = "Aucun scan pour le moment";
+"pillScan.deleteScans" = "Supprimer les scans";
+"pillScan.deleteScansMessage" = "Êtes-vous sûr de vouloir supprimer les scans sélectionnés ?";
+"pillScan.unselectAll" = "Tout désélectionner";
+"pillScan.selectAll" = "Tout sélectionner";
+
+
+// MARK: - LOCATION
+"location.fetching" = "Récupération…";
+"location.unavailable" = "Localisation indisponible";
+
+
+// MARK: - STOCK
+"stock.confirmEndBatch" = "Êtes-vous sûr de vouloir terminer ce comptage de lot ?";
+"stock.confirmExport" = "Voulez-vous exporter les détails d’inventaire de ce lot ?";
+"stock.endBatch" = "TERMINER LE LOT";
+"stock.ndcs" = "NDC";
+"stock.pendingBatches" = "LOTS EN ATTENTE";
+"stock.confirmDeleteTitle" = "Confirmer la suppression";
+"stock.deleteSelectedTitle" = "Supprimer la sélection";
+"stock.deleteBatchMessage" = "Êtes-vous sûr de vouloir supprimer ce lot ?";
+"stock.deleteSelectedBatchesMessage" = "Êtes-vous sûr de vouloir supprimer les lots sélectionnés ?";
+"stock.noTransactionsYet" = "Aucune transaction pour le moment";
+"stock.startAddingItems" = "Commencez à ajouter des articles à ce lot";
+"stock.endCount" = "TERMINER LE COMPTAGE";
+"stock.addItem" = "+ AJOUTER";
+"stock.noCountEndBatchMessage" = "Aucune transaction ou comptage ajouté. Voulez-vous terminer le lot ?";
+"stock.addNoteQuestion" = "Souhaitez-vous ajouter une note ?";
+"stock.deleteButton" = "Supprimer";
+"stock.cancelButton" = "Annuler";
+"stock.deselectAll" = "Tout désélectionner";
+"stock.selectAll" = "Tout sélectionner";
+
+
+// MARK: - UNSYNCED TRANSACTIONS
+"unsync.screenTitle" = "TRANSACTIONS NON SYNCHRONISÉES";
+"unsync.allSynced" = "Toutes les transactions sont synchronisées";
+"unsync.pmsNotConnected" = "PMS non connecté";
+"unsync.stocks" = "STOCKS";
+"unsync.dispenses" = "DISTRIBUTIONS";
+"unsync.syncAll" = "TOUT SYNCHRONISER";
+
+
+// MARK: - STEP
+"controlled.scan" = "Scanner le code QR du contenant";
+"controlled.containerInitiate" = "Compter la quantité du flacon de stock";
+"controlled.targetVerification" = "Compter la quantité prescrite";
+"controlled.targetReverification" = "Recompter la quantité prescrite";
+"controlled.vial" = "Capturer une image du flacon rempli";
+"controlled.containerPending" = "Compter tous les comprimés restants dans le contenant";
+"controlled.regularTargetReverification" = "Compter les comprimés du flacon ouvert";
+"controlled.scanBarcode" = "Scanner le code-barres / QR du flacon de stock";
+"controlled.scanStockCountBarcode" = "Scanner le code-barres / QR du flacon de stock";
+"controlled.scanRxLabelBarcode" = "Scanner l’étiquette de l’ordonnance";
+
+"pillCount.addButton" = "Ajouter";
+"pillCount.addButtonWait" = "Patienter...";
+"pillCount.allDone" = "Tout terminé";
+"pillCount.totalCount" = "Comptage total";
+"pillCount.redo" = "Refaire";
+"pillCount.done" = "Terminé";
+"pillCount.transactionDetail" = "Détail de la transaction %d";
+
+
+// MARK: - HL7 Notifications
+"hl7Notification.newRxTitle" = "New Rx Received";
+"hl7Notification.rxUpdatedTitle" = "Rx Updated";
+"hl7Notification.rxOnHoldTitle" = "Rx On Hold";
+"hl7Notification.rxCancelledTitle" = "Rx Cancelled";
+"hl7Notification.rxCompletedTitle" = "Rx Completed";
+"hl7Notification.qtyLabel" = "Qty";
+"hl7Notification.inventoryRequestTitle" = "Inventory Request";
+"hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
+"hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
+"barcodeScan.hazardousNdcDetected" = "NDC dangereux détecté.";
+"barcodeScan.wearGlovesAndProceedWithCaution" = "Portez des gants et procédez avec prudence.";

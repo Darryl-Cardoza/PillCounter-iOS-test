@@ -1,0 +1,96 @@
+//
+//  StockItemRowView.swift
+//  PillCounter
+//
+//  Created by Bhushan Patil on 20/04/26.
+//
+import SwiftUI
+
+// MARK: - Reusable View
+struct StockItemRowView: View {
+    let data: StockData
+    @EnvironmentObject private var appColors: AppColors
+
+
+
+    // MARK: - Body
+
+    var body: some View {
+        HStack(spacing: 16) {
+
+            ThumbnailImageView(
+                imagePath: nil,
+                width: 80,
+                height: 60,
+                cornerRadius: 8,
+                borderColor: appColors.primaryBackground,
+                placeholderImageName:  data.isFromPms ? "dispense_placeholder" : "batch_icon",
+                placeholderBackgroundColor: appColors.text,
+                placeholderSize: CGSize(width: 28, height: 28),
+                showImageBackground: appColors.primaryBackground
+            )
+
+            // Center info
+            VStack(alignment: .leading, spacing: 8) {
+
+                Text(String(data.batchId))
+                    .foregroundColor(appColors.primary)
+                    .font(.system(size: 14, weight: .semibold))
+                                    
+
+                HStack(spacing: 10){
+                    // Date
+                    Text(DateUtils.formatToUSDateTime(data.createdAt))
+                        .foregroundColor(appColors.text.opacity(0.6))
+                        .font(.system(size: 12, weight: .regular))
+                        .lineLimit(1)
+                    
+                    if data.bucketId != "NORMAL"{
+                        Text(data.bucketId)
+                            .foregroundColor(appColors.text)
+                            .font(.system(size: 12, weight: .regular))
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Right side
+            HStack(spacing: 10) {
+                VStack(spacing: 8) {
+                  
+                    Text(String(data.ndcCount))
+                        .foregroundColor(appColors.secondary)
+                        .font(.system(size: 16, weight: .bold))
+                                        
+
+                    Text(NSLocalizedString("NDCS", comment: ""))
+                        .foregroundColor(appColors.text)
+                        .font(.system(size: 12, weight: .regular))
+                }
+            }
+            .padding(.trailing, 8)
+        }
+        .padding(.vertical, 15)
+        .padding(.horizontal, 12)
+        .background(appColors.secondaryBackground)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
+    }
+
+    // MARK: - Helpers
+
+    @ViewBuilder
+    private func tintedIcon(_ name: String) -> some View {
+        Image(name)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 24, height: 24)
+            .overlay(appColors.primary)
+            .mask(
+                Image(name)
+                    .resizable()
+                    .scaledToFit()
+            )
+    }
+}

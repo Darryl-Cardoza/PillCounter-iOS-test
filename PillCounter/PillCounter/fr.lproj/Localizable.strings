@@ -1,0 +1,91 @@
+/*
+  Localizable.strings (French)
+  PillCounter
+
+  Created by HC on 05/11/25.
+*/
+
+// MARK: - GENERAL
+
+"APP_NAME" = "Compte-pilules";
+"COMPANY_NAME" = "RITE TECHNOLOGIES";
+"VERSION" = "Version";
+
+// MARK: - LOGIN
+
+"REMEMBER_ME" = "Se souvenir de moi";
+"LOGIN_BUTTON" = "CONNEXION";
+"EMAIL_INPUT_FIELD_PLACEHOLDER" = "Adresse e-mail";
+"EMAIL_ERROR_MESSAGE" = "Veuillez entrer votre adresse e-mail.";
+
+// MARK: - OTP VERIFICATION SCREEN
+
+"CODE_SENT_TEXT" = "Le code de sécurité a été envoyé à";
+"RESEND_CODE" = "Renvoyer le code";
+"VERIFY_BUTTON" = "VÉRIFIER";
+
+// MARK: - DASHBOARD
+
+"COMPLETED" = "terminé";
+"PARTIAL" = "partiel";
+
+// MARK: - FIXED COUNT
+
+"FIXED_COUNT_TITLE" = "Comptage fixe";
+"FIXED_COUNT_SUBTITLE" = "Pour compter des quantités fixes";
+
+// MARK: - REGULAR COUNT
+
+"REGULAR_COUNT_TITLE" = "Comptage régulier";
+"REGULAR_COUNT_SUBTITLE" = "Pour les comptages quotidiens réguliers";
+
+// MARK: - HAMBURGER MENU
+
+"HISTORY" = "Historique";
+"PROFILE" = "Profil";
+"SETTINGS" = "Paramètres";
+"LOGOUT" = "Déconnexion";
+
+"HISTORY_DURATION_MONTH" = "mois";
+"HISTORY_DURATION_MONTHS" = "mois";
+
+/* ============================= */
+/* MARK: PILL COUNT VIEW         */
+/* ============================= */
+"TOTAL_PILL_COUNT" = "TOTAL";
+"PILL_COUNT_HEADER" = "COMPTAGE DES COMPRIMÉS";
+
+/* ============================= */
+/* MARK: PROFILE                 */
+/* ============================= */
+"FIRST_NAME" = "Prénom";
+"LAST_NAME" = "Nom";
+"PHARMACY_NAME" = "Nom de la pharmacie";
+"NPI_ID" = "Numéro NPI";
+"PHONE_NUMBER" = "Numéro de téléphone";
+"EMAIL" = "E-mail";
+
+/* BUTTONS */
+"DELETE" = "SUPPRIMER";
+"SKIP" = "PASSER";
+"SAVE" = "ENREGISTRER";
+
+/* ============================= */
+/* MARK: USER SETTINGS VIEW      */
+/* ============================= */
+"TOGGLE_BUTTON_TEXT" = "Toujours demander pour ajouter des notes";
+"SAVE_HISTORY" = "Sauvegarder l’historique pendant";
+
+
+// MARK: - HL7 Notifications
+"hl7Notification.newRxTitle" = "New Rx Received";
+"hl7Notification.rxUpdatedTitle" = "Rx Updated";
+"hl7Notification.rxOnHoldTitle" = "Rx On Hold";
+"hl7Notification.rxCancelledTitle" = "Rx Cancelled";
+"hl7Notification.rxCompletedTitle" = "Rx Completed";
+"hl7Notification.qtyLabel" = "Qty";
+"hl7Notification.inventoryRequestTitle" = "Inventory Request";
+"hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
+"hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
+"barcodeScan.hazardousNdcDetected" = "NDC dangereux détecté.";
+"barcodeScan.wearGlovesAndProceedWithCaution" = "Portez des gants et procédez avec prudence.";

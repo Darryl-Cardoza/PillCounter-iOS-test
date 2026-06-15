@@ -1,0 +1,106 @@
+//
+//  VialBottomContentView.swift
+//  PillCounter
+//
+
+import SwiftUI
+
+struct VialBottomContentView: View {
+
+    @EnvironmentObject var appColors: AppColors
+    @EnvironmentObject var pillScanViewModel: PillScanViewModel
+    @EnvironmentObject var cameraService: CameraService
+
+    @Environment(\.isLandscape) private var isLandscape
+
+    private var isCaptured: Bool { pillScanViewModel.capturedVialImage != nil }
+    
+    // MARK: - Common Size Variables
+    private var isIPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var iconSize: CGFloat { isIPad ? 64 : 40 }
+    private var captureButtonSize: CGFloat { isIPad ? 100 : 70 }
+    private var captureIconSize: CGFloat { isIPad ? 42 : 28 }
+    private var captureIconWeight: Font.Weight { .medium }
+    private var labelFont: Font { isIPad ? .title3 : .caption }
+    private var layoutSpacing: CGFloat { isIPad ? 120 : (isLandscape ? 70 : 90) }
+
+    var body: some View {
+        let layout = isLandscape
+            ? AnyLayout(VStackLayout(spacing: layoutSpacing))
+            : AnyLayout(HStackLayout(spacing: layoutSpacing))
+
+        layout {
+            VStack(spacing: 10) {
+                Image("redo_icon")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+                    .foregroundStyle(isCaptured ? appColors.primary : Color.white.opacity(0.5))
+                Text(L10n.PillCount.redo)
+                    .font(labelFont)
+                    .foregroundColor(isCaptured ? appColors.text :Color.white.opacity(0.5))
+            }
+            .onTapGesture {
+                guard isCaptured else { return }
+                // Clearing the captured still removes the full-screen overlay and
+                // reveals the live feed again. The session was never stopped, so no
+                // restart/rebind is needed — just reset the inactivity timer.
+                pillScanViewModel.capturedVialImage = nil
+                pillScanViewModel.vialCapturedImagePath = nil
+                cameraService.resetInactivityTimer()
+            }
+
+            ZStack {
+                Circle()
+                    .fill(appColors.primary)
+                    .frame(width: captureButtonSize, height: captureButtonSize)
+                Image(systemName: "camera")
+                    .font(.system(size: captureIconSize, weight: captureIconWeight))
+                    .foregroundColor(.white)
+            }
+            .onTapGesture { captureVial() }
+
+            VStack(spacing: 10) {
+                Image("done_icon")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+                    .foregroundColor(isCaptured ? appColors.primary : Color.white.opacity(0.5) )
+                Text(L10n.PillCount.done)
+                    .font(labelFont)
+                    .foregroundColor(isCaptured ? appColors.text : Color.white.opacity(0.5))
+            }
+            .onTapGesture {
+                guard isCaptured else { return }
+                doneVial()
+            }
+        }
+        .padding(.vertical, isIPad ? 35 : 25)
+        .padding(.horizontal)
+    }
+
+    private func captureVial() {
+        guard pillScanViewModel.capturedVialImage == nil else {
+            pillScanViewModel.showToastMessage(text: L10n.PillCount.imageAlreadyCaptured)
+            return
+        }
+        guard let image = cameraService.captureSnapshot() else { return }
+        // Do NOT stop the session — counting is already paused for the vial step. The
+        // captured still is shown full-screen by UnifiedCameraLayout while
+        // capturedVialImage is set; stopping would blank the live feed and cost a
+        // restart on redo/done.
+        let normalized = image.normalized()
+        pillScanViewModel.capturedVialImage = normalized
+        if let path = PhotoFileManager.shared.saveImage(normalized) {
+            pillScanViewModel.vialCapturedImagePath = path
+        }
+    }
+
+    private func doneVial() {
+        guard let imagePath = pillScanViewModel.vialCapturedImagePath else { return }
+        pillScanViewModel.addOrReplaceVialTransactionDetail(imagePath: imagePath)
+        pillScanViewModel.vialDoneTriggered = true
+    }
+}

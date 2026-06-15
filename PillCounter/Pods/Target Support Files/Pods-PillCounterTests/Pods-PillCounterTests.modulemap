@@ -1,0 +1,6 @@
+framework module Pods_PillCounterTests {
+  umbrella header "Pods-PillCounterTests-umbrella.h"
+
+  export *
+  module * { export * }
+}

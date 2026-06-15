@@ -60,15 +60,15 @@ struct HistoryTransactionDetailView: View {
                                 )
                         }
                         
-                        Button { generateAndSharePDF() } label: {
-                            Image("pdf")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 30, height: 30)
-                                .overlay { appColors.primary }
-                                .mask(Image("pdf").resizable().scaledToFit())
-                                .padding(.trailing)
-                        }
+//                        Button { generateAndSharePDF() } label: {
+//                            Image("pdf")
+//                                .resizable()
+//                                .scaledToFit()
+//                                .frame(width: 30, height: 30)
+//                                .overlay { appColors.primary }
+//                                .mask(Image("pdf").resizable().scaledToFit())
+//                                .padding(.trailing)
+//                        }
                     }
                 },
                 showBackButton: true,
@@ -338,9 +338,9 @@ extension HistoryTransactionDetailView {
     ) -> some View {
         VStack(spacing: 20) {
             if showVialInfo{
-                ScrollView(.horizontal, showsIndicators: false) {
-                      batchesGrid(step: step)
-                  }
+                if let detail = historyViewModel.detailsByStep[step]?.first {
+                    batchItem(detail: detail, step: step)
+                }
             } else {
                 HStack(spacing: 20) {
                     ThumbnailImageView(
@@ -399,12 +399,12 @@ extension HistoryTransactionDetailView {
                                      .lineLimit(1)
                                      .padding(.top, -6)
 
-                                 Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
-                                     .foregroundStyle(appColors.text)
-                                     .font(.system(size: 14))
-                                     .fontWeight(.semibold)
-                                     .multilineTextAlignment(.center)
-                                     .lineLimit(2)
+//                                 Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
+//                                     .foregroundStyle(appColors.text)
+//                                     .font(.system(size: 14))
+//                                     .fontWeight(.semibold)
+//                                     .multilineTextAlignment(.center)
+//                                     .lineLimit(2)
                              }
                         }  else {
                             if let txn = transaction {
@@ -416,22 +416,16 @@ extension HistoryTransactionDetailView {
                                         .minimumScaleFactor(0.6)
                                         .lineLimit(1)
                                     
-                                    Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
-                                        .foregroundStyle(appColors.text)
-                                        .font(.system(size: 14))
-                                        .fontWeight(.semibold)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
+//                                    Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
+//                                        .foregroundStyle(appColors.text)
+//                                        .font(.system(size: 14))
+//                                        .fontWeight(.semibold)
+//                                        .multilineTextAlignment(.center)
+//                                        .lineLimit(2)
                                 }
                             }
                         }
 
-                        Text(L10n.History.totalCount)
-                            .foregroundStyle(appColors.text)
-                            .font(.system(size: 14))
-                            .fontWeight(.semibold)
-                            .multilineTextAlignment(.center)
-                    
                         Spacer()
                     }
                     .frame(width: 120, height: 100)
@@ -440,9 +434,12 @@ extension HistoryTransactionDetailView {
                 }
             }
 
-            // Images grid — reads from historyViewModel.detailsByStep
-            ScrollView(.horizontal, showsIndicators: false) {
-                batchesGrid(step: step)
+            // Images grid — reads from historyViewModel.detailsByStep.
+            // Vial shows a single image above, so skip the grid for it.
+            if !showVialInfo {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    batchesGrid(step: step)
+                }
             }
         }
     }

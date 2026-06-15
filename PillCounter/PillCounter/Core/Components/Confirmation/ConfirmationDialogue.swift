@@ -45,89 +45,63 @@ struct ConfirmationDialogue: View {
 
             
             
-            
-            if showSingleConfirmButton {	
+            if showSingleConfirmButton {
 
-                // single centered button
                 PillCountingButton(
                     iconName: nil,
                     title: confirmButtonText.uppercased(),
-                    textColor: appColors.text,
+                    textColor: appColors.primary,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
-                    font: .system(size: 12, weight: .regular),
+                    font: .system(size: 14, weight: .semibold),
                     cornerRadius: 30,
                     horizontalPadding: 40,
                     verticalPadding: 14,
                     iconSize: 0,
                     action: onConfirm
                 )
+                .fixedSize()
                 .padding(.top, 10)
 
             } else {
 
-                // normal two buttons
                 HStack(spacing: 16) {
-
                     PillCountingButton(
                         iconName: nil,
                         title: cancelButtonText.uppercased(),
-                        textColor: appColors.text,
+                        textColor: appColors.primary,
                         backgroundColor: appColors.primaryBackground,
                         borderColor: appColors.primary,
-                        font: .system(size: 12, weight: .semibold),
+                        font: .system(size: 14, weight: .semibold),
                         cornerRadius: 30,
-                        horizontalPadding: 32,
+                        horizontalPadding: 8,
                         verticalPadding: 14,
                         iconSize: 0,
                         action: onCancel
                     )
-
+                    .frame(maxWidth: .infinity)
                     PillCountingButton(
                         iconName: nil,
                         title: confirmButtonText.uppercased(),
-                        textColor: appColors.text,
+                        textColor: Color.white,
                         backgroundColor: appColors.primary,
                         borderColor: .clear,
-                        font: .system(size: 12, weight: .regular),
+                        font: .system(size: 14, weight: .semibold),
                         cornerRadius: 30,
-                        horizontalPadding: 32,
+                        horizontalPadding: 8,
                         verticalPadding: 14,
                         iconSize: 0,
                         action: onConfirm
                     )
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(.top, 10)
             }
         }
-        .frame(width: 275)
+        .frame(maxWidth: .infinity)
         .padding()
         .background(appColors.primaryBackground)
         .cornerRadius(24)
     }
 }
-
-
-//#Preview {
-//    let appColors = AppColors.shared
-//
-//    ZStack {
-//        Color.black.opacity(0.4)
-//            .ignoresSafeArea()
-//
-//        ConfirmationDialogue(
-//            title: "Confirmation",
-//            message: "Are you sure you want to go back?",
-//            onCancel: {
-//                print("Preview: Cancel tapped")
-//            },
-//            onConfirm: {
-//                print("Preview: OK tapped")
-//            }
-//        )
-//        .environmentObject(appColors)
-//        .padding()
-//    }
-//    .preferredColorScheme(.dark)
-//}
 

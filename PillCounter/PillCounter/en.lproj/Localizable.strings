@@ -204,6 +204,8 @@
 "barcodeScan.rxNotSentByPms" = "Rx not found on this device. Please wait for PMS to send it.";
 "barcodeScan.rxInProgressTitle" = "Rx Already In Progress";
 "barcodeScan.rxInProgressMessage" = "Pill counting for this Rx has already started. Do you want to continue from where you left off?";
+"barcodeScan.hazardousNdcDetected" = "Hazardous NDC detected.";
+"barcodeScan.wearGlovesAndProceedWithCaution" = "Wear gloves and proceed with caution.";
 
 
 // MARK: - GENERIC EQUIVALENT POPUP
@@ -281,7 +283,7 @@
 "stock.startAddingItems" = "Start adding items to this batch";
 "stock.endCount" = "END COUNT";
 "stock.addItem" = "+ ADD";
-"stock.endBatchTitle" = "End Batch Count?";
+"stock.endBatchTitle" = "End Batch Count";
 "stock.noCountEndBatchMessage" = "No transactions or counts added. Do you want to end the batch?";
 "stock.addNoteQuestion" = "Would you like to add a note?";
 "stock.deleteButton" = "Delete";
@@ -322,7 +324,7 @@
 "stockCountSheet.openPills" = "Open Pills";
 "stockCountSheet.lotNumber" = "Lot Number";
 "stockCountSheet.total" = "Total";
-"stockCountSheet.clear" = "CLEAR";
+"stockCountSheet.clear" = "CANCEL";
 "stockCountSheet.add" = "ADD";
 "stockCountSheet.edit" = "Edit";
 "stockCountSheet.pillsWithCount" = "%d pills";

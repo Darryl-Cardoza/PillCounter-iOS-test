@@ -27,7 +27,7 @@ final class GloveDetector {
     static let shared = GloveDetector()
 
     /// The loaded CoreML model.  nil only if model file is missing or corrupted.
-    private(set) var model: gloves_detector_fp32?
+    private(set) var model: gloves_detector_fp16?
 
     private init() {
         loadModel()
@@ -38,7 +38,7 @@ final class GloveDetector {
             let config = MLModelConfiguration()
             config.computeUnits = .cpuAndGPU
 
-            model = try gloves_detector_fp32(configuration: config)
+            model = try gloves_detector_fp16(configuration: config)
 
             print("✅ [GLOVE MODEL] Model loaded and ready")
         } catch {

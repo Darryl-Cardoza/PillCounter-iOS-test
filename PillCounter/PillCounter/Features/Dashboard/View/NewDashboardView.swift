@@ -95,13 +95,23 @@ struct NewDashboardView: View {
             .first?.interfaceOrientation.isLandscape ?? false
     }
 
+    /// REGULAR-count transactions are inventory/stock counts surfaced as their own
+    /// batch rows — they must never appear as dispense rows in either dashboard tab,
+    /// under any stat-card filter. Excluded at the merge source so both the lists and
+    /// the filtered views drop them.
+    private func isRegular(_ txn: PillCountTransactionEntity) -> Bool {
+        txn.count_type?.uppercased() == CountType.REGULAR.rawValue
+    }
+
     private var mergedQueueItems: [DashboardQueueItem] {
-        let dispenseItems = dispensePartial.map {
-            DashboardQueueItem.dispense(
-                $0,
-                pillCount: pillCounts[$0.txn_id] ?? 0
-            )
-        }
+        let dispenseItems = dispensePartial
+            .filter { !isRegular($0) }
+            .map {
+                DashboardQueueItem.dispense(
+                    $0,
+                    pillCount: pillCounts[$0.txn_id] ?? 0
+                )
+            }
         let inventoryItems = inventoryPartial.map {
             DashboardQueueItem.inventory(
                 $0,
@@ -158,12 +168,14 @@ struct NewDashboardView: View {
     }
 
     private var mergedRecentItems: [DashboardQueueItem] {
-        let dispenseItems = dispenseCompleted.map {
-            DashboardQueueItem.dispense(
-                $0,
-                pillCount: pillCounts[$0.txn_id] ?? 0
-            )
-        }
+        let dispenseItems = dispenseCompleted
+            .filter { !isRegular($0) }
+            .map {
+                DashboardQueueItem.dispense(
+                    $0,
+                    pillCount: pillCounts[$0.txn_id] ?? 0
+                )
+            }
         let inventoryItems = inventoryCompleted.map {
             DashboardQueueItem.inventory(
                 $0,
@@ -182,12 +194,15 @@ struct NewDashboardView: View {
     // MARK: - Stat cards built from live data
 
     private var statCards: [DashboardStatCard] {
-        [
+        // Counts must match the dispense rows shown in the tabs, which exclude
+        // REGULAR (inventory) transactions — so count against the same slice.
+        let dispensePartialFixed = dispensePartial.filter { !isRegular($0) }
+        return [
             DashboardStatCard(
                 id: "disp-high-priority",
                 iconName: "icon_priority",
                 iconColor: appColors.secondary,
-                count: dispensePartial.filter {
+                count: dispensePartialFixed.filter {
                     let p =
                         $0.txn_priority?.trimmingCharacters(in: .whitespaces)
                         .lowercased() == "high"
@@ -200,7 +215,7 @@ struct NewDashboardView: View {
                 id: "disp-pending",
                 iconName: "partial",
                 iconColor: appColors.secondary,
-                count: dispensePartial.count,
+                count: dispensePartialFixed.count,
                 label: L10n.Dashboard.StatCards.dispensePending,
                 filter: .dispPending
             ),
@@ -208,7 +223,7 @@ struct NewDashboardView: View {
                 id: "disp-cont-drugs",
                 iconName: "icon_controlled",
                 iconColor: appColors.secondary,
-                count: dispensePartial.filter {
+                count: dispensePartialFixed.filter {
                     let t =
                         $0.drug?.drug_type?.trimmingCharacters(in: .whitespaces)
                         ?? ""
@@ -221,7 +236,7 @@ struct NewDashboardView: View {
                 id: "disp-hazardous",
                 iconName: "icon_hazardous",
                 iconColor: appColors.secondary,
-                count: dispensePartial.filter { $0.drug?.is_hazardous == true }
+                count: dispensePartialFixed.filter { $0.drug?.is_hazardous == true }
                     .count,
                 label: L10n.Dashboard.StatCards.hazardous,
                 filter: .hazardous
@@ -504,7 +519,7 @@ struct NewDashboardView: View {
                 HStack(spacing: 0) {
                     Text(L10n.Dashboard.quickActions)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(appColors.text.opacity(0.5))
+                        .foregroundColor(appColors.text)
                         .textCase(.uppercase)
                         .tracking(1)
                         .padding(.horizontal, pad)
@@ -530,7 +545,7 @@ struct NewDashboardView: View {
                         // Action cards — Dispense on top, Inventory on bottom
                         VStack(spacing: pad) {
                             landscapeQuickActionCard(
-                                iconName: "dispense_dashboard_icon",
+                                iconName: "icon_dashboard_dispense",
                                 title: L10n.Dashboard.FixedCount.title,
                                 subtitle: L10n.Dashboard.FixedCount.subtitle,
                                 action: navigateToDispense
@@ -538,7 +553,7 @@ struct NewDashboardView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                             landscapeQuickActionCard(
-                                iconName: "placeholder_history",
+                                iconName: "icon_dashboard_stock",
                                 title: L10n.Dashboard.RegularCount.title,
                                 subtitle: L10n.Dashboard.RegularCount.subtitle,
                                 action: handleInventoryTapped
@@ -561,13 +576,7 @@ struct NewDashboardView: View {
                     }
                     .frame(width: leftWidth, height: contentHeight)
 
-                    // Main divider
-                    //                    Rectangle()
-                    //                        .fill(appColors.text.opacity(0.18))
-                    //                        .frame(width: 1, height: contentHeight)
-
-                    // ── Right panel: queue list ──
-                    // padding(.top, -2) aligns first list item with first stat card (stat card starts at pad=10, list content starts at 12)
+                   
                     TabView(selection: $selectedQueueTab) {
                         queueScrollContent(
                             items: filteredQueueItems,
@@ -620,7 +629,7 @@ struct NewDashboardView: View {
                         Image(iconName)
                             .renderingMode(.template)
                             .resizable()
-                            .scaledToFit()
+                            .scaleEffect(1.5)
                             .foregroundColor(appColors.secondary)
                             .padding(circleSize * 0.3)
                     }
@@ -643,6 +652,7 @@ struct NewDashboardView: View {
             .cornerRadius(16)
             .shadow(color: appColors.text.opacity(0.05), radius: 4, x: 0, y: 2)
         }
+        .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
         .buttonStyle(PlainButtonStyle())
     }
 
@@ -662,9 +672,8 @@ struct NewDashboardView: View {
         HStack(alignment: .center) {
             // Left: pharmacy logo + name + terminal
             HStack(spacing: 10) {
-                Image("app_icon")
+                Image("icon_app")
                     .resizable()
-                    .scaledToFit()
                     .frame(width: isIpad ? 36 : 30, height: isIpad ? 36 : 30)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -676,8 +685,11 @@ struct NewDashboardView: View {
                     .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
                     .foregroundColor(appColors.text)
                     if !selectedTerminalName.isEmpty {
+//                        Text(
+//                            "\(L10n.Profile.terminal) \(selectedTerminalName) | \(userViewModel.fullName) "
+//                        )
                         Text(
-                            "\(L10n.Profile.terminal) \(selectedTerminalName) | \(userViewModel.fullName) "
+                            "\(selectedTerminalName) | \(userViewModel.fullName) "
                         )
                         .font(.system(size: isIpad ? 15 : 13))
                         .foregroundColor(appColors.text.opacity(0.6))
@@ -714,20 +726,20 @@ struct NewDashboardView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.Dashboard.quickActions)
                 .font(.system(size: isIpad ? 15 : 13, weight: .semibold))
-                .foregroundColor(appColors.text.opacity(0.5))
+                .foregroundColor(appColors.text)
                 .textCase(.uppercase)
                 .tracking(1)
 
             if isIpad {
                 HStack(spacing: 14) {
                     quickActionCard(
-                        iconName: "dispense_dashboard_icon",
+                        iconName: "icon_dashboard_dispense",
                         title: L10n.Dashboard.FixedCount.title,
                         subtitle: L10n.Dashboard.FixedCount.subtitle,
                         action: navigateToDispense
                     )
                     quickActionCard(
-                        iconName: "placeholder_history",
+                        iconName: "icon_dashboard_stock",
                         title: L10n.Dashboard.RegularCount.title,
                         subtitle: L10n.Dashboard.RegularCount.subtitle,
                         action: handleInventoryTapped
@@ -736,13 +748,13 @@ struct NewDashboardView: View {
             } else {
                 VStack(spacing: 10) {
                     quickActionCard(
-                        iconName: "dispense_dashboard_icon",
+                        iconName: "icon_dashboard_dispense",
                         title: L10n.Dashboard.FixedCount.title,
                         subtitle: L10n.Dashboard.FixedCount.subtitle,
                         action: navigateToDispense
                     )
                     quickActionCard(
-                        iconName: "placeholder_history",
+                        iconName: "icon_dashboard_stock",
                         title: L10n.Dashboard.RegularCount.title,
                         subtitle: L10n.Dashboard.RegularCount.subtitle,
                         action: handleInventoryTapped
@@ -796,6 +808,7 @@ struct NewDashboardView: View {
             .cornerRadius(16)
             .shadow(color: appColors.text.opacity(0.05), radius: 4, x: 0, y: 2)
         }
+        .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
         .buttonStyle(PlainButtonStyle())
     }
 
@@ -879,6 +892,7 @@ struct NewDashboardView: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
     }
 
     // MARK: - Queue section
@@ -1046,14 +1060,15 @@ struct NewDashboardView: View {
             let data = txn.toRowData(pillCount: pillCount)
             DispenseItemRowView(data: data)
                 .onTapGesture {
+                    // The detail screen resolves the txn from
+                    // historyViewModel.filteredTransactionsOfUserByDate. The dashboard
+                    // never populates that array (it loads its own dispenseCompleted),
+                    // so seed it with the tapped txn before navigating — otherwise the
+                    // detail screen finds nothing and shows empty.
+                    historyViewModel.filteredTransactionsOfUserByDate = [txn]
                     historyViewModel.selectedTransactionId = txn.txn_id
-                    router.navigate(
-                        to: .authentication(
-                            .user(.userSettings(.HistoryTransactionDetail))
-                        )
-                    )
+                    router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
                 }
-
         case .inventory(let batch, let ndcCount):
             let data = batch.toStockData(ndcCount: ndcCount)
             StockItemRowView(data: data)
@@ -1227,7 +1242,7 @@ struct NewDashboardView: View {
                 PillCountingButton(
                     iconName: nil,
                     title: L10n.Common.cancel,
-                    textColor: appColors.text,
+                    textColor: appColors.primary,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
                     font: .system(size: 16, weight: .semibold),

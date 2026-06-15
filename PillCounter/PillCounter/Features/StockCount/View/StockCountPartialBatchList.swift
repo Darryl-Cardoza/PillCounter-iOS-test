@@ -91,15 +91,15 @@
                     }
                     selectedBatchId = freshBatch.batch_id
                     stockCountViewMoel.currentBatch = freshBatch
-                    router.navigate(
-                        to: .authentication(
-                            .login(
-                                .dashboard(
-                                    .pillCount(.stockCount(.stockCountBatchDetail))
-                                )
-                            )
-                        )
-                    )
+//                    router.navigate(
+//                        to: .authentication(
+//                            .login(
+//                                .dashboard(
+//                                    .pillCount(.stockCount(.stockCountBatchDetail))
+//                                )
+//                            )
+//                        )
+//                    )
                 },
 
                 // MENU LONG PRESS

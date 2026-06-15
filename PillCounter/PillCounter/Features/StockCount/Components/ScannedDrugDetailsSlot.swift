@@ -27,15 +27,15 @@ struct ScannedDrugDetailsSlot: View {
                     .foregroundColor(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                PillCountingButton(
-                    iconName: nil, title: L10n.StockCountSheet.edit,
-                    textColor: appColors.primary, backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 14, weight: .semibold),
-                    cornerRadius: 30, horizontalPadding: 4, verticalPadding: 4, iconSize: 0,
-                    action: onEditTapped
-                )
-                .frame(maxWidth: 80)
+//                PillCountingButton(
+//                    iconName: nil, title: L10n.StockCountSheet.edit,
+//                    textColor: appColors.primary, backgroundColor: .clear,
+//                    borderColor: appColors.primary,
+//                    font: .system(size: 14, weight: .semibold),
+//                    cornerRadius: 30, horizontalPadding: 4, verticalPadding: 4, iconSize: 0,
+//                    action: onEditTapped
+//                )
+//                .frame(maxWidth: 80)
             }
             .padding(.top, isIpadPortrait ? 8 : 14)
 
@@ -59,7 +59,9 @@ struct ScannedDrugDetailsSlot: View {
         let packageQty = Int(drug?.quantity ?? 0)
         // After auto-add, pendingBottleCount reflects the committed bottle count.
         let newTotal   = stockCountViewModel.pendingBottleCount
-        let totalPills = newTotal * packageQty
+        let openPills  = stockCountViewModel.existingOpenPillCount(for: drug?.ndc ?? "")
+        // Displayed pill total = pills from sealed bottles + loose open-scan pills.
+        let totalPills = newTotal * packageQty + openPills
 
         return VStack(spacing: 16) {
             if isIpadPortrait {
@@ -75,10 +77,10 @@ struct ScannedDrugDetailsSlot: View {
                     Divider()
 
                     HStack(alignment: .top, spacing: 12) {
-                        cellLabel(L10n.StockCountSheet.batchNo, value: batchId, color: appColors.secondary)
+                        cellLabel(L10n.StockCountSheet.batchNo, value: drug?.lotNumber ?? "-", color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                        cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)
+                        cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry ?? "—", color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         cellLabel(L10n.StockCountSheet.bucket, value: bucket.uppercased(), color: appColors.secondary, align: .trailing)
                     }
@@ -107,6 +109,21 @@ struct ScannedDrugDetailsSlot: View {
 
             bottleStepper(newTotal: newTotal, totalPills: totalPills)
                 .padding(.vertical, isIPhone ? 0 : 6)
+
+//            openPillsRow(openPills: openPills)
+        }
+    }
+
+    private func openPillsRow(openPills: Int) -> some View {
+        HStack {
+            Text(L10n.StockCountSheet.openPills)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(appColors.text)
+            Spacer()
+            Text("\(openPills)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(appColors.secondary)
+                .monospacedDigit()
         }
     }
 

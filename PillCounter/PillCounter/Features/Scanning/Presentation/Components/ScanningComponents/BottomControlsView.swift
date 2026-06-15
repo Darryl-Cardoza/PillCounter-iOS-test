@@ -105,7 +105,7 @@ struct BottomControlsViewBodyForPillScan: View {
             if isLandscape {
                 VStack(spacing: 0) {
                     addButton
-                        .frame(width: isIpad ? 160 : 120, height: isIpad ? 600 : 120)
+                        .frame(width: isIpad ? 160 : 120, height: isIpad ? 400 : 120)
                         .frame(maxWidth: .infinity)
                         .padding(.top, isIpad ? 12 : 48)
                     Spacer()
@@ -122,7 +122,7 @@ struct BottomControlsViewBodyForPillScan: View {
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     .padding(.horizontal, isIpad ? 40 : 16)
-                    .padding(.bottom, isIpad ? 36 : 18)
+                    .padding(.bottom, isIpad ? 60 : 18) //36 prev
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -239,6 +239,7 @@ struct BottomControlsViewHeader: View {
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .padding(.horizontal, 16)
+                        .padding(.top, 60)
                 }
             } else {
                 ZStack {

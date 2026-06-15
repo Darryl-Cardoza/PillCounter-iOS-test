@@ -60,23 +60,44 @@ extension UnifiedCameraView {
             onConfirm: {
                 showNoteOption = false
                 showConfirmCompletionPopup = false
-                if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
-                    router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+
+                // Capture before any state reset — startContinuousDispense() clears
+                // currentTransaction, so read the id/type up front.
+                let completedTxnId = pillScanViewModel.currentTransaction?.txn_id ?? 0
+                let isFixed =
+                    pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue
+                let completedCountType = router.selectedPillScanningType ?? .FIXED
+
+                if isFixed {
+                    // Mark COMPLETED FIRST, then start the continuous-dispense flow.
+                    // startContinuousDispense() reads the pending-txn list to decide
+                    // whether to show the queue or go to the dashboard — if we don't
+                    // await the status write first, that gate races the completion and
+                    // still sees this txn as PARTIAL (it then re-appears in the queue).
+                    Task { @MainActor in
+                        await userViewModel.completeTheSelectedTransaction(
+                            txnId: completedTxnId,
+                            countType: completedCountType
+                        )
+                        // Continuous dispense — reset back to RX-scan in place and surface
+                        // the "Today's Queue" sheet over it. No navigation. See UnifiedCameraView.
+                        startContinuousDispense()
+                    }
                 } else {
                     stockCountViewModel.updateCounts(
-                        txnId: pillScanViewModel.currentTransaction?.txn_id,
+                        txnId: completedTxnId,
                         bottleQty: nil,
                         looseQty: pillScanViewModel.addCurrentOpenPillCount
                     )
-                    router.setRoot(
-                        to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail)))))
-                    )
-                }
-                Task(priority: .background) {
-                    await userViewModel.completeTheSelectedTransaction(
-                        txnId: pillScanViewModel.currentTransaction?.txn_id ?? 0,
-                        countType: router.selectedPillScanningType ?? .FIXED
-                    )
+//                    router.setRoot(
+//                        to: .authentication(.login(.dashboard(.pillCount(.stockCount))))
+//                    )
+                    Task(priority: .background) {
+                        await userViewModel.completeTheSelectedTransaction(
+                            txnId: completedTxnId,
+                            countType: completedCountType
+                        )
+                    }
                 }
             }
         )
@@ -119,11 +140,12 @@ extension UnifiedCameraView {
             onCancel: { showStepCompletionPopup = false },
             onConfirm: {
                 showStepCompletionPopup = false
+                // Clearing capturedVialImage removes the full-screen vial still overlay
+                // and reveals the live feed. The session was never stopped (vial only
+                // freezes counting), so no start()/rebind is needed.
                 if pillScanViewModel.capturedVialImage != nil {
                     pillScanViewModel.capturedVialImage = nil
                     pillScanViewModel.vialCapturedImagePath = nil
-                    cameraService.start()
-                    cameraService.rebindPreviewLayer()
                     cameraService.resetInactivityTimer()
                 }
                 pillScanViewModel.handleStepCompletion()

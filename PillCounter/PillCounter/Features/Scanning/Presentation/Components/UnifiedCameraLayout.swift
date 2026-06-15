@@ -12,6 +12,10 @@ struct UnifiedCameraLayout: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    private var isIpad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
 
     let cameraService: CameraService
     let showPillCountPanel: Bool
@@ -50,6 +54,30 @@ struct UnifiedCameraLayout: View {
                 }
             }
 
+            // ── Vial captured still (full screen) ─────────────────────────────
+            // During the vial step, once the operator captures the vial image we show
+            // that still full-screen, fully covering the live feed (opaque black
+            // backing so no camera background bleeds through). "Redo" clears
+            // capturedVialImage and this overlay disappears, revealing the live feed.
+            if pillScanViewModel.currentControlledStep == .vial,
+               let vialImage = pillScanViewModel.capturedVialImage {
+                // Match the live camera framing exactly: a full-bleed container
+                // (GeometryReader sized to the whole screen) with the still filling it
+                // via scaledToFill + clipped — same as the preview's .resizeAspectFill.
+                // This keeps the overlaid UI (header, controls) aligned identically
+                // whether the live feed or the captured still is showing.
+                GeometryReader { geo in
+                    Image(uiImage: vialImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+                .ignoresSafeArea()
+                .background(Color.black.ignoresSafeArea())
+                .allowsHitTesting(false)
+            }
+
             // ── Loading spinner ───────────────────────────────────────────────
             if pillScanViewModel.isCheckingNdc || stockCountViewModel.isLoading || !cameraService.isAuthorized {
                 Color.black.opacity(0.5).ignoresSafeArea()
@@ -84,14 +112,14 @@ struct UnifiedCameraLayout: View {
                         }
 
                         if isLandscape {
-                            if showPillCountPanel {
+                            if showPillCountPanel   {
                                 // showPillCountPanel true: back | 16 | instruction | 16 | glove | Spacer
                                 Color.clear.frame(width: 220, height: 1)
                                 if !instructionText.isEmpty {
                                     PillCountInstructionOverlay(text: instructionText)
                                 }
                                 if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
-                                    Color.clear.frame(width: 200, height: 1)
+                                    Color.clear.frame(width: isIpad ? 200 : 50, height: 1)
                                     GloveStatusIndicator(cameraService: cameraService)
                                 }
                                 Spacer()
@@ -114,7 +142,7 @@ struct UnifiedCameraLayout: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 4)
                 .padding(.top, isLandscape ? 10 : 40)
 
                 Spacer()

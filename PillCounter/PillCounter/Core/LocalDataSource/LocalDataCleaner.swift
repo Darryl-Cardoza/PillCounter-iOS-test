@@ -23,7 +23,11 @@ final class LocalDataCleaner {
             TransactionDetailStore.shared.deleteAll()
             TransactionStore.shared.deleteAll()
             BatchStore.shared.deleteAll()
-            DrugCatalogStore.shared.deleteAll()
+            // NOTE: the drug master (DrugCatalogStore) is intentionally NOT cleared
+            // here. It is built up on-device via saveManual(...) as drugs are scanned
+            // and is never re-synced from the server, so wiping it would silently lose
+            // the whole catalog until every drug is re-scanned. "Clear local data"
+            // clears transactions/batches/details/images only.
 
             // Delete all images
             if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {

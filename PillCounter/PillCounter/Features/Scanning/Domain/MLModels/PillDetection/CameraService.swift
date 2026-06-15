@@ -42,6 +42,50 @@ final class CameraService: NSObject, ObservableObject {
     private let trayDetector   = TrayDetectionService.shared
     private let gloveDetector  = GloveDetectionService()
 
+    /// Reject a "tray" whose bbox covers at least this fraction of the frame — a
+    /// background surface (e.g. the table) fills the frame, whereas a real tray is
+    /// a bounded object inside it. Matches Android TRAY_MAX_FRAME_COVERAGE = 0.75.
+    private static let trayMaxFrameCoverage: CGFloat = 0.75
+
+    /// Number of recent frames whose pill counts are kept for median smoothing.
+    /// The raw per-frame count jitters ±1–2 even on a static scene; reporting the
+    /// median over this window steadies the displayed number. Markers (dots) still
+    /// come from the live frame, so they stay responsive. Matches Android
+    /// PILL_COUNT_SMOOTH_WINDOW = 5.
+    private static let countSmoothWindow: Int = 5
+
+    /// Rolling buffer of recent per-frame counts, oldest first. Median → stableCount.
+    private var recentCounts: [Int] = []
+
+    /// Number of consecutive empty frames (gate closed OR model found 0 pills) the
+    /// last non-zero count is held before it is allowed to drain toward zero. The
+    /// median over countSmoothWindow only tolerates ±1–2 jitter — it flips to 0 as
+    /// soon as a short burst of empty frames (a momentary segmentation/gate flicker
+    /// or a blurred frame) fills the window with zeros, which is the "count suddenly
+    /// drops to 0 even though pills are still there" symptom. While we are inside the
+    /// hold the empty frame is NOT pushed into the median, so stableCount stays put.
+    /// Once empties persist past the hold the zeros flow in normally, so the count
+    /// still falls to 0 when the tray is genuinely emptied or removed.
+    private static let countHoldFrames: Int = 5
+
+    /// Consecutive empty-frame counter feeding the countHoldFrames hold.
+    private var emptyCountFrames: Int = 0
+
+    /// Number of consecutive frames the last-good tray/chute detections are held
+    /// after a momentary segmentation miss, so the overlay + pill gate don't blink
+    /// on an otherwise-steady scene. Matches Android TRAY_HOLD_FRAMES = 1: kept
+    /// short so the tray (and the pill markers gated by it) clear almost immediately
+    /// when the camera moves away — a longer hold leaves a visible ghost of the old
+    /// box. The COUNT is separately protected from a single dropped frame by the
+    /// median over countSmoothWindow, so a 1-frame hold is enough.
+    private static let trayHoldFrames: Int = 1
+
+    /// Last-good tray/chute detections (with masks) and the miss counter, used to
+    /// bridge a single dropped segmentation frame. Mirrors Android
+    /// heldTrayDetections / trayMissFrames. Reset on counting pause/resume.
+    private var heldTrayDetections: [TrayResult] = []
+    private var trayMissFrames: Int = 0
+
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
 
@@ -245,14 +289,32 @@ final class CameraService: NSObject, ObservableObject {
     /// STARTS CAMERA SESSION
     func start() {
         sessionQueue.async {
-            guard !self.session.isRunning else { return }
-            self.session.startRunning()
+            if !self.session.isRunning {
+                self.session.startRunning()
+            }
+            // Always re-attach the preview layer to the session AFTER the session is
+            // confirmed running. start() is self-healing and symmetric with stop():
+            // whatever state the preview was left in (detached by a prior stop(), or
+            // never bound), calling start() guarantees the live feed shows. Doing this
+            // here — on the session queue, post-startRunning — also closes the old race
+            // where a stray `previewLayer.session = nil` from stop() could land on the
+            // main queue *after* a start() and blank a freshly-running preview.
+            DispatchQueue.main.async {
+                if self.previewLayer?.session !== self.session {
+                    self.previewLayer?.session = self.session
+                }
+            }
         }
         setZoom(zoomFactor == 0 ? 1.0 : zoomFactor)
         resetInactivityTimer()
     }
 
     /// STOPS CAMERA SESSION
+    /// Stops the running session but intentionally KEEPS the preview layer bound to it.
+    /// A stopped AVCaptureSession freezes the preview on its last frame (smooth), and
+    /// the next start() resumes instantly. Nulling previewLayer.session here is what
+    /// previously caused the permanent blank-screen-with-detection-still-working bug,
+    /// because start() never re-attached it. So we no longer detach on stop.
     func stop() {
         cancelInactivityTimer()
 
@@ -262,10 +324,6 @@ final class CameraService: NSObject, ObservableObject {
             // Session is fully stopped — no barcodes are visible. Clear the lock
             // so the next start() begins fresh rather than blocking on a stale value.
             self.lockedBarcodeValue = nil
-        }
-
-        DispatchQueue.main.async {
-            self.previewLayer?.session = nil
         }
     }
 
@@ -328,7 +386,14 @@ final class CameraService: NSObject, ObservableObject {
             self.trayDetections   = []
             self.gloveDetections  = []
             self.isGloveHazardous = false
+            self.recentCounts.removeAll()   // start the next session's median fresh
+            self.emptyCountFrames = 0
         }
+        // Drop the held tray/chute detections so the next session re-acquires them
+        // from scratch rather than counting against a stale tray that may no longer
+        // be in frame.
+        heldTrayDetections.removeAll()
+        trayMissFrames = 0
     }
 
     func resumeCounting() {
@@ -345,6 +410,18 @@ final class CameraService: NSObject, ObservableObject {
             self.glovesConfirmed  = false
             self.gloveDetections  = []
             self.isGloveHazardous = false
+            self.detectedTrayColor    = nil
+            self.lastSampledTrayColor = nil
+        }
+    }
+
+    /// Clears only the tray-colour sampling memory so the NEXT complete-tray frame
+    /// re-publishes its colour even if the tray is physically unchanged. Tray colour
+    /// is published only on CHANGE, so without this a new transaction on the same tray
+    /// (continuous dispense) never re-emits — and the hazardous-tray check/marking for
+    /// that transaction never runs. Call when the current transaction changes.
+    func resetTrayColorSampling() {
+        DispatchQueue.main.async {
             self.detectedTrayColor    = nil
             self.lastSampledTrayColor = nil
         }
@@ -469,13 +546,51 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             ? gloveDetector.detect(pixelBuffer: pixelBuffer)
             : []
 
-        // ── Model 2: Tray / chute detection (RTMDet-Tiny 640×640) ────────────
-        // Returns both .tray and .chute regions; only .tray regions gate pill counts.
-        let allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
+        // ── Model 2: Tray / chute segmentation (MobileNetV2-UNet 384×384) ────
+        // Returns .tray and .chute regions, each carrying a per-pixel mask. Pills
+        // are tested against the masks (not bounding boxes) — 1:1 with Android.
+        var allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
 
-        // Only TRAY regions (class 0) are used to filter pill positions.
-        // CHUTE regions (class 1) are passed to the overlay for display only.
-        let trayRects = allTrays.filter { $0.trayClass == .tray }.map { $0.rect }
+        // ── Tray temporal hold (anti-flicker) ────────────────────────────────
+        // Bridge a single dropped tray-seg frame so the overlay + pill gate don't
+        // blink on a steady scene. Clears after trayHoldFrames consecutive misses
+        // so the tray still disappears when you move away. Mirrors Android.
+        if !allTrays.isEmpty {
+            heldTrayDetections = allTrays
+            trayMissFrames = 0
+        } else if trayMissFrames < Self.trayHoldFrames {
+            trayMissFrames += 1
+            allTrays = heldTrayDetections
+        } else {
+            heldTrayDetections = []
+        }
+
+        // ── "Complete product" gate (mirrors Android TrayGate) ───────────────
+        // A valid scene requires BOTH a tray AND a chute, and the largest tray must
+        // NOT fill the frame (that would be the background surface, not a tray).
+        // When closed: no pill count, no tray/chute overlay.
+        let trayDets  = allTrays.filter { $0.trayClass == .tray }
+        let chuteDets = allTrays.filter { $0.trayClass == .chute }
+
+        let frameSz = pixelBuffer.size
+        let frameArea = max(1, frameSz.width * frameSz.height)
+        let trayCoverage = trayDets
+            .map { ($0.rect.width * $0.rect.height) / frameArea }
+            .max() ?? 0
+        let trayFillsFrame = trayCoverage >= Self.trayMaxFrameCoverage
+        let isCompleteTray = !trayDets.isEmpty && !chuteDets.isEmpty && !trayFillsFrame
+
+        let gateOpen = isCompleteTray
+
+        // Overlay shows tray/chute only when the scene is a complete product.
+        let displayTrays = isCompleteTray ? allTrays : []
+
+        // Tray/chute detections (with masks) used by the pill filter below.
+        let effectiveTrayDets  = trayDets
+        let effectiveChuteDets = chuteDets
+
+        // First tray rect for tray-colour sampling (display/feature only).
+        let trayRects = trayDets.map { $0.rect }
 
         // ── Tray colour sampling (hazardous-tray feature) ────────────────────
         // Continuously classify the visible tray's generic colour and publish it
@@ -484,7 +599,14 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         // isTrayColorDetectionEnabled so it runs ONLY while the pill-count sheet is
         // showing in the dispense / stock-scan-pills flows. Runs regardless of
         // isGloveDetectionEnabled because the non-hazardous flow also needs it.
-        if isTrayColorDetectionEnabled, let firstTrayRect = trayRects.first,
+        //
+        // Sample ONLY on a complete-product frame (tray AND chute detected, same gate
+        // as counting/overlay). Without this, continuous dispense samples an early
+        // tray-only frame — before the chute is acquired — and pins lastSampledTrayColor
+        // to it. Because the colour is published only on CHANGE, the real complete-tray
+        // colour then never re-emits, so the hazardous-tray capture popup is missed on
+        // first entry and only reappears later when the colour happens to change again.
+        if isTrayColorDetectionEnabled, isCompleteTray, let firstTrayRect = trayRects.first,
            let color = TrayColorClassifier.dominantColor(in: pixelBuffer, rect: firstTrayRect) {
             DispatchQueue.main.async {
                 guard self.isTrayColorDetectionEnabled, self.isCountingEnabled else { return }
@@ -498,14 +620,24 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, _ in
             guard let self else { return }
 
-            // Keep only pills whose centre falls inside a TRAY (not CHUTE) rect.
-            // An empty trayRects list means no tray is visible → count = 0.
+            // Counting GATE (mirrors Android): only count when the scene is a
+            // complete product (tray AND chute, tray not filling frame). Then keep a
+            // pill only if its CENTRE lands on the actual TRAY mask AND not on the
+            // CHUTE mask. Using the per-pixel masks (not bounding boxes) is what
+            // makes counting correct at any angle/height and keeps chute pills out —
+            // the bbox of an angled tray covers non-tray area including the chute,
+            // but the mask does not.
             let filtered: [DetectionResult]
-            if trayRects.isEmpty {
+            if !gateOpen {
                 filtered = []
             } else {
                 filtered = allPills.filter { pill in
-                    trayRects.contains { trayRect in trayRect.contains(pill.center) }
+                    let cx = pill.center.x
+                    let cy = pill.center.y
+                    let inTray = effectiveTrayDets.contains { $0.containsPoint(cx, cy) }
+                    guard inTray else { return false }
+                    let inChute = effectiveChuteDets.contains { $0.containsPoint(cx, cy) }
+                    return !inChute
                 }
             }
 
@@ -514,9 +646,46 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
             DispatchQueue.main.async {
                 guard self.isCountingEnabled else { return }
-                self.detections       = filtered
-                self.stableCount      = filtered.count
-                self.trayDetections   = allTrays
+
+                // Markers (dots) come from the LIVE frame so they stay responsive.
+                self.detections = filtered
+
+                // Displayed/committed count is the MEDIAN over the last few frames,
+                // so a single boundary pill blinking across the threshold doesn't
+                // jitter the number. Median (not mean) ignores the occasional spike.
+                //
+                // Empty-frame hold: a momentary gate/segmentation flicker or a blurred
+                // frame yields 0 pills for a frame or two even though the tray is still
+                // full. Feeding those zeros straight into the median collapses it to 0
+                // (the "count drops to zero" symptom). So while we have a non-zero
+                // count and only a short burst of empties has elapsed, DON'T record the
+                // zero — hold the median window. Once empties persist past the hold the
+                // zeros flow in normally, so the count still drains to 0 when the tray
+                // is genuinely emptied or removed.
+                let frameCount = filtered.count
+                let holdingEmpty: Bool
+                if frameCount == 0 {
+                    self.emptyCountFrames += 1
+                    holdingEmpty = self.stableCount > 0
+                        && self.emptyCountFrames <= Self.countHoldFrames
+                } else {
+                    self.emptyCountFrames = 0
+                    holdingEmpty = false
+                }
+
+                // While holding, leave recentCounts/stableCount untouched so a brief
+                // burst of empty frames can't collapse the median to 0; other overlay
+                // state below still updates normally.
+                if !holdingEmpty {
+                    self.recentCounts.append(frameCount)
+                    if self.recentCounts.count > Self.countSmoothWindow {
+                        self.recentCounts.removeFirst()
+                    }
+                    let sortedCounts = self.recentCounts.sorted()
+                    self.stableCount = sortedCounts[sortedCounts.count / 2]
+                }
+
+                self.trayDetections   = displayTrays
                 self.gloveDetections  = gloves
                 self.isGloveHazardous = hazardous
                 if glovesNowSafe { self.glovesConfirmed = true }
@@ -567,9 +736,12 @@ extension CameraService {
             // Draw oriented image (no flip needed — CIImage already handled it)
             UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: imageSize))
 
-            // Draw badges at transformed positions
+            // Draw badges at transformed positions. Badge size is fixed (relative to
+            // image width) so every pill marker is the same size regardless of the
+            // detected box, instead of scaling per-pill.
+            let badgeSize = imageSize.width * 0.04
             transformedDetections.enumerated().forEach { index, detection in
-                drawBadge(context: context, index: index, rect: detection.rect)
+                drawBadge(context: context, index: index, rect: detection.rect, badgeSize: badgeSize)
             }
         }
     }
@@ -670,9 +842,10 @@ extension CameraService {
     private func drawBadge(
         context: CGContext,
         index: Int,
-        rect: CGRect
+        rect: CGRect,
+        badgeSize: CGFloat
     ) {
-        let circleSize: CGFloat = min(rect.width, rect.height) * 0.6
+        let circleSize = badgeSize
         let center = CGPoint(x: rect.midX, y: rect.midY)
 
         let circleRect = CGRect(

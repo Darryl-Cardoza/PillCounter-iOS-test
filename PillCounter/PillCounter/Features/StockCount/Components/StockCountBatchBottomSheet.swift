@@ -291,7 +291,6 @@ struct StockCountBatchBottomSheet: View {
     }
 
     // MARK: - Scan pills button
-
     private var scanPillsButtonView: some View {
         PillCountingButton(
             iconName: nil, title: L10n.StockCountSheet.scanPills,

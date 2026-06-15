@@ -79,6 +79,8 @@ struct UnifiedCameraView: View {
 
     @State var showNoteOption: Bool = false
     @State var showConfirmCompletionPopup: Bool = false
+    /// "Today's Queue" dispense list shown after a FIXED dispense count is confirmed complete.
+    @State var showDispenseQueueSheet: Bool = false
     // Stock count end-count popups
     @State var showStockEndBatchPopUp: Bool = false
     @State var showStockNoteOptions:   Bool = false
@@ -127,9 +129,28 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
             .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
-            .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
+//            .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
+            .customPopup(isPresented: $pillScanViewModel.showHazardousTraySubstitutePopup) { hazardousTraySubstitutePopup }
+            .bottomSheet(
+                isPresented: $showDispenseQueueSheet,
+                dismissOnBackgroundTap: false,
+                showDim: false,
+                portraitHeight: UIScreen.main.bounds.height * 0.50,
+                landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? 460 : 420
+            ) {
+                DispenseTransactionListSheetContent(
+                    // Continuous dispense — resume the picked txn in place, no navigation.
+                    onSelect: { txn in
+                        resumeSelectedTransactionInline(txn)
+                    }
+                )
+                .environmentObject(appColors)
+                .environmentObject(router)
+                .environmentObject(userViewModel)
+                .environmentObject(pillScanViewModel)
+            }
             .overlay {
                 if showSuccessAnimation {
                     SuccessAnimationView(count: lastAddedCount, color: appColors.secondary)
@@ -208,6 +229,7 @@ struct UnifiedCameraView: View {
         rootContent
             .bottomSheet(
                 isPresented: $pillScanViewModel.showRxFlowPopup,
+                showDim: false,
                 onDismiss: {
                     pillScanViewModel.showRxFlowPopup = false
                     pillScanViewModel.fetchedRxTransaction = nil
@@ -237,6 +259,7 @@ struct UnifiedCameraView: View {
             .bottomSheet(
                 isPresented: $pillScanViewModel.showVerifyStockBottlePopup,
                 dismissOnBackgroundTap: false,
+                showDim: false,
                 onDismiss: {
                     pillScanViewModel.showVerifyStockBottlePopup = false
                 }
@@ -374,14 +397,22 @@ struct UnifiedCameraView: View {
                 cameraService.isTrayColorDetectionEnabled = showing
                 if showing { pillScanViewModel.resetTrayColorTracking() }
             }
-            // Freeze tray-colour detection while the confirmation popup is up so the
-            // live feed can't change the captured colour; resume after confirm/dismiss.
+            // Freeze tray-colour detection while either hazardous-tray popup is up so
+            // the live feed can't change the captured colour; resume after confirm/dismiss.
             .onChange(of: pillScanViewModel.showHazardousTrayPopup) { _, showingPopup in
+                cameraService.isTrayColorDetectionEnabled = showingPopup ? false : showPillCountPanel
+            }
+            .onChange(of: pillScanViewModel.showHazardousTraySubstitutePopup) { _, showingPopup in
                 cameraService.isTrayColorDetectionEnabled = showingPopup ? false : showPillCountPanel
             }
             .onChange(of: pillScanViewModel.currentTransaction) { _, txn in
                 cameraService.isGloveDetectionEnabled =
                     (txn?.drug?.is_hazardous == true) && AppStorageManager.shared.isHazardousDrugSetting
+                // New transaction (e.g. continuous dispense): re-arm tray-colour
+                // sampling so the same physical tray re-emits its colour and the
+                // hazardous-tray check/marking runs for this transaction too.
+                cameraService.resetTrayColorSampling()
+                pillScanViewModel.resetTrayColorTracking()
             }
     }
 
@@ -392,7 +423,7 @@ struct UnifiedCameraView: View {
             cameraService: cameraService,
             showPillCountPanel: showPillCountPanel,
             pillCountSheetHeight: pillCountSheetHeight,
-            showStockCountPanel: showStockCountPanel,
+            showStockCountPanel: showStockCountPanel || showDispenseQueueSheet,
             stockCountSheetHeight: stockSheetCurrentHeight,
             isLandscape: isLandscape,
             instructionText: overlayInstructionText,
@@ -444,9 +475,16 @@ struct UnifiedCameraView: View {
                 restartFlow()
             }
         }
+        // RX scan succeeded (RX detail popup is about to show) — only now dismiss
+        // the continuous-dispense queue sheet. Blocked/failed scans never set this.
+        .onChange(of: pillScanViewModel.showRxFlowPopup) { _, showing in
+            if showing && showDispenseQueueSheet { showDispenseQueueSheet = false }
+        }
         .onChange(of: pillScanViewModel.rxResumeInline) { _, triggered in
             guard triggered else { return }
             pillScanViewModel.rxResumeInline = false
+            // RX scan resolved to an inline resume — a success, so close the queue sheet.
+            if showDispenseQueueSheet { showDispenseQueueSheet = false }
             guard let txn = pillScanViewModel.currentTransaction else { return }
             pillScanViewModel.getControlledStep(pillCountTxn: txn)
             pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
@@ -486,6 +524,14 @@ struct UnifiedCameraView: View {
     /// Single source of truth for voice feedback, covering every scan mode.
     var unifiedInstructionText: String {
         if showPillCountPanel {
+            // The pill-count panel opens synchronously, but the controlled step is
+            // resolved later by initializeTransaction()'s async Task. Until that lands,
+            // currentControlledStep is still the placeholder .scan ("Scan Container QR
+            // Code"), which gets spoken and then immediately replaced by the real step —
+            // two utterances. Suppress the transient placeholder until the step is set.
+            if !hasInitializedStep && pillScanViewModel.currentControlledStep == .scan {
+                return ""
+            }
             return controlledStepInstruction
         }
         if isOpenPillScanMode {
@@ -583,25 +629,24 @@ extension UnifiedCameraView {
                 pillScanViewModel.getControlledStep(pillCountTxn: selected)
                 pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
             }
-            DispatchQueue.main.asyncAfter(deadline: .now()) {
-                cameraService.start()
-                cameraService.cancelInactivityTimer()
-                initializeTransaction()
-                if pillScanViewModel.currentControlledStep != .vial {
-                    cameraService.resumeCounting()
-                }
+            // Start directly — start() runs on the session queue (serialized) and
+            // re-attaches the preview itself, so the extra main-queue hop is unneeded
+            // and only delayed the first frame.
+            cameraService.start()
+            cameraService.cancelInactivityTimer()
+            initializeTransaction()
+            if pillScanViewModel.currentControlledStep != .vial {
+                cameraService.resumeCounting()
             }
         } else {
-            DispatchQueue.main.asyncAfter(deadline: .now()) {
-                cameraService.start()
-                cameraService.cancelInactivityTimer()
-                cameraService.enableBarcodeScanning()
-                if currentScanType == .stockCount {
-                    // Stock count only needs barcode scanning; pill detection must stay off.
-                    cameraService.pauseCounting()
-                } else {
-                    startScanTimeout()
-                }
+            cameraService.start()
+            cameraService.cancelInactivityTimer()
+            cameraService.enableBarcodeScanning()
+            if currentScanType == .stockCount {
+                // Stock count only needs barcode scanning; pill detection must stay off.
+                cameraService.pauseCounting()
+            } else {
+                startScanTimeout()
             }
         }
     }
@@ -655,6 +700,12 @@ extension UnifiedCameraView {
         guard !newValue.isEmpty,
               !pillScanViewModel.isCheckingNdc
         else { return }
+
+        // Continuous dispense note: the queue sheet is NOT dismissed here. It is
+        // dismissed only once the RX scan actually succeeds and isn't blocked —
+        // see the showRxFlowPopup / rxResumeInline observers below. A failed or
+        // blocked scan (not found / on hold) leaves the sheet up so the operator
+        // can still pick a txn from the list.
 
         FeedbackManager.shared.triggerDetectionFeedback(
             isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
@@ -764,6 +815,140 @@ extension UnifiedCameraView {
         stockCountViewModel.reset()
     }
 
+    // MARK: - Continuous dispense
+
+    /// Called after a FIXED dispense txn is confirmed complete. Instead of navigating
+    /// away, it resets everything back to a fresh RX-scan state IN PLACE (camera live,
+    /// barcode scanning enabled, scanType = .rx_label) and shows the "Today's Queue"
+    /// sheet on top. The operator can then scan an RX (just dismiss the sheet) or pick
+    /// a txn from the list to resume it — all without leaving UnifiedCameraView.
+    func startContinuousDispense() {
+        // If nothing is left to dispense, leave the flow immediately. This must run
+        // BEFORE the teardown below: flipping showPillCountPanel/currentControlledStep
+        // changes unifiedInstructionText to scanType.instructionText (still .barcode),
+        // which fires the speak observer and speaks the barcode prompt on the way out.
+        guard hasPendingDispenseTxns() else {
+            router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+            return
+        }
+
+        // Tear down the just-completed txn's pill-count session.
+        showPillCountPanel = false
+        isOpenPillScanMode = false
+        cameraService.disableBarcodeScanning()
+        cameraService.pauseCounting()
+
+        // Reset the RX / NDC popup flags so the next txn gets a fresh false→true
+        // transition. onChange observers (e.g. showScannedDrugInfoPopoup driving
+        // handleSubstitute) only fire on a transition — if a flag is left true from
+        // the just-completed txn, the next scan sets it true with no change and the
+        // observer never fires, so the barcode is "accepted" but the flow stalls.
+        // Mirrors onAppear's fresh-entry reset.
+        pillScanViewModel.showScannedDrugInfoPopoup = false
+        pillScanViewModel.showRxFlowPopup = false
+        pillScanViewModel.showRxOnHoldPopup = false
+        pillScanViewModel.showRxInProgressPopup = false
+        pillScanViewModel.showNdcEquivalencePopup = false
+        pillScanViewModel.showVerifyStockBottlePopup = false
+        pillScanViewModel.ndcMismatchRestartFlow = false
+        pillScanViewModel.isNdcEquivalent = false
+        pillScanViewModel.ndcComparisonResponse = nil
+        pillScanViewModel.isDrugFound = nil
+
+        // Clear all per-transaction state so the next txn starts clean.
+        pillScanViewModel.resetScanningState()
+        pillScanViewModel.selectedTransaction = nil
+        pillScanViewModel.currentTransaction = nil
+        pillScanViewModel.currentTransactionTransactionDetails = nil
+        pillScanViewModel.scannedRxData = nil
+        pillScanViewModel.fetchedRxTransaction = nil
+        pillScanViewModel.note = ""
+        pillScanViewModel.selectedBucket = ""
+        pillScanViewModel.currentControlledStep = .scan
+        pillScanViewModel.currentControlledTargetCount = nil
+        pillScanViewModel.capturedVialImage = nil
+        pillScanViewModel.vialCapturedImagePath = nil
+        userViewModel.currentTransactionTxnId = nil
+
+        scannedRawValue = nil
+        capturedImage = nil
+        hasInitializedStep = false
+   
+
+        // Surface the queue (there's pending work — checked at the top). Scanning an
+        // RX dismisses the sheet (see onChange below); picking a row resumes that txn.
+        showDispenseQueueSheet = true
+        cameraState = .scanning
+
+        // Back to RX-label scan, ready underneath the sheet.
+        scanType = .rx_label
+        cameraService.start()
+        cameraService.resetBarcodeScanState()
+        cameraService.enableBarcodeScanning()
+        pillScanViewModel.resetTrayColorTracking()
+    }
+
+    /// True when there are pending FIXED dispense txns waiting. Builds the same list
+    /// the queue sheet's `reload()` produces: FIXED, batch_id == 0, status != ON_HOLD.
+    private func hasPendingDispenseTxns() -> Bool {
+        let userId = AppStorageManager.shared.userId ?? ""
+        guard let user = UserStore.shared.fetchByUserId(userId) else {
+            return false
+        }
+
+        let fixed = TransactionStore.shared.fetchPartial(for: user, countType: .FIXED)
+        let fresh = fixed
+            .filter { $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue }
+            .sorted { $0.created_at < $1.created_at }
+
+        return !fresh.isEmpty
+    }
+
+    /// Resume a txn picked from the queue sheet — mirrors the `.resumeCount` branch of
+    /// `onAppear`, but in place (no navigation). Reflects whatever state the txn is in.
+    func resumeSelectedTransactionInline(_ txn: PillCountTransactionEntity) {
+        showDispenseQueueSheet = false
+
+        let countType: CountType =
+            txn.count_type?.uppercased() == CountType.REGULAR.rawValue ? .REGULAR : .FIXED
+        router.selectedPillScanningType = countType
+        userViewModel.currentTransactionTxnId = txn.txn_id
+        pillScanViewModel.selectedTransaction = txn
+
+        // If the NDC isn't verified yet, fall back to the barcode-scan state so the
+        // operator scans the bottle first (same as the dashboard resume → .barcode path).
+        guard txn.is_ndc_verfied else {
+            scanType = .barcode
+            pillScanViewModel.currentTransaction = txn
+            showPillCountPanel = false
+            cameraState = .scanning
+            scannedRawValue = nil
+            capturedImage = nil
+            cameraService.start()
+            cameraService.resetBarcodeScanState()
+            cameraService.enableBarcodeScanning()
+            cameraService.pauseCounting()
+            return
+        }
+
+        // NDC verified — resume counting directly.
+        scanType = .resumeCount
+        pillScanViewModel.currentTransaction = txn
+        pillScanViewModel.getControlledStep(pillCountTxn: txn)
+        pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
+        pillScanViewModel.addCurrentOpenPillCount = 0
+        hasInitializedStep = true
+
+        showPillCountPanel = true
+        cameraService.start()
+        cameraService.disableBarcodeScanning()
+        if pillScanViewModel.currentControlledStep != .vial {
+            cameraService.resumeCounting()
+        } else {
+            cameraService.pauseCounting()
+        }
+    }
+
     func handleAdd() {
         guard !isAddDisabled else { return }
         cameraService.resetInactivityTimer()
@@ -787,8 +972,13 @@ extension UnifiedCameraView {
         lastAddedCount = cameraService.stableCount
         showSuccessAnimation = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+        // Re-enable Add quickly — a short lockout only guards against an accidental
+        // double-tap, it shouldn't make the operator wait. The success animation
+        // runs its own ~2.5s lifecycle and is dismissed separately below.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             isAddDisabled = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             showSuccessAnimation = false
         }
 
@@ -862,8 +1052,17 @@ extension UnifiedCameraView {
             }
             return
         }
-
-        showStepCompletionPopup = true
+        // Newly added to skip completion popup.
+        // Clearing capturedVialImage removes the full-screen vial still overlay and
+        // reveals the live feed. The session was never stopped (vial only freezes
+        // counting), so no start()/rebind is needed — just reset the inactivity timer.
+        if pillScanViewModel.capturedVialImage != nil {
+            pillScanViewModel.capturedVialImage = nil
+            pillScanViewModel.vialCapturedImagePath = nil
+            cameraService.resetInactivityTimer()
+        }
+        pillScanViewModel.handleStepCompletion()
+//        showStepCompletionPopup = true
     }
 
     func handleVialDone() {
@@ -875,7 +1074,17 @@ extension UnifiedCameraView {
         } else if nextStep == nil {
             showConfirmCompletionPopup = true
         } else {
-            showStepCompletionPopup = true
+//            showStepCompletionPopup = true
+            // Newly added to skip completion popup.
+            // Clearing capturedVialImage removes the full-screen vial still overlay and
+            // reveals the live feed. The session was never stopped (vial only freezes
+            // counting), so no start()/rebind is needed — just reset the inactivity timer.
+            if pillScanViewModel.capturedVialImage != nil {
+                pillScanViewModel.capturedVialImage = nil
+                pillScanViewModel.vialCapturedImagePath = nil
+                cameraService.resetInactivityTimer()
+            }
+            pillScanViewModel.handleStepCompletion()
         }
     }
 
@@ -1138,12 +1347,17 @@ extension UnifiedCameraView {
     var stockEndBatchPopup: some View {
         ConfirmationDialogue(
             title: L10n.Stock.endBatchTitle,
-            message: stockHasNoCount ? L10n.Stock.noCountEndBatchMessage : nil,
+            message: stockHasNoCount ? L10n.Stock.noCountEndBatchMessage : L10n.Stock.confirmEndBatch,
             cancelButtonText: L10n.Common.no,
             confirmButtonText: L10n.Common.yes,
             onCancel: { showStockEndBatchPopUp = false },
             onConfirm: { confirmStockEndBatch() }
         )
+        // Force the standard (light) palette so the dialog's buttons match every
+        // other ConfirmationDialogue. Without this it inherits the camera screen's
+        // forced-dark appColors, making the Yes/No buttons render with a different
+        // background/text colour than the rest of the app.
+        .environmentObject(appColors)
     }
 
     var stockNoteOptionPopup: some View {

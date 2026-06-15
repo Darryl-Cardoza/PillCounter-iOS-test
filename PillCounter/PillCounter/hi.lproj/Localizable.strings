@@ -319,3 +319,5 @@
 "hl7Notification.inventoryRequestTitle" = "Inventory Request";
 "hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
 "hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
+"barcodeScan.hazardousNdcDetected" = "खतरनाक NDC का पता चला।";
+"barcodeScan.wearGlovesAndProceedWithCaution" = "दस्ताने पहनें और सावधानी से आगे बढ़ें।";

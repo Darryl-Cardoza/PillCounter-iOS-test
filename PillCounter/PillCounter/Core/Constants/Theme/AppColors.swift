@@ -44,11 +44,11 @@ final class AppColors: ObservableObject {
     // MARK: - Colors
 
     var primary: Color {
-        hexColor(currentPalette?.primary, fallback: "01BBD3")
+        hexColor(currentPalette?.primary, fallback: "3EAEE3") //01BBD3
     }
 
     var secondary: Color {
-        hexColor(currentPalette?.secondary, fallback: "FD82B5")
+        hexColor(currentPalette?.secondary, fallback: "F69633") //FD82B5
     }
 
     var tertiary: Color {

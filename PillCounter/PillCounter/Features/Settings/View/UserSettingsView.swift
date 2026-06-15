@@ -34,7 +34,7 @@ struct UserSettingsView: View {
     @State private var hazardousTrayColor =
     AppStorageManager.shared.hazardousTrayColor
 
-    
+
     // 1. Source of Truth (The actual saved setting)
     @State private var selectedSaveHistoryOption: SaveHistoryOption =
     AppStorageManager.shared.saveHistoryOption
@@ -103,7 +103,7 @@ struct UserSettingsView: View {
             showResetHazardousTrayColorPopup = false
         }
     }
-    
+
     private var confirmationPopUp: some View {
         ConfirmationDialogue(
             title: String(format: L10n.Settings.confirmHistoryTitle, pendingOption?.displayText ?? selectedSaveHistoryOption.displayText),
@@ -291,7 +291,6 @@ struct UserSettingsView: View {
                     if hazardousTrayColor != nil {
                         showResetHazardousTrayColorPopup = true
                     }
-                    // TODO: No hazardous tray color set yet — nothing to reset.
                 }
 
                 Divider().background(appColors.primaryBackground)

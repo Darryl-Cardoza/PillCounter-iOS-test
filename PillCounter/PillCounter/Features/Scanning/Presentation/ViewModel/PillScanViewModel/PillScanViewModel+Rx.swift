@@ -128,6 +128,8 @@ extension PillScanViewModel {
                     print("[RxScan] Rx popup → rxNo: \(scannedRxData?.rxNo ?? "nil"), ndc: \(scannedRxData?.ndcNo ?? "nil"), drug: \(scannedRxData?.drugName ?? "UNKNOWN"), qty: \(scannedRxData?.qty ?? "nil")")
                     showRxFlowPopup = true
                 }
+                
+                
             }
 
         } catch {

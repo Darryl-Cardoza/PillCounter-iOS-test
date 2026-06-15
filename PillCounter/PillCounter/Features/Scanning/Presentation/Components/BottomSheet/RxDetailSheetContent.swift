@@ -112,7 +112,8 @@ struct RxDetailsSheetContent: View {
                             badgeSize: badgeSize,
                             titleFontSize: titleFontSize,
                             valueFontSize: valueFontSize,
-                            verticalPadding: rowVerticalPadding)
+                            verticalPadding: rowVerticalPadding
+            )
 
             Divider()
                 .background(appColors.text.opacity(0.12))
@@ -242,9 +243,9 @@ struct RxDetailsSheetContent: View {
         HStack(alignment: .center, spacing: 16) {
             leading.frame(width: 120, height: 120)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 16) {
                 Text(title)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 17, weight: .regular))
                     .foregroundColor(appColors.text)
                 Text(value)
                     .font(.system(size: 20, weight: .regular))
@@ -327,7 +328,7 @@ private struct LabeledText: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 15, weight: .regular))
+                .font(.system(size: 18, weight: .regular)) //15
                 .foregroundColor(appColors.text)
             Text(value)
                 .font(.system(size: 17, weight: .semibold))
@@ -348,7 +349,7 @@ private struct FormBadge: View {
     var body: some View {
         VStack(spacing: 10) {
             Text("Form")
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 18, weight: .regular))
                 .foregroundColor(appColors.text)
 
             Image("dispense_dashboard_icon")
@@ -378,7 +379,7 @@ private struct ValueBadge: View {
     var body: some View {
         VStack(spacing: 10) {
             Text(label)
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 18, weight: .regular))
                 .foregroundColor(appColors.text)
             Text(value)
                 .font(.system(size: isIpad ? 24 : 16, weight: .semibold))

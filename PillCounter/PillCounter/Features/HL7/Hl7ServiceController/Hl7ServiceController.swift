@@ -126,7 +126,7 @@ final class Hl7ServiceController: ObservableObject {
     // MARK: - Observe Pending Transactions
 
     private func observeTxnChanges() {
-        batchDAO.transactionsDidChange
+        transactionDAO.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 Log("🔄 [TxnObserver] Detected change → enqueue txn sync")

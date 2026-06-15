@@ -258,6 +258,8 @@ enum L10n {
         static let rxNotSentByPms = NSLocalizedString("barcodeScan.rxNotSentByPms", comment: "")
         static let rxInProgressTitle = NSLocalizedString("barcodeScan.rxInProgressTitle", comment: "")
         static let rxInProgressMessage = NSLocalizedString("barcodeScan.rxInProgressMessage", comment: "")
+        static let hazardousNdcDetected = NSLocalizedString("barcodeScan.hazardousNdcDetected", comment: "")
+        static let wearGlovesAndProceedWithCaution = NSLocalizedString("barcodeScan.wearGlovesAndProceedWithCaution", comment: "")
     }
 
     // MARK: - Generic Equivalent Popup

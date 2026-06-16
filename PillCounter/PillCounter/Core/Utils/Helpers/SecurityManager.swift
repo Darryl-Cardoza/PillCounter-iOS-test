@@ -11,22 +11,34 @@ import MachO
 struct SecurityManager {
 
     // MARK: - PUBLIC SECURITY CHECK
+    /// True when the runtime environment shows signs of compromise.
+    ///
+    /// Active checks: jailbreak, attached debugger, runtime dylib injection.
+    /// In DEBUG builds these short-circuit to `false` (see each check) so normal
+    /// development on device/simulator is never flagged.
+    ///
+    /// Deliberately NOT included (removed as unreliable):
+    ///  • simulator detection — the simulator is a valid QA target.
+    ///  • `SignerIdentity` tamper heuristic — present on dev/ad-hoc builds and
+    ///    absent on App Store builds, so it false-positives. Reinstate only
+    ///    with a reliable signature/receipt-based check.
     static func isDeviceCompromised() -> Bool {
-//        return isJailbroken()
-//            || isDebuggerAttached()
-//            || isRunningOnSimulator()
-//            || isTampered()
-//            || hasSuspiciousDylibs()
+        #if DEBUG
         return false
+        #else
+        return isJailbroken()
+            || isDebuggerAttached()
+            || hasSuspiciousDylibs()
+        #endif
     }
 
 
     // MARK: - JAILBREAK DETECTION
     private static func isJailbroken() -> Bool {
         #if targetEnvironment(simulator)
-        return true
-        #endif
-
+        // Jailbreak detection is meaningless on the simulator; never flag it.
+        return false
+        #else
         let jailbreakPaths = [
             "/Applications/Cydia.app",
             "/Applications/Sileo.app",
@@ -53,6 +65,7 @@ struct SecurityManager {
         } catch {
             return false
         }
+        #endif
     }
 
     // MARK: - DEBUGGER DETECTION
@@ -68,25 +81,7 @@ struct SecurityManager {
         return (info.kp_proc.p_flag & P_TRACED) != 0
     }
 
-    // MARK: - SIMULATOR DETECTION
-    private static func isRunningOnSimulator() -> Bool {
-        #if targetEnvironment(simulator)
-        #if DEBUG
-        return false
-        #else
-        return true
-        #endif
-        #else
-        return false
-        #endif
-    }
-
-    // MARK: - APP TAMPERING DETECTION
-    private static func isTampered() -> Bool {
-        return Bundle.main.infoDictionary?["SignerIdentity"] != nil
-    }
-
-    // MARK: - DYLIB INJECTION DETECTION 
+    // MARK: - DYLIB INJECTION DETECTION
     /// Walks every dynamic library loaded into the current process via the
     /// MachO dyld API. Frida, Substrate, Substitute, libhooker, and similar
     /// instrumentation frameworks all inject a .dylib whose path contains a

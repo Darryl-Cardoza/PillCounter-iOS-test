@@ -2,7 +2,7 @@
 //  DashboardQuickActionCards.swift
 //  PillCounter
 //
-//  Quick-action cards used by NewDashboardView in its three layouts
+//  Quick-action cards used by DashboardView in its three layouts
 //  (portrait / iPad, phone-landscape, iPad-landscape). Pure presentation —
 //  takes an icon, copy and an action; reads theming from AppColors.
 //
@@ -10,7 +10,7 @@
 import SwiftUI
 
 /// Portrait + iPad quick-action card.
-struct DashboardQuickActionCard: View {
+struct QuickActionCardPortrait: View {
     @EnvironmentObject private var appColors: AppColors
 
     let iconName: String
@@ -62,7 +62,7 @@ struct DashboardQuickActionCard: View {
 }
 
 /// Compact card for the phone-landscape left column.
-struct PhoneQuickActionCard: View {
+struct QuickActionCardCompact: View {
     @EnvironmentObject private var appColors: AppColors
 
     let iconName: String
@@ -111,7 +111,7 @@ struct PhoneQuickActionCard: View {
 }
 
 /// Large card for the iPad-landscape left column.
-struct LandscapeQuickActionCard: View {
+struct QuickActionCardExpanded: View {
     @EnvironmentObject private var appColors: AppColors
 
     let iconName: String

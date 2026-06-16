@@ -13,16 +13,15 @@ import Combine
 @MainActor
 class PillScanViewModel: ObservableObject {
 
-    // DAO instances
-    let drugMasterDAO = DrugCatalogStore.shared
-    let transactionDAO = TransactionStore.shared
-    let transactionDetailDAO = TransactionDetailStore.shared
-    let batchDAO = BatchStore.shared
-    let userDataLocalStorage = UserStore.shared
-
-    // decode the values of the barcode or qr, calling the api, processing it, storing it in database
-    let decoder = BarcodeAndQRDecoder()
-    let userRepo = UserRepository.shared
+    // Injected dependencies — default to production singletons so existing
+    // call sites (`PillScanViewModel()`) keep working; tests pass mocks.
+    let drugMasterDAO: DrugCatalogDataSource
+    let transactionDAO: TransactionDataSource
+    let transactionDetailDAO: TransactionDetailDataSource
+    let batchDAO: BatchDataSource
+    let userDataLocalStorage: UserDataSource
+    let decoder: BarcodeAndQRDecoder
+    let userRepo: UserRepositoryProtocol
 
     @Published var isDrugFound: Bool?
 
@@ -47,7 +46,28 @@ class PillScanViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     //Controlled Drug Repository
-    let controlledRepo  = ControlledRepository.shared
+    let controlledRepo: ControlledRepositoryProtocol
+
+    // MARK: - Init
+    init(
+        drugMasterDAO: DrugCatalogDataSource = DrugCatalogStore.shared,
+        transactionDAO: TransactionDataSource = TransactionStore.shared,
+        transactionDetailDAO: TransactionDetailDataSource = TransactionDetailStore.shared,
+        batchDAO: BatchDataSource = BatchStore.shared,
+        userDataLocalStorage: UserDataSource = UserStore.shared,
+        decoder: BarcodeAndQRDecoder = BarcodeAndQRDecoder(),
+        userRepo: UserRepositoryProtocol = UserRepository.shared,
+        controlledRepo: ControlledRepositoryProtocol = ControlledRepository.shared
+    ) {
+        self.drugMasterDAO = drugMasterDAO
+        self.transactionDAO = transactionDAO
+        self.transactionDetailDAO = transactionDetailDAO
+        self.batchDAO = batchDAO
+        self.userDataLocalStorage = userDataLocalStorage
+        self.decoder = decoder
+        self.userRepo = userRepo
+        self.controlledRepo = controlledRepo
+    }
 
     //Toast
     @Published  var showToast: Bool = false
@@ -109,6 +129,27 @@ class PillScanViewModel: ObservableObject {
     @Published var showVerifyStockBottlePopup: Bool = false
 
     
+    // MARK: - Dispense-count entry
+
+    /// Sets up the shared scan session for an existing dispense transaction,
+    /// fetched fresh from the store by id. Centralises the setup that callers
+    /// (dashboard, history lists, sheets) previously duplicated inline.
+    /// Returns the derived count type + scan type so the caller can route, or
+    /// nil if the transaction no longer exists.
+    @discardableResult
+    func startDispenseCount(txnId: Int64) -> (countType: CountType, scanType: ScanType)? {
+        guard let txn = transactionDAO.fetchById(txnId) else { return nil }
+
+        selectedTransaction = txn
+
+        let countType: CountType =
+            txn.count_type?.uppercased() == CountType.REGULAR.rawValue
+            ? .REGULAR : .FIXED
+        let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
+
+        return (countType, scanType)
+    }
+
     private func postTransactionUIUpdate(countType: CountType) {
         getAllTransactionDetailsOfTheCurrentTransaction()
 

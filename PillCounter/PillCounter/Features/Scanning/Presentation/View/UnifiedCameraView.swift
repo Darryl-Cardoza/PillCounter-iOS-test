@@ -40,6 +40,14 @@ struct UnifiedCameraView: View {
 
     // ── Navigation parameter ──────────────────────────────────────────────────
     let currentScanType: ScanType
+    /// Dispense transaction id passed via the route. When set, the screen sets
+    /// up the scan session for that transaction in `onAppear`. nil for flows
+    /// that don't target an existing txn (e.g. fresh rx_label).
+    let dispenseTxnId: Int64?
+    /// Stock-count batch id to resume (route payload). nil unless resuming.
+    let stockBatchId: Int64?
+    /// Bucket id for a brand-new stock-count batch (route payload). nil unless new.
+    let newBatchBucketId: String?
     @State var scanType: ScanType
 
     @StateObject var cameraService = CameraService()
@@ -61,8 +69,16 @@ struct UnifiedCameraView: View {
     @State private var stockSheetCurrentWidth: CGFloat = UIScreen.main.bounds.width * 0.45
     @State private var stockSheetIsExpanded: Bool = false
 
-    init(currentScanType: ScanType) {
+    init(
+        currentScanType: ScanType,
+        dispenseTxnId: Int64? = nil,
+        stockBatchId: Int64? = nil,
+        newBatchBucketId: String? = nil
+    ) {
         self.currentScanType = currentScanType
+        self.dispenseTxnId = dispenseTxnId
+        self.stockBatchId = stockBatchId
+        self.newBatchBucketId = newBatchBucketId
         self._scanType = State(initialValue: currentScanType)
         self._showPillCountPanel = State(initialValue: currentScanType == .resumeCount)
         self._showStockCountPanel = State(initialValue: currentScanType == .stockCount)
@@ -463,7 +479,7 @@ struct UnifiedCameraView: View {
                 // before fetching new drug data. Calling it here would wipe scannedDrugData mid-fetch.
                 pillScanViewModel.isNdcAdded = false
             } else if added {
-                router.setRoot(to: .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail))))))
+                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
             }
         }
         .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
@@ -603,6 +619,27 @@ extension UnifiedCameraView {
         capturedImage = nil
         hasInitializedStep = false
         scanType = currentScanType
+
+        // Resume/start an existing dispense transaction. The route carries the
+        // id; the VM fetches it and sets `selectedTransaction`. This must run
+        // before the transaction-clearing and resume logic below, which read
+        // `selectedTransaction` / `currentTransactionTxnId`.
+        if let dispenseTxnId,
+           let setup = pillScanViewModel.startDispenseCount(txnId: dispenseTxnId) {
+            userViewModel.currentTransactionTxnId = dispenseTxnId
+            router.selectedPillScanningType = setup.countType
+        }
+
+        // Set up the stock-count session from the route payload (resume an
+        // existing batch, or start a new one for a bucket). Runs after
+        // `reset()`, which intentionally preserves currentBatch/pendingBucketId.
+        if let stockBatchId {
+            stockCountViewModel.startStockCount(batchId: stockBatchId)
+            router.selectedPillScanningType = .REGULAR
+        } else if let newBatchBucketId {
+            stockCountViewModel.startNewBatch(bucketId: newBatchBucketId)
+            router.selectedPillScanningType = .REGULAR
+        }
 
         // Only clear transaction state for a truly fresh scan.
         // When resuming with .barcode (NDC not yet verified), selectedTransaction

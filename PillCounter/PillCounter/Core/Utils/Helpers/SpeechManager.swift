@@ -21,14 +21,11 @@ final class SpeechManager {
 
         synthesizer.stopSpeaking(at: .immediate)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            let utterance = AVSpeechUtterance(string: text)
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.45
+        utterance.pitchMultiplier = 1.0
 
-            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-            utterance.rate = 0.45
-            utterance.pitchMultiplier = 1.0
-
-            self.synthesizer.speak(utterance)
-        }
+        synthesizer.speak(utterance)
     }
 }

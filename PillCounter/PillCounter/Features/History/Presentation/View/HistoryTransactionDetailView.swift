@@ -24,6 +24,12 @@ struct HistoryTransactionDetailView: View {
     @EnvironmentObject private var historyViewModel: HistoryViewModel
     @EnvironmentObject private var userViewModel: UserViewModel
 
+    // MARK: - Route payload
+    /// Passed in via the route. The screen resolves the entity from the store
+    /// by this id — it no longer relies on the caller pre-seeding
+    /// `historyViewModel.filteredTransactionsOfUserByDate`.
+    let txnId: Int64
+
     // MARK: - Local State
     @StateObject private var pdfService = PDFShareService.shared
     @State private var fullScreenImage: Image?
@@ -116,15 +122,8 @@ struct HistoryTransactionDetailView: View {
             }
         }
         .onAppear {
-            guard let id = historyViewModel.selectedTransactionId else { return }
-
-            // Resolve the entity and immediately prepare step details
-            if let txn = historyViewModel.filteredTransactionsOfUserByDate
-                .first(where: { $0.txn_id == id })
-            {
-                transaction = txn
-                historyViewModel.prepareDetails(for: txn)
-            }
+            // Resolve the entity from the store by id and prepare step details.
+            transaction = historyViewModel.prepareDetails(forTxnId: txnId)
         }
         .onDisappear {
             transaction = nil

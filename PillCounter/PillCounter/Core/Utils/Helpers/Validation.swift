@@ -8,32 +8,26 @@
 import Foundation
 
 struct Validation {
-    static func isValidEmail(_ email: String) -> Bool {
-        // Regular expression pattern for a valid email
-        let pattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
-        let regex = try? NSRegularExpression(pattern: pattern)
-        let range = NSRange(location: 0, length: email.utf16.count)
-        return regex?.firstMatch(in: email, options: [], range: range) != nil
+
+    /// Single source of truth for the email pattern, compiled once.
+    private static let emailPattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
+    private static let emailRegex = try? NSRegularExpression(pattern: emailPattern)
+
+    /// Returns true if `value` is a syntactically valid email.
+    private static func matchesEmail(_ value: String) -> Bool {
+        guard let emailRegex else { return false }
+        let range = NSRange(location: 0, length: value.utf16.count)
+        return emailRegex.firstMatch(in: value, options: [], range: range) != nil
     }
-    
+
+    static func isValidEmail(_ email: String) -> Bool {
+        matchesEmail(email)
+    }
+
     static func validateEmail(_ email: String) -> String? {
-           
-           let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
-           
-           if trimmed.isEmpty {
-               return "EMAIL_ERROR_MESSAGE"
-           }
-           
-           let pattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
-           let regex = try? NSRegularExpression(pattern: pattern)
-           let range = NSRange(location: 0, length: trimmed.utf16.count)
-           
-           let isValid = regex?.firstMatch(in: trimmed, options: [], range: range) != nil
-           
-           if !isValid {
-               return "EMAIL_ERROR_INVALID" 
-           }
-           
-           return nil
-       }
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "EMAIL_ERROR_MESSAGE" }
+        if !matchesEmail(trimmed) { return "EMAIL_ERROR_INVALID" }
+        return nil
+    }
 }

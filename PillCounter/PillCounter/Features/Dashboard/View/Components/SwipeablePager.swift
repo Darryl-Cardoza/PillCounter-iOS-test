@@ -5,7 +5,7 @@
 //  A two-page horizontal pager backed by UIPageViewController. Unlike a
 //  `.page`-style SwiftUI `TabView`, it reliably honors a programmatic `selection`
 //  binding even when nested inside a fixed-frame `GeometryReader` — so both swipe
-//  gestures and tab-header taps animate between pages. Used by NewDashboardView's
+//  gestures and tab-header taps animate between pages. Used by DashboardView's
 //  Today's Queue / Recent Activity tabs across all layouts.
 //
 

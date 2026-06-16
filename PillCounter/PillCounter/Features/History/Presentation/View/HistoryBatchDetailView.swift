@@ -14,7 +14,12 @@ struct HistoryBatchDetailView: View {
     @Environment(\.isLandscape) private var isLandscape
     @EnvironmentObject private var historyViewModel: HistoryViewModel
     @EnvironmentObject private var userViewModel: UserViewModel
-    
+
+    // MARK: - Route payload
+    /// Passed in via the route. The screen fetches the batch from the store by
+    /// this id — no caller pre-seeding required.
+    let batchId: Int64
+
     @State private var showDeleteConfirmation: Bool = false
     @State private var expandedNdc: String? = nil
     @State private var exportedPDFURL: URL? = nil
@@ -92,7 +97,7 @@ struct HistoryBatchDetailView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: String(format: L10n.History.batchIdTitle, historyViewModel.selectedBatch?.batch_id ?? 0),
+                title: String(format: L10n.History.batchIdTitle, historyViewModel.selectedBatch?.batch_id ?? batchId),
                 headerActionsBackground: appColors.primaryBackground,
                 backgroundColor: appColors.primaryBackground,
                 onBack: {
@@ -100,9 +105,8 @@ struct HistoryBatchDetailView: View {
                 }
             )
             .onAppear {
-                if let batchId = historyViewModel.selectedBatchId {
-                    historyViewModel.prepareBatchDetails(for: batchId)
-                }
+                historyViewModel.selectedBatchId = batchId
+                historyViewModel.prepareBatchDetails(for: batchId)
             }
             .onDisappear {
                 historyViewModel.clearBatchDetail()

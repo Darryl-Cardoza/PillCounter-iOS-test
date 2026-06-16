@@ -11,14 +11,39 @@ import Combine
 @MainActor
 class StockCountViewModel: ObservableObject {
 
-    // MARK: - Dependencies
+    // MARK: - Injected dependencies
+    //
+    // Default to the production singletons so existing call sites
+    // (`StockCountViewModel()`) keep working unchanged. Tests pass mocks
+    // conforming to the data-source / repository protocols.
 
-    let batchDAO             = BatchStore.shared
-    let transactionDAO       = TransactionStore.shared
-    let drugMasterDAO        = DrugCatalogStore.shared
-    let userDataLocalStorage = UserStore.shared
-    let decoder              = BarcodeAndQRDecoder()
-    let controlledRepo       = ControlledRepository.shared
+    let batchDAO: BatchDataSource
+    let transactionDAO: TransactionDataSource
+    let transactionDetailDAO: TransactionDetailDataSource
+    let drugMasterDAO: DrugCatalogDataSource
+    let userDataLocalStorage: UserDataSource
+    let decoder: BarcodeAndQRDecoder
+    let controlledRepo: ControlledRepositoryProtocol
+
+    init(
+        batchDAO: BatchDataSource = BatchStore.shared,
+        transactionDAO: TransactionDataSource = TransactionStore.shared,
+        transactionDetailDAO: TransactionDetailDataSource = TransactionDetailStore.shared,
+        drugMasterDAO: DrugCatalogDataSource = DrugCatalogStore.shared,
+        userDataLocalStorage: UserDataSource = UserStore.shared,
+        decoder: BarcodeAndQRDecoder = BarcodeAndQRDecoder(),
+        controlledRepo: ControlledRepositoryProtocol = ControlledRepository.shared
+    ) {
+        self.batchDAO = batchDAO
+        self.transactionDAO = transactionDAO
+        self.transactionDetailDAO = transactionDetailDAO
+        self.drugMasterDAO = drugMasterDAO
+        self.userDataLocalStorage = userDataLocalStorage
+        self.decoder = decoder
+        self.controlledRepo = controlledRepo
+
+        observeDataChanges()
+    }
 
     // MARK: - Published State
 
@@ -57,12 +82,6 @@ class StockCountViewModel: ObservableObject {
     // MARK: - Combine
 
     private var cancellables = Set<AnyCancellable>()
-
-    // MARK: - Init
-
-    init() {
-        observeDataChanges()
-    }
 
     // MARK: - Reactive Observer
 
@@ -122,6 +141,26 @@ class StockCountViewModel: ObservableObject {
         currentBatch = lastBatch
         reloadAllState()
         return true
+    }
+
+    // MARK: - Stock-count entry (called by the scan screen on appear)
+
+    /// Resume counting an existing batch. Fetches it fresh by id and rebuilds
+    /// the session. Centralises the setup callers previously did inline.
+    func startStockCount(batchId: Int64) {
+        guard let batch = batchDAO.fetchById(batchId) else { return }
+        currentBatch = batch
+        reloadAllState()
+    }
+
+    /// Begin a new stock-count batch for the given bucket. The batch is created
+    /// lazily on the first scan via `ensureBatchExists()`; here we just clear any
+    /// prior session and stash the bucket.
+    func startNewBatch(bucketId: String) {
+        currentBatch = nil
+        groupedTransactions = []
+        batchNdcSet = []
+        pendingBucketId = bucketId
     }
 
     func loadBatches() -> [BatchCountEntity] {
@@ -217,7 +256,7 @@ class StockCountViewModel: ObservableObject {
 
         totalNdcRequests = 0
         for transaction in regularCountTransactions {
-            totalNdcRequests = TransactionDetailStore.shared.totalCount(txnId: transaction.txn_id)
+            totalNdcRequests = transactionDetailDAO.totalCount(txnId: transaction.txn_id)
         }
     }
 

@@ -2,7 +2,7 @@
 //  DashboardStatCardView.swift
 //  PillCounter
 //
-//  Tappable stat card on NewDashboardView. Highlights when its filter is active
+//  Tappable stat card on DashboardView. Highlights when its filter is active
 //  and toggles the filter via the supplied callback.
 //
 

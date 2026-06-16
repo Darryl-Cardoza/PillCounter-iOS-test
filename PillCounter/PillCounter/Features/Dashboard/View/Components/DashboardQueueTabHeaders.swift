@@ -3,7 +3,7 @@
 //  PillCounter
 //
 //  The "Today's Queue" / "Recent Activity" segmented tab headers on
-//  NewDashboardView. Binds to the selected-tab index.
+//  DashboardView. Binds to the selected-tab index.
 //
 
 import SwiftUI

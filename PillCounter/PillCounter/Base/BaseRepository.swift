@@ -31,7 +31,7 @@ protocol BaseRepositoryProtocol {
 }
 
 extension BaseRepositoryProtocol {
-    static var shouldBypassSSL: Bool { return  true } //make it false
+    static var shouldBypassSSL: Bool { return false }
 
     // MARK: - Perform Request
     static func performRequest<T: Decodable>(
@@ -178,7 +178,7 @@ extension BaseRepositoryProtocol {
     }
 
     private static func logResponse(_ data: Data, _ response: URLResponse?) {
-//        #if DEBUG
+        #if DEBUG
         print("\n========================= 📩 API RESPONSE =========================")
         if let httpResponse = response as? HTTPURLResponse {
             print("⬅️ Status Code: \(httpResponse.statusCode)")
@@ -196,7 +196,7 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
-//        #endif
+        #endif
     }
 }
 

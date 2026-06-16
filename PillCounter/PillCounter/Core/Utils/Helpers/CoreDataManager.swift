@@ -18,11 +18,13 @@ final class CoreDataManager {
 
     static let shared = CoreDataManager()
 
+    private static let modelName = "PillCounter"
+
     let container: NSPersistentContainer
 
-    // init function
+    /// Production initializer — loads the on-disk, file-protected SQLite store.
     private init() {
-        container = NSPersistentContainer(name: "PillCounter")
+        container = NSPersistentContainer(name: CoreDataManager.modelName)
 
         guard let description = container.persistentStoreDescriptions.first else {
             fatalError("No store description")
@@ -43,6 +45,31 @@ final class CoreDataManager {
                 DBDebugLogger.printAll()
             }
             #endif
+        }
+    }
+
+    /// In-memory initializer for unit tests. Each instance gets an isolated
+    /// store that never touches disk, so tests can build and query entities
+    /// without affecting the app database or each other.
+    ///
+    /// Usage in a test:
+    /// ```
+    /// let cd = CoreDataManager(inMemory: true)
+    /// let txn = PillCountTransactionEntity(context: cd.context)
+    /// ```
+    init(inMemory: Bool) {
+        container = NSPersistentContainer(name: CoreDataManager.modelName)
+
+        if inMemory {
+            let description = NSPersistentStoreDescription()
+            description.type = NSInMemoryStoreType
+            container.persistentStoreDescriptions = [description]
+        }
+
+        container.loadPersistentStores { _, error in
+            if let error = error {
+                fatalError("Failed to load in-memory Core Data: \(error.localizedDescription)")
+            }
         }
     }
     
@@ -71,6 +98,4 @@ final class CoreDataManager {
             container.viewContext.reset()
         }
     }
-
-    private static let modelName = "PillCounter"
 }

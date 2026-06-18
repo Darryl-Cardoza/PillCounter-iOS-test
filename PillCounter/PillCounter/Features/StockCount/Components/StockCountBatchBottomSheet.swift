@@ -90,14 +90,23 @@ struct StockCountBatchBottomSheet: View {
 
     // MARK: - iPad Landscape
 
+    @ViewBuilder
     private var iPadLandscapeLayout: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            StockCountBatchPanel(topPadding: statusBarHeight, onScanPills: onScanPills) {
-                EmptyView()
-            }
-            .frame(maxHeight: .infinity)
+        if showEditSheet, let txn = editableTxn {
+            // Edit takes over the ENTIRE panel (full width + height).
+            StockCountEditDetailsSheet(txn: txn, onDismiss: { showEditSheet = false })
+                .environmentObject(appColors)
+                .environmentObject(stockCountViewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                StockCountBatchPanel(topPadding: statusBarHeight, onScanPills: onScanPills) {
+                    EmptyView()
+                }
+                .frame(maxHeight: .infinity)
 
-            detailSlot(isIpadPortrait: false)
+                detailSlot(isIpadPortrait: false)
+            }
         }
     }
 

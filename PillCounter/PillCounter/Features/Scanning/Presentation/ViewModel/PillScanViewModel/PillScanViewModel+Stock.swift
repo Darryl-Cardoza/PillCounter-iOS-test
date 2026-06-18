@@ -139,7 +139,8 @@ extension PillScanViewModel {
             drugName: drugName,
             batchId: batchId,
             expirationDate: expiryString,
-            lotNumber: decoded.lotNumber
+            lotNumber: decoded.lotNumber,
+            serialNumber: decoded.serialNumber
         )
 
         // MARK: 7️⃣ Fetch newly created txn

@@ -39,7 +39,7 @@ struct VialBottomContentView: View {
                     .foregroundStyle(isCaptured ? appColors.primary : Color.white.opacity(0.5))
                 Text(L10n.PillCount.redo)
                     .font(labelFont)
-                    .foregroundColor(isCaptured ? appColors.text :Color.white.opacity(0.5))
+                    .foregroundColor(isCaptured ? appColors.text : Color.white.opacity(0.5))
             }
             .onTapGesture {
                 guard isCaptured else { return }

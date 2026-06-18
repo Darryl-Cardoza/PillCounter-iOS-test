@@ -22,7 +22,7 @@ final class FieldEncryptionManager {
         guard let data = value.data(using: .utf8) else { return value }
 
         do {
-            let key = try loadOrCreateKey()
+            let key = loadOrCreateKey()
             let sealed = try AES.GCM.seal(data, using: key)
             guard let combined = sealed.combined else { return value }
             return combined.base64EncodedString()
@@ -58,7 +58,7 @@ final class FieldEncryptionManager {
         }
 
         do {
-            let key = try loadOrCreateKey()
+            let key = loadOrCreateKey()
             let decrypted = try AES.GCM.open(sealed, using: key)
             return String(data: decrypted, encoding: .utf8)
         } catch {
@@ -93,51 +93,19 @@ final class FieldEncryptionManager {
 
     // MARK: - Key management
 
+    // Account/service/accessibility preserved exactly from the original
+    // implementation so the existing field-encryption key stays readable.
+    // WhenUnlockedThisDeviceOnly: device-bound, not backed up to iCloud.
     private static let keyAccount = "com.pillcounter.field.encryption.key.v1"
     private static let keyService = "com.ritetechnologies.PillCounting"
 
-    /// Loads the AES-256-GCM key from Keychain, or generates and stores
-    /// a new one. Key is stored with kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-    /// — device-bound, not backed up to iCloud.
-    private func loadOrCreateKey() throws -> SymmetricKey {
-        if let existing = loadKey() { return existing }
-        let key = SymmetricKey(size: .bits256)
-        try saveKey(key)
-        return key
-    }
-
-    private func loadKey() -> SymmetricKey? {
-        let query: [String: Any] = [
-            kSecClass as String:       kSecClassGenericPassword,
-            kSecAttrService as String: Self.keyService,
-            kSecAttrAccount as String: Self.keyAccount,
-            kSecReturnData as String:  true,
-            kSecMatchLimit as String:  kSecMatchLimitOne
-        ]
-        var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data
-        else { return nil }
-        return SymmetricKey(data: data)
-    }
-
-    private func saveKey(_ key: SymmetricKey) throws {
-        let keyData = key.withUnsafeBytes { Data($0) }
-        let attributes: [String: Any] = [
-            kSecClass as String:           kSecClassGenericPassword,
-            kSecAttrService as String:     Self.keyService,
-            kSecAttrAccount as String:     Self.keyAccount,
-            kSecAttrAccessible as String:  kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-            kSecValueData as String:       keyData
-        ]
-        SecItemDelete(attributes as CFDictionary)
-        let status = SecItemAdd(attributes as CFDictionary, nil)
-        if status != errSecSuccess {
-            throw NSError(
-                domain: "FieldEncryption",
-                code: Int(status),
-                userInfo: [NSLocalizedDescriptionKey: "Keychain write failed: \(status)"]
-            )
-        }
+    /// Loads the AES-256-GCM field key from the Keychain, or generates and
+    /// stores a new one.
+    private func loadOrCreateKey() -> SymmetricKey {
+        Keychain.getOrCreateSymmetricKey(
+            account: Self.keyAccount,
+            service: Self.keyService,
+            accessibility: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        )
     }
 }

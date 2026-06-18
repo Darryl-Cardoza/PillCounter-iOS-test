@@ -38,13 +38,13 @@ public enum DashboardFlow: Hashable, Codable {
 }
 
 public enum ScanningFlow: Codable, Hashable {
-    case scan(ScanType)
-    case stockCount(StockCountFlow)
-}
-
-public enum StockCountFlow: Codable, Hashable {
-    case stockCountBatchDetail
-    case stockCountPartialBatchListScreen
+    /// Payload the scan screen uses to set up its session on appear, so callers
+    /// don't poke the shared view models directly:
+    /// - `txnId`: resume/start a count for an existing dispense transaction.
+    /// - `batchId`: resume an existing stock-count batch.
+    /// - `bucketId`: start a new stock-count batch for this bucket.
+    /// All nil for flows that don't target existing data (e.g. fresh rx_label).
+    case scan(ScanType, txnId: Int64? = nil, batchId: Int64? = nil, bucketId: String? = nil)
 }
 
 
@@ -80,8 +80,8 @@ public enum HamburgerMenuFLow: Hashable, Codable {
     case profile
     case settings
     case unsyncedTransaction
-    case HistoryTransactionDetail
-    case HistoryBatchDetail
+    case HistoryTransactionDetail(Int64)   // txn_id — screen fetches the entity by id
+    case HistoryBatchDetail(Int64)         // batch_id — screen fetches the batch by id
 }
 
 public enum HamburgerMenuItem: CaseIterable, Identifiable {

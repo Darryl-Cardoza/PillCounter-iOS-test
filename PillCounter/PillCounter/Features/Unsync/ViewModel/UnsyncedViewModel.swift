@@ -25,20 +25,30 @@ final class UnsyncedViewModel: ObservableObject {
 
     // MARK: - Private
 
-    private let batchDAO = BatchStore.shared
-    private let transactionDAO = TransactionStore.shared
-    private let transactionDetailDAO = TransactionDetailStore.shared
+    private let batchStore: BatchDataSource
+    private let transactionStore: TransactionDataSource
+    private let transactionDetailStore: TransactionDetailDataSource
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Init
 
-    init() {
-        batchDAO.transactionsDidChange
+    /// Dependencies default to the production singletons, so existing call
+    /// sites (`UnsyncedViewModel()`) keep working unchanged. Tests pass mocks.
+    init(
+        batchStore: BatchDataSource = BatchStore.shared,
+        transactionStore: TransactionDataSource = TransactionStore.shared,
+        transactionDetailStore: TransactionDetailDataSource = TransactionDetailStore.shared
+    ) {
+        self.batchStore = batchStore
+        self.transactionStore = transactionStore
+        self.transactionDetailStore = transactionDetailStore
+
+        batchStore.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.loadAll() }
             .store(in: &cancellables)
 
-        transactionDAO.transactionsDidChange
+        transactionStore.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.loadAll() }
             .store(in: &cancellables)
@@ -54,19 +64,19 @@ final class UnsyncedViewModel: ObservableObject {
     }
 
     private func loadBatches() {
-        let rawBatches = batchDAO.fetchCompletedUnsynced()
+        let rawBatches = batchStore.fetchCompletedUnsynced()
 
         batches = rawBatches.map { batch in
-            let ndcCount = batchDAO.getTransactionCount(for: batch.batch_id)
+            let ndcCount = batchStore.getTransactionCount(for: batch.batch_id)
             return batch.toStockData(ndcCount: ndcCount)
         }
     }
 
     private func loadTransactions() {
-        let txns = transactionDAO.fetchCompletedUnsynced()
+        let txns = transactionStore.fetchCompletedUnsynced()
 
         transactions = txns.map { txn in
-               let counted = transactionDetailDAO.totalCountForStep(
+               let counted = transactionDetailStore.totalCountForStep(
                    txnId: txn.txn_id,
                    step: .targetVerification
                )

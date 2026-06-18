@@ -27,15 +27,15 @@ struct ScannedDrugDetailsSlot: View {
                     .foregroundColor(appColors.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-//                PillCountingButton(
-//                    iconName: nil, title: L10n.StockCountSheet.edit,
-//                    textColor: appColors.primary, backgroundColor: .clear,
-//                    borderColor: appColors.primary,
-//                    font: .system(size: 14, weight: .semibold),
-//                    cornerRadius: 30, horizontalPadding: 4, verticalPadding: 4, iconSize: 0,
-//                    action: onEditTapped
-//                )
-//                .frame(maxWidth: 80)
+                PillCountingButton(
+                    iconName: nil, title: L10n.StockCountSheet.edit,
+                    textColor: appColors.primary, backgroundColor: .clear,
+                    borderColor: appColors.primary,
+                    font: .system(size: 14, weight: .semibold),
+                    cornerRadius: 30, horizontalPadding: 4, verticalPadding: 4, iconSize: 0,
+                    action: onEditTapped
+                )
+                .frame(maxWidth: 80)
             }
             .padding(.top, isIpadPortrait ? 8 : 14)
 
@@ -56,6 +56,7 @@ struct ScannedDrugDetailsSlot: View {
         let drug  = stockCountViewModel.scannedDrugData
         let bucket = stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL"
         let batchId = String(stockCountViewModel.currentBatch?.batch_id ?? 0)
+        let lotNumbet = drug?.lotNumber ?? "-"
         let packageQty = Int(drug?.quantity ?? 0)
         // After auto-add, pendingBottleCount reflects the committed bottle count.
         let newTotal   = stockCountViewModel.pendingBottleCount
@@ -77,7 +78,7 @@ struct ScannedDrugDetailsSlot: View {
                     Divider()
 
                     HStack(alignment: .top, spacing: 12) {
-                        cellLabel(L10n.StockCountSheet.batchNo, value: drug?.lotNumber ?? "-", color: appColors.secondary)
+                        cellLabel(L10n.StockCountSheet.batchNo, value: lotNumbet, color: appColors.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry ?? "—", color: appColors.secondary)
@@ -98,7 +99,7 @@ struct ScannedDrugDetailsSlot: View {
                     cellLabel(L10n.StockCountSheet.ndcNumber, value: drug?.ndc ?? "—", color: appColors.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    cellLabel(L10n.StockCountSheet.batchNo, value: batchId, color: appColors.secondary)
+                    cellLabel(L10n.StockCountSheet.batchNo, value: lotNumbet, color: appColors.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                     Spacer()
                     cellLabel(L10n.StockCountSheet.expiryDate, value: drug?.expiry.isEmpty == false ? drug!.expiry : "—", color: appColors.secondary)

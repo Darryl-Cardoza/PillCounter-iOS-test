@@ -11,20 +11,35 @@ import ComposeApp
 @MainActor
 class UserViewModel: ObservableObject {
 
-    // MARK: DATABASE
-    let userLocalDB = UserStore.shared
+    // MARK: - Injected dependencies
+    //
+    // Default to production singletons so `UserViewModel()` keeps working;
+    // tests pass mocks conforming to the data-source / repository protocols.
+    let userLocalDB: UserDataSource
+    let transactionDAO: TransactionDataSource
+    let transactionDetailDAO: TransactionDetailDataSource
+    let drugMasterDAO: DrugCatalogDataSource
+    let batchDAO: BatchDataSource
+    let userRepo: UserRepositoryProtocol
+    let settingsRepo: SettingsRepositoryProtocol
 
-    // DAO instances
-    let transactionDAO = TransactionStore.shared
-    let transactionDetailDAO = TransactionDetailStore.shared
-    let drugMasterDAO = DrugCatalogStore.shared
-    let batchDAO = BatchStore.shared
-
-    // user repo
-    let userRepo = UserRepository.shared
-
-    // settings repo
-    let settingsRepo = SettingsRepository.shared
+    init(
+        userLocalDB: UserDataSource = UserStore.shared,
+        transactionDAO: TransactionDataSource = TransactionStore.shared,
+        transactionDetailDAO: TransactionDetailDataSource = TransactionDetailStore.shared,
+        drugMasterDAO: DrugCatalogDataSource = DrugCatalogStore.shared,
+        batchDAO: BatchDataSource = BatchStore.shared,
+        userRepo: UserRepositoryProtocol = UserRepository.shared,
+        settingsRepo: SettingsRepositoryProtocol = SettingsRepository.shared
+    ) {
+        self.userLocalDB = userLocalDB
+        self.transactionDAO = transactionDAO
+        self.transactionDetailDAO = transactionDetailDAO
+        self.drugMasterDAO = drugMasterDAO
+        self.batchDAO = batchDAO
+        self.userRepo = userRepo
+        self.settingsRepo = settingsRepo
+    }
 
     // MARK: - Published UI state
     @Published var isLoading: Bool = false
@@ -231,6 +246,11 @@ class UserViewModel: ObservableObject {
 
         } catch {
             Log("[User] Error fetching user: \(error.localizedDescription)")
+            // The auth/me call failed. Fall back to whatever we have cached so the
+            // terminal dropdown (and profile) stay populated instead of going blank.
+            if terminals.isEmpty {
+                hydrateTerminalsFromCache()
+            }
         }
     }
 

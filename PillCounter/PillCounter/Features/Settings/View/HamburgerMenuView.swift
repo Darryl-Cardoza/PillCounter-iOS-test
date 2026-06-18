@@ -17,19 +17,16 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
-    @StateObject private var unsyncedViewModel = UnsyncedViewModel()
+
+    // Single settings view model drives the menu's settings-derived rows:
+    // the unsynced count and the save-history display.
+    @StateObject private var settingsViewModel = SettingsViewModel()
 
     @State private var showLogoutPopup: Bool = false
     @State private var showStockCountPopup: Bool = false
     @State private var showSelectBucketIdPopup: Bool = false
     @State private var selectedStockCountOption: StockCountOption = .newBatch
-    
-    @AppStorage(AppStorageManager.AppStorageKeys.saveHistoryOption)
-    
 
-    
-    private var storedHistoryOption: String = SaveHistoryOption.default.rawValue
-    
     private let menuItems = HamburgerMenuItem.allCases
 
     // MARK: BODY
@@ -199,12 +196,12 @@ struct HamburgerMenuView: View {
         switch item {
             
         case .History:
-            Text("\(storedHistoryOption)")
+            Text(settingsViewModel.saveHistoryDisplayText)
                 .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
 
         case .UnsyncedTransaction:
-            Text("\(unsyncedViewModel.batches.count + unsyncedViewModel.transactions.count)")
+            Text("\(settingsViewModel.unsyncedCount)")
                 .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
               

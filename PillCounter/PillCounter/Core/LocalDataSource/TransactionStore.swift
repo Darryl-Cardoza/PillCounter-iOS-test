@@ -31,6 +31,7 @@ final class TransactionStore {
         isControlled: Bool? = nil,
         expirationDate: String? = nil,
         lotNumber: String? = nil,
+        serialNumber: String? = nil,
         rxNo: String? = nil,
         bucketId: String? = nil,
         priority: String? = nil,
@@ -53,6 +54,7 @@ final class TransactionStore {
         entity.is_ndc_verfied = false
         entity.expiry = expirationDate
         entity.lot_no = lotNumber
+        entity.serial_no = serialNumber
         entity.bucket_id = bucketId
         entity.workflow_step = workFlowStep
         entity.user = user
@@ -67,7 +69,7 @@ final class TransactionStore {
         }
 
         CoreDataManager.shared.save(context: context)
-        print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), countType: \(countType.rawValue), batchId: \(batchId), isFromPms: \(isFromPms)")
+        print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), countType: \(countType.rawValue), batchId: \(batchId), isFromPms: \(isFromPms), lotNo: \(lotNumber ?? "-"), serialNo: \(serialNumber ?? "-"), expiry: \(expirationDate ?? "-")")
         transactionsDidChange.send()
         return entity
     }
@@ -248,7 +250,7 @@ final class TransactionStore {
         results.forEach { refreshDecrypted($0) }
         StoreLogger.log(
             dao: "TransactionDAO", op: "fetchAll",
-            columns: ["txn_id", "rx_no", "drug_name", "count_type", "status", "batch_id", "target_count", "is_from_pms", "is_synced"],
+            columns: ["txn_id", "rx_no", "drug_name", "count_type", "status", "batch_id", "target_count", "lot_no", "serial_no"],
             rows: results.map { [
                 "\($0.txn_id)",
                 $0.rx_no ?? "-",
@@ -257,8 +259,11 @@ final class TransactionStore {
                 $0.status ?? "-",
                 "\($0.batch_id)",
                 "\($0.target_count)",
-                "\($0.is_from_pms)",
-                "\($0.is_synced)"
+//                "\($0.is_from_pms)",
+//                "\($0.is_synced)",
+                "\($0.lot_no)",
+//                "\($0.expiry_date)",
+                $0.serial_no ?? "",
             ]}
         )
         return results

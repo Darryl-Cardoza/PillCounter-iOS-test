@@ -246,6 +246,11 @@ class UserViewModel: ObservableObject {
 
         } catch {
             Log("[User] Error fetching user: \(error.localizedDescription)")
+            // The auth/me call failed. Fall back to whatever we have cached so the
+            // terminal dropdown (and profile) stay populated instead of going blank.
+            if terminals.isEmpty {
+                hydrateTerminalsFromCache()
+            }
         }
     }
 

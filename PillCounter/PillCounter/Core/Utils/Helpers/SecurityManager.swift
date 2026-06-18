@@ -26,9 +26,12 @@ struct SecurityManager {
         #if DEBUG
         return false
         #else
-        return isJailbroken()
-            || isDebuggerAttached()
-            || hasSuspiciousDylibs()
+        return
+        isJailbroken()
+        || isDebuggerAttached()
+        || isRunningOnSimulator()
+        || isTampered()
+        || hasSuspiciousDylibs()
         #endif
     }
 
@@ -67,6 +70,23 @@ struct SecurityManager {
         }
         #endif
     }
+    
+    private static func isRunningOnSimulator() -> Bool {
+          #if targetEnvironment(simulator)
+          #if DEBUG
+          return false
+          #else
+          return true
+          #endif
+          #else
+          return false
+          #endif
+      }
+
+      // MARK: - APP TAMPERING DETECTION
+      private static func isTampered() -> Bool {
+          return Bundle.main.infoDictionary?["SignerIdentity"] != nil
+      }
 
     // MARK: - DEBUGGER DETECTION
     private static func isDebuggerAttached() -> Bool {

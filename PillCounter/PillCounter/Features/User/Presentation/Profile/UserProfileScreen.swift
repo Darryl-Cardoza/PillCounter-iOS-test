@@ -70,7 +70,11 @@ struct UserProfileScreen: View {
         }
         .onAppear {
             Task {
-                await userViewModel.getUser()
+                // Force a remote refresh so the profile (and terminal list) is
+                // always up to date — if a prior auth/me call failed, the cached
+                // user may be missing terminals, so we re-fetch rather than serve
+                // stale local data.
+                await userViewModel.getUser(forceRemote: true)
             }
         }
         .onTapGesture {
@@ -127,7 +131,8 @@ struct UserProfileScreen: View {
                 placeholder: L10n.Profile.phoneNumber,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                maxLength: 10
+                maxLength: 10,
+                usPhoneFormat: true
             )
 
             FloatingLabelTextField(
@@ -194,7 +199,8 @@ struct UserProfileScreen: View {
                 placeholder: L10n.Profile.phoneNumber,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                maxLength: 10
+                maxLength: 10,
+                usPhoneFormat: true
             )
 
             FloatingLabelTextField(

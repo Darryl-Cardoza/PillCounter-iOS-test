@@ -179,16 +179,16 @@ private extension UnsyncedTransactionView {
     var syncButtonArea: some View {
         VStack(spacing: 6) {
             // PMS status badge
-            if viewModel.batches.isEmpty {
-                Text(L10n.Unsync.pmsNotConnected)
-                    .font(.system(size: 12))
-                    .foregroundColor(                                 userViewModel.pmsConnectionState == .disconnected
-                                                                      ? Color.black : appColors.text
-                    )
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(appColors.secondaryBackground)
-            }
+//            if viewModel.batches.isEmpty {
+//                Text(L10n.Unsync.pmsNotConnected)
+//                    .font(.system(size: 12))
+//                    .foregroundColor(                                 userViewModel.pmsConnectionState == .disconnected
+//                                                                      ? Color.black : appColors.text
+//                    )
+//                    .padding(.horizontal, 12)
+//                    .padding(.vertical, 6)
+//                    .background(appColors.secondaryBackground)
+//            }
 
             Button {
                 Task { await viewModel.syncAll() }

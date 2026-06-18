@@ -100,6 +100,12 @@ struct PillCounterApp: App {
                             .task {
                                 userViewModel.loadMobileThemeSettings()
 
+                                // Hydrate the user from auth/me on launch (mirrors
+                                // mobile settings). Forcing remote ensures the profile
+                                // and terminal list are refreshed even when a stale
+                                // local user already exists.
+                                Task { await userViewModel.getUser(forceRemote: true) }
+
                                 Task.detached(priority: .background) {
                                     await MainActor.run {
                                         HistoryCleanupStore.shared.cleanUpOldHistory()

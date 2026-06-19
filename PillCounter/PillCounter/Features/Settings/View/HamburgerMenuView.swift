@@ -29,6 +29,14 @@ struct HamburgerMenuView: View {
 
     private let menuItems = HamburgerMenuItem.allCases
 
+    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
+
+    /// Unsynced transactions are a PMS-integration-only concept — disable the row
+    /// when PMS integration is off for this account.
+    private func isItemDisabled(_ item: HamburgerMenuItem) -> Bool {
+        item == .UnsyncedTransaction && !isPmsIntegrated
+    }
+
     // MARK: BODY
     var body: some View {
         ZStack {
@@ -127,6 +135,8 @@ struct HamburgerMenuView: View {
 //        let isCountItem = (item == .FixedCount || item == .RegularCount)
         let isCountItem = false
 
+        let disabled = isItemDisabled(item)
+
         Button {
             handleMenuSelection(item)
         } label: {
@@ -186,6 +196,9 @@ struct HamburgerMenuView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Grayed out when PMS is off, but kept tappable so the tap can surface
+        // the "feature not available" toast (handled in handleMenuSelection).
+        .opacity(disabled ? 0.6 : 1.0)
     }
 
     // MARK: - TRAILING VIEW BUILDER
@@ -465,9 +478,15 @@ struct HamburgerMenuView: View {
 //                    .login(.dashboard(.pillCount(.scan(.rx_label))))))
 //            
         case .UnsyncedTransaction:
+            // PMS off → unsynced transactions are unavailable; surface a toast
+            // instead of navigating.
+            if isItemDisabled(.UnsyncedTransaction) {
+                ToastManager.shared.show(message: L10n.Menu.featureNotAvailableMessage)
+                return
+            }
             router.navigate(
                 to: .authentication(.user(.userSettings(.unsyncedTransaction))))
-            
+
         case .Settings:
             router.navigate(
                 to: .authentication(.user(.userSettings(.settings))))

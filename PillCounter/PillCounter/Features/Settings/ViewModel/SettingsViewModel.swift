@@ -164,6 +164,22 @@ final class SettingsViewModel: ObservableObject {
         hazardousTrayColor = nil
     }
 
+    // MARK: - PMS-gated settings
+
+    /// Reset the PMS-integration-gated settings to their defaults (off / empty).
+    /// Called when PMS integration is off so a stale "on" value can't take effect:
+    /// Back Count, Hazardous Drug, Require Double Count (schedules) and the
+    /// Hazardous Tray Color. No-op when everything is already at default.
+    func resetPmsGatedSettings() {
+        if isBackCountRequired { setBackCountRequired(false) }
+        if isHazardousDrugSettingEnabled { setHazardousDrugSetting(false) }
+        if !selectedSchedules.isEmpty {
+            selectedSchedules = []
+            store.selectedSchedules = []
+        }
+        if hazardousTrayColor != nil { resetHazardousTrayColor() }
+    }
+
     // MARK: - Clear local data
 
     func clearLocalData() {

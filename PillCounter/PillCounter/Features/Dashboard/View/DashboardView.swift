@@ -24,11 +24,13 @@ struct DashboardView: View {
     private var userId: String { AppStorageManager.shared.userId ?? "" }
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = true
-    private var isHl7Enable: Bool { AppStorageManager.shared.isHl7Enabled }
+    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
     @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
     var selectedTerminalName: String = ""
 
     @State private var showSelectBucketIdPopup: Bool = false
+    /// Shown when a dispense action is tapped while PMS integration is off.
+    @State private var showFeatureUnavailablePopup: Bool = false
     @State private var hasCheckedNewUser: Bool = false
     @State private var selectedQueueTab: Int = 0  // 0 = Today's Queue, 1 = Recent Activity
 
@@ -77,6 +79,21 @@ struct DashboardView: View {
         .customPopup(isPresented: $showSelectBucketIdPopup) {
             selectBucketPopUp
         }
+        .customPopup(isPresented: $showFeatureUnavailablePopup) {
+            featureUnavailablePopUp
+        }
+    }
+
+    private var featureUnavailablePopUp: some View {
+        ConfirmationDialogue(
+            title: L10n.Menu.featureNotAvailableTitle,
+            message: L10n.Menu.featureNotAvailableMessage,
+            cancelButtonText: "",
+            confirmButtonText: L10n.Common.ok,
+            showSingleConfirmButton: true,
+            onCancel: {},
+            onConfirm: { showFeatureUnavailablePopup = false }
+        )
     }
  
     // MARK: - Portrait body
@@ -298,20 +315,22 @@ struct DashboardView: View {
                     )
                     .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
                     .foregroundColor(appColors.text)
-                    if !selectedTerminalName.isEmpty {
-                        Text(
-                            "\(selectedTerminalName) | \(userViewModel.fullName) "
-                        )
+                    
+                    // Showing terminal name and username
+                    let displayName = isPmsIntegrated && !selectedTerminalName.isEmpty
+                        ? "\(selectedTerminalName) | \(userViewModel.fullName)"
+                        : userViewModel.fullName
+
+                    Text(displayName)
                         .font(.system(size: isIpad ? 15 : 13))
                         .foregroundColor(appColors.text.opacity(0.6))
-                    }
                 }
             }
 
             Spacer()
 
             // Right: PMS status + Hamburger menu
-            if isHl7Enable {
+            if isPmsIntegrated {
                 PMSConnectionButtonView(
                     pmsConnectionState: userViewModel.pmsConnectionState
                 )
@@ -461,7 +480,16 @@ struct DashboardView: View {
                         items: viewModel.filteredQueueItems,
                         idPrefix: "queue"
                     ) {
-                        DashboardTodaysQueueRow(item: $0, router: router)
+                        DashboardTodaysQueueRow(
+                            item: $0,
+                            router: router,
+                            // PMS off → block dispense rows in the pending queue list;
+                            // tapping shows the popup instead of resuming the scan.
+                            // (The Dispense quick-action card is NOT blocked.)
+                            onDispenseBlocked: isPmsIntegrated
+                                ? nil
+                                : { showFeatureUnavailablePopup = true }
+                        )
                     }
                 )
             } else {

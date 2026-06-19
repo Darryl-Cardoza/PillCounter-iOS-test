@@ -29,7 +29,8 @@ final class AppStorageManager {
         static let isLoggedIn           = "is_logged_in"
         static let rememberMe           = "remember_me"
         static let tokenExpiryTimestamp = "token_expiry_timestamp"
-        static let isHl7Enable          = "is_hl7_enable"
+        static let isPmsIntegrated      = "is_pms_integrated"
+        static let allowLocalStorage    = "allow_local_storage"
         static let pmsHostName          = "pms_host_name"
         static let pillCounterHostName  = "pillcounter_host_name"
         static let barcodeFormat        = "barcode_format"
@@ -113,11 +114,16 @@ final class AppStorageManager {
         }
     }
 
-    var isHl7Enabled: Bool {
-        get { Keychain.getPassword(for: AppStorageKeys.isHl7Enable) == "true" }
-        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isHl7Enable) }
+    var isPmsIntegrated: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.isPmsIntegrated) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isPmsIntegrated) }
     }
 
+    var allowLocalStorage: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.allowLocalStorage) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.allowLocalStorage) }
+    }
+    
     var pmsHostName: String {
         get { Keychain.getPassword(for: AppStorageKeys.pmsHostName) ?? "" }
         set { Keychain.savePassword(newValue, for: AppStorageKeys.pmsHostName) }

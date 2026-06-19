@@ -133,7 +133,8 @@ class LoginViewModel: ObservableObject {
 
                 // All sensitive values written to Keychain via AppStorageManager
                 store.isLoggedIn   = true
-                store.isHl7Enabled = result.data?.user?.isHl7Enabled ?? false
+                store.isPmsIntegrated = result.data?.user?.isPmsIntegrated ?? false
+                store.allowLocalStorage = result.data?.user?.allowLocalStorage ?? false
                 store.accessToken  = result.data?.accessToken ?? ""
                 store.refreshToken = result.data?.refreshToken ?? ""
                 store.userEmail    = userEmail
@@ -147,7 +148,8 @@ class LoginViewModel: ObservableObject {
                     SessionManager.shared.reset()
                     Hl7ServiceController.shared.evaluate()
                 }
-
+                print("IsPmsIntegrated \(store.isPmsIntegrated)")
+                print("allowLocalStorage \(store.allowLocalStorage)")
             } else {
                 errorMessage = result.message ?? "Invalid OTP. Please try again."
             }

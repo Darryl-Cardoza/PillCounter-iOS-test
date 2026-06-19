@@ -89,6 +89,17 @@ final class CameraService: NSObject, ObservableObject {
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
 
+    /// Target inference rate. The camera delivers frames at the device default
+    /// (~30 fps), but the three-model pipeline (glove + tray-seg + pill-detect)
+    /// can't keep up, so excess frames are wasted motion-blurred work. We throttle
+    /// inference to this rate in captureOutput; frames arriving sooner are dropped.
+    private static let targetInferenceFPS: Double = 15
+    private static let minInferenceInterval: TimeInterval = 1.0 / targetInferenceFPS
+
+    /// Presentation timestamp (in seconds) of the last frame we ran inference on.
+    /// Uses the buffer's own clock so the throttle is independent of wall-clock.
+    private var lastInferenceTimestamp: TimeInterval = -1
+
     // MARK: - TIMER
     private var inactivityTimer: DispatchSourceTimer?
 
@@ -184,7 +195,18 @@ final class CameraService: NSObject, ObservableObject {
     private func configureSession() {
         sessionQueue.async {
             self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
+            // Use the 1280×720 VIDEO preset (matching the Android analysis stream),
+            // not .photo. The .photo preset runs continuous still-capture auto-
+            // exposure / auto-focus, so frame brightness and sharpness drift every
+            // frame — that drift pushes borderline pills across the confidence
+            // threshold and makes the overlay + count flicker even on a static tray.
+            // A fixed 720p video stream gives steady exposure and is also smaller →
+            // faster inference. Fall back to .photo if 720p is unsupported.
+            if self.session.canSetSessionPreset(.hd1280x720) {
+                self.session.sessionPreset = .hd1280x720
+            } else {
+                self.session.sessionPreset = .photo
+            }
 
             guard
                 let device = AVCaptureDevice.default(
@@ -203,6 +225,25 @@ final class CameraService: NSObject, ObservableObject {
             self.maxzoom = min(device.activeFormat.videoMaxZoomFactor, 5.0)
             self.videoInput = input
             self.session.addInput(input)
+
+            // Cap capture to 15 fps. The three-model pipeline can't process 30 fps,
+            // so the extra frames are discarded as motion-blurred waste. Locking both
+            // min and max frame duration to 1/15 s also gives the sensor a longer,
+            // steadier exposure per frame, which further reduces the brightness
+            // jitter that flickers borderline pills. Clamped to a rate the active
+            // format supports so lockForConfiguration can't throw out of range.
+            if let range = device.activeFormat.videoSupportedFrameRateRanges.first {
+                let fps = min(max(15.0, range.minFrameRate), range.maxFrameRate)
+                let duration = CMTimeMake(value: 1, timescale: Int32(fps.rounded()))
+                do {
+                    try device.lockForConfiguration()
+                    device.activeVideoMinFrameDuration = duration
+                    device.activeVideoMaxFrameDuration = duration
+                    device.unlockForConfiguration()
+                } catch {
+                    print("⚠️ [CAMERA] Could not lock 15 fps — \(error)")
+                }
+            }
 
             self.videoOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String:
@@ -536,6 +577,19 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         lastPixelBuffer = pixelBuffer
 
         guard isCountingEnabled else { return }
+
+        // ── Inference throttle: cap the pipeline to targetInferenceFPS ────────
+        // The camera runs at ~30 fps but the three-model pipeline can't process
+        // every frame, so we skip frames that arrive sooner than minInferenceInterval
+        // after the last processed one. Uses the buffer's presentation timestamp
+        // (its own clock) rather than wall-clock. lastPixelBuffer is updated above
+        // regardless, so snapshots still use the freshest frame.
+        let ts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        if lastInferenceTimestamp >= 0,
+           ts - lastInferenceTimestamp < Self.minInferenceInterval {
+            return
+        }
+        lastInferenceTimestamp = ts
 
         // ── Model 1: Glove safety detection (YOLOX-Nano 320×320) ──────────────
         // Only runs when the current drug is hazardous (isGloveDetectionEnabled) AND

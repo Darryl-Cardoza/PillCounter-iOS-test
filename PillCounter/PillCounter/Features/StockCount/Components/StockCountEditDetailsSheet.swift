@@ -27,6 +27,9 @@ struct StockCountEditDetailsSheet: View {
 
     let txn: GroupedTransaction
     let onDismiss: () -> Void
+    /// When true the panel hugs its content height (used as a docked
+    /// full-width bottom card on iPad portrait) instead of filling.
+    var hugContentHeight: Bool = false
 
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.verticalSizeClass)   private var vSizeClass
@@ -60,7 +63,7 @@ struct StockCountEditDetailsSheet: View {
             dialogFooter
                 .background(appColors.secondaryBackground)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: hugContentHeight ? nil : .infinity, alignment: .top)
         .background(appColors.primaryBackground)
     }
 
@@ -118,6 +121,10 @@ struct StockCountEditDetailsSheet: View {
             }
             .padding(20)
         }
+        // As a docked bottom card, hug content but cap height so a long
+        // lot list stays scrollable instead of pushing the card off-screen.
+        .frame(maxHeight: hugContentHeight ? UIScreen.main.bounds.height * 0.6 : .infinity)
+        .fixedSize(horizontal: false, vertical: hugContentHeight)
     }
 
     // MARK: - Drug Info Section

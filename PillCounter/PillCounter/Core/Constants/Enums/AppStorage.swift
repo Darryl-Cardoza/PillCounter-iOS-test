@@ -50,6 +50,7 @@ final class AppStorageManager {
         static let selectedTerminalName = "selected_terminal_name"
         static let storedTerminals      = "stored_terminals"
         static let isHarzardousDrugSetting = "hazardous_pill_setting"
+        static let deleteCompletedTransactions = "delete_completed_transactions"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -214,6 +215,17 @@ final class AppStorageManager {
     var isHazardousDrugSetting: Bool {
         get { defaults.bool(forKey: AppStorageKeys.isHarzardousDrugSetting) }
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isHarzardousDrugSetting) }
+    }
+
+    /// When true, a transaction is deleted as soon as it is completed so the
+    /// dispense is not retained in the app. Driven by the mobile settings API
+    /// (server-provided flag), defaults to `true` when never set.
+    var deleteCompletedTransactions: Bool {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.deleteCompletedTransactions) != nil else { return true }
+            return defaults.bool(forKey: AppStorageKeys.deleteCompletedTransactions)
+        }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.deleteCompletedTransactions) }
     }
 
     var isPillCountingEnabled: Bool {

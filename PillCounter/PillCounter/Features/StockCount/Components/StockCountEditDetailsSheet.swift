@@ -7,6 +7,12 @@ import SwiftUI
 
 // MARK: - Editable Lot Row Model
 
+/// Which section a lot-row delete (trash) action targets.
+enum LotField {
+    case sealed   // bottle_qty
+    case open     // loose_qty
+}
+
 struct EditableLotRow: Identifiable {
     let id = UUID()
     let txnId: Int64
@@ -181,11 +187,11 @@ struct StockCountEditDetailsSheet: View {
     }
 
     private func sealedLotRow(row: Binding<EditableLotRow>) -> some View {
-        lotRow(row: row, value: row.sealedBottles)
+        lotRow(row: row, value: row.sealedBottles, field: .sealed)
     }
 
     // Shared row used by both sections — keeps spacing/alignment identical.
-    private func lotRow(row: Binding<EditableLotRow>, value: Binding<Int>) -> some View {
+    private func lotRow(row: Binding<EditableLotRow>, value: Binding<Int>, field: LotField) -> some View {
         HStack(spacing: columnGap) {
             Text(row.wrappedValue.lot.isEmpty ? "—" : row.wrappedValue.lot)
                 .font(.system(size: 15))
@@ -199,12 +205,12 @@ struct StockCountEditDetailsSheet: View {
 
             inlineStepper(value: value, minValue: 0)
 
-            deleteButton(for: row.wrappedValue.id)
+            deleteButton(for: row.wrappedValue.id, field: field)
         }
     }
 
-    private func deleteButton(for rowId: UUID) -> some View {
-        Button(action: { deleteRow(rowId) }) {
+    private func deleteButton(for rowId: UUID, field: LotField) -> some View {
+        Button(action: { deleteRow(rowId, field: field) }) {
             Image(systemName: "trash")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundColor(appColors.primary)
@@ -230,7 +236,7 @@ struct StockCountEditDetailsSheet: View {
 
             // Rows
             ForEach($lotRows) { $row in
-                lotRow(row: $row, value: $row.openPills)
+                lotRow(row: $row, value: $row.openPills, field: .open)
             }
         }
     }
@@ -382,13 +388,23 @@ struct StockCountEditDetailsSheet: View {
         lotRows = rows.sorted { $0.lot < $1.lot }
     }
 
-    private func deleteRow(_ rowId: UUID) {
-        guard let row = lotRows.first(where: { $0.id == rowId }) else { return }
+    private func deleteRow(_ rowId: UUID, field: LotField) {
+        guard let idx = lotRows.firstIndex(where: { $0.id == rowId }) else { return }
+        let row = lotRows[idx]
+        // Don't delete the transactions — just zero out the tapped section's count.
+        // Sealed trash zeroes only bottle_qty; open-pills trash zeroes only loose_qty.
         for txnId in row.txnIds {
-            stockCountViewModel.transactionDAO.softDelete(txnId: txnId)
+            stockCountViewModel.transactionDAO.setAbsoluteCounts(
+                txnId: txnId,
+                bottleQty: field == .sealed ? 0 : nil,
+                looseQty:  field == .open   ? 0 : nil
+            )
         }
         withAnimation(.easeInOut(duration: 0.25)) {
-            lotRows.removeAll { $0.id == rowId }
+            switch field {
+            case .sealed: lotRows[idx].sealedBottles = 0
+            case .open:   lotRows[idx].openPills = 0
+            }
         }
     }
 
@@ -400,6 +416,9 @@ struct StockCountEditDetailsSheet: View {
                 looseQty: Int32(row.openPills)
             )
         }
+        // Counts were written straight to the DAO — pull them back into the detail
+        // card's stepper state so it reflects the edit instead of the stale scan value.
+        stockCountViewModel.resyncScannedDrugCounts()
         onDismiss()
     }
 }

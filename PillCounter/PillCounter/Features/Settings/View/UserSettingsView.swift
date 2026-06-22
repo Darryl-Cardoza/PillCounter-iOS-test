@@ -26,6 +26,18 @@ struct UserSettingsView: View {
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
     
+    
+    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
+    /// PMS-gated rows are disabled when PMS integration is off for this account.
+    private var isPmsDisabled: Bool { !isPmsIntegrated }
+
+    /// Surface the "feature not available" toast when a PMS-gated row is tapped.
+    private func showFeatureUnavailableToast() {
+        ToastManager.shared.show(message: L10n.Menu.featureNotAvailableMessage)
+    }
+
+
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -60,6 +72,13 @@ struct UserSettingsView: View {
         }
         .customPopup(isPresented: $showResetHazardousTrayColorPopup) {
             resetHazardousTrayColorDialog
+        }
+        .onAppear {
+            // PMS off → the gated features are unavailable; reset them to their
+            // defaults (off / empty) so a stale "on" value can't take effect.
+            if isPmsDisabled {
+                settingsViewModel.resetPmsGatedSettings()
+            }
         }
     }
 
@@ -123,10 +142,11 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: L10n.Settings.alwaysAskNotes,
                     isOn: $settingsViewModel.isPillCountingEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    settingsViewModel.setPillCountingEnabled(newValue)
-                }
+                    onColor: appColors.primary,
+                    onToggle: { newValue in
+                        settingsViewModel.setPillCountingEnabled(newValue)
+                    }
+                )
                 
                 Divider().background(appColors.primaryBackground)
                 
@@ -151,7 +171,12 @@ struct UserSettingsView: View {
                 }
                 .padding(.horizontal)
                 .contentShape(Rectangle())
+                .opacity(isPmsDisabled ? 0.6 : 1.0)
                 .onTapGesture {
+                    if isPmsDisabled {
+                        showFeatureUnavailableToast()
+                        return
+                    }
                     withAnimation(.easeInOut(duration: 0.25)) {
                         activeSubScreen = .schedule
                     }
@@ -164,10 +189,13 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: L10n.Settings.requireBackCount,
                     isOn: $settingsViewModel.isBackCountRequired,
-                    onColor: appColors.primary
-                ) { newValue in
-                    settingsViewModel.setBackCountRequired(newValue)
-                }
+                    onColor: appColors.primary,
+                    isDisabled: isPmsDisabled,
+                    onDisabledTap: { showFeatureUnavailableToast() },
+                    onToggle: { newValue in
+                        settingsViewModel.setBackCountRequired(newValue)
+                    }
+                )
                 
                 Divider().background(appColors.primaryBackground)
                 
@@ -202,10 +230,11 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: L10n.Settings.soundFeedback,
                     isOn: $settingsViewModel.isSoundEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    settingsViewModel.setSoundEnabled(newValue)
-                }
+                    onColor: appColors.primary,
+                    onToggle: { newValue in
+                        settingsViewModel.setSoundEnabled(newValue)
+                    }
+                )
                 
                 
                 Divider().background(appColors.primaryBackground)
@@ -214,10 +243,11 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: L10n.Settings.hapticFeedback,
                     isOn: $settingsViewModel.isHapticEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    settingsViewModel.setHapticEnabled(newValue)
-                }
+                    onColor: appColors.primary,
+                    onToggle: { newValue in
+                        settingsViewModel.setHapticEnabled(newValue)
+                    }
+                )
                 
                 Divider().background(appColors.primaryBackground)
                 
@@ -225,10 +255,11 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: L10n.Settings.voiceInstructions,
                     isOn: $settingsViewModel.isSpeechEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    settingsViewModel.setSpeechEnabled(newValue)
-                }
+                    onColor: appColors.primary,
+                    onToggle: { newValue in
+                        settingsViewModel.setSpeechEnabled(newValue)
+                    }
+                )
                 
                 Divider().background(appColors.primaryBackground)
                 
@@ -236,10 +267,13 @@ struct UserSettingsView: View {
                 ToggleRowView(
                     title: L10n.Settings.hazardousPillSetting,
                     isOn: $settingsViewModel.isHazardousDrugSettingEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    settingsViewModel.setHazardousDrugSetting(newValue)
-                }
+                    onColor: appColors.primary,
+                    isDisabled: isPmsDisabled,
+                    onDisabledTap: { showFeatureUnavailableToast() },
+                    onToggle: { newValue in
+                        settingsViewModel.setHazardousDrugSetting(newValue)
+                    }
+                )
 
                 Divider().background(appColors.primaryBackground)
 
@@ -257,7 +291,12 @@ struct UserSettingsView: View {
                 }
                 .padding(.horizontal)
                 .contentShape(Rectangle())
+                .opacity(isPmsDisabled ? 0.6 : 1.0)
                 .onTapGesture {
+                    if isPmsDisabled {
+                        showFeatureUnavailableToast()
+                        return
+                    }
                     // Only offer to reset when a hazardous tray color is set.
                     if settingsViewModel.hazardousTrayColor != nil {
                         showResetHazardousTrayColorPopup = true
@@ -433,6 +472,10 @@ struct ToggleRowView: View {
 
     var onColor: Color = .pink
     var horizontalPadding: CGFloat = 16
+    /// When true the row is grayed out, the toggle is inert, and a tap anywhere
+    /// on the row routes to `onDisabledTap` instead of flipping the toggle.
+    var isDisabled: Bool = false
+    var onDisabledTap: (() -> Void)? = nil
     var onToggle: ((Bool) -> Void)? = nil
 
     var body: some View {
@@ -445,6 +488,7 @@ struct ToggleRowView: View {
                 isOn: Binding(
                     get: { isOn },
                     set: { newValue in
+                        guard !isDisabled else { return }
                         isOn = newValue
                         onToggle?(newValue)
                     }
@@ -452,8 +496,16 @@ struct ToggleRowView: View {
                 onColor: onColor
             )
             .scaleEffect(0.8)
+            // Block the toggle's own hit-testing when disabled so the row-level
+            // tap below is what fires (showing the "not available" popup).
+            .allowsHitTesting(!isDisabled)
         }
         .padding(.horizontal, horizontalPadding)
+        .opacity(isDisabled ? 0.6 : 1.0)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isDisabled { onDisabledTap?() }
+        }
     }
 }
 

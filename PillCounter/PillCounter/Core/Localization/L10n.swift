@@ -141,6 +141,8 @@ enum L10n {
         static let totalCount = NSLocalizedString("pillCount.totalCount", comment: "")
         static let redo = NSLocalizedString("pillCount.redo", comment: "")
         static let done = NSLocalizedString("pillCount.done", comment: "")
+        static let incorrectRxLabel = NSLocalizedString("pillCount.incorrectRxLabel", comment: "")
+        static let scanVialRxToCapture = NSLocalizedString("pillCount.scanVialRxToCapture", comment: "")
         static let transactionDetail = NSLocalizedString("pillCount.transactionDetail", comment: "")
     }
     
@@ -155,6 +157,8 @@ enum L10n {
         static let confirmLogoutMessage = NSLocalizedString("menu.confirmLogoutMessage", comment: "")
         static let logoutButton = NSLocalizedString("menu.logoutButton", comment: "")
         static let noLastBatchFound = NSLocalizedString("menu.toast.noLastBatchFound", comment: "")
+        static let featureNotAvailableTitle = NSLocalizedString("menu.featureNotAvailableTitle", comment: "")
+        static let featureNotAvailableMessage = NSLocalizedString("menu.featureNotAvailableMessage", comment: "")
 
         enum HistoryDuration {
             static let month = NSLocalizedString("menu.history.duration.month", comment: "")

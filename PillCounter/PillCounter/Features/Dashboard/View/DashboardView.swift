@@ -24,11 +24,12 @@ struct DashboardView: View {
     private var userId: String { AppStorageManager.shared.userId ?? "" }
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = true
-    private var isHl7Enable: Bool { AppStorageManager.shared.isHl7Enabled }
+    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
     @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
     var selectedTerminalName: String = ""
 
-    @State private var showSelectBucketIdPopup: Bool = false
+    /// Shown when a dispense action is tapped while PMS integration is off.
+    @State private var showFeatureUnavailablePopup: Bool = false
     @State private var hasCheckedNewUser: Bool = false
     @State private var selectedQueueTab: Int = 0  // 0 = Today's Queue, 1 = Recent Activity
 
@@ -37,6 +38,19 @@ struct DashboardView: View {
     // needs no stock-count or pill-scan view model.
     @State private var bucketOptions: [String] = []
     @State private var selectedBucket: String = ""
+
+    // The bucket popup is presented as a function of the data itself: it's shown
+    // exactly when bucketOptions is non-empty. Driving presentation off a separate
+    // Bool meant the data write and the show write were two independent @State
+    // updates — on first launch SwiftUI could evaluate the popup body before the
+    // bucketOptions write propagated, rendering an empty list. With one source of
+    // truth, the popup can never appear without its options.
+    private var showSelectBucketIdPopup: Binding<Bool> {
+        Binding(
+            get: { !bucketOptions.isEmpty },
+            set: { if !$0 { bucketOptions = [] } }
+        )
+    }
 
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
@@ -74,9 +88,24 @@ struct DashboardView: View {
         .onReceive(TransactionStore.shared.transactionsDidChange) {
             viewModel.loadQueueData(userId: userId)
         }
-        .customPopup(isPresented: $showSelectBucketIdPopup) {
+        .customPopup(isPresented: showSelectBucketIdPopup) {
             selectBucketPopUp
         }
+        .customPopup(isPresented: $showFeatureUnavailablePopup) {
+            featureUnavailablePopUp
+        }
+    }
+
+    private var featureUnavailablePopUp: some View {
+        ConfirmationDialogue(
+            title: L10n.Menu.featureNotAvailableTitle,
+            message: L10n.Menu.featureNotAvailableMessage,
+            cancelButtonText: "",
+            confirmButtonText: L10n.Common.ok,
+            showSingleConfirmButton: true,
+            onCancel: {},
+            onConfirm: { showFeatureUnavailablePopup = false }
+        )
     }
  
     // MARK: - Portrait body
@@ -298,20 +327,22 @@ struct DashboardView: View {
                     )
                     .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
                     .foregroundColor(appColors.text)
-                    if !selectedTerminalName.isEmpty {
-                        Text(
-                            "\(selectedTerminalName) | \(userViewModel.fullName) "
-                        )
+                    
+                    // Showing terminal name and username
+                    let displayName = isPmsIntegrated && !selectedTerminalName.isEmpty
+                        ? "\(selectedTerminalName) | \(userViewModel.fullName)"
+                        : userViewModel.fullName
+
+                    Text(displayName)
                         .font(.system(size: isIpad ? 15 : 13))
                         .foregroundColor(appColors.text.opacity(0.6))
-                    }
                 }
             }
 
             Spacer()
 
             // Right: PMS status + Hamburger menu
-            if isHl7Enable {
+            if isPmsIntegrated {
                 PMSConnectionButtonView(
                     pmsConnectionState: userViewModel.pmsConnectionState
                 )
@@ -461,7 +492,16 @@ struct DashboardView: View {
                         items: viewModel.filteredQueueItems,
                         idPrefix: "queue"
                     ) {
-                        DashboardTodaysQueueRow(item: $0, router: router)
+                        DashboardTodaysQueueRow(
+                            item: $0,
+                            router: router,
+                            // PMS off → block dispense rows in the pending queue list;
+                            // tapping shows the popup instead of resuming the scan.
+                            // (The Dispense quick-action card is NOT blocked.)
+                            onDispenseBlocked: isPmsIntegrated
+                                ? nil
+                                : { showFeatureUnavailablePopup = true }
+                        )
                     }
                 )
             } else {
@@ -550,24 +590,53 @@ struct DashboardView: View {
         DashboardSelectBucketPopup(
             bucketOptions: bucketOptions,
             selectedBucket: $selectedBucket,
-            onCancel: { showSelectBucketIdPopup = false },
+            onCancel: { bucketOptions = [] },
             onConfirm: {
-                createBatchAndNavigate(bucketId: selectedBucket)
-                showSelectBucketIdPopup = false
+                let bucket = selectedBucket
+                bucketOptions = []
+                createBatchAndNavigate(bucketId: bucket)
             }
         )
     }
 
     private func handleInventoryTapped() {
-        let buckets = userViewModel.bucket
-        let meaningful = buckets.filter { $0 != "NORMAL" && !$0.isEmpty }
-        if meaningful.isEmpty {
-            // No real bucket choices — skip popup, use NORMAL directly
-            createBatchAndNavigate(bucketId: "NORMAL")
-        } else {
-            bucketOptions = buckets
-            selectedBucket = buckets.first ?? ""
-            showSelectBucketIdPopup = true
+        // First visit: onAppear's getUser may still be in flight, so the
+        // Keychain-backed bucket list can be empty here even though the user
+        // does have buckets. `userViewModel.bucket` is a computed property over
+        // Keychain (not @Published), so SwiftUI never re-renders this popup when
+        // it populates — which is why buckets only appeared on a later visit.
+        // Resolve the list before presenting so it's always correct.
+        // UserViewModel is @MainActor, so this Task runs on the main actor —
+        // the UI mutations below are safe without an explicit MainActor.run.
+        Task {
+            // Read straight from the Keychain-backed store rather than through
+            // userViewModel.bucket — same source, but makes it explicit this is a
+            // point-in-time read with no SwiftUI binding.
+            var buckets = AppStorageManager.shared.bucket
+            var meaningful = buckets.filter { $0 != "NORMAL" && !$0.isEmpty }
+
+            if meaningful.isEmpty {
+                // Buckets may simply not have loaded yet — fetch user data and retry
+                // once before falling back to NORMAL. Force the remote call:
+                // getUser() serves from the local cache when a local user exists,
+                // and the cache path never writes the bucket list (only the remote
+                // auth/me path does). Without forceRemote the retry returned early
+                // with no buckets — which is why the popup was empty on first launch.
+                await userViewModel.getUser(forceRemote: true)
+                buckets = AppStorageManager.shared.bucket
+                meaningful = buckets.filter { $0 != "NORMAL" && !$0.isEmpty }
+            }
+
+            if meaningful.isEmpty {
+                // No real bucket choices — skip popup, use NORMAL directly
+                createBatchAndNavigate(bucketId: "NORMAL")
+            } else {
+                // Presentation is derived from bucketOptions (see showSelectBucketIdPopup):
+                // setting it both fills the list AND shows the popup in one atomic
+                // @State update, so the list is never empty on first render.
+                selectedBucket = buckets.first ?? ""
+                bucketOptions = buckets
+            }
         }
     }
 

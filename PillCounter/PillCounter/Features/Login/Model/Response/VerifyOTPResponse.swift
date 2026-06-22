@@ -43,7 +43,8 @@ struct VerifyOTPUser: Codable {
     let isVerified: Bool?
     let role: VerifyOTPRole?
     let authIsLocked: Bool?
-    let isHl7Enabled: Bool?
+    let isPmsIntegrated: Bool?
+    let allowLocalStorage: Bool?
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
@@ -51,7 +52,8 @@ struct VerifyOTPUser: Codable {
         case isVerified = "is_verified"
         case role
         case authIsLocked = "auth_is_locked"
-        case isHl7Enabled = "is_hl7_enabled"
+        case isPmsIntegrated = "is_pms_integrated"
+        case allowLocalStorage = "allow_local_storage"
     }
 }
 

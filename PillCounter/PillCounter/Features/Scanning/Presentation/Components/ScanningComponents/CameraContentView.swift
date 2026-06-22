@@ -35,7 +35,10 @@ struct CameraContentView: View {
                     .padding(.top, isLandscape ? 0 : 30)
 
                     if pillScanViewModel.currentControlledStep != .vial {
-                        DetectionOverlay(cameraService: cameraService).ignoresSafeArea()
+                        DetectionOverlay(
+                            cameraService: cameraService,
+                            targetQuantity: pillScanViewModel.currentControlledTargetCount ?? 0
+                        ).ignoresSafeArea()
 //                        TrayOverlay(cameraService: cameraService).ignoresSafeArea()
                     }
                     if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {

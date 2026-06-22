@@ -95,6 +95,9 @@ struct UnifiedCameraView: View {
 
     @State var showNoteOption: Bool = false
     @State var showConfirmCompletionPopup: Bool = false
+    /// Shown when an RX label is scanned but HL7/PMS is disabled for this account.
+    /// The scan is blocked entirely — no parse/proceed logic runs.
+    @State var showHl7UnavailablePopup: Bool = false
     /// "Today's Queue" dispense list shown after a FIXED dispense count is confirmed complete.
     @State var showDispenseQueueSheet: Bool = false
     // Stock count end-count popups
@@ -116,6 +119,15 @@ struct UnifiedCameraView: View {
     
     // ── Bluetooth HID scanner ─────────────────────────────────────────────────
     @State private var btScannerFocusTrigger: Int = 0
+
+    // ── Stock-count duplicate-scan suppression ────────────────────────────────
+    // The camera releases its barcode lock the instant the code leaves the frame,
+    // so the SAME bottle held steady can re-fire while its details are still showing.
+    // Track the last same-NDC increment so a repeat of the same code within the
+    // cooldown window doesn't double-count (see handleStockCountScan).
+    @State private var lastStockIncrementRawValue: String = ""
+    @State private var lastStockIncrementAt: Date = .distantPast
+    private let stockSameScanCooldown: TimeInterval = 5
 
     @StateObject private var locationService = LocationService.shared
     @Environment(\.scenePhase) private var scenePhase
@@ -147,6 +159,7 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
 //            .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
+            .customPopup(isPresented: $showHl7UnavailablePopup, dismissOnBackgroundTap: false) { hl7UnavailablePopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTraySubstitutePopup) { hazardousTraySubstitutePopup }
             .bottomSheet(
@@ -508,6 +521,8 @@ struct UnifiedCameraView: View {
             cameraService.disableBarcodeScanning()
             if pillScanViewModel.currentControlledStep != .vial {
                 cameraService.resumeCounting()
+            } else {
+                enableVialRxScanning()
             }
         }
         .onChange(of: pillScanViewModel.currentControlledStep) { _, newStep in
@@ -518,7 +533,13 @@ struct UnifiedCameraView: View {
             guard currentScanType != .stockCount else { return }
             if newStep == .vial {
                 cameraService.pauseCounting()
+                // Re-arm barcode scanning so the operator can hold the dispensing
+                // vial's RX label in frame and have it auto-captured when the RX
+                // matches this transaction (handleScannedCode → handleVialRxScan).
+                enableVialRxScanning()
             } else {
+                // Leaving the vial step — turn the vial RX scanner back off.
+                cameraService.disableBarcodeScanning()
                 cameraService.resumeCounting()
             }
         }
@@ -738,6 +759,25 @@ extension UnifiedCameraView {
               !pillScanViewModel.isCheckingNdc
         else { return }
 
+        // Vial step auto-capture: while the pill-count panel is on the vial step, a
+        // scanned barcode is the dispensing vial's RX label — not an RX/NDC scan.
+        // Match it against the transaction and capture; never fall through to the
+        // normal RX/NDC parse flow below.
+        if showPillCountPanel && pillScanViewModel.currentControlledStep == .vial {
+            handleVialRxScan(newValue)
+            return
+        }
+
+        // HL7/PMS gate: the dispense (RX-label) flow depends on HL7. When the
+        // account has HL7 disabled, block the scan entirely — show the
+        // "feature not available" popup and run no parse/proceed logic.
+        if scanType == .rx_label && !AppStorageManager.shared.isPmsIntegrated {
+            cameraService.disableBarcodeScanning()
+            cameraService.pauseCounting()
+            showHl7UnavailablePopup = true
+            return
+        }
+
         // Continuous dispense note: the queue sheet is NOT dismissed here. It is
         // dismissed only once the RX scan actually succeeds and isn't blocked —
         // see the showRxFlowPopup / rxResumeInline observers below. A failed or
@@ -820,6 +860,7 @@ extension UnifiedCameraView {
                 pillScanViewModel.addCurrentOpenPillCount = 0
                 if pillScanViewModel.currentControlledStep == .vial {
                     cameraService.pauseCounting()
+                    enableVialRxScanning()
                 } else {
                     cameraService.resumeCounting()
                 }
@@ -983,6 +1024,7 @@ extension UnifiedCameraView {
             cameraService.resumeCounting()
         } else {
             cameraService.pauseCounting()
+            enableVialRxScanning()
         }
     }
 
@@ -1125,6 +1167,77 @@ extension UnifiedCameraView {
         }
     }
 
+    // MARK: - Vial RX auto-capture
+
+    /// Arms barcode scanning for the vial step so the dispensing vial's RX label
+    /// can be read and matched. Clears any stale scanned value first so a value
+    /// left over from an earlier scan doesn't immediately re-fire.
+    func enableVialRxScanning() {
+        guard currentScanType != .stockCount else { return }
+        cameraService.resetBarcodeScanState()
+        cameraService.enableBarcodeScanning()
+    }
+
+    /// Handles a barcode read while on the vial step. The barcode is the dispensing
+    /// vial's RX label: extract its RX number and compare to the current
+    /// transaction's rx_no. On a match, auto-capture the still and run the done
+    /// path (advances the step). On a mismatch — a different RX label — surface
+    /// "Incorrect RX label found" and keep scanning.
+    func handleVialRxScan(_ rawValue: String) {
+        // Already captured (manual or auto) — ignore further reads until redo.
+        guard pillScanViewModel.capturedVialImage == nil else { return }
+
+        let expectedRx = pillScanViewModel.currentTransaction?.rx_no?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let scannedRx = pillScanViewModel.extractRxNo(from: rawValue)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        guard !expectedRx.isEmpty, !scannedRx.isEmpty,
+              scannedRx.compare(expectedRx, options: .caseInsensitive) == .orderedSame else {
+            // A barcode was read but it isn't this transaction's RX label.
+            FeedbackManager.shared.triggerDetectionFeedback(
+                isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
+                isSoundEnabled: AppStorageManager.shared.isSoundEnabled
+            )
+            pillScanViewModel.showToastMessage(text: L10n.PillCount.incorrectRxLabel)
+            // Re-arm so the operator can present the correct label.
+            enableVialRxScanning()
+            return
+        }
+
+        // RX matches — capture and complete the vial step automatically.
+        FeedbackManager.shared.triggerDetectionFeedback(
+            isHapticEnabled: AppStorageManager.shared.isHapticEnabled,
+            isSoundEnabled: AppStorageManager.shared.isSoundEnabled
+        )
+        cameraService.disableBarcodeScanning()
+        autoCaptureVialAndDone()
+    }
+
+    /// Captures the live still into the vial image slot and immediately runs the
+    /// done path. Mirrors VialBottomContentView.captureVial() + doneVial() so the
+    /// auto path produces the same state as a manual capture-then-done.
+    private func autoCaptureVialAndDone() {
+        guard let image = cameraService.captureSnapshot() else {
+            // Capture failed — re-arm scanning so the operator can retry.
+            enableVialRxScanning()
+            return
+        }
+        let normalized = image.normalized()
+        pillScanViewModel.capturedVialImage = normalized
+        guard let path = PhotoFileManager.shared.saveImage(normalized) else {
+            // Couldn't persist — clear the in-memory still and re-arm.
+            pillScanViewModel.capturedVialImage = nil
+            enableVialRxScanning()
+            return
+        }
+        pillScanViewModel.vialCapturedImagePath = path
+        pillScanViewModel.addOrReplaceVialTransactionDetail(imagePath: path)
+        // Fires the vialDoneTriggered observer → handleVialDone(), which advances
+        // the step (and clears the captured still as part of that flow).
+        pillScanViewModel.vialDoneTriggered = true
+    }
+
     func handleStockCountAdd() {
         Task { await performStockCountAdd() }
     }
@@ -1170,7 +1283,14 @@ extension UnifiedCameraView {
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.suppressListReload = false
         stockCountViewModel.reloadAllState()
+        resetStockSameScanCooldown()
         btScannerFocusTrigger += 1
+    }
+
+    /// Clears the same-scan cooldown so the next scan of any drug starts fresh.
+    private func resetStockSameScanCooldown() {
+        lastStockIncrementRawValue = ""
+        lastStockIncrementAt = .distantPast
     }
 
     /// Called by the Add button — dismisses the details panel and refreshes the list.
@@ -1179,6 +1299,7 @@ extension UnifiedCameraView {
         stockCountViewModel.suppressListReload = false
         stockCountViewModel.reset()
         stockCountViewModel.reloadAllState()
+        resetStockSameScanCooldown()
         btScannerFocusTrigger += 1
     }
 
@@ -1227,6 +1348,19 @@ extension UnifiedCameraView {
         }()
 
         if isSameNdc {
+            // Same barcode held in front. The camera lock releases the moment the code
+            // leaves the frame, so a steady bottle can re-fire this branch and double the
+            // count. Ignore a repeat of the same raw code within the cooldown window — a
+            // genuine re-scan of the same drug still increments once the window passes.
+            if rawValue == lastStockIncrementRawValue,
+               Date().timeIntervalSince(lastStockIncrementAt) < stockSameScanCooldown {
+                cameraService.resetBarcodeScanState()
+                cameraService.enableBarcodeScanning()
+                btScannerFocusTrigger += 1
+                return
+            }
+            lastStockIncrementRawValue = rawValue
+            lastStockIncrementAt = Date()
             // Same barcode held in front — increment sealed bottle count, commit immediately.
             stockCountViewModel.pendingBottleCount += 1
             await performStockCountAdd()
@@ -1407,6 +1541,26 @@ extension UnifiedCameraView {
         // other ConfirmationDialogue. Without this it inherits the camera screen's
         // forced-dark appColors, making the Yes/No buttons render with a different
         // background/text colour than the rest of the app.
+        .environmentObject(appColors)
+    }
+
+    var hl7UnavailablePopup: some View {
+        ConfirmationDialogue(
+            title: L10n.Menu.featureNotAvailableTitle,
+            message: L10n.Menu.featureNotAvailableMessage,
+            cancelButtonText: "",
+            confirmButtonText: L10n.Common.ok,
+            showSingleConfirmButton: true,
+            onCancel: {},
+            onConfirm: {
+                showHl7UnavailablePopup = false
+                // User stays on the screen — re-arm scanning so they can back out
+                // or scan again (which will just re-trigger this popup).
+                restartFlow()
+            }
+        )
+        // Force the standard (light) palette so the dialog matches the rest of
+        // the app instead of inheriting the camera screen's forced-dark colors.
         .environmentObject(appColors)
     }
 

@@ -18,12 +18,19 @@ import SwiftUI
 struct DashboardTodaysQueueRow: View {
     let item: DashboardQueueItem
     let router: Router
+    /// When non-nil (PMS off), tapping a dispense row calls this instead of
+    /// navigating — the dispense flow is gated on PMS integration.
+    var onDispenseBlocked: (() -> Void)? = nil
 
     var body: some View {
         switch item {
         case .dispense(let txn, let pillCount):
             DispenseItemRowView(data: txn.toRowData(pillCount: pillCount))
                 .onTapGesture {
+                    if let onDispenseBlocked {
+                        onDispenseBlocked()
+                        return
+                    }
                     // Self-describing navigation: pass the txn id + scan type. The
                     // scan screen fetches the txn and sets up the session onAppear.
                     let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
@@ -53,12 +60,19 @@ struct DashboardTodaysQueueRow: View {
 struct DashboardRecentActivityRow: View {
     let item: DashboardQueueItem
     let router: Router
+    /// When non-nil (PMS off), tapping a completed dispense row calls this
+    /// instead of opening its history detail — dispense is PMS-gated.
+    var onDispenseBlocked: (() -> Void)? = nil
 
     var body: some View {
         switch item {
         case .dispense(let txn, let pillCount):
             DispenseItemRowView(data: txn.toRowData(pillCount: pillCount))
                 .onTapGesture {
+                    if let onDispenseBlocked {
+                        onDispenseBlocked()
+                        return
+                    }
                     router.navigate(
                         to: .authentication(.user(.userSettings(.HistoryTransactionDetail(txn.txn_id))))
                     )

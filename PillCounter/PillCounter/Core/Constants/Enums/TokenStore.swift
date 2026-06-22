@@ -17,7 +17,8 @@ protocol TokenStore: AnyObject {
     var isNewUser: Bool { get set }
 
     var isLoggedIn: Bool { get set }
-    var isHl7Enabled: Bool { get set }
+    var isPmsIntegrated: Bool { get set }
+    var allowLocalStorage: Bool { get set }
     var accessToken: String? { get set }
     var refreshToken: String? { get set }
     var userEmail: String? { get set }

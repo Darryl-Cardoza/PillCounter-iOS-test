@@ -86,6 +86,16 @@ final class CameraService: NSObject, ObservableObject {
     private var heldTrayDetections: [TrayResult] = []
     private var trayMissFrames: Int = 0
 
+    /// True once AE/AF/AWB have been locked for the current counting session.
+    /// The `.hd1280x720` preset already steadies the stream, but residual 3A
+    /// micro-adjustments still wobble borderline pills, and — critically — a hand
+    /// reaching into the tray retriggers auto-exposure for the WHOLE scene, which
+    /// shifts every pill's confidence at once and makes the count chaotic during
+    /// occlusion. Locking exposure/focus/white-balance once the tray is acquired
+    /// freezes the imaging so only real pill changes move the count. Reset on
+    /// counting pause/resume so a new scene re-meters before locking again.
+    private var is3ALocked = false
+
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
 
@@ -112,6 +122,30 @@ final class CameraService: NSObject, ObservableObject {
     @Published var stableCount: Int = 0
     @Published var detections: [DetectionResult] = []
     @Published var trayDetections: [TrayResult] = []
+
+    /// Ids of the pills currently flagged as "excess near the chute" — the surplus
+    /// over the dispense target, picked nearest-the-chute. Computed ONCE per frame
+    /// in the pipeline (not in the SwiftUI body, which can run several times per
+    /// frame and would corrupt the picker's temporal state). The overlay just reads
+    /// this set. Empty when there is no target / no excess.
+    @Published var excessPillIDs: Set<UUID> = []
+
+    /// Dispense target for the current step. The view sets this; when > 0 the
+    /// excess-near-chute highlight is active and the surplus (stableCount − target)
+    /// pills closest to the chute are flagged. 0 disables the feature.
+    var excessTargetQuantity: Int = 0 {
+        didSet {
+            // A new target redefines what "excess" means — restart the sticky
+            // picker so it doesn't carry highlights chosen for the old target.
+            guard excessTargetQuantity != oldValue else { return }
+            chuteProximity.reset()
+        }
+    }
+
+    /// Stateful, frame-persistent excess-pill picker (tracks + smoothed distance +
+    /// margin-based steal). Lives here so it is driven once per frame by the
+    /// pipeline rather than by SwiftUI re-renders.
+    private let chuteProximity = ChuteProximity()
 
     /// All glove detections from the most recent inference run (rate-limited to 400 ms
     /// after the first detection).  Empty when gloves have never been checked or when
@@ -270,7 +304,92 @@ final class CameraService: NSObject, ObservableObject {
             }
 
             self.session.commitConfiguration()
+
+            // Cap capture to 15 fps. Set AFTER commitConfiguration — iOS can
+            // silently override frame-duration set *during* configuration when a
+            // sessionPreset is active. Every captured frame fans out into three
+            // model inferences (pill 640², tray 384², glove 320²); at the sensor's
+            // native 30–60 fps that pins the ANE/GPU and overheats the device for
+            // no accuracy gain — the scene barely changes between frames. 15 fps is
+            // plenty for a hand placing pills and roughly halves sustained load.
+            self.configureFrameRate(fps: 15)
         }
+    }
+
+    /// Clamps the capture device to a fixed frame rate. The requested fps is
+    /// clamped to the active format's supported range, and the call is a no-op if
+    /// the device or format can't honour it (zoom/exposure are untouched).
+    private func configureFrameRate(fps: Double) {
+        guard let device = captureDevice else { return }
+
+        // The active format advertises the min/max frame-duration it supports.
+        // Requesting a duration outside that range throws, so clamp into it.
+        let ranges = device.activeFormat.videoSupportedFrameRateRanges
+        guard let range = ranges.first else { return }
+
+        let targetFps = min(max(fps, range.minFrameRate), range.maxFrameRate)
+        let duration = CMTime(value: 1, timescale: CMTimeScale(targetFps))
+
+        do {
+            try device.lockForConfiguration()
+            device.activeVideoMinFrameDuration = duration
+            device.activeVideoMaxFrameDuration = duration
+            device.unlockForConfiguration()
+        } catch {
+            // Intentionally silent — a failed fps cap must not break the camera.
+        }
+    }
+
+    // MARK: - EXPOSURE / FOCUS LOCK
+
+    /// Locks auto-exposure, auto-focus and auto-white-balance to their current
+    /// settings so the imaging stops drifting once a stable scene (complete tray)
+    /// is in view. Idempotent via `is3ALocked`; only locks the modes the device
+    /// actually supports. Called from the frame delegate the first time the
+    /// complete-product gate opens.
+    private func lock3AIfNeeded() {
+        guard !is3ALocked, let device = captureDevice else { return }
+
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.locked) {
+                device.exposureMode = .locked
+            }
+            if device.isFocusModeSupported(.locked) {
+                device.focusMode = .locked
+            }
+            if device.isWhiteBalanceModeSupported(.locked) {
+                device.whiteBalanceMode = .locked
+            }
+            device.unlockForConfiguration()
+            is3ALocked = true
+        } catch {
+            // Intentionally silent — a failed 3A lock must not break the camera.
+        }
+    }
+
+    /// Restores continuous auto-exposure/focus/white-balance so the next counting
+    /// session re-meters a fresh scene before locking again. Called on counting
+    /// pause/resume (the operator may point at a different tray/lighting).
+    private func unlock3A() {
+        guard is3ALocked, let device = captureDevice else { is3ALocked = false; return }
+
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Intentionally silent.
+        }
+        is3ALocked = false
     }
 
     // MARK: - BARCODE CONTROL
@@ -361,6 +480,9 @@ final class CameraService: NSObject, ObservableObject {
 
         sessionQueue.async {
             guard self.session.isRunning else { return }
+            // Release the 3A lock before stopping so the next start() re-meters the
+            // scene from scratch (lighting/tray may differ after a long pause).
+            self.unlock3A()
             self.session.stopRunning()
             // Session is fully stopped — no barcodes are visible. Clear the lock
             // so the next start() begins fresh rather than blocking on a stale value.
@@ -427,14 +549,23 @@ final class CameraService: NSObject, ObservableObject {
             self.trayDetections   = []
             self.gloveDetections  = []
             self.isGloveHazardous = false
+            self.excessPillIDs    = []
             self.recentCounts.removeAll()   // start the next session's median fresh
             self.emptyCountFrames = 0
         }
+        // Restart the sticky excess picker so the next session doesn't inherit
+        // highlights chosen against a stale tray/target.
+        chuteProximity.reset()
         // Drop the held tray/chute detections so the next session re-acquires them
         // from scratch rather than counting against a stale tray that may no longer
         // be in frame.
         heldTrayDetections.removeAll()
         trayMissFrames = 0
+
+        // Release the AE/AF/AWB lock on the session queue so the next counting
+        // session re-meters a fresh scene (possibly a different tray/lighting)
+        // before locking again.
+        sessionQueue.async { [weak self] in self?.unlock3A() }
     }
 
     func resumeCounting() {
@@ -636,6 +767,12 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         let gateOpen = isCompleteTray
 
+        // Once a complete, stable scene (tray AND chute) is acquired, lock
+        // AE/AF/AWB so the imaging stops drifting and a hand reaching in can't
+        // retrigger a whole-scene re-exposure. Idempotent — only fires once per
+        // session; released on counting pause/resume.
+        if isCompleteTray { lock3AIfNeeded() }
+
         // Overlay shows tray/chute only when the scene is a complete product.
         let displayTrays = isCompleteTray ? allTrays : []
 
@@ -740,6 +877,23 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
                 }
 
                 self.trayDetections   = displayTrays
+
+                // ── Excess-near-chute highlight (computed ONCE per frame) ──────
+                // Number of pills to mark uses the SMOOTHED stableCount (steady);
+                // WHICH pills are picked is the persistent-track picker (sticky,
+                // distance-smoothed, margin-based steal) so packed pills don't
+                // ping-pong. Chute/tray geometry is this frame's segmentation.
+                // Disabled (empty) when no real target is set.
+                if self.excessTargetQuantity > 0 {
+                    let excess = max(0, self.stableCount - self.excessTargetQuantity)
+                    let chute = displayTrays.first { $0.trayClass == .chute }
+                    let tray  = displayTrays.first { $0.trayClass == .tray }
+                    self.excessPillIDs = self.chuteProximity.nearChuteIDs(
+                        pills: filtered, chute: chute, tray: tray, excess: excess)
+                } else if !self.excessPillIDs.isEmpty {
+                    self.excessPillIDs = []
+                }
+
                 self.gloveDetections  = gloves
                 self.isGloveHazardous = hazardous
                 if glovesNowSafe { self.glovesConfirmed = true }

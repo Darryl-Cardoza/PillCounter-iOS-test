@@ -21,8 +21,12 @@ struct UserProfileScreen: View {
 //        Bool = true
 
     @State private var firstName: String = ""
-    
+
     @State private var npiText: String = ""
+
+    /// Terminal selection is a PMS-integration-only concept — disable the
+    /// dropdown when PMS integration is off for this account.
+    private var isPmsDisabled: Bool { !AppStorageManager.shared.isPmsIntegrated }
 
     
     var body: some View {
@@ -254,6 +258,19 @@ struct UserProfileScreen: View {
             .frame(height: 64)
             .background(appColors.secondaryBackground)
             .cornerRadius(10)
+        }
+        .disabled(isPmsDisabled)
+        .opacity(isPmsDisabled ? 0.6 : 1.0)
+        // When PMS is off the Menu is disabled (inert); overlay a tap target so the
+        // tap still surfaces the "feature not available" toast instead of nothing.
+        .overlay {
+            if isPmsDisabled {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        toastManager.show(message: L10n.Menu.featureNotAvailableMessage)
+                    }
+            }
         }
     }
 

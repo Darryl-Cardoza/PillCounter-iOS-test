@@ -241,6 +241,24 @@ extension PillScanViewModel {
         }
     }
 
+    // MARK: Rx Number Extraction (no side effects)
+
+    /// Pulls just the RXNO field out of a scanned barcode using the configured
+    /// barcodeFormat, without running any of the lookup/popup flow that
+    /// `parseScanData` performs. Used by the vial auto-capture step to match a
+    /// scanned vial label against the current transaction's rx_no.
+    /// Returns nil if the value doesn't match the format or has no RXNO field.
+    func extractRxNo(from value: String) -> String? {
+        let barcodeFormat = AppStorageManager.shared.barcodeFormat
+        guard let keys = try? extractKeys(from: barcodeFormat) else { return nil }
+        let values = extractValues(from: value)
+        guard !keys.isEmpty, !values.isEmpty else { return nil }
+
+        let mapped = zip(keys, values).reduce(into: [String: String]()) { $0[$1.0] = $1.1 }
+        let rxNo = mapped["RXNO"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return rxNo.isEmpty ? nil : rxNo
+    }
+
     // MARK: Barcode Format Match Check
 
     /// Builds a regex from the configured barcodeFormat and tests the scanned value against it.

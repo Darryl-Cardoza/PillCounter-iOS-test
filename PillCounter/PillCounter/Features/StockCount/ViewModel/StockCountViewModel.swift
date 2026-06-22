@@ -408,6 +408,23 @@ class StockCountViewModel: ObservableObject {
         // so they survive scan resets within the same session.
     }
 
+    /// Re-syncs the detail card's stepper state from the DB after an Edit Details save.
+    /// The card reads `pendingBottleCount`, which was set once during scan; the Edit sheet
+    /// writes straight to the DAO, so without this the card stays stale.
+    ///
+    /// `pendingBottleCount` MUST stay equal to `committedTxnId`'s own `bottle_qty`, because the
+    /// Add flush (`flushPendingBottleCount`) writes it back to that single txn. Storing the
+    /// NDC-wide sum here instead would make the flush re-apply the edit and double the count.
+    func resyncScannedDrugCounts() {
+        guard let ndc = scannedDrugData?.ndc else { return }
+        existingNdcBottleCount = existingBottleCount(for: ndc)
+        if let txnId = committedTxnId, let txn = transactionDAO.fetchById(txnId) {
+            pendingBottleCount = Int(txn.bottle_qty)
+        } else {
+            pendingBottleCount = existingNdcBottleCount
+        }
+    }
+
     /// Returns the existing sealed bottle count for an NDC already in the current batch.
     /// Displayed alongside the stepper so the user sees current total + how many they're adding.
     func existingBottleCount(for ndc: String) -> Int {

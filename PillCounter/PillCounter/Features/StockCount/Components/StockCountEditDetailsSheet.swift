@@ -393,6 +393,9 @@ struct StockCountEditDetailsSheet: View {
                 looseQty: Int32(row.openPills)
             )
         }
+        // Counts were written straight to the DAO — pull them back into the detail
+        // card's stepper state so it reflects the edit instead of the stale scan value.
+        stockCountViewModel.resyncScannedDrugCounts()
         onDismiss()
     }
 }

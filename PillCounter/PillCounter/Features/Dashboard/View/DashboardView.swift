@@ -587,15 +587,34 @@ struct DashboardView: View {
     }
 
     private func handleInventoryTapped() {
-        let buckets = userViewModel.bucket
-        let meaningful = buckets.filter { $0 != "NORMAL" && !$0.isEmpty }
-        if meaningful.isEmpty {
-            // No real bucket choices — skip popup, use NORMAL directly
-            createBatchAndNavigate(bucketId: "NORMAL")
-        } else {
-            bucketOptions = buckets
-            selectedBucket = buckets.first ?? ""
-            showSelectBucketIdPopup = true
+        // First visit: onAppear's getUser may still be in flight, so the
+        // Keychain-backed bucket list can be empty here even though the user
+        // does have buckets. `userViewModel.bucket` is a computed property over
+        // Keychain (not @Published), so SwiftUI never re-renders this popup when
+        // it populates — which is why buckets only appeared on a later visit.
+        // Resolve the list before presenting so it's always correct.
+        // UserViewModel is @MainActor, so this Task runs on the main actor —
+        // the UI mutations below are safe without an explicit MainActor.run.
+        Task {
+            var buckets = userViewModel.bucket
+            var meaningful = buckets.filter { $0 != "NORMAL" && !$0.isEmpty }
+
+            if meaningful.isEmpty {
+                // Buckets may simply not have loaded yet — fetch user data and retry
+                // once before falling back to NORMAL.
+                await userViewModel.getUser()
+                buckets = userViewModel.bucket
+                meaningful = buckets.filter { $0 != "NORMAL" && !$0.isEmpty }
+            }
+
+            if meaningful.isEmpty {
+                // No real bucket choices — skip popup, use NORMAL directly
+                createBatchAndNavigate(bucketId: "NORMAL")
+            } else {
+                bucketOptions = buckets
+                selectedBucket = buckets.first ?? ""
+                showSelectBucketIdPopup = true
+            }
         }
     }
 

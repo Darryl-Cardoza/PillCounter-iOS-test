@@ -433,6 +433,22 @@ class StockCountViewModel: ObservableObject {
         return txns.reduce(0) { $0 + Int($1.bottle_qty) }
     }
 
+    /// NDC-wide sealed bottle total shown in the scanned-detail card.
+    ///
+    /// `pendingBottleCount` is bound to the single `committedTxnId` (the flush target), so it
+    /// only ever holds ONE lot's bottle count. The card must instead show the full NDC across
+    /// every lot — including counts written by the Edit sheet. We take the DB NDC-wide sum and
+    /// fold in the live, not-yet-flushed stepper delta for the committed txn so the number reacts
+    /// to +/- taps immediately (the DAO write is debounced 600ms and would otherwise lag).
+    func displayBottleTotal(for ndc: String) -> Int {
+        let ndcWide = existingBottleCount(for: ndc)
+        guard let txnId = committedTxnId, let txn = transactionDAO.fetchById(txnId) else {
+            return ndcWide
+        }
+        let committedDbQty = Int(txn.bottle_qty)
+        return ndcWide - committedDbQty + pendingBottleCount
+    }
+
     /// Returns the existing open bottle count for an NDC in the current batch.
     func existingOpenBottleCount(for ndc: String) -> Int {
         guard let batchId = currentBatch?.batch_id else { return 0 }

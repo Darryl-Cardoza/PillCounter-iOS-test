@@ -58,10 +58,13 @@ struct ScannedDrugDetailsSlot: View {
         let batchId = String(stockCountViewModel.currentBatch?.batch_id ?? 0)
         let lotNumbet = drug?.lotNumber ?? "-"
         let packageQty = Int(drug?.quantity ?? 0)
-        // After auto-add, pendingBottleCount reflects the committed bottle count.
-        let newTotal   = stockCountViewModel.pendingBottleCount
-        let openPills  = stockCountViewModel.existingOpenPillCount(for: drug?.ndc ?? "")
-        // Displayed pill total = pills from sealed bottles + loose open-scan pills.
+        let ndc        = drug?.ndc ?? ""
+        // NDC-wide sealed bottle total across every lot (incl. Edit-sheet changes),
+        // with the live stepper delta folded in. NOT pendingBottleCount, which is just
+        // the single committed lot bound to the flush.
+        let newTotal   = stockCountViewModel.displayBottleTotal(for: ndc)
+        let openPills  = stockCountViewModel.existingOpenPillCount(for: ndc)
+        // Displayed pill total = pills from all sealed bottles + loose open-scan pills.
         let totalPills = newTotal * packageQty + openPills
 
         return VStack(spacing: 16) {

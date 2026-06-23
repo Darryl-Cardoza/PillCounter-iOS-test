@@ -243,6 +243,8 @@ enum L10n {
         static let quantity = NSLocalizedString("barcodeScan.quantity", comment: "")
         static let rxNumber = NSLocalizedString("barcodeScan.rxNumber", comment: "")
         static let bucket = NSLocalizedString("barcodeScan.bucket", comment: "")
+        static let strength = NSLocalizedString("barcodeScan.strength", comment: "")
+        static let form = NSLocalizedString("barcodeScan.form", comment: "")
         static let selectContainerStatus = NSLocalizedString("barcodeScan.selectContainerStatus", comment: "")
         static let sealed = NSLocalizedString("barcodeScan.sealed", comment: "")
         static let opened = NSLocalizedString("barcodeScan.opened", comment: "")

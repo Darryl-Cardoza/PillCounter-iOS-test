@@ -20,6 +20,8 @@ final class DrugCatalogStore {
         drugId: Int64,
         drugName: String,
         drugType: String? = nil,
+        strength: String? = nil,
+        dosageForm: String? = nil,
         packageQty: Int32 = 0,
         isHazardous: Bool? = nil
     ) {
@@ -27,6 +29,8 @@ final class DrugCatalogStore {
         if !drugName.isEmpty { entity.drug_name = drugName }
         if !gtin.isEmpty { entity.gtin = gtin }
         if let drugType, !drugType.isEmpty { entity.drug_type = drugType }
+        if let strength, !strength.isEmpty { entity.strength = strength }
+        if let dosageForm, !dosageForm.isEmpty { entity.dosage_form = dosageForm }
         if packageQty > 0 { entity.package_qty = packageQty }
         if let isHazardous { entity.is_hazardous = isHazardous }
         entity.ndc = ndc
@@ -96,6 +100,8 @@ final class DrugCatalogStore {
         ndc: String? = nil,
         gtin: String? = nil,
         drugType: String? = nil,
+        strength: String? = nil,
+        dosageForm: String? = nil,
         packageQty: Int32? = nil,
         isHazardous: Bool? = nil
     ) {
@@ -104,6 +110,8 @@ final class DrugCatalogStore {
         if let ndc { drug.ndc = ndc }
         if let gtin, !gtin.isEmpty { drug.gtin = gtin }
         if let drugType { drug.drug_type = drugType }
+        if let strength { drug.strength = strength }
+        if let dosageForm { drug.dosage_form = dosageForm }
         if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
         if let isHazardous { drug.is_hazardous = isHazardous }
         CoreDataManager.shared.save(context: context)

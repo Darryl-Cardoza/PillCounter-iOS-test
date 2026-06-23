@@ -268,7 +268,9 @@ struct UnifiedCameraView: View {
                     quantity: pillScanViewModel.fetchedRxTransaction?.target_count.description ?? "-",
                     ndcNumber: pillScanViewModel.fetchedRxTransaction?.drug?.ndc ?? "-",
                     bucket: pillScanViewModel.fetchedRxTransaction?.bucket_id ?? "-",
-                    rxNumber: pillScanViewModel.fetchedRxTransaction?.rx_no ?? "-"
+                    rxNumber: pillScanViewModel.fetchedRxTransaction?.rx_no ?? "-",
+                    strength: pillScanViewModel.fetchedRxTransaction?.drug?.strength ?? "-",
+                    form: pillScanViewModel.fetchedRxTransaction?.drug?.dosage_form ?? "-"
                 )
                 .environmentObject(appColors)
             }

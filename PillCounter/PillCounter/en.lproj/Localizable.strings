@@ -189,6 +189,8 @@
 "barcodeScan.quantity" = "Quantity";
 "barcodeScan.rxNumber" = "Rx Number";
 "barcodeScan.bucket" = "Bucket";
+"barcodeScan.strength" = "Strength";
+"barcodeScan.form" = "Form";
 "barcodeScan.selectContainerStatus" = "Select Container Status";
 "barcodeScan.sealed" = "Sealed";
 "barcodeScan.opened" = "Opened";

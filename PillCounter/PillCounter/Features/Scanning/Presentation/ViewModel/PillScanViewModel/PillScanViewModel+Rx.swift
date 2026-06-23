@@ -335,6 +335,8 @@ extension PillScanViewModel {
                 drugId:       generateUniqueDrugId(),
                 drugName:     resolvedName,
                 drugType:     data.scannedNdc?.regulatory?.schedule,
+                strength:     data.scannedNdc?.activeIngredients?.first?.strength ?? data.scannedNdc?.activeIngredients?.first?.strengthRaw,
+                dosageForm:   data.scannedNdc?.dosageForm?.first,
                 packageQty:   data.scannedNdc?.safeQuantity ?? 0,
                 isHazardous:  data.scannedNdc?.isHazardous
             )

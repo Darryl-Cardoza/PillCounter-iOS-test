@@ -96,6 +96,8 @@ protocol DrugCatalogDataSource: AnyObject {
         drugId: Int64,
         drugName: String,
         drugType: String?,
+        strength: String?,
+        dosageForm: String?,
         packageQty: Int32,
         isHazardous: Bool?
     )
@@ -105,6 +107,8 @@ protocol DrugCatalogDataSource: AnyObject {
         ndc: String?,
         gtin: String?,
         drugType: String?,
+        strength: String?,
+        dosageForm: String?,
         packageQty: Int32?,
         isHazardous: Bool?
     )
@@ -172,20 +176,24 @@ extension TransactionDetailDataSource {
 extension DrugCatalogDataSource {
     func saveManual(
         ndc: String, gtin: String = "", drugId: Int64, drugName: String,
-        drugType: String? = nil, packageQty: Int32 = 0, isHazardous: Bool? = nil
+        drugType: String? = nil, strength: String? = nil, dosageForm: String? = nil,
+        packageQty: Int32 = 0, isHazardous: Bool? = nil
     ) {
         saveManual(
             ndc: ndc, gtin: gtin, drugId: drugId, drugName: drugName,
-            drugType: drugType, packageQty: packageQty, isHazardous: isHazardous
+            drugType: drugType, strength: strength, dosageForm: dosageForm,
+            packageQty: packageQty, isHazardous: isHazardous
         )
     }
     func update(
         drugId: Int64, drugName: String? = nil, ndc: String? = nil, gtin: String? = nil,
-        drugType: String? = nil, packageQty: Int32? = nil, isHazardous: Bool? = nil
+        drugType: String? = nil, strength: String? = nil, dosageForm: String? = nil,
+        packageQty: Int32? = nil, isHazardous: Bool? = nil
     ) {
         update(
             drugId: drugId, drugName: drugName, ndc: ndc, gtin: gtin,
-            drugType: drugType, packageQty: packageQty, isHazardous: isHazardous
+            drugType: drugType, strength: strength, dosageForm: dosageForm,
+            packageQty: packageQty, isHazardous: isHazardous
         )
     }
 }

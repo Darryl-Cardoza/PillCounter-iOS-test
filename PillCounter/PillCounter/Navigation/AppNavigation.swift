@@ -26,6 +26,7 @@ struct AppNavigation: View {
                     DashboardView()
                 } else {
                     LoginEmailView()
+//                    DashboardView()
                 }
             }
             .navigationDestination(for: PillCounterFlow.self) { destination in

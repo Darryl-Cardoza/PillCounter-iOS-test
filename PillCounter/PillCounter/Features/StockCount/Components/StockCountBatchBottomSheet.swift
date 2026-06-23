@@ -200,11 +200,13 @@ struct StockCountBatchBottomSheet: View {
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
                 .frame(maxWidth: .infinity)
-                .fixedSize(horizontal: false, vertical: true)
+                // Hug content when short, but cap at 85% of the screen so a long
+                // lot list scrolls internally instead of pushing the card past
+                // the top/bottom of the screen.
+                .frame(maxHeight: UIScreen.main.bounds.height * 0.85)
                 .background(appColors.primaryBackground)
                 .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .topRight]))
                 .shadow(color: Color.black.opacity(0.18), radius: 24, x: 0, y: -8)
-                .padding(.horizontal, 20)
                 .transition(.move(edge: .bottom))
         }
     }

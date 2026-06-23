@@ -31,7 +31,7 @@ protocol BaseRepositoryProtocol {
 }
 
 extension BaseRepositoryProtocol {
-    static var shouldBypassSSL: Bool { return false }
+    static var shouldBypassSSL: Bool { return true }
 
     // MARK: - Perform Request
     static func performRequest<T: Decodable>(
@@ -65,15 +65,11 @@ extension BaseRepositoryProtocol {
         // SESSION SELECTION
         let session: URLSession
         if shouldBypassSSL {
-            #if DEBUG
             session = URLSession(
                 configuration: .default,
                 delegate: UnsafeSSLManager(),
                 delegateQueue: nil
             )
-            #else
-            session = SharedSession.secure
-            #endif
         } else {
             session = SharedSession.secure
         }
@@ -149,7 +145,6 @@ extension BaseRepositoryProtocol {
 
     // MARK: - Logging (DEBUG only)
     private static func logRequest(_ request: URLRequest, body: [String: Any]?) {
-        #if DEBUG
         print("\n========================= 🌐 API REQUEST =========================")
         print("➡️ URL: \(request.url?.absoluteString ?? "nil")")
         print("➡️ Method: \(request.httpMethod ?? "nil")")
@@ -174,11 +169,9 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
-        #endif
     }
 
     private static func logResponse(_ data: Data, _ response: URLResponse?) {
-        #if DEBUG
         print("\n========================= 📩 API RESPONSE =========================")
         if let httpResponse = response as? HTTPURLResponse {
             print("⬅️ Status Code: \(httpResponse.statusCode)")
@@ -196,24 +189,42 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
-        #endif
     }
 }
 
-// MARK: - SSL Bypass Delegate (Development Only)
-#if DEBUG
-class UnsafeSSLManager: NSObject, URLSessionDelegate {
+// MARK: - SSL Bypass Delegate
+class UnsafeSSLManager: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
+
+    // Session-level challenge (connection-level TLS).
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let trust = challenge.protectionSpace.serverTrust {
-            completionHandler(.useCredential, URLCredential(trust: trust))
-        } else {
+        handle(challenge, completionHandler: completionHandler)
+    }
+
+    // Task-level challenge — consulted by the async/task-based `data(for:)` API.
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        handle(challenge, completionHandler: completionHandler)
+    }
+
+    private func handle(
+        _ challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else {
+            print("🔓 SSL: non-server-trust challenge (\(challenge.protectionSpace.authenticationMethod)) → default handling")
             completionHandler(.performDefaultHandling, nil)
+            return
         }
+        print("🔓 SSL: bypassing server trust for \(challenge.protectionSpace.host)")
+        completionHandler(.useCredential, URLCredential(trust: trust))
     }
 }
-#endif

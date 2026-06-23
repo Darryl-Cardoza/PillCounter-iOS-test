@@ -480,9 +480,19 @@ class StockCountViewModel: ObservableObject {
             lotNumber: firstLot?.lot ?? "",
             expiry:    firstLot?.expiry ?? ""
         )
-        existingNdcBottleCount = Int(txn.sealedBottleQty)
-        pendingBottleCount = Int(txn.sealedBottleQty)
         committedTxnId = txn.txnId
+        // existingNdcBottleCount is the NDC-wide sum across every txn/batch (for display).
+        // pendingBottleCount MUST be the committed txn's OWN bottle_qty, not the NDC-wide
+        // sum — flushPendingBottleCount writes it absolutely onto committedTxnId, so storing
+        // the sum here would overwrite one lot with the whole-NDC total and double-count the
+        // other batches' bottles on the next reload. displayBottleTotal folds the per-txn
+        // pending value back into the NDC-wide sum, so the card still shows the full total.
+        existingNdcBottleCount = Int(txn.sealedBottleQty)
+        if let txnId = committedTxnId, let entity = transactionDAO.fetchById(txnId) {
+            pendingBottleCount = Int(entity.bottle_qty)
+        } else {
+            pendingBottleCount = Int(txn.sealedBottleQty)
+        }
         selectedGroupedTransaction = txn
     }
 

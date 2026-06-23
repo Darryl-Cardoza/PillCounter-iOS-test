@@ -321,6 +321,7 @@ enum L10n {
         static let noScansYet = NSLocalizedString("pillScan.noScansYet", comment: "")
         static let deleteScans = NSLocalizedString("pillScan.deleteScans", comment: "")
         static let deleteScansMessage = NSLocalizedString("pillScan.deleteScansMessage", comment: "")
+        static let viewAllCounts = NSLocalizedString("pillScan.viewAllCounts", comment: "")
     }
 
     // MARK: - Location

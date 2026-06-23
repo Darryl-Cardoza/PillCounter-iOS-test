@@ -265,6 +265,7 @@
 "pillScan.noScansYet" = "No scans yet";
 "pillScan.deleteScans" = "Delete Scans";
 "pillScan.deleteScansMessage" = "Are you sure you want to delete the selected scans?";
+"pillScan.viewAllCounts" = "View all counts";
 
 // MARK: - LOCATION
 "location.fetching" = "Fetching...";

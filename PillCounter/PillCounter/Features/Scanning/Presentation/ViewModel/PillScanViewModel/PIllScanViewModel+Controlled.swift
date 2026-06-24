@@ -20,6 +20,14 @@ extension PillScanViewModel{
 
         return nil
     }
+
+    /// Open-ended step — the user pours ALL pills and there is no meaningful
+    /// target to compare against (parent / container-initiate count). The UI
+    /// hides the target progress bar and the button is always an explicit "Done"
+    /// (completion is the user's decision, not a count == target check).
+    var isOpenEndedCountStep: Bool {
+        currentControlledStep == .containerInitiate
+    }
     
     
     // MARK: - Update Target Count

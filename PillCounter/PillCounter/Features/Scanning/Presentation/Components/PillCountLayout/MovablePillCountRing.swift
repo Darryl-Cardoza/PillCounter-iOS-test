@@ -31,6 +31,14 @@ struct MovablePillCountRing: View {
 
     // Ookla-style ripple — animates while the target is reached ("All Done").
     @State private var rippleActive: Bool = false
+    // Subtle "breathing" — the solid ring gently scales/glows in/out while
+    // "All Done", giving the state a calm, alive feel beyond the ripple.
+    @State private var donePulse: Bool = false
+
+    // Edit-mode pulse — a dashed halo that breathes/rotates while the ring is
+    // "picked up" (held), signalling that it can now be dragged/resized.
+    @State private var editPulse: Bool = false
+    @State private var editDashPhase: CGFloat = 0
 
     // ── Pinch-to-resize (experimental) ──────────────────────────────────────
     // `committedScale` is the resting zoom factor; `gestureScale` is the live
@@ -192,21 +200,57 @@ struct MovablePillCountRing: View {
 
     private var ringContent: some View {
         ZStack {
-            // Ookla-style ripple — expanding, fading rings while "All Done".
+            // Edit-mode halo — a dashed, slowly-rotating ring that breathes
+            // while the ring is held, indicating it's now movable/resizable.
+            if isDragging {
+                Circle()
+                    .stroke(
+                        ringColor.opacity(0.9),
+                        style: StrokeStyle(
+                            lineWidth: isIpad ? 3 : 2,
+                            lineCap: .round,
+                            dash: [baseSize * 0.06, baseSize * 0.05],
+                            dashPhase: editDashPhase
+                        )
+                    )
+                    .frame(width: baseSize * 1.18, height: baseSize * 1.18)
+                    .scaleEffect(editPulse ? 1.06 : 0.98)
+                    .opacity(editPulse ? 0.35 : 0.9)
+                    .animation(
+                        .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                        value: editPulse
+                    )
+                    .transition(.scale.combined(with: .opacity))
+            }
+
+            // "All Done" ripple — three soft, staggered waves that expand and
+            // fade outward, layered under the breathing ring below.
             if isTargetReached {
-                ForEach(0..<2, id: \.self) { i in
+                ForEach(0..<3, id: \.self) { i in
                     Circle()
-                        .stroke(appColors.primary, lineWidth: 1)
+                        .stroke(appColors.primary, lineWidth: isIpad ? 2 : 1.5)
                         .frame(width: baseSize, height: baseSize)
-                        .scaleEffect(rippleActive ? 1.4 : 1.0)
-                        .opacity(rippleActive ? 0 : 0.6)
+                        .scaleEffect(rippleActive ? 1.55 : 0.92)
+                        .opacity(rippleActive ? 0 : 0.5)
                         .animation(
-                            .easeOut(duration: 2.8)
+                            .easeOut(duration: 3.0)
                                 .repeatForever(autoreverses: false)
-                                .delay(Double(i) * 1.4),
+                                .delay(Double(i) * 1.0),
                             value: rippleActive
                         )
                 }
+
+                // Soft glow halo that breathes with the ring.
+                Circle()
+                    .fill(appColors.primary.opacity(0.18))
+                    .frame(width: baseSize, height: baseSize)
+                    .scaleEffect(donePulse ? 1.12 : 0.96)
+                    .opacity(donePulse ? 0.0 : 0.6)
+                    .blur(radius: baseSize * 0.06)
+                    .animation(
+                        .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
+                        value: donePulse
+                    )
             }
 
             // Transparent dark backing for the ring.
@@ -217,9 +261,22 @@ struct MovablePillCountRing: View {
             Circle()
                 .stroke(ringColor, style: StrokeStyle(lineWidth: isIpad ? 3 : 2, lineCap: .round))
                 .frame(width: baseSize, height: baseSize)
+                // Gentle breathing on the ring outline while "All Done".
+                .scaleEffect(isTargetReached && donePulse ? 1.04 : 1.0)
+                .shadow(
+                    color: appColors.primary.opacity(isTargetReached && donePulse ? 0.7 : 0.25),
+                    radius: isTargetReached ? (donePulse ? baseSize * 0.05 : baseSize * 0.02) : 0
+                )
+                .animation(
+                    .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
+                    value: donePulse
+                )
 
-            // No "Add" label — the count shows alone, then converts to "All Done"
-            // (with the ripple above) once the target is reached.
+            // While the ring is an Add control it shows the count with an "Add"
+            // label beneath it; once the target is reached it converts to
+            // "All Done" (with the ripple above). The open-ended parent pour is
+            // never target-reached, so it always shows the Add state — its step
+            // is finished via the separate "Done" button in the bottom bar.
             if isTargetReached {
                 Text(L10n.PillCount.allDone)
                     .font(.system(size: baseSize * 0.16, weight: .bold))
@@ -227,10 +284,15 @@ struct MovablePillCountRing: View {
                     .multilineTextAlignment(.center)
                     .transition(.scale.combined(with: .opacity))
             } else {
-                Text("\(count)")
-                    .font(.system(size: baseSize * 0.30, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .transition(.scale.combined(with: .opacity))
+                VStack(spacing: baseSize * 0.04) {
+                    Text("\(count)")
+                        .font(.system(size: baseSize * 0.30, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(L10n.Common.add)
+                        .font(.system(size: baseSize * 0.13, weight: .bold))
+                        .foregroundStyle(isAddDisabled ? Color.white.opacity(0.4) : .white)
+                }
+                .transition(.scale.combined(with: .opacity))
             }
         }
         // The ring itself is the tap target — a tap counts as Add / All Done.
@@ -241,9 +303,24 @@ struct MovablePillCountRing: View {
         .scaleEffect(isDragging ? 1.18 : 1.0)
         .shadow(color: .black.opacity(isDragging ? 0.4 : 0), radius: isDragging ? 16 : 0, y: isDragging ? 8 : 0)
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isTargetReached)
-        .onAppear { rippleActive = isTargetReached }
+        .onAppear {
+            rippleActive = isTargetReached
+            donePulse = isTargetReached
+        }
         .onChange(of: isTargetReached) { _, reached in
             rippleActive = reached
+            donePulse = reached
+        }
+        // Start/stop the edit-mode halo animations alongside the picked-up state.
+        .onChange(of: isDragging) { _, dragging in
+            editPulse = dragging
+            if dragging {
+                withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+                    editDashPhase = -baseSize * 0.5
+                }
+            } else {
+                editDashPhase = 0
+            }
         }
     }
 
@@ -252,6 +329,8 @@ struct MovablePillCountRing: View {
         if isTargetReached {
             onAllDone()
         } else {
+            // Both the normal step and the open-ended parent pour commit via Add.
+            // (The parent pour is finished by the bottom-bar "Done" button.)
             guard !isAddDisabled else { return }
             onAdd()
         }

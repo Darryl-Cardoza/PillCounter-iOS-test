@@ -240,7 +240,7 @@ struct RxDetailsSheetContent: View {
     // MARK: - Buttons
 
     private var iPhoneButtons: some View {
-        HStack(spacing: 12) {
+        EqualWidthHStackButtons(spacing: 8) {
             PillCountingButton(
                 iconName: nil, title: L10n.Common.cancel,
                 textColor: appColors.primary, backgroundColor: .clear,
@@ -261,7 +261,7 @@ struct RxDetailsSheetContent: View {
     
 
     private var iPadButtons: some View {
-        EqualWidthHStackButtons(spacing: 16) {
+        EqualWidthHStackButtons(spacing: 12) {
             PillCountingButton(
                 title: L10n.Common.cancel,
                 textColor: appColors.primary,

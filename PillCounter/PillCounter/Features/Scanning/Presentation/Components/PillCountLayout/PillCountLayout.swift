@@ -34,6 +34,10 @@ struct PillCountLayout: View {
 
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
+    /// iPhone in portrait — needs a stacked top bar and the steps row lifted
+    /// out of the bottom bar (the bottom bar can't fit everything in one line).
+    private var isIphonePortrait: Bool { !isIpad && !isLandscape }
+
     // ── Data mirrors BottomControlsView so the displayed numbers are identical ──
 
     /// Target for the current step (0 when there is no meaningful target, e.g. REGULAR).
@@ -67,6 +71,18 @@ struct PillCountLayout: View {
         pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue
     }
 
+    /// Open-ended parent pour — no target; the bar shows the live count and an
+    /// explicit "Done" button (the ring stays an "Add" control).
+    private var isOpenEndedStep: Bool {
+        pillScanViewModel.isOpenEndedCountStep
+    }
+
+    /// "Done" on the open-ended step must not fire with nothing poured, so it's
+    /// enabled only once at least one pill has been committed to this step.
+    private var isDoneEnabled: Bool {
+        currentTotalCount > 0
+    }
+
     var body: some View {
         ZStack {
             // ── Movable / clickable count ring (the ring itself is the Add target) ──
@@ -86,7 +102,7 @@ struct PillCountLayout: View {
                     drugName: pillScanViewModel.currentTransaction?.drug?.drug_name ?? "-",
                     form: pillScanViewModel.currentTransaction?.drug?.dosage_form ?? "-",
                     strength: pillScanViewModel.currentTransaction?.drug?.strength ?? "-",
-                    bucket: pillScanViewModel.currentTransaction?.bucket_id ?? "-",
+                    bucket: pillScanViewModel.currentTransaction?.bucket_id ?? "NORMAL",
                     instructionText: instructionText,
                     isLandscape: isLandscape,
                     isIpad: isIpad,
@@ -97,6 +113,15 @@ struct PillCountLayout: View {
 
                 Spacer()
 
+                // On iPhone portrait the steps row is lifted out of the bottom
+                // bar (which can't fit everything in a single line) and shown above it.
+                if isIphonePortrait {
+                    StepProgressRow(
+                        activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
+                        currentStep: pillScanViewModel.currentControlledStep
+                    )
+                }
+
                 PillCountBottomBar(
                     activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                     currentStep: pillScanViewModel.currentControlledStep,
@@ -104,7 +129,11 @@ struct PillCountLayout: View {
                     targetCount: targetCount,
                     isIpad: isIpad,
                     isLandscape: isLandscape,
-                    onShowDetailGrid: onShowDetailGrid
+                    showSteps: !isIphonePortrait,
+                    isOpenEndedCountStep: isOpenEndedStep,
+                    isDoneEnabled: isDoneEnabled,
+                    onShowDetailGrid: onShowDetailGrid,
+                    onDone: onAllDone
                 )
             }
         }

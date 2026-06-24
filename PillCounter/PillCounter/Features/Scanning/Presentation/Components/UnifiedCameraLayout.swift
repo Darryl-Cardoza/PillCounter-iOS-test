@@ -121,14 +121,15 @@ struct UnifiedCameraLayout: View {
                         if isLandscape {
                             if showPillCountPanel   {
                                 // showPillCountPanel true: back | 16 | instruction | 16 | glove | Spacer
-                                Color.clear.frame(width: 220, height: 1)
+//                                Color.clear.frame(width: 220, height: 1)
+                                Spacer()
                                 if !instructionText.isEmpty {
                                     PillCountInstructionOverlay(text: instructionText)
                                 }
-                                if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
-                                    Color.clear.frame(width: isIpad ? 200 : 50, height: 1)
-                                    GloveStatusIndicator(cameraService: cameraService)
-                                }
+//                                if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
+//                                    Color.clear.frame(width: isIpad ? 200 : 50, height: 1)
+//                                    GloveStatusIndicator(cameraService: cameraService)
+//                                }
                                 Spacer()
                             } else {
                                 Spacer()

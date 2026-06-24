@@ -343,19 +343,17 @@ class StockCountViewModel: ObservableObject {
             }
             let drugName = response.data?.scannedNdc?.lookupName ?? ""
             let qty      = response.data?.scannedNdc?.safeQuantity ?? 0
-            let drugType = response.data?.scannedNdc?.regulatory?.schedule
 
             // Backfill drug master so future scans resolve locally with full data
             let newDrugId = generateUniqueDrugId()
-            drugMasterDAO.saveManual(
-                ndc:         ndc,
-                gtin:        gtin,
-                drugId:      newDrugId,
-                drugName:    drugName,
-                drugType:    drugType,
-                packageQty:  qty,
-                isHazardous: response.data?.scannedNdc?.isHazardous
-            )
+            if let scannedNdc = response.data?.scannedNdc {
+                drugMasterDAO.upsertFromApi(
+                    ndc:    ndc,
+                    drugId: newDrugId,
+                    drug:   scannedNdc,
+                    gtin:   gtin
+                )
+            }
 
             scannedDrugData = ScannedDrugData(
                 drugName:   drugName,

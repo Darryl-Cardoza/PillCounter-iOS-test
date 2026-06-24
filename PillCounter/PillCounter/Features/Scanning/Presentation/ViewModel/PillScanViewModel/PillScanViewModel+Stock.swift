@@ -93,20 +93,22 @@ extension PillScanViewModel {
                     ndcValidationRequest: request
                 )
 
-                if let lookup = response.data?.scannedNdc?.lookupName,
+                if let scannedNdc = response.data?.scannedNdc,
+                   let lookup = scannedNdc.lookupName,
                    !lookup.isEmpty {
 
                     let newId = generateUniqueDrugId()
 
-                    drugMasterDAO.saveManual(
-                        ndc:         response.data?.scannedNdc?.drugCode ?? ndc,
-                        gtin:        gtin,
-                        drugId:      newId,
-                        drugName:    lookup,
-                        drugType:    response.data?.scannedNdc?.regulatory?.schedule,
-                        packageQty:  response.data?.scannedNdc?.safeQuantity ?? quantity,
-                        isHazardous: response.data?.scannedNdc?.isHazardous
+                    drugMasterDAO.upsertFromApi(
+                        ndc:    scannedNdc.drugCode ?? ndc,
+                        drugId: newId,
+                        drug:   scannedNdc,
+                        gtin:   gtin
                     )
+                    // Fall back to the scanned bottle quantity when the API gave no package size.
+                    if scannedNdc.safeQuantity == 0 {
+                        drugMasterDAO.update(drugId: newId, packageQty: quantity)
+                    }
 
                     drugIdToUse = newId
                 } else {
@@ -286,19 +288,18 @@ extension PillScanViewModel {
                     ndcValidationRequest: request
                 )
 
-                guard let lookup = response.data?.scannedNdc?.lookupName,
+                guard let scannedNdc = response.data?.scannedNdc,
+                      let lookup = scannedNdc.lookupName,
                       !lookup.isEmpty else {
                     continue
                 }
 
                 let newId = generateUniqueDrugId()
 
-                drugMasterDAO.saveManual(
-                    ndc: response.data?.scannedNdc?.drugCode ?? "",
+                drugMasterDAO.upsertFromApi(
+                    ndc:    scannedNdc.drugCode ?? "",
                     drugId: newId,
-                    drugName: lookup,
-                    drugType: response.data?.scannedNdc?.regulatory?.schedule,
-                    packageQty: response.data?.scannedNdc?.safeQuantity ?? 0
+                    drug:   scannedNdc
                 )
 
                 resolvedItems.append(

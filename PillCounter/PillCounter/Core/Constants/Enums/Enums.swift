@@ -241,7 +241,7 @@ extension ControlledStep {
 
 
 // MARK: - ASSET NAME MAPPING
-extension ControlledStepRow {
+extension StepProgressRow {
 
 func assetName(for step: ControlledStep) -> String {
 

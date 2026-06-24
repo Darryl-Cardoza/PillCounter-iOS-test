@@ -330,16 +330,13 @@ extension PillScanViewModel {
 
             let resolvedName = data.scannedNdc?.lookupName ?? ""
 
-            drugMasterDAO.saveManual(
-                ndc:          ndc,
-                drugId:       generateUniqueDrugId(),
-                drugName:     resolvedName,
-                drugType:     data.scannedNdc?.regulatory?.schedule,
-                strength:     data.scannedNdc?.activeIngredients?.first?.strength ?? data.scannedNdc?.activeIngredients?.first?.strengthRaw,
-                dosageForm:   data.scannedNdc?.dosageForm?.first,
-                packageQty:   data.scannedNdc?.safeQuantity ?? 0,
-                isHazardous:  data.scannedNdc?.isHazardous
-            )
+            if let scannedNdc = data.scannedNdc {
+                drugMasterDAO.upsertFromApi(
+                    ndc:    ndc,
+                    drugId: generateUniqueDrugId(),
+                    drug:   scannedNdc
+                )
+            }
             print("[resolve Drug Name : isHazardous : ] \(data.scannedNdc?.isHazardous ?? false)")
 
             print("[RxScan] Drug resolved from API → '\(resolvedName)'")

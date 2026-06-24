@@ -197,16 +197,14 @@ extension PillScanViewModel{
         // (local path is taken when getControlledDrugInfo resolved from cache and
         // never populated ndcComparisonResponse).
         let actualDrugId: Int64
-        if let apiNdc = ndcComparisonResponse?.data?.scannedNdc?.drugCode, !apiNdc.isEmpty {
+        if let scannedNdc = ndcComparisonResponse?.data?.scannedNdc,
+           let apiNdc = scannedNdc.drugCode, !apiNdc.isEmpty {
             let newDrugId = generateUniqueDrugId()
-            drugMasterDAO.saveManual(
-                ndc:         apiNdc,
-                gtin:        gtin,
-                drugId:      newDrugId,
-                drugName:    ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
-                drugType:    ndcComparisonResponse?.data?.scannedNdc?.regulatory?.schedule ?? "",
-                packageQty:  ndcComparisonResponse?.data?.scannedNdc?.safeQuantity ?? 0,
-                isHazardous: ndcComparisonResponse?.data?.scannedNdc?.isHazardous
+            drugMasterDAO.upsertFromApi(
+                ndc:    apiNdc,
+                drugId: newDrugId,
+                drug:   scannedNdc,
+                gtin:   gtin
             )
             actualDrugId = drugMasterDAO.fetchByNdc(apiNdc)?.drug_id ?? newDrugId
         } else if let localDrug = drugMasterDAO.fetchByGtin(gtin), let localNdc = localDrug.ndc, !localNdc.isEmpty {

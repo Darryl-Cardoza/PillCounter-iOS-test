@@ -29,7 +29,9 @@ extension PillCountTransactionEntity {
             status: self.status ?? "",
             note: self.note,
             bucketId: self.bucket_id ?? "",
-            drugType: self.drug?.drug_type ?? ""
+            drugType: self.drug?.drug_type ?? "",
+            strength: self.drug?.strength ?? "",
+            dosageForm: self.drug?.dosage_form ?? ""
         )
     }
 }

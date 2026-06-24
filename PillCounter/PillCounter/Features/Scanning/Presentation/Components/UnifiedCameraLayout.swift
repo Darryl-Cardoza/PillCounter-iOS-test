@@ -204,7 +204,7 @@ struct UnifiedCameraLayout: View {
             if isLandscape {
                 Spacer()
                 HStack {
-                    ControlledStepRow(
+                    StepProgressRow(
                         activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                         currentStep: pillScanViewModel.currentControlledStep
                     )
@@ -213,7 +213,7 @@ struct UnifiedCameraLayout: View {
                 }
             } else {
                 Spacer()
-                ControlledStepRow(
+                StepProgressRow(
                     activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                     currentStep: pillScanViewModel.currentControlledStep
                 )

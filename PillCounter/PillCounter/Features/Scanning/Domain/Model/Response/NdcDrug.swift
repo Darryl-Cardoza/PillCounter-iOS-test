@@ -206,6 +206,21 @@ struct DrugImageItem: Codable {
 
 extension NdcDrug {
 
+    /// Strength of the first active ingredient (prefers normalized `strength`, falls back to raw).
+    var primaryStrength: String? {
+        activeIngredients?.first?.strength ?? activeIngredients?.first?.strengthRaw
+    }
+
+    /// First dosage form from the API (the field can arrive as a single value or array).
+    var primaryDosageForm: String? {
+        dosageForm?.first
+    }
+
+    /// Regulatory schedule used as the drug type / control schedule.
+    var scheduleType: String? {
+        regulatory?.schedule
+    }
+
     var safeQuantity: Int32 {
         // Case 1: structured (best)
         if let qty = package?.levels?.first?.contains?.quantity {

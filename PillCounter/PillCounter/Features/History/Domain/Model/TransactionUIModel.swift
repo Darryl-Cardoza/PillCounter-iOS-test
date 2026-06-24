@@ -18,4 +18,6 @@ struct TransactionRowData: Identifiable {
     let note: String?
     let bucketId: String
     let drugType: String
+    let strength: String
+    let dosageForm: String
 }

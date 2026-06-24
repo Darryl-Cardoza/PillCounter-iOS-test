@@ -43,7 +43,7 @@ struct CameraContentView: View {
                     }
                     if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
                         VStack {
-                            ControlledStepRow(
+                            StepProgressRow(
                                 activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                                 currentStep: pillScanViewModel.currentControlledStep
                             )

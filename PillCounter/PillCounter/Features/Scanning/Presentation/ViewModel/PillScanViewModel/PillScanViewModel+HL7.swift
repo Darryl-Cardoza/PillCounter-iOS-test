@@ -246,15 +246,13 @@ extension PillScanViewModel {
                 let response = try await controlledRepo.getControlledDrugInfo(
                     ndcValidationRequest: request
                 )
-                if let lookup = response.data?.scannedNdc?.lookupName, !lookup.isEmpty {
+                if let scannedNdc = response.data?.scannedNdc,
+                   let lookup = scannedNdc.lookupName, !lookup.isEmpty {
                     let newId = generateUniqueDrugId()
-                    drugMasterDAO.saveManual(
-                        ndc: hl7Ndc,
+                    drugMasterDAO.upsertFromApi(
+                        ndc:    hl7Ndc,
                         drugId: newId,
-                        drugName: lookup,
-                        drugType: response.data?.scannedNdc?.regulatory?.schedule,
-                        packageQty: response.data?.scannedNdc?.safeQuantity ?? 0,
-                        isHazardous: response.data?.scannedNdc?.isHazardous
+                        drug:   scannedNdc
                     )
                     resolvedDrugId = newId
                     resolvedDrugName = lookup
@@ -401,7 +399,8 @@ extension PillScanViewModel {
                     ndcValidationRequest: request
                 )
 
-                if let lookup = response.data?.scannedNdc?.lookupName,
+                if let scannedNdc = response.data?.scannedNdc,
+                   let lookup = scannedNdc.lookupName,
                    !lookup.isEmpty {
 
                     let newId = generateUniqueDrugId()
@@ -413,16 +412,13 @@ extension PillScanViewModel {
                     // lookups (which also use the HL7 ndc) find this record.
                     // packageNdc from the API may differ, which would orphan the saved
                     // drug and break the transaction's drug relationship.
-                    drugMasterDAO.saveManual(
-                        ndc: ndc,
+                    drugMasterDAO.upsertFromApi(
+                        ndc:    ndc,
                         drugId: newId,
-                        drugName: lookup,
-                        drugType: response.data?.scannedNdc?.regulatory?.schedule,
-                        packageQty: response.data?.scannedNdc?.safeQuantity ?? 0,
-                        isHazardous: response.data?.scannedNdc?.isHazardous
+                        drug:   scannedNdc
                     )
 
-                    drugType = response.data?.scannedNdc?.regulatory?.schedule
+                    drugType = scannedNdc.scheduleType
 
                     Log("HL7: Drug created via API → \(lookup)")
                 } else {

@@ -810,7 +810,9 @@ class UserViewModel: ObservableObject {
             createdAt: txn.created_at, barcodeImagePath: txn.barcode_image,
             pillCount: pillCount, targetCount: Int(txn.target_count),
             countType: txn.count_type ?? "", status: txn.status ?? "",
-            note: txn.note, bucketId: "360B", drugType: txn.drug?.drug_type ?? ""
+            note: txn.note, bucketId: "360B", drugType: txn.drug?.drug_type ?? "",
+            strength: txn.drug?.strength ?? "",
+            dosageForm: txn.drug?.dosage_form ?? ""
         )
     }
 

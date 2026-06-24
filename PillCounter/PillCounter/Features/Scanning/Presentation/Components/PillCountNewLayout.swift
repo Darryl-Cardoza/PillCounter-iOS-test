@@ -90,6 +90,7 @@ struct PillCountNewLayout: View {
                 topBar
                 Spacer()
                 bottomBar
+                
             }
         }
     }
@@ -129,13 +130,11 @@ struct PillCountNewLayout: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Steps row (FIXED only) — center.
-//            if isFixed {
-                ControlledStepRow(
-                    activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
-                    currentStep: pillScanViewModel.currentControlledStep
-                )
-//            }
+            // Steps For
+            StepProgressRow(
+                activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
+                currentStep: pillScanViewModel.currentControlledStep
+            )
 
             // Horizontal target progress bar — always visible, trailing.
             PillCountTargetProgressBar(
@@ -146,10 +145,11 @@ struct PillCountNewLayout: View {
             )
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, isIpad ? 24 : 14)
-        .padding(.vertical, isIpad ? 10 : 8)
+        .padding(.horizontal, 20)
         .frame(maxWidth: .infinity)
         .background(Color.black.opacity(0.45))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(16)
     }
 }
 
@@ -173,11 +173,6 @@ struct PillCountTopBar: View {
 
     var body: some View {
         ZStack {
-            // Center: instruction overlay, independent of the side content.
-//            if !instructionText.isEmpty {
-//                PillCountInstructionOverlay(text: instructionText)
-//            }
-
             HStack(alignment: .center, spacing: isIpad ? 16 : 10) {
                 // Back button — leading
                 Button(action: onBack) {
@@ -207,28 +202,47 @@ struct PillCountTopBar: View {
                     GloveStatusIndicator(cameraService: cameraService)
                 }
 
-                // Form / Strength / Bucket — bigger.
+                // Form / Strength / Bucket
                 HStack(alignment: .top, spacing: isIpad ? 40 : 22) {
-                    infoColumn(title: L10n.BarcodeScan.form, value: form)
+                    formIconColumn(title: L10n.BarcodeScan.form, dosageForm: form)
                     infoColumn(title: L10n.BarcodeScan.strength, value: strength)
                     infoColumn(title: L10n.BarcodeScan.bucket, value: bucket)
                 }
             }
-            // Equal padding on all sides.
-            .padding(isIpad ? 30 : 14)
+            .padding(10)
         }
         .frame(maxWidth: .infinity)
         .background(Color.black.opacity(0.45))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.top, 20)
+        .padding(16)
+        
+    }
+    /// Form column — shows the dosage-form icon (same utility as the thumbnail)
+    /// instead of the raw form text.
+    @ViewBuilder
+    private func formIconColumn(title: String, dosageForm: String) -> some View {
+        VStack(alignment: .center, spacing: 8) {
+            Text(title)
+                .font(.system(size: isIpad ? 14 : 11, weight: .regular))
+                .foregroundStyle(appColors.text)
+            Image(DosageFormIcon.iconName(for: dosageForm))
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: isIpad ? 22 : 18, height: isIpad ? 22 : 18)
+                .foregroundStyle(appColors.text)
+        }
     }
 
     @ViewBuilder
     private func infoColumn(title: String, value: String) -> some View {
         VStack(alignment: .center, spacing: 8) {
             Text(title)
-                .font(.system(size: isIpad ? 16 : 11, weight: .regular))
+                .font(.system(size: isIpad ? 14 : 11, weight: .regular))
                 .foregroundStyle(appColors.text)
             Text(value)
-                .font(.system(size: isIpad ? 24 : 15, weight: .semibold))
+                .font(.system(size: isIpad ? 16 : 15, weight: .semibold))
                 .foregroundStyle(appColors.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -264,11 +278,37 @@ struct MovablePillCountRing: View {
     // Ookla-style ripple — animates while the target is reached ("All Done").
     @State private var rippleActive: Bool = false
 
+    // ── Pinch-to-resize (experimental) ──────────────────────────────────────
+    // `committedScale` is the resting zoom factor; `gestureScale` is the live
+    // pinch delta. Session-only (not persisted). Clamped to [minScale, maxScale].
+    @State private var committedScale: CGFloat = 1.0
+    @State private var gestureScale: CGFloat = 1.0
+
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-    private var baseSize: CGFloat {
+
+    /// Unscaled base diameter for the current device / orientation.
+    private var baseSizeUnscaled: CGFloat {
         let s: CGFloat = 120
         guard isIpad else { return s }
         return isLandscape ? s * 2.0 : s * 1.5
+    }
+
+    // Pinch limits, relative to the unscaled base size.
+    private let minScale: CGFloat = 0.6
+    private let maxScale: CGFloat = 1.8
+
+    /// Effective resting scale, clamped to the allowed range.
+    private var effectiveScale: CGFloat {
+        min(max(committedScale * gestureScale, minScale), maxScale)
+    }
+
+    /// Actual ring diameter after pinch scaling.
+    private var baseSize: CGFloat { baseSizeUnscaled * effectiveScale }
+
+    /// Largest diameter that still fits the device's smaller screen dimension —
+    /// keeps the ring within bounds on every device, regardless of pinch.
+    private func maxDiameter(in size: CGSize) -> CGFloat {
+        min(size.width, size.height) * 0.9
     }
 
     // Default resting position — right side, vertically centered (matches the mockup).
@@ -307,55 +347,85 @@ struct MovablePillCountRing: View {
                         committedOffset = clamp(saved, in: geo.size)
                     }
                 }
-                // Long-press to "pick up", then drag to move. A plain tap counts as Add.
-                .gesture(
-                    LongPressGesture(minimumDuration: 0.25)
-                        .sequenced(before: DragGesture())
-                        .onChanged { value in
-                            switch value {
-                            case .second(true, let drag?):
-                                if !isDragging {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        isDragging = true
-                                    }
-                                }
-                                // Clamp live so the ring never crosses the screen edge.
-                                let base = clamp(committedOffset ?? defaultOffset(in: geo.size), in: geo.size)
-                                let proposed = CGSize(
-                                    width: base.width + drag.translation.width,
-                                    height: base.height + drag.translation.height
-                                )
-                                let clamped = clamp(proposed, in: geo.size)
-                                dragOffset = CGSize(
-                                    width: clamped.width - base.width,
-                                    height: clamped.height - base.height
-                                )
-                            default:
-                                break
-                            }
-                        }
-                        .onEnded { value in
-                            if case .second(true, let drag?) = value {
-                                let base = clamp(committedOffset ?? defaultOffset(in: geo.size), in: geo.size)
-                                let dropped = clamp(
-                                    CGSize(
-                                        width: base.width + drag.translation.width,
-                                        height: base.height + drag.translation.height
-                                    ),
-                                    in: geo.size
-                                )
-                                committedOffset = dropped
-                                // Remember the drop position for next time.
-                                AppStorageManager.shared.pillCountRingOffset = dropped
-                            }
-                            dragOffset = .zero
-                            // Animate back to the normal (dropped) size.
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                                isDragging = false
-                            }
-                        }
-                )
+                // Long-press to drag (one finger) and pinch to resize (two fingers)
+                // run simultaneously. A plain tap counts as Add.
+                .gesture(dragGesture(in: geo.size).simultaneously(with: pinchGesture(in: geo.size)))
         }
+    }
+
+    // MARK: - Gestures
+
+    /// Long-press to "pick up", then drag to move. Clamped to the screen.
+    private func dragGesture(in size: CGSize) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture())
+            .onChanged { value in
+                switch value {
+                case .second(true, let drag?):
+                    if !isDragging {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isDragging = true
+                        }
+                    }
+                    // Clamp live so the ring never crosses the screen edge.
+                    let base = clamp(committedOffset ?? defaultOffset(in: size), in: size)
+                    let proposed = CGSize(
+                        width: base.width + drag.translation.width,
+                        height: base.height + drag.translation.height
+                    )
+                    let clamped = clamp(proposed, in: size)
+                    dragOffset = CGSize(
+                        width: clamped.width - base.width,
+                        height: clamped.height - base.height
+                    )
+                default:
+                    break
+                }
+            }
+            .onEnded { value in
+                if case .second(true, let drag?) = value {
+                    let base = clamp(committedOffset ?? defaultOffset(in: size), in: size)
+                    let dropped = clamp(
+                        CGSize(
+                            width: base.width + drag.translation.width,
+                            height: base.height + drag.translation.height
+                        ),
+                        in: size
+                    )
+                    committedOffset = dropped
+                    // Remember the drop position for next time.
+                    AppStorageManager.shared.pillCountRingOffset = dropped
+                }
+                dragOffset = .zero
+                // Animate back to the normal (dropped) size.
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    isDragging = false
+                }
+            }
+    }
+
+    /// Two-finger pinch to resize the ring between min and max radius.
+    /// Session-only (experimental, not persisted).
+    private func pinchGesture(in size: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                gestureScale = value
+            }
+            .onEnded { value in
+                // Fold the gesture delta into the committed scale, clamped to the
+                // allowed range AND to what fits the device's screen.
+                let screenMaxScale = maxDiameter(in: size) / baseSizeUnscaled
+                let upper = min(maxScale, screenMaxScale)
+                let settled = min(max(committedScale * value, minScale), upper)
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    committedScale = settled
+                    gestureScale = 1.0
+                    // Keep the (possibly now-larger) ring within the screen.
+                    if let committed = committedOffset {
+                        committedOffset = clamp(committed, in: size)
+                    }
+                }
+            }
     }
 
     private var ringColor: Color {
@@ -372,7 +442,7 @@ struct MovablePillCountRing: View {
             if isTargetReached {
                 ForEach(0..<2, id: \.self) { i in
                     Circle()
-                        .stroke(appColors.primary, lineWidth: isIpad ? 3 : 2)
+                        .stroke(appColors.primary, lineWidth: 1)
                         .frame(width: baseSize, height: baseSize)
                         .scaleEffect(rippleActive ? 1.4 : 1.0)
                         .opacity(rippleActive ? 0 : 0.6)
@@ -391,7 +461,7 @@ struct MovablePillCountRing: View {
                 .frame(width: baseSize, height: baseSize)
 
             Circle()
-                .stroke(ringColor, style: StrokeStyle(lineWidth: isIpad ? 5 : 3, lineCap: .round))
+                .stroke(ringColor, style: StrokeStyle(lineWidth: isIpad ? 3 : 2, lineCap: .round))
                 .frame(width: baseSize, height: baseSize)
 
             // No "Add" label — the count shows alone, then converts to "All Done"
@@ -452,24 +522,36 @@ struct PillCountTargetProgressBar: View {
         return min(max(CGFloat(current) / CGFloat(target), 0), 1)
     }
 
-    private var trackHeight: CGFloat { isIpad ? 10 : 10 }
-    private var trackWidth: CGFloat { isLandscape ? 240 : 160 }
+    private var trackHeight: CGFloat { isIpad ? 4 : 10 }
+    /// Lower bound so the track never collapses to nothing when steps are crowded.
+    private var minTrackWidth: CGFloat { isIpad ? 80 : 60 }
 
     var body: some View {
-        HStack(spacing: 8) {
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(appColors.primaryBackground)
-                    .frame(width: trackWidth, height: trackHeight)
+        HStack(spacing: 16) {
+            // Flexible track — fills whatever horizontal space is left after the
+            // count text, so it shrinks gracefully when there are many steps.
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(appColors.primaryBackground)
+                        .frame(width: geo.size.width, height: trackHeight)
 
-                Capsule()
-                    .fill(appColors.secondary)
-                    .frame(width: trackWidth * fraction, height: trackHeight)
-                    .animation(.easeInOut(duration: 0.25), value: fraction)
+                    Capsule()
+                        .fill(appColors.secondary)
+                        .frame(width: geo.size.width * fraction, height: trackHeight)
+                        .animation(.easeInOut(duration: 0.25), value: fraction)
+                }
+                .frame(height: geo.size.height, alignment: .center)
             }
-            
+            .frame(minWidth: minTrackWidth, maxWidth: .infinity)
+            .frame(height: trackHeight)
+
+            // Count text — never compressed, so it stays readable.
             (Text("\(current)/").foregroundStyle(appColors.secondary) + Text("\(target)").foregroundStyle(appColors.text))
                 .font(.system(size: isIpad ? 20 : 13, weight: .semibold))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
         }
     }
 }

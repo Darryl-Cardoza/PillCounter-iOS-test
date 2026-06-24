@@ -112,6 +112,13 @@ protocol DrugCatalogDataSource: AnyObject {
         packageQty: Int32?,
         isHazardous: Bool?
     )
+    @discardableResult
+    func upsertFromApi(
+        ndc: String,
+        drugId: Int64,
+        drug: NdcDrug,
+        gtin: String
+    ) -> DrugMasterEntity?
 }
 
 // MARK: - Default-argument bridges
@@ -195,6 +202,12 @@ extension DrugCatalogDataSource {
             drugType: drugType, strength: strength, dosageForm: dosageForm,
             packageQty: packageQty, isHazardous: isHazardous
         )
+    }
+    @discardableResult
+    func upsertFromApi(
+        ndc: String, drugId: Int64, drug: NdcDrug, gtin: String = ""
+    ) -> DrugMasterEntity? {
+        upsertFromApi(ndc: ndc, drugId: drugId, drug: drug, gtin: gtin)
     }
 }
 

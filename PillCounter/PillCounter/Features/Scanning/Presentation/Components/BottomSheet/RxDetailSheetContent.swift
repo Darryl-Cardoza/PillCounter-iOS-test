@@ -187,8 +187,8 @@ struct RxDetailsSheetContent: View {
             .frame(height: 110)
             .padding(.horizontal, 28)
 
-            iPadButtons
-                .padding(.bottom, 28)
+            iPhoneButtons
+                .padding(.bottom, 20)
         }
     }
 
@@ -232,7 +232,7 @@ struct RxDetailsSheetContent: View {
             }
             .padding(.horizontal, 28)
 
-            iPadButtons
+            iPhoneButtons
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -260,33 +260,33 @@ struct RxDetailsSheetContent: View {
     }
     
 
-    private var iPadButtons: some View {
-        EqualWidthHStackButtons(spacing: 12) {
-            PillCountingButton(
-                title: L10n.Common.cancel,
-                textColor: appColors.primary,
-                backgroundColor: .clear,
-                borderColor: appColors.primary,
-                font: .system(size: 14, weight: .semibold),
-                cornerRadius: 40,
-                horizontalPadding: 40,
-                verticalPadding: 12,
-                action: onCancel
-            )
-            PillCountingButton(
-                title: L10n.BarcodeScan.proceed,
-                textColor: .white,
-                backgroundColor: appColors.primary,
-                borderColor: .clear,
-                font: .system(size: 14, weight: .semibold),
-                cornerRadius: 40,
-                horizontalPadding: 40,
-                verticalPadding: 12,
-                action: onProceed
-            )
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
+//    private var iPadButtons: some View {
+//        EqualWidthHStackButtons(spacing: 8) {
+//            PillCountingButton(
+//                title: L10n.Common.cancel,
+//                textColor: appColors.primary,
+//                backgroundColor: .clear,
+//                borderColor: appColors.primary,
+//                font: .system(size: 14, weight: .semibold),
+//                cornerRadius: 40,
+//                horizontalPadding: 40,
+//                verticalPadding: 12,
+//                action: onCancel
+//            )
+//            PillCountingButton(
+//                title: L10n.BarcodeScan.proceed,
+//                textColor: .white,
+//                backgroundColor: appColors.primary,
+//                borderColor: .clear,
+//                font: .system(size: 14, weight: .semibold),
+//                cornerRadius: 40,
+//                horizontalPadding: 40,
+//                verticalPadding: 12,
+//                action: onProceed
+//            )
+//        }
+//        .frame(maxWidth: .infinity, alignment: .center)
+//    }
 }
 
 // MARK: - Labeled Text (iPad only)

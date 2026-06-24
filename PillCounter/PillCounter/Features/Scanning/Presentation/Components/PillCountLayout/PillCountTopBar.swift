@@ -138,7 +138,7 @@ struct PillCountTopBar: View {
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(width: isIpad ? 28 : 20, height: isIpad ? 22 : 18)
+                .frame(width: isIpad ? 28 : 16, height: isIpad ? 28 : 16)
                 .foregroundStyle(appColors.text)
         }
     }

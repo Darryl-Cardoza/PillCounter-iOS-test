@@ -31,7 +31,7 @@ protocol BaseRepositoryProtocol {
 }
 
 extension BaseRepositoryProtocol {
-    static var shouldBypassSSL: Bool { return true }
+    static var shouldBypassSSL: Bool { return false }
 
     // MARK: - Perform Request
     static func performRequest<T: Decodable>(
@@ -65,11 +65,15 @@ extension BaseRepositoryProtocol {
         // SESSION SELECTION
         let session: URLSession
         if shouldBypassSSL {
+            #if DEBUG
             session = URLSession(
                 configuration: .default,
                 delegate: UnsafeSSLManager(),
                 delegateQueue: nil
             )
+            #else
+            session = SharedSession.secure
+            #endif
         } else {
             session = SharedSession.secure
         }
@@ -145,6 +149,7 @@ extension BaseRepositoryProtocol {
 
     // MARK: - Logging (DEBUG only)
     private static func logRequest(_ request: URLRequest, body: [String: Any]?) {
+        #if DEBUG
         print("\n========================= 🌐 API REQUEST =========================")
         print("➡️ URL: \(request.url?.absoluteString ?? "nil")")
         print("➡️ Method: \(request.httpMethod ?? "nil")")
@@ -169,9 +174,11 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
+        #endif
     }
 
     private static func logResponse(_ data: Data, _ response: URLResponse?) {
+        #if DEBUG
         print("\n========================= 📩 API RESPONSE =========================")
         if let httpResponse = response as? HTTPURLResponse {
             print("⬅️ Status Code: \(httpResponse.statusCode)")
@@ -189,10 +196,12 @@ extension BaseRepositoryProtocol {
         }
 
         print("==================================================================\n")
+        #endif
     }
 }
 
-// MARK: - SSL Bypass Delegate
+// MARK: - SSL Bypass Delegate (Development Only)
+#if DEBUG
 class UnsafeSSLManager: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
 
     // Session-level challenge (connection-level TLS).
@@ -228,3 +237,4 @@ class UnsafeSSLManager: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
         completionHandler(.useCredential, URLCredential(trust: trust))
     }
 }
+#endif

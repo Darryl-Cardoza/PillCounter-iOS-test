@@ -93,6 +93,10 @@ struct UnifiedCameraLayout: View {
             }
 
             // ── Header row ────────────────────────────────────────────────────
+            // Hidden while the new pill-count layout is active (non-vial) — its top
+            // bar hosts the back button / instruction / glove / drug info instead.
+            // The vial step still uses this header (its overlay is bottom-only).
+            if !(showPillCountPanel && pillScanViewModel.currentControlledStep != .vial) {
             VStack {
                 ZStack {
                     // ── Portrait: instruction centered independently ──
@@ -152,7 +156,8 @@ struct UnifiedCameraLayout: View {
 
                 Color.clear.frame(height: showPillCountPanel ? pillCountSheetHeight : showStockCountPanel ? stockCountSheetHeight : 0)
             }
-            
+            }
+
             // ── Controlled step row ───────────────────────────────────────────
             // OLD: steps were drawn here over the bottom sheet. The new pill-count
             // layout (PillCountNewLayout) now owns the steps row, so this is disabled

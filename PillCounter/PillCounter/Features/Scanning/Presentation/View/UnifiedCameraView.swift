@@ -256,7 +256,9 @@ struct UnifiedCameraView: View {
     private var rootWithPillCountSheet: some View {
         rootWithBarcodePopups
             .overlay {
-                if showPillCountPanel {
+                // Hidden while the inactivity "Resume" overlay (in UnifiedCameraLayout,
+                // the layer below) is up — so Resume stays the topmost, tappable control.
+                if showPillCountPanel && !cameraService.isPausedDueToInactivity {
                     Group {
                         if pillScanViewModel.currentControlledStep == .vial {
                             VStack {
@@ -271,6 +273,10 @@ struct UnifiedCameraView: View {
                                 countType: router.selectedPillScanningType ?? .FIXED,
                                 isLandscape: isLandscape,
                                 isAddDisabled: isAddDisabled,
+                                instructionText: overlayInstructionText,
+                                showGloveIndicator: (currentScanType != .stockCount || isOpenPillScanMode)
+                                    && cameraService.isGloveDetectionEnabled,
+                                onBack: { router.navigateBack() },
                                 onAdd: { handleAdd() },
                                 onAllDone: { handleComplete() },
                                 onShowDetailGrid: { showDetailGrid = true }

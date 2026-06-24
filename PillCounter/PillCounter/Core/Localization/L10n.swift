@@ -155,6 +155,8 @@ enum L10n {
         static let confirmLogoutMessage = NSLocalizedString("menu.confirmLogoutMessage", comment: "")
         static let logoutButton = NSLocalizedString("menu.logoutButton", comment: "")
         static let noLastBatchFound = NSLocalizedString("menu.toast.noLastBatchFound", comment: "")
+        static let featureNotAvailableTitle = NSLocalizedString("menu.featureNotAvailableTitle", comment: "")
+        static let featureNotAvailableMessage = NSLocalizedString("menu.featureNotAvailableMessage", comment: "")
 
         enum HistoryDuration {
             static let month = NSLocalizedString("menu.history.duration.month", comment: "")

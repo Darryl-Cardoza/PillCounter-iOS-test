@@ -49,7 +49,7 @@ final class Hl7ServiceController: ObservableObject {
     func evaluate() {
         print("===== HL7 Service Evaluation =====")
         print("isLoggedIn: \(AppStorageManager.shared.isLoggedIn)")
-        print("isHl7Enabled: \(AppStorageManager.shared.isHl7Enabled)")
+        print("isPmsIntegrated: \(AppStorageManager.shared.isPmsIntegrated)")
         print("isDeviceCompromised: \(SecurityManager.isDeviceCompromised())")
         print("shouldStartService: \(shouldStartService)")
         print("=================================")
@@ -66,7 +66,7 @@ final class Hl7ServiceController: ObservableObject {
 
     private var shouldStartService: Bool {
         AppStorageManager.shared.isLoggedIn
-            && AppStorageManager.shared.isHl7Enabled
+            && AppStorageManager.shared.isPmsIntegrated
             && !SecurityManager.isDeviceCompromised()
     }
 

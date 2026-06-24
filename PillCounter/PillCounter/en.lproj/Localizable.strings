@@ -126,6 +126,8 @@
 "menu.confirmLogoutMessage" = "Are you sure you want to logout?";
 "menu.logoutButton" = "Logout";
 "menu.toast.noLastBatchFound" = "No last batch found";
+"menu.featureNotAvailableTitle" = "Feature Not Available";
+"menu.featureNotAvailableMessage" = "This feature is not available for your account.";
 
 
 // MARK: - PROFILE

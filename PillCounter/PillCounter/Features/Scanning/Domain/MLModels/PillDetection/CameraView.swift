@@ -91,10 +91,26 @@ final class PreviewView: UIView {
 // MARK: - Detection Overlay
 
 struct DetectionOverlay: View {
-    
+
 
     @ObservedObject var cameraService: CameraService
     @EnvironmentObject var appColors: AppColors
+
+    /// Dispense target quantity for the current step. The excess-near-chute
+    /// highlight is ENABLED only when this is > 0 (a real dispense target). When
+    /// it is 0 the feature is OFF entirely — every pill dot is drawn black exactly
+    /// like regular (non-target) counting; nothing is treated as "exceed". When
+    /// the live tray holds MORE pills than the target, the surplus pills closest
+    /// to the chute are drawn BLACK while all other (within-target) pills are drawn
+    /// in `appColors.secondary`, so the operator can see which to remove.
+    var targetQuantity: Int = 0
+
+    /// Stateful near-chute picker. Held across frames so its temporal hysteresis
+    /// (remembering last frame's highlighted pills) can stop adjacent, nearly
+    /// equidistant pills from ping-ponging the highlight every frame. A reference
+    /// type kept in @State — we never want SwiftUI to observe it, only to persist
+    /// the same instance across re-renders.
+    @State private var chuteProximity = ChuteProximity()
 
     var body: some View {
         GeometryReader { _ in
@@ -103,20 +119,40 @@ struct DetectionOverlay: View {
                 if let layer = cameraService.previewLayer,
                    layer.session != nil
                 {
+                    // ── Excess-near-chute highlight set ───────────────────────
+                    // Only when a real target is set (targetQuantity > 0). Number
+                    // of pills to highlight uses the SMOOTHED stableCount (steady),
+                    // while WHICH pills are picked is re-ranked from the live
+                    // detections each frame (responsive). The chute geometry comes
+                    // from the same frame's segmentation result. With target 0 the
+                    // feature is off and highlightedIDs is empty → all dots black.
+                    let excess = targetQuantity > 0
+                        ? max(0, cameraService.stableCount - targetQuantity)
+                        : 0
+                    let chute = cameraService.trayDetections.first { $0.trayClass == .chute }
+                    let tray = cameraService.trayDetections.first { $0.trayClass == .tray }
+                    let highlightedIDs = chuteProximity.nearChuteIDs(
+                        pills: cameraService.detections,
+                        chute: chute,
+                        tray: tray,
+                        excess: excess
+                    )
+
                     ForEach(
                         Array(cameraService.detections.enumerated()),
                         id: \.offset
                     ) { _, det in
-                        
+
                         let screenRect = getScreenRect(
                             for: det,
                             using: layer
                         )
-                        
+
                         let badgeSize: CGFloat = 16
-                        
+                        let isNearChute = highlightedIDs.contains(det.id)
+
                         Circle()
-                            .fill(Color.black.opacity(0.8))
+                            .fill(isNearChute ? Color.black.opacity(0.8) : appColors.secondary)
                             .overlay(
                                 Circle()
                                     .stroke(Color.white, lineWidth: 2)
@@ -129,7 +165,7 @@ struct DetectionOverlay: View {
                     }
                 }
             }
-            
+
         }
         .allowsHitTesting(false)
     }

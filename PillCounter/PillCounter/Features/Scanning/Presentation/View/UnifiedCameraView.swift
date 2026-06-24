@@ -267,7 +267,7 @@ struct UnifiedCameraView: View {
                                     .padding(.bottom, UIDevice.current.userInterfaceIdiom == .pad ? 24 : 14)
                             }
                         } else {
-                            PillCountNewLayout(
+                            PillCountLayout(
                                 pillScanViewModel: pillScanViewModel,
                                 cameraService: cameraService,
                                 countType: router.selectedPillScanningType ?? .FIXED,
@@ -615,7 +615,7 @@ struct UnifiedCameraView: View {
         return unifiedInstructionText
     }
 
-    // OLD pill-count controls (replaced by PillCountNewLayout). Kept commented out.
+    // OLD pill-count controls (replaced by PillCountLayout). Kept commented out.
 //    private var controlsContent: some View {
 //        BottomControlsView(
 //            isLandscape: isLandscape,

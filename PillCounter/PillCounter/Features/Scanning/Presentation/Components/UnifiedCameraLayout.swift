@@ -160,7 +160,7 @@ struct UnifiedCameraLayout: View {
 
             // ── Controlled step row ───────────────────────────────────────────
             // OLD: steps were drawn here over the bottom sheet. The new pill-count
-            // layout (PillCountNewLayout) now owns the steps row, so this is disabled
+            // layout (PillCountLayout) now owns the steps row, so this is disabled
             // to avoid a duplicate. Kept commented out per the migration.
 //            if showPillCountPanel,
 //               pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {

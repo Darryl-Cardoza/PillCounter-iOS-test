@@ -40,7 +40,10 @@ struct UnifiedCameraLayout: View {
             }
 
             if showPillDetectionUI {
-                DetectionOverlay(cameraService: cameraService)
+                DetectionOverlay(
+                    cameraService: cameraService,
+                    targetQuantity: pillScanViewModel.currentControlledTargetCount ?? 0
+                )
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
 

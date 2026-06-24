@@ -95,6 +95,9 @@ struct UnifiedCameraView: View {
 
     @State var showNoteOption: Bool = false
     @State var showConfirmCompletionPopup: Bool = false
+    /// Shown when an RX label is scanned but HL7/PMS is disabled for this account.
+    /// The scan is blocked entirely — no parse/proceed logic runs.
+    @State var showHl7UnavailablePopup: Bool = false
     /// "Today's Queue" dispense list shown after a FIXED dispense count is confirmed complete.
     @State var showDispenseQueueSheet: Bool = false
     // Stock count end-count popups
@@ -147,6 +150,7 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
 //            .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
+            .customPopup(isPresented: $showHl7UnavailablePopup, dismissOnBackgroundTap: false) { hl7UnavailablePopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTraySubstitutePopup) { hazardousTraySubstitutePopup }
             .bottomSheet(
@@ -778,6 +782,16 @@ extension UnifiedCameraView {
         guard !newValue.isEmpty,
               !pillScanViewModel.isCheckingNdc
         else { return }
+
+        // HL7/PMS gate: the dispense (RX-label) flow depends on HL7. When the
+        // account has HL7 disabled, block the scan entirely — show the
+        // "feature not available" popup and run no parse/proceed logic.
+        if scanType == .rx_label && !AppStorageManager.shared.isPmsIntegrated {
+            cameraService.disableBarcodeScanning()
+            cameraService.pauseCounting()
+            showHl7UnavailablePopup = true
+            return
+        }
 
         // Continuous dispense note: the queue sheet is NOT dismissed here. It is
         // dismissed only once the RX scan actually succeeds and isn't blocked —
@@ -1448,6 +1462,26 @@ extension UnifiedCameraView {
         // other ConfirmationDialogue. Without this it inherits the camera screen's
         // forced-dark appColors, making the Yes/No buttons render with a different
         // background/text colour than the rest of the app.
+        .environmentObject(appColors)
+    }
+
+    var hl7UnavailablePopup: some View {
+        ConfirmationDialogue(
+            title: L10n.Menu.featureNotAvailableTitle,
+            message: L10n.Menu.featureNotAvailableMessage,
+            cancelButtonText: "",
+            confirmButtonText: L10n.Common.ok,
+            showSingleConfirmButton: true,
+            onCancel: {},
+            onConfirm: {
+                showHl7UnavailablePopup = false
+                // User stays on the screen — re-arm scanning so they can back out
+                // or scan again (which will just re-trigger this popup).
+                restartFlow()
+            }
+        )
+        // Force the standard (light) palette so the dialog matches the rest of
+        // the app instead of inheriting the camera screen's forced-dark colors.
         .environmentObject(appColors)
     }
 

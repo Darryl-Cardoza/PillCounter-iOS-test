@@ -395,6 +395,21 @@ final class TransactionStore {
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] UPDATED synced — txnId: \(txnId)")
+
+        // Once the dispense has been acknowledged by PMS (is_synced == true),
+        // delete it so it is not retained on the device — but only when local
+        // storage is NOT allowed for this account, and only for completed FIXED
+        // dispense transactions (never REGULAR stock counts). When
+        // allowLocalStorage is true the transaction is kept on the device.
+        // Until sync succeeds the transaction stays on the device regardless.
+        if !AppStorageManager.shared.allowLocalStorage,
+           txn.count_type == CountType.FIXED.rawValue,
+           txn.status == CountStatus.COMPLETED.rawValue
+            || txn.status == CountStatus.FORCE_COMPLETED.rawValue {
+            softDelete(txnId: txnId)
+            return
+        }
+
         transactionsDidChange.send()
     }
 

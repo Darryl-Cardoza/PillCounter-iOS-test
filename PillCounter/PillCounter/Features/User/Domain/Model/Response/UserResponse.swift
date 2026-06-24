@@ -79,7 +79,7 @@ struct UserProfile: Codable {
     let npiID: String?
     
     let isVerified: Bool?
-    let isHl7Enabled: Bool?
+    let isPmsIntegrated: Bool?
     
     let bucket: [String]?
     
@@ -99,7 +99,7 @@ struct UserProfile: Codable {
         case npiID = "npi_id"
         
         case isVerified = "is_verified"
-        case isHl7Enabled = "is_hl7_enabled"
+        case isPmsIntegrated = "is_hl7_enabled"
         
         case bucket
         case role

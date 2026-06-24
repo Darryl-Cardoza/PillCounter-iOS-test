@@ -93,6 +93,10 @@ struct UnifiedCameraLayout: View {
             }
 
             // ── Header row ────────────────────────────────────────────────────
+            // Hidden while the new pill-count layout is active (non-vial) — its top
+            // bar hosts the back button / instruction / glove / drug info instead.
+            // The vial step still uses this header (its overlay is bottom-only).
+            if !(showPillCountPanel && pillScanViewModel.currentControlledStep != .vial) {
             VStack {
                 ZStack {
                     // ── Portrait: instruction centered independently ──
@@ -116,15 +120,14 @@ struct UnifiedCameraLayout: View {
 
                         if isLandscape {
                             if showPillCountPanel   {
-                                // showPillCountPanel true: back | 16 | instruction | 16 | glove | Spacer
-                                Color.clear.frame(width: 220, height: 1)
+                                Spacer()
                                 if !instructionText.isEmpty {
                                     PillCountInstructionOverlay(text: instructionText)
                                 }
-                                if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
-                                    Color.clear.frame(width: isIpad ? 200 : 50, height: 1)
-                                    GloveStatusIndicator(cameraService: cameraService)
-                                }
+//                                if showPillDetectionUI && cameraService.isGloveDetectionEnabled {
+//                                    Color.clear.frame(width: isIpad ? 200 : 50, height: 1)
+//                                    GloveStatusIndicator(cameraService: cameraService)
+//                                }
                                 Spacer()
                             } else {
                                 Spacer()
@@ -152,12 +155,16 @@ struct UnifiedCameraLayout: View {
 
                 Color.clear.frame(height: showPillCountPanel ? pillCountSheetHeight : showStockCountPanel ? stockCountSheetHeight : 0)
             }
-            
-            // ── Controlled step row ───────────────────────────────────────────
-            if showPillCountPanel,
-               pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
-               controlledStepRow
             }
+
+            // ── Controlled step row ───────────────────────────────────────────
+            // OLD: steps were drawn here over the bottom sheet. The new pill-count
+            // layout (PillCountLayout) now owns the steps row, so this is disabled
+            // to avoid a duplicate. Kept commented out per the migration.
+//            if showPillCountPanel,
+//               pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
+//               controlledStepRow
+//            }
 
             // ── Toast ─────────────────────────────────────────────────────────
             // Toasts are shown via the global ToastManager (see PillScanViewModel
@@ -196,7 +203,7 @@ struct UnifiedCameraLayout: View {
             if isLandscape {
                 Spacer()
                 HStack {
-                    ControlledStepRow(
+                    StepProgressRow(
                         activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                         currentStep: pillScanViewModel.currentControlledStep
                     )
@@ -205,7 +212,7 @@ struct UnifiedCameraLayout: View {
                 }
             } else {
                 Spacer()
-                ControlledStepRow(
+                StepProgressRow(
                     activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                     currentStep: pillScanViewModel.currentControlledStep
                 )

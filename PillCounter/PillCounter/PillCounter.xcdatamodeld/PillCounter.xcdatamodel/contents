@@ -15,9 +15,11 @@
     <entity name="DrugMasterEntity" representedClassName="DrugMasterEntity" syncable="YES" codeGenerationType="class">
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="dosage_form" optional="YES" attributeType="String"/>
         <attribute name="drug_name" optional="YES" attributeType="String"/>
         <attribute name="drug_type" optional="YES" attributeType="String"/>
         <attribute name="gtin" optional="YES" attributeType="String"/>
+        <attribute name="strength" optional="YES" attributeType="String"/>
         <attribute name="is_hazardous" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="ndc" attributeType="String"/>
         <attribute name="package_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>

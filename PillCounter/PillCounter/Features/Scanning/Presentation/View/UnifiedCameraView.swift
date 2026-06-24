@@ -232,25 +232,69 @@ struct UnifiedCameraView: View {
             : UIScreen.main.bounds.width * 0.50
     }
 
+    // ── OLD pill-count bottom-sheet UI (replaced by the new full-screen overlay) ──
+    // Kept (commented out) intentionally — do not delete while the new UI is validated.
+//    private var rootWithPillCountSheet: some View {
+//        rootWithBarcodePopups
+//            .bottomSheet(
+//                isPresented: $showPillCountPanel,
+//                dismissOnBackgroundTap: false,
+//                showDim: false,
+//                portraitHeight: pillCountSheetHeight,
+//                landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? nil : 280
+//            ) {
+//                ZStack {
+//                    darkAppColors.secondaryBackground.opacity(0.6)
+//                    if pillScanViewModel.currentControlledStep == .vial {
+//                        vialControlBottomView
+//                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+//                    } else {
+//                        controlsContent
+//                    }
+//                }
+//                .environmentObject(darkAppColors)
+//            }
+//    }
+
+    // ── NEW pill-count UI ──────────────────────────────────────────────────────
+    // Full-screen overlay over the live camera (no bottom sheet). Non-vial steps
+    // show the new layout (top info bar + movable count ring + target progress bar +
+    // steps row + "View all counts"). The vial step shows just its three icons
+    // (redo / capture / done) in the same bottom area — no background. Logic is
+    // unchanged; the same handlers are wired.
     private var rootWithPillCountSheet: some View {
         rootWithBarcodePopups
-            .bottomSheet(
-                isPresented: $showPillCountPanel,
-                dismissOnBackgroundTap: false,
-                showDim: false,
-                portraitHeight: pillCountSheetHeight,
-                landscapeWidth: UIDevice.current.userInterfaceIdiom == .pad ? nil : 280
-            ) {
-                ZStack {
-                    darkAppColors.secondaryBackground.opacity(0.6)
-                    if pillScanViewModel.currentControlledStep == .vial {
-                        vialControlBottomView
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        controlsContent
+            .overlay {
+                // Hidden while the inactivity "Resume" overlay (in UnifiedCameraLayout,
+                // the layer below) is up — so Resume stays the topmost, tappable control.
+                if showPillCountPanel && !cameraService.isPausedDueToInactivity {
+                    Group {
+                        if pillScanViewModel.currentControlledStep == .vial {
+                            VStack {
+                                Spacer()
+                                vialControlBottomView
+                                    .padding(.bottom, UIDevice.current.userInterfaceIdiom == .pad ? 24 : 14)
+                            }
+                        } else {
+                            PillCountLayout(
+                                pillScanViewModel: pillScanViewModel,
+                                cameraService: cameraService,
+                                countType: router.selectedPillScanningType ?? .FIXED,
+                                isLandscape: isLandscape,
+                                isAddDisabled: isAddDisabled,
+                                instructionText: overlayInstructionText,
+                                showGloveIndicator: (currentScanType != .stockCount || isOpenPillScanMode)
+                                    && cameraService.isGloveDetectionEnabled,
+                                onBack: { router.navigateBack() },
+                                onAdd: { handleAdd() },
+                                onAllDone: { handleComplete() },
+                                onShowDetailGrid: { showDetailGrid = true }
+                            )
+                        }
                     }
+                    .environmentObject(darkAppColors)
+                    .ignoresSafeArea()
                 }
-                .environmentObject(darkAppColors)
             }
     }
 
@@ -280,8 +324,10 @@ struct UnifiedCameraView: View {
                     drugName: pillScanViewModel.fetchedRxTransaction?.drug?.drug_name ?? "-",
                     quantity: pillScanViewModel.fetchedRxTransaction?.target_count.description ?? "-",
                     ndcNumber: pillScanViewModel.fetchedRxTransaction?.drug?.ndc ?? "-",
-                    bucket: pillScanViewModel.fetchedRxTransaction?.bucket_id ?? "-",
-                    rxNumber: pillScanViewModel.fetchedRxTransaction?.rx_no ?? "-"
+                    bucket: pillScanViewModel.fetchedRxTransaction?.bucket_id ?? "NORMAL",
+                    rxNumber: pillScanViewModel.fetchedRxTransaction?.rx_no ?? "-",
+                    strength: pillScanViewModel.fetchedRxTransaction?.drug?.strength ?? "-",
+                    form: pillScanViewModel.fetchedRxTransaction?.drug?.dosage_form ?? "-"
                 )
                 .environmentObject(appColors)
             }
@@ -586,21 +632,22 @@ struct UnifiedCameraView: View {
         return unifiedInstructionText
     }
 
-    private var controlsContent: some View {
-        BottomControlsView(
-            isLandscape: isLandscape,
-            pillScanViewModel: pillScanViewModel,
-            cameraService: cameraService,
-            appColors: darkAppColors,
-            isAddButtonDisabled: isAddDisabled,
-            onAddPill: { handleAdd() },
-            onComplete: { handleComplete() },
-            onReset: { showDeleteAllTransactionDetailsPopup = true },
-            onShowDetailGrid: { showDetailGrid = true },
-            showTransactionDetails: $showTransactionHistory,
-            isPaused: $isPaused
-        )
-    }
+    // OLD pill-count controls (replaced by PillCountLayout). Kept commented out.
+//    private var controlsContent: some View {
+//        BottomControlsView(
+//            isLandscape: isLandscape,
+//            pillScanViewModel: pillScanViewModel,
+//            cameraService: cameraService,
+//            appColors: darkAppColors,
+//            isAddButtonDisabled: isAddDisabled,
+//            onAddPill: { handleAdd() },
+//            onComplete: { handleComplete() },
+//            onReset: { showDeleteAllTransactionDetailsPopup = true },
+//            onShowDetailGrid: { showDetailGrid = true },
+//            showTransactionDetails: $showTransactionHistory,
+//            isPaused: $isPaused
+//        )
+//    }
 
     private var vialControlBottomView: some View {
         VialBottomContentView()

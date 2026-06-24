@@ -20,6 +20,8 @@ final class DrugCatalogStore {
         drugId: Int64,
         drugName: String,
         drugType: String? = nil,
+        strength: String? = nil,
+        dosageForm: String? = nil,
         packageQty: Int32 = 0,
         isHazardous: Bool? = nil
     ) {
@@ -27,12 +29,50 @@ final class DrugCatalogStore {
         if !drugName.isEmpty { entity.drug_name = drugName }
         if !gtin.isEmpty { entity.gtin = gtin }
         if let drugType, !drugType.isEmpty { entity.drug_type = drugType }
+        if let strength, !strength.isEmpty { entity.strength = strength }
+        if let dosageForm, !dosageForm.isEmpty { entity.dosage_form = dosageForm }
         if packageQty > 0 { entity.package_qty = packageQty }
         if let isHazardous { entity.is_hazardous = isHazardous }
         entity.ndc = ndc
         CoreDataManager.shared.save(context: context)
         print("💊 [DrugMasterDAO] SAVED — ndc: \(ndc), drugId: \(drugId), drugName: \(drugName)")
         _ = fetchAll()
+    }
+
+    /// Single entry point for persisting an API `NdcDrug` response into the drug master.
+    ///
+    /// Every flow that calls the drug API (Rx, controlled substitution, HL7, stock count)
+    /// routes its save through here so ALL fields — including `strength` and `dosage_form` —
+    /// are written consistently. Delegates to `saveManual`, which only overwrites a field when
+    /// the incoming value is non-empty, so later API calls fill in missing data without wiping
+    /// good data already on the record.
+    ///
+    /// - Parameters:
+    ///   - ndc: Storage key. Callers decide which NDC to key under (e.g. HL7 keeps the original
+    ///          scanned NDC, not the API's package NDC).
+    ///   - drugId: Id assigned only if the record is newly created.
+    ///   - drug: The decoded API DTO.
+    ///   - gtin: Optional GTIN to backfill.
+    /// - Returns: The persisted entity (so callers can read back the resolved `drug_id`).
+    @discardableResult
+    func upsertFromApi(
+        ndc: String,
+        drugId: Int64,
+        drug: NdcDrug,
+        gtin: String = ""
+    ) -> DrugMasterEntity? {
+        saveManual(
+            ndc:  ndc,
+            gtin:  gtin,
+            drugId:  drugId,
+            drugName: drug.lookupName ?? "",
+            drugType:  drug.scheduleType,
+            strength: drug.primaryStrength,
+            dosageForm: drug.primaryDosageForm,
+            packageQty:  drug.safeQuantity,
+            isHazardous: drug.isHazardous
+        )
+        return fetchByNdc(ndc)
     }
 
     @discardableResult
@@ -74,7 +114,7 @@ final class DrugCatalogStore {
         let results = (try? context.fetch(request)) ?? []
         StoreLogger.log(
             dao: "DrugMasterDAO", op: "fetchAll",
-            columns: ["drug_id", "ndc", "drug_name", "gtin", "drug_type", "pkg_qty", "is_hazardous"],
+            columns: ["drug_id", "ndc", "drug_name", "gtin", "drug_type", "pkg_qty", "is_hazardous", "strengh", "dosage_form"],
             rows: results.map { [
                 "\($0.drug_id)",
                 $0.ndc ?? "-",
@@ -82,7 +122,9 @@ final class DrugCatalogStore {
                 $0.gtin ?? "-",
                 $0.drug_type ?? "-",
                 "\($0.package_qty)",
-                "\($0.is_hazardous)"
+                "\($0.is_hazardous)",
+                $0.strength ?? "",
+                $0.dosage_form ?? ""
             ]}
         )
         return results
@@ -96,6 +138,8 @@ final class DrugCatalogStore {
         ndc: String? = nil,
         gtin: String? = nil,
         drugType: String? = nil,
+        strength: String? = nil,
+        dosageForm: String? = nil,
         packageQty: Int32? = nil,
         isHazardous: Bool? = nil
     ) {
@@ -104,6 +148,8 @@ final class DrugCatalogStore {
         if let ndc { drug.ndc = ndc }
         if let gtin, !gtin.isEmpty { drug.gtin = gtin }
         if let drugType { drug.drug_type = drugType }
+        if let strength { drug.strength = strength }
+        if let dosageForm { drug.dosage_form = dosageForm }
         if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
         if let isHazardous { drug.is_hazardous = isHazardous }
         CoreDataManager.shared.save(context: context)

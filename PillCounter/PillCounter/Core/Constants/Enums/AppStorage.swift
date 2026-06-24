@@ -52,6 +52,8 @@ final class AppStorageManager {
         static let storedTerminals      = "stored_terminals"
         static let isHarzardousDrugSetting = "hazardous_pill_setting"
         static let deleteCompletedTransactions = "delete_completed_transactions"
+        static let pillCountRingOffsetX = "pill_count_ring_offset_x"
+        static let pillCountRingOffsetY = "pill_count_ring_offset_y"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -310,6 +312,30 @@ final class AppStorageManager {
         set {
             let data = try? JSONEncoder().encode(newValue)
             defaults.setValue(data, forKey: AppStorageKeys.storedTerminals)
+        }
+    }
+
+    /// Last position the operator dragged the pill-count ring to, stored as an
+    /// offset (in points) from the screen centre. `nil` when never moved — the
+    /// layout then falls back to its default right-side resting position.
+    var pillCountRingOffset: CGSize? {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.pillCountRingOffsetX) != nil,
+                  defaults.object(forKey: AppStorageKeys.pillCountRingOffsetY) != nil
+            else { return nil }
+            return CGSize(
+                width: defaults.double(forKey: AppStorageKeys.pillCountRingOffsetX),
+                height: defaults.double(forKey: AppStorageKeys.pillCountRingOffsetY)
+            )
+        }
+        set {
+            if let size = newValue {
+                defaults.setValue(size.width, forKey: AppStorageKeys.pillCountRingOffsetX)
+                defaults.setValue(size.height, forKey: AppStorageKeys.pillCountRingOffsetY)
+            } else {
+                defaults.removeObject(forKey: AppStorageKeys.pillCountRingOffsetX)
+                defaults.removeObject(forKey: AppStorageKeys.pillCountRingOffsetY)
+            }
         }
     }
 

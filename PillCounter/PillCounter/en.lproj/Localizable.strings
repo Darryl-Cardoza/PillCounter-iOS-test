@@ -193,6 +193,8 @@
 "barcodeScan.quantity" = "Quantity";
 "barcodeScan.rxNumber" = "Rx Number";
 "barcodeScan.bucket" = "Bucket";
+"barcodeScan.strength" = "Strength";
+"barcodeScan.form" = "Form";
 "barcodeScan.selectContainerStatus" = "Select Container Status";
 "barcodeScan.sealed" = "Sealed";
 "barcodeScan.opened" = "Opened";
@@ -267,6 +269,7 @@
 "pillScan.noScansYet" = "No scans yet";
 "pillScan.deleteScans" = "Delete Scans";
 "pillScan.deleteScansMessage" = "Are you sure you want to delete the selected scans?";
+"pillScan.viewAllCounts" = "View all counts";
 
 // MARK: - LOCATION
 "location.fetching" = "Fetching...";

@@ -19,6 +19,10 @@ struct DispenseItemRowView: View {
         data.targetCount != data.pillCount
     }
 
+    private var isFixedCount: Bool {
+        data.countType.uppercased() == CountType.FIXED.rawValue
+    }
+
 
 
     private var displayText: String {
@@ -44,7 +48,9 @@ struct DispenseItemRowView: View {
                 placeholderImageName: "dispense_placeholder",
                 placeholderBackgroundColor: appColors.text,
                 placeholderSize: CGSize(width: 28, height: 28),
-                showImageBackground: appColors.primaryBackground
+                showImageBackground: appColors.primaryBackground,
+                dosageForm: isFixedCount ? data.dosageForm : nil,
+                strength: isFixedCount ? data.strength : nil
             )
 
             // Center info

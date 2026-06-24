@@ -25,11 +25,9 @@ struct VialBottomContentView: View {
     private var layoutSpacing: CGFloat { isIPad ? 120 : (isLandscape ? 70 : 90) }
 
     var body: some View {
-        let layout = isLandscape
-            ? AnyLayout(VStackLayout(spacing: layoutSpacing))
-            : AnyLayout(HStackLayout(spacing: layoutSpacing))
-
-        layout {
+        // Redo / capture / done always sit in a horizontal row — at the bottom in
+        // both orientations (landscape previously stacked them into a centered column).
+        HStack(spacing: layoutSpacing) {
             VStack(spacing: 10) {
                 Image("redo_icon")
                     .renderingMode(.template)
@@ -83,6 +81,10 @@ struct VialBottomContentView: View {
         }
         .padding(.vertical, isIPad ? 35 : 25)
         .padding(.horizontal)
+        // Same translucent dark backdrop as the top / bottom bars.
+        .background(Color.black.opacity(0.45))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(16)
     }
 
     private func captureVial() {

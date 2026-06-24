@@ -215,6 +215,7 @@
 "pillScan.noScansYet" = "Aucun scan pour le moment";
 "pillScan.deleteScans" = "Supprimer les scans";
 "pillScan.deleteScansMessage" = "Êtes-vous sûr de vouloir supprimer les scans sélectionnés ?";
+"pillScan.viewAllCounts" = "Voir tous les comptages";
 "pillScan.unselectAll" = "Tout désélectionner";
 "pillScan.selectAll" = "Tout sélectionner";
 

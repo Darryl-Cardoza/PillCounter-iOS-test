@@ -24,8 +24,18 @@ struct ThumbnailImageView: View {
     let isFromPms: Bool
     let showImageBackground: Color?
 
+    // MARK: - DOSAGE FORM (fixed-count flow)
+    /// When provided, the view shows a dosage-form icon with the strength text
+    /// below it instead of the image / regular placeholder.
+    let dosageForm: String?
+    let strength: String?
+
     // MARK: - ENVIRONMENT
     @EnvironmentObject private var appColors: AppColors
+
+    private var showsDosageForm: Bool {
+        dosageForm != nil
+    }
 
     // MARK: - INIT
     init(
@@ -39,7 +49,9 @@ struct ThumbnailImageView: View {
         placeholderBackgroundColor: Color? = nil,
         placeholderSize: CGSize = CGSize(width: 25, height: 25),
         isFromPms: Bool = false,
-        showImageBackground: Color? = nil
+        showImageBackground: Color? = nil,
+        dosageForm: String? = nil,
+        strength: String? = nil
     ) {
         self.imagePath = imagePath
         self.width = width
@@ -52,12 +64,16 @@ struct ThumbnailImageView: View {
         self.placeholderSize = placeholderSize
         self.isFromPms = isFromPms
         self.showImageBackground = showImageBackground
+        self.dosageForm = dosageForm
+        self.strength = strength
     }
 
     // MARK: - BODY
     var body: some View {
         ZStack {
-            if let path = imagePath,
+            if showsDosageForm {
+                dosageFormView
+            } else if let path = imagePath,
                 !path.isEmpty,
                 let loadedImage = PhotoFileManager.shared.loadImage(from: path)
             {
@@ -100,5 +116,29 @@ struct ThumbnailImageView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Dosage form layout (fixed-count flow)
+    @ViewBuilder
+    private var dosageFormView: some View {
+        VStack(spacing: 6) {
+            Image(DosageFormIcon.iconName(for: dosageForm))
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: placeholderSize.width, height: placeholderSize.height)
+                .foregroundStyle(appColors.secondary)
+
+            if let strength, !strength.isEmpty {
+                Text(strength)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(appColors.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .frame(width: width, height: height)
+        .background(showImageBackground ?? appColors.secondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }

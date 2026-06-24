@@ -16,7 +16,7 @@ private enum StepState {
 
 // MARK: - MAIN STEP ROW VIEW
 
-struct ControlledStepRow: View {
+struct StepProgressRow: View {
 
     @EnvironmentObject var appColors: AppColors
 
@@ -28,13 +28,13 @@ struct ControlledStepRow: View {
     }
 
     // Sizing tokens
-    private var iconSize: CGFloat       { isIpad ? 32 : 20 }
-    private var circlePadding: CGFloat  { isIpad ? 12 : 8  }
-    private var circleFrame: CGFloat    { isIpad ? 56 : 40  }
-    private var chevronSize: CGFloat    { isIpad ? 16 : 12  }
-    private var hSpacing: CGFloat       { isIpad ? 12 : 8   }
-    private var vPadding: CGFloat       { isIpad ? 20 : 15  }
-    private var strokeWidth: CGFloat    { isIpad ? 2.5 : 2  }
+    private var iconSize: CGFloat       { isIpad ? 28 : 20 }
+    private var circlePadding: CGFloat  { isIpad ? 10 : 8  }
+    private var circleFrame: CGFloat    { isIpad ? 48 : 40  }
+    private var chevronSize: CGFloat    { isIpad ? 14 : 12  }
+    private var hSpacing: CGFloat       { isIpad ? 10 : 8   }
+    private var vPadding: CGFloat       { isIpad ? 16 : 15  }
+    private var strokeWidth: CGFloat    { isIpad ? 2 : 2  }
 
     var body: some View {
         let items = buildSteps()
@@ -55,7 +55,7 @@ struct ControlledStepRow: View {
 
 // MARK: - BUILD STEP STATES
 
-private extension ControlledStepRow {
+private extension StepProgressRow {
 
     func buildSteps() -> [(ControlledStep, StepState)] {
         guard let currentIndex = activeSteps.firstIndex(of: currentStep) else {
@@ -71,7 +71,7 @@ private extension ControlledStepRow {
 
 // MARK: - STEP ICON
 
-private extension ControlledStepRow {
+private extension StepProgressRow {
 
     @ViewBuilder
     func stepIcon(for item: (ControlledStep, StepState)) -> some View {
@@ -111,7 +111,7 @@ private extension ControlledStepRow {
 
 // MARK: - CONNECTOR
 
-private extension ControlledStepRow {
+private extension StepProgressRow {
 
     @ViewBuilder
     func connectorView(

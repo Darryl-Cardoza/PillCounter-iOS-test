@@ -7,6 +7,12 @@ import SwiftUI
 
 // MARK: - Editable Lot Row Model
 
+/// Which section a lot-row delete (trash) action targets.
+enum LotField {
+    case sealed   // bottle_qty
+    case open     // loose_qty
+}
+
 struct EditableLotRow: Identifiable {
     let id = UUID()
     let txnId: Int64
@@ -27,6 +33,9 @@ struct StockCountEditDetailsSheet: View {
 
     let txn: GroupedTransaction
     let onDismiss: () -> Void
+    /// When true the panel hugs its content height (used as a docked
+    /// full-width bottom card on iPad portrait) instead of filling.
+    var hugContentHeight: Bool = false
 
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.verticalSizeClass)   private var vSizeClass
@@ -54,13 +63,13 @@ struct StockCountEditDetailsSheet: View {
             dialogHeader
             if isIPad && isLandscape {
                 landscapeContent
+                dialogFooter
+                    .background(appColors.secondaryBackground)
             } else {
                 portraitContent
             }
-            dialogFooter
-                .background(appColors.secondaryBackground)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: hugContentHeight ? nil : .infinity, alignment: .top)
         .background(appColors.primaryBackground)
     }
 
@@ -82,7 +91,10 @@ struct StockCountEditDetailsSheet: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.vertical, isLandscape ? 16 : 0 )
+        .padding(.leading, isLandscape ? 0: 16)
+        .padding(.top, isLandscape ? nil : 16)
+
     }
 
     // MARK: - Layouts
@@ -110,31 +122,70 @@ struct StockCountEditDetailsSheet: View {
     }
 
     private var portraitContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                drugInfoSection
-                sealedBottlesSection
-                openPillsSection
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    portraitDrugInfoSection
+                    sealedBottlesSection
+                    openPillsSection
+                }
+                .padding(EdgeInsets(top: 0, leading: 20, bottom: 20, trailing: 20))
             }
-            .padding(20)
+            // When hugging (iPad-portrait docked card), let the ScrollView size to
+            // its content so a short list yields a short card. The parent caps the
+            // overall height (maxHeight 85%), so a long list is clipped here and
+            // scrolls internally instead of pushing the card off-screen.
+            // When filling (iPhone / landscape), expand to claim all space.
+            .frame(maxHeight: hugContentHeight ? nil : .infinity)
+
+            // Sticky footer: sits inside the card, pinned to the bottom, and
+            // does not scroll with the lot list above.
+            HStack {
+                Spacer()
+                dialogFooter
+                Spacer()
+            }
         }
+        .background(appColors.secondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(EdgeInsets(top: 0, leading: 20, bottom: 20, trailing: 20))
     }
 
     // MARK: - Drug Info Section
     private var drugInfoSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            sectionLabel(L10n.StockCountSheet.scannedDrugDetails)
+            sectionLabel(L10n.StockCountSheet.scannedDrugDetails, appColors.text)
 
             VStack(alignment: .leading, spacing: 10) {
                 infoRow(label: L10n.StockCountSheet.drugName, value: txn.drugName, valueColor: appColors.secondary)
                 Divider()
                 HStack(alignment: .top) {
                     infoCell(label: L10n.StockCountSheet.ndcNumber, value: txn.ndc, valueColor: appColors.secondary)
-                    Spacer()
                     infoCell(label: L10n.StockCountSheet.bucket, value: (stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL").uppercased(), valueColor: appColors.secondary)
-                }.frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .frame(maxWidth: .infinity)
                 Divider()
             }
+        }
+    }
+
+    // MARK: - Drug Info Section (Portrait)
+    /// iPad-portrait variant: Drug Name / NDC / Bucket laid out as a single
+    /// horizontal 3-column row beneath the section label, matching the mockup.
+    private var portraitDrugInfoSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel(L10n.StockCountSheet.scannedDrugDetails)
+                .padding(.top, 8)
+
+            HStack(alignment: .top, spacing: columnGap) {
+                infoCell(label: L10n.StockCountSheet.drugName, value: txn.drugName, valueColor: appColors.secondary)
+                infoCell(label: L10n.StockCountSheet.ndcNumber, value: txn.ndc, valueColor: appColors.secondary)
+                infoCell(label: L10n.StockCountSheet.bucket, value: (stockCountViewModel.currentBatch?.bucket_id ?? "NORMAL").uppercased(), valueColor: appColors.secondary)
+            }
+            .frame(maxWidth: .infinity)
+
+            Divider()
         }
     }
 
@@ -166,19 +217,22 @@ struct StockCountEditDetailsSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(L10n.StockCountSheet.expiryDate)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            // Reserve the exact trailing area used by the stepper + delete icon.
-            Color.clear.frame(width: stepperWidth + columnGap + deleteWidth, height: 0)
+            // Mirror the row layout: reserve the stepper width, then a spacer
+            // pushes the delete column to the trailing edge.
+            Color.clear.frame(width: stepperWidth, height: 0)
+            Spacer(minLength: columnGap)
+            Color.clear.frame(width: deleteWidth, height: 0)
         }
         .font(.system(size: 14, weight: .regular))
         .foregroundColor(appColors.text.opacity(0.45))
     }
 
     private func sealedLotRow(row: Binding<EditableLotRow>) -> some View {
-        lotRow(row: row, value: row.sealedBottles)
+        lotRow(row: row, value: row.sealedBottles, field: .sealed)
     }
 
     // Shared row used by both sections — keeps spacing/alignment identical.
-    private func lotRow(row: Binding<EditableLotRow>, value: Binding<Int>) -> some View {
+    private func lotRow(row: Binding<EditableLotRow>, value: Binding<Int>, field: LotField) -> some View {
         HStack(spacing: columnGap) {
             Text(row.wrappedValue.lot.isEmpty ? "—" : row.wrappedValue.lot)
                 .font(.system(size: 15))
@@ -192,16 +246,17 @@ struct StockCountEditDetailsSheet: View {
 
             inlineStepper(value: value, minValue: 0)
 
-            deleteButton(for: row.wrappedValue.id)
+            Spacer()
+
+            deleteButton(for: row.wrappedValue.id, field: field)
         }
     }
 
-    private func deleteButton(for rowId: UUID) -> some View {
-        Button(action: { deleteRow(rowId) }) {
+    private func deleteButton(for rowId: UUID, field: LotField) -> some View {
+        Button(action: { deleteRow(rowId, field: field) }) {
             Image(systemName: "trash")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundColor(appColors.primary)
-                .frame(width: deleteWidth, height: 36)
                 .contentShape(Rectangle())
         }
     }
@@ -209,7 +264,7 @@ struct StockCountEditDetailsSheet: View {
     // MARK: - Open Pills Section
 
     private var openPillsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 20) {
             HStack {
                 sectionLabel(L10n.StockCountSheet.openPills)
                 Spacer()
@@ -223,7 +278,7 @@ struct StockCountEditDetailsSheet: View {
 
             // Rows
             ForEach($lotRows) { $row in
-                lotRow(row: $row, value: $row.openPills)
+                lotRow(row: $row, value: $row.openPills, field: .open)
             }
         }
     }
@@ -243,8 +298,8 @@ struct StockCountEditDetailsSheet: View {
                     .frame(width: 48, height: 48)
                     .background(appColors.primaryBackground)
                     .clipShape(UnevenRoundedRectangle(
-                        topLeadingRadius: 8,
-                        bottomLeadingRadius: 8,
+                        topLeadingRadius: 10,
+                        bottomLeadingRadius: 10,
                         bottomTrailingRadius: 0,
                         topTrailingRadius: 0,
                         style: .continuous
@@ -274,8 +329,8 @@ struct StockCountEditDetailsSheet: View {
                     .clipShape(UnevenRoundedRectangle(
                         topLeadingRadius: 0,
                         bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 8,
-                        topTrailingRadius: 8,
+                        bottomTrailingRadius: 10,
+                        topTrailingRadius: 10,
                         style: .continuous
                     ))
             }
@@ -284,42 +339,42 @@ struct StockCountEditDetailsSheet: View {
     }
 
     // MARK: - Footer
-
     private var dialogFooter: some View {
-        HStack(spacing: 16) {
+        EqualWidthHStackButtons(spacing: 16) {
             PillCountingButton(
                 iconName: nil, title: L10n.Common.cancel,
                 textColor: appColors.primary, backgroundColor: .clear,
                 borderColor: appColors.primary,
-                font: .system(size: 14, weight: .bold),
+                font: .system(size: 14, weight: .semibold),
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
                 action: onDismiss
             )
             PillCountingButton(
                 iconName: nil, title: L10n.Common.save,
                 textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
-                font: .system(size: 14, weight: .bold),
+                font: .system(size: 14, weight: .semibold),
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
                 action: saveChanges
             )
         }
-        .padding(.horizontal, 60)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
         .padding(.vertical, 16)
     }
 
     // MARK: - Helper Views
 
-    private func sectionLabel(_ text: String) -> some View {
+    private func sectionLabel(_ text: String, _ color: Color? = nil) -> some View {
         Text(text)
             .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(appColors.secondary)
+            .foregroundStyle(color ?? appColors.secondary)
     }
-
+    
     private func infoRow(label: String, value: String, valueColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.system(size: 14, weight: .regular))
-                .foregroundColor(appColors.text.opacity(0.42))
+                .foregroundColor(appColors.text)
             Text(value)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(valueColor)
@@ -375,24 +430,48 @@ struct StockCountEditDetailsSheet: View {
         lotRows = rows.sorted { $0.lot < $1.lot }
     }
 
-    private func deleteRow(_ rowId: UUID) {
-        guard let row = lotRows.first(where: { $0.id == rowId }) else { return }
+    private func deleteRow(_ rowId: UUID, field: LotField) {
+        guard let idx = lotRows.firstIndex(where: { $0.id == rowId }) else { return }
+        let row = lotRows[idx]
+        // Don't delete the transactions — just zero out the tapped section's count.
+        // Sealed trash zeroes only bottle_qty; open-pills trash zeroes only loose_qty.
         for txnId in row.txnIds {
-            stockCountViewModel.transactionDAO.softDelete(txnId: txnId)
+            stockCountViewModel.transactionDAO.setAbsoluteCounts(
+                txnId: txnId,
+                bottleQty: field == .sealed ? 0 : nil,
+                looseQty:  field == .open   ? 0 : nil
+            )
         }
         withAnimation(.easeInOut(duration: 0.25)) {
-            lotRows.removeAll { $0.id == rowId }
+            switch field {
+            case .sealed: lotRows[idx].sealedBottles = 0
+            case .open:   lotRows[idx].openPills = 0
+            }
         }
     }
 
     private func saveChanges() {
         for row in lotRows {
-            stockCountViewModel.transactionDAO.setAbsoluteCounts(
-                txnId: row.txnId,
-                bottleQty: Int32(row.sealedBottles),
-                looseQty: Int32(row.openPills)
-            )
+            // A lot row aggregates the counts of every transaction in the group
+            // (see buildRows — sealedBottles/openPills are sums over row.txnIds).
+            // Writing that summed value onto only the first txn while leaving the
+            // siblings at their original counts would inflate the NDC-wide total
+            // on the next reload (e.g. 50 shown becomes 53 saved). Collapse the
+            // group: put the edited totals on the primary txn and zero the rest,
+            // so the saved group total equals exactly what the user sees.
+            let primaryTxnId = row.txnIds.contains(row.txnId) ? row.txnId : row.txnIds.first
+            for txnId in row.txnIds {
+                let isPrimary = txnId == primaryTxnId
+                stockCountViewModel.transactionDAO.setAbsoluteCounts(
+                    txnId: txnId,
+                    bottleQty: isPrimary ? Int32(row.sealedBottles) : 0,
+                    looseQty:  isPrimary ? Int32(row.openPills)     : 0
+                )
+            }
         }
+        // Counts were written straight to the DAO — pull them back into the detail
+        // card's stepper state so it reflects the edit instead of the stale scan value.
+        stockCountViewModel.resyncScannedDrugCounts()
         onDismiss()
     }
 }

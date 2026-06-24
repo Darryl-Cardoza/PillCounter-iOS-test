@@ -202,18 +202,39 @@ extension BaseRepositoryProtocol {
 
 // MARK: - SSL Bypass Delegate (Development Only)
 #if DEBUG
-class UnsafeSSLManager: NSObject, URLSessionDelegate {
+class UnsafeSSLManager: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
+
+    // Session-level challenge (connection-level TLS).
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let trust = challenge.protectionSpace.serverTrust {
-            completionHandler(.useCredential, URLCredential(trust: trust))
-        } else {
+        handle(challenge, completionHandler: completionHandler)
+    }
+
+    // Task-level challenge — consulted by the async/task-based `data(for:)` API.
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        handle(challenge, completionHandler: completionHandler)
+    }
+
+    private func handle(
+        _ challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else {
+            print("🔓 SSL: non-server-trust challenge (\(challenge.protectionSpace.authenticationMethod)) → default handling")
             completionHandler(.performDefaultHandling, nil)
+            return
         }
+        print("🔓 SSL: bypassing server trust for \(challenge.protectionSpace.host)")
+        completionHandler(.useCredential, URLCredential(trust: trust))
     }
 }
 #endif

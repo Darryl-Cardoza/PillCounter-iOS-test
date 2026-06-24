@@ -408,12 +408,45 @@ class StockCountViewModel: ObservableObject {
         // so they survive scan resets within the same session.
     }
 
+    /// Re-syncs the detail card's stepper state from the DB after an Edit Details save.
+    /// The card reads `pendingBottleCount`, which was set once during scan; the Edit sheet
+    /// writes straight to the DAO, so without this the card stays stale.
+    ///
+    /// `pendingBottleCount` MUST stay equal to `committedTxnId`'s own `bottle_qty`, because the
+    /// Add flush (`flushPendingBottleCount`) writes it back to that single txn. Storing the
+    /// NDC-wide sum here instead would make the flush re-apply the edit and double the count.
+    func resyncScannedDrugCounts() {
+        guard let ndc = scannedDrugData?.ndc else { return }
+        existingNdcBottleCount = existingBottleCount(for: ndc)
+        if let txnId = committedTxnId, let txn = transactionDAO.fetchById(txnId) {
+            pendingBottleCount = Int(txn.bottle_qty)
+        } else {
+            pendingBottleCount = existingNdcBottleCount
+        }
+    }
+
     /// Returns the existing sealed bottle count for an NDC already in the current batch.
     /// Displayed alongside the stepper so the user sees current total + how many they're adding.
     func existingBottleCount(for ndc: String) -> Int {
         guard let batchId = currentBatch?.batch_id else { return 0 }
         let txns = transactionDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
         return txns.reduce(0) { $0 + Int($1.bottle_qty) }
+    }
+
+    /// NDC-wide sealed bottle total shown in the scanned-detail card.
+    ///
+    /// `pendingBottleCount` is bound to the single `committedTxnId` (the flush target), so it
+    /// only ever holds ONE lot's bottle count. The card must instead show the full NDC across
+    /// every lot — including counts written by the Edit sheet. We take the DB NDC-wide sum and
+    /// fold in the live, not-yet-flushed stepper delta for the committed txn so the number reacts
+    /// to +/- taps immediately (the DAO write is debounced 600ms and would otherwise lag).
+    func displayBottleTotal(for ndc: String) -> Int {
+        let ndcWide = existingBottleCount(for: ndc)
+        guard let txnId = committedTxnId, let txn = transactionDAO.fetchById(txnId) else {
+            return ndcWide
+        }
+        let committedDbQty = Int(txn.bottle_qty)
+        return ndcWide - committedDbQty + pendingBottleCount
     }
 
     /// Returns the existing open bottle count for an NDC in the current batch.
@@ -447,9 +480,19 @@ class StockCountViewModel: ObservableObject {
             lotNumber: firstLot?.lot ?? "",
             expiry:    firstLot?.expiry ?? ""
         )
-        existingNdcBottleCount = Int(txn.sealedBottleQty)
-        pendingBottleCount = Int(txn.sealedBottleQty)
         committedTxnId = txn.txnId
+        // existingNdcBottleCount is the NDC-wide sum across every txn/batch (for display).
+        // pendingBottleCount MUST be the committed txn's OWN bottle_qty, not the NDC-wide
+        // sum — flushPendingBottleCount writes it absolutely onto committedTxnId, so storing
+        // the sum here would overwrite one lot with the whole-NDC total and double-count the
+        // other batches' bottles on the next reload. displayBottleTotal folds the per-txn
+        // pending value back into the NDC-wide sum, so the card still shows the full total.
+        existingNdcBottleCount = Int(txn.sealedBottleQty)
+        if let txnId = committedTxnId, let entity = transactionDAO.fetchById(txnId) {
+            pendingBottleCount = Int(entity.bottle_qty)
+        } else {
+            pendingBottleCount = Int(txn.sealedBottleQty)
+        }
         selectedGroupedTransaction = txn
     }
 

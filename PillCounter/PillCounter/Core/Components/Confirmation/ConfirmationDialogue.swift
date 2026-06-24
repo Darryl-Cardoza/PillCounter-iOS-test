@@ -21,6 +21,12 @@ struct ConfirmationDialogue: View {
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
+    // Consistent button sizing across all popups — slightly larger on iPad.
+    private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var buttonFont: Font { .system(size: isIpad ? 17 : 14, weight: .semibold) }
+    private var buttonHorizontalPadding: CGFloat { isIpad ? 16 : 8 }
+    private var buttonVerticalPadding: CGFloat { isIpad ? 18 : 14 }
+
     var body: some View {
         VStack(spacing: 15) {
 
@@ -50,13 +56,13 @@ struct ConfirmationDialogue: View {
                 PillCountingButton(
                     iconName: nil,
                     title: confirmButtonText.uppercased(),
-                    textColor: Color.white,
+                    textColor: appColors.text,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
-                    font: .system(size: 14, weight: .semibold),
+                    font: buttonFont,
                     cornerRadius: 30,
-                    horizontalPadding: 40,
-                    verticalPadding: 14,
+                    horizontalPadding: isIpad ? 48 : 40,
+                    verticalPadding: buttonVerticalPadding,
                     iconSize: 0,
                     action: onConfirm
                 )
@@ -65,36 +71,35 @@ struct ConfirmationDialogue: View {
 
             } else {
 
-                HStack(spacing: 16) {
+                EqualWidthHStackButtons(spacing: 16) {
                     PillCountingButton(
                         iconName: nil,
                         title: cancelButtonText.uppercased(),
                         textColor: appColors.primary,
                         backgroundColor: appColors.primaryBackground,
                         borderColor: appColors.primary,
-                        font: .system(size: 14, weight: .semibold),
+                        font: buttonFont,
                         cornerRadius: 30,
-                        horizontalPadding: 8,
-                        verticalPadding: 14,
+                        horizontalPadding: buttonHorizontalPadding,
+                        verticalPadding: buttonVerticalPadding,
                         iconSize: 0,
                         action: onCancel
                     )
-                    .frame(maxWidth: .infinity)
                     PillCountingButton(
                         iconName: nil,
                         title: confirmButtonText.uppercased(),
-                        textColor: Color.white,
+                        textColor: appColors.text,
                         backgroundColor: appColors.primary,
                         borderColor: .clear,
-                        font: .system(size: 14, weight: .semibold),
+                        font: buttonFont,
                         cornerRadius: 30,
-                        horizontalPadding: 8,
-                        verticalPadding: 14,
+                        horizontalPadding: buttonHorizontalPadding,
+                        verticalPadding: buttonVerticalPadding,
                         iconSize: 0,
                         action: onConfirm
                     )
-                    .frame(maxWidth: .infinity)
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.top, 10)
             }
         }

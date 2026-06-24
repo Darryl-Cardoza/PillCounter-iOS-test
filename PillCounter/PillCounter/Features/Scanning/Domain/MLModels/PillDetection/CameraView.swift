@@ -105,13 +105,6 @@ struct DetectionOverlay: View {
     /// in `appColors.secondary`, so the operator can see which to remove.
     var targetQuantity: Int = 0
 
-    /// Stateful near-chute picker. Held across frames so its temporal hysteresis
-    /// (remembering last frame's highlighted pills) can stop adjacent, nearly
-    /// equidistant pills from ping-ponging the highlight every frame. A reference
-    /// type kept in @State — we never want SwiftUI to observe it, only to persist
-    /// the same instance across re-renders.
-    @State private var chuteProximity = ChuteProximity()
-
     var body: some View {
         GeometryReader { _ in
             ZStack(alignment: .topLeading) {
@@ -120,23 +113,12 @@ struct DetectionOverlay: View {
                    layer.session != nil
                 {
                     // ── Excess-near-chute highlight set ───────────────────────
-                    // Only when a real target is set (targetQuantity > 0). Number
-                    // of pills to highlight uses the SMOOTHED stableCount (steady),
-                    // while WHICH pills are picked is re-ranked from the live
-                    // detections each frame (responsive). The chute geometry comes
-                    // from the same frame's segmentation result. With target 0 the
-                    // feature is off and highlightedIDs is empty → all dots black.
-                    let excess = targetQuantity > 0
-                        ? max(0, cameraService.stableCount - targetQuantity)
-                        : 0
-                    let chute = cameraService.trayDetections.first { $0.trayClass == .chute }
-                    let tray = cameraService.trayDetections.first { $0.trayClass == .tray }
-                    let highlightedIDs = chuteProximity.nearChuteIDs(
-                        pills: cameraService.detections,
-                        chute: chute,
-                        tray: tray,
-                        excess: excess
-                    )
+                    // The picker now runs ONCE per frame inside CameraService (its
+                    // sticky, distance-smoothed, margin-based-steal logic relies on
+                    // per-frame state and would be corrupted if driven by SwiftUI's
+                    // multiple body evaluations per frame). Here we only publish the
+                    // current target to the service and READ the resulting set.
+                    let highlightedIDs = cameraService.excessPillIDs
 
                     ForEach(
                         Array(cameraService.detections.enumerated()),
@@ -168,6 +150,12 @@ struct DetectionOverlay: View {
 
         }
         .allowsHitTesting(false)
+        // Drive the pipeline's excess picker from the current dispense target.
+        // Set here (not in body) so we never mutate observed state mid-render.
+        .onAppear { cameraService.excessTargetQuantity = targetQuantity }
+        .onChange(of: targetQuantity) { _, newValue in
+            cameraService.excessTargetQuantity = newValue
+        }
     }
 
     // MARK: - Coordinate Conversion

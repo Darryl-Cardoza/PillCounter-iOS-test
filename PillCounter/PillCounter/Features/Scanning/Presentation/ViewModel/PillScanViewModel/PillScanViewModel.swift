@@ -112,6 +112,9 @@ class PillScanViewModel: ObservableObject {
     @Published var capturedVialImage: UIImage? = nil
     @Published var vialCapturedImagePath: String? = nil
     @Published var vialDoneTriggered: Bool = false
+    /// Toggled briefly when a vial still is captured to drive the white shutter
+    /// flash animation in UnifiedCameraLayout.
+    @Published var vialCaptureFlash: Bool = false
 
     //MARK: RX FLow
     @Published var showRxFlowPopup: Bool = false

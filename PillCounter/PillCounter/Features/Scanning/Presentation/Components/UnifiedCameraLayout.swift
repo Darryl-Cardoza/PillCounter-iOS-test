@@ -79,6 +79,17 @@ struct UnifiedCameraLayout: View {
                 .ignoresSafeArea()
                 .background(Color.black.ignoresSafeArea())
                 .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+
+            // ── Shutter flash ─────────────────────────────────────────────────
+            // Brief white flash overlaid the instant the vial still is captured,
+            // giving the classic camera "snap" feel alongside the shutter sound.
+            if pillScanViewModel.vialCaptureFlash {
+                Color.white
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
             }
 
             // ── Loading spinner ───────────────────────────────────────────────

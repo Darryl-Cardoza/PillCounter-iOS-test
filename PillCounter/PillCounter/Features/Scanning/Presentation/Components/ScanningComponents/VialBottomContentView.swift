@@ -92,12 +92,28 @@ struct VialBottomContentView: View {
             return
         }
         guard let image = cameraService.captureSnapshot() else { return }
+
+        // Immediate shutter feedback — sound + haptic + a quick white flash — so the
+        // capture feels instant even though saving the file happens just after.
+        FeedbackManager.shared.playCameraShutterSound()
+        FeedbackManager.shared.vibrate()
+        withAnimation(.easeOut(duration: 0.08)) {
+            pillScanViewModel.vialCaptureFlash = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeIn(duration: 0.18)) {
+                pillScanViewModel.vialCaptureFlash = false
+            }
+        }
+
         // Do NOT stop the session — counting is already paused for the vial step. The
         // captured still is shown full-screen by UnifiedCameraLayout while
         // capturedVialImage is set; stopping would blank the live feed and cost a
         // restart on redo/done.
         let normalized = image.normalized()
-        pillScanViewModel.capturedVialImage = normalized
+        withAnimation(.easeInOut(duration: 0.2)) {
+            pillScanViewModel.capturedVialImage = normalized
+        }
         if let path = PhotoFileManager.shared.saveImage(normalized) {
             pillScanViewModel.vialCapturedImagePath = path
         }

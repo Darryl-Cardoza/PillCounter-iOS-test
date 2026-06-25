@@ -51,10 +51,10 @@ struct DashboardSelectBucketPopup: View {
                     textColor: appColors.primary,
                     backgroundColor: .clear,
                     borderColor: appColors.primary,
-                    font: .system(size: 16, weight: .semibold),
+                    font: .system(size: 14, weight: .semibold),
                     cornerRadius: 30,
                     horizontalPadding: 32,
-                    verticalPadding: 20,
+                    verticalPadding: 18,
                     iconSize: 0,
                     action: onCancel
                 )
@@ -64,10 +64,10 @@ struct DashboardSelectBucketPopup: View {
                     textColor: .white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
-                    font: .system(size: 16, weight: .semibold),
+                    font: .system(size: 14, weight: .semibold),
                     cornerRadius: 30,
                     horizontalPadding: 32,
-                    verticalPadding: 20,
+                    verticalPadding: 18,
                     iconSize: 0,
                     action: onConfirm
                 )

@@ -21,8 +21,8 @@ struct PillCountBottomBar: View {
     let isLandscape: Bool
     /// When false (iPhone portrait), the steps row is rendered outside this bar.
     var showSteps: Bool = true
-    /// Forwarded to the steps row — host re-shows the tooltip on a current-step tap.
-    var onTapCurrentStep: () -> Void = {}
+    /// Forwarded to the steps row — host re-shows the tooltip on any step tap.
+    var onTapStep: (ControlledStep) -> Void = { _ in }
     /// Open-ended step (parent pour) — there is no target, so we show the live
     /// count plus an explicit "Done" button instead of a meaningless `current/0`
     /// progress bar.
@@ -35,7 +35,23 @@ struct PillCountBottomBar: View {
     var onDone: () -> Void = {}
 
     /// iPhone in portrait — needs extra vertical padding so the bar isn't too thin.
-    private var isIphonePortrait: Bool { !isIpad && !isLandscape }
+    private var isPortrait: Bool { !isLandscape }
+
+    /// Bare live-count number — only the open-ended container-initiate pour shows it
+    /// (it has no target). `.containerPending` has a real target and uses the bar.
+    private var showsLiveCount: Bool {
+        isOpenEndedCountStep && currentStep != .containerPending
+    }
+
+    /// Target progress bar — shown for every step except the open-ended
+    /// container-initiate pour (which has no meaningful target).
+    private var showsProgressBar: Bool {
+        !(isOpenEndedCountStep && currentStep != .containerPending)
+    }
+
+    /// Explicit Proceed button — shown on both open-ended steps
+    /// (container-initiate and container-pending).
+    private var showsProceedButton: Bool { isOpenEndedCountStep }
 
     var body: some View {
         HStack(alignment: .center, spacing: isIpad ? 24 : 12) {
@@ -50,30 +66,69 @@ struct PillCountBottomBar: View {
                         .foregroundStyle(appColors.primary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // In portrait the button hugs its content so the trailing progress bar
+            // can claim ALL the remaining width; in landscape it shares the bar
+            // equally (steps row sits centred between the two flexible sides).
+            .frame(maxWidth: isPortrait ? nil : .infinity, alignment: .leading)
+            .fixedSize(horizontal: isPortrait, vertical: false)
 
             // Steps For — hidden here on iPhone portrait (shown above the bar instead).
+            // Wrapped in an equal-share flexible frame so the row stays centred in
+            // the bar regardless of how wide the leading / trailing slots become —
+            // otherwise the side slots split the leftover space and shove it off-centre.
             if showSteps {
                 StepProgressRow(
                     activeSteps: activeSteps,
                     currentStep: currentStep,
-                    onTapCurrentStep: onTapCurrentStep
+                    onTapStep: onTapStep
                 )
+                .fixedSize()
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+            
+            // The live pill-count number is shown only for the open-ended parent
+            // pour (container-initiate). `.containerPending` has a real target, so
+            // it uses the progress bar instead and the bare count is suppressed.
+            if showsLiveCount && !isLandscape {
+                Text("\(currentTotalCount)")
+                    .font(.system(size: isIpad ? 22 : 16, weight: .bold))
+                    .foregroundStyle(appColors.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(alignment: .center)
             }
 
-            // Trailing slot: for the open-ended parent pour (no target) show the
-            // live count and an explicit "Done" button; otherwise the horizontal
-            // target progress bar.
-            if isOpenEndedCountStep {
-                HStack(spacing: isIpad ? 16 : 10) {
-                    Text("\(currentTotalCount)")
-                        .font(.system(size: isIpad ? 22 : 16, weight: .bold))
-                        .foregroundStyle(appColors.secondary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-
+            // Trailing slot:
+            //  • container-initiate (open-ended, no target) → live count + Proceed
+            //  • container-pending → target progress bar + Proceed (no bare count)
+            //  • everything else → target progress bar only
+            HStack(spacing: isIpad ? 16 : 10) {
+                if showsProgressBar {
+                    PillCountTargetProgressBar(
+                        current: currentTotalCount,
+                        target: targetCount,
+                        isIpad: isIpad,
+                        isLandscape: isLandscape
+                    )
+                    // In portrait the steps row is lifted out of the bar, so this
+                    // slot is the only flexible content on the right — let the bar
+                    // stretch into all the remaining width instead of hugging right.
+                    .frame(maxWidth: isPortrait ? .infinity : nil)
+                }
+                
+                if showsProceedButton {
+                    
+                    if showsLiveCount && isLandscape {
+                        Text("\(currentTotalCount)")
+                            .font(.system(size: isIpad ? 22 : 16, weight: .bold))
+                            .foregroundStyle(appColors.secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(alignment: .center)
+                    }
+                    
                     Button(action: onDone) {
-                        Text(L10n.PillCount.done)
+                        Text(L10n.BarcodeScan.proceed)
                             .font(.system(size: isIpad ? 16 : 13, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, isIpad ? 20 : 14)
@@ -83,20 +138,13 @@ struct PillCountBottomBar: View {
                             )
                     }
                     .disabled(!isDoneEnabled)
+                    .fixedSize()
                 }
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            } else {
-                PillCountTargetProgressBar(
-                    current: currentTotalCount,
-                    target: targetCount,
-                    isIpad: isIpad,
-                    isLandscape: isLandscape
-                )
-                .frame(maxWidth: .infinity, alignment: .trailing)
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, isIphonePortrait ? 14 : 0)
+        .padding(.vertical, isPortrait ? 14 : 0)
         .frame(maxWidth: .infinity)
         .background(Color.black.opacity(0.45))
         .clipShape(RoundedRectangle(cornerRadius: 12))

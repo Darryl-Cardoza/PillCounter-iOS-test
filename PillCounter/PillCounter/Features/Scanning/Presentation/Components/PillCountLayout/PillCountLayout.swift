@@ -41,15 +41,27 @@ struct PillCountLayout: View {
     @State private var showTooltip = false
     /// Bumped on each show so a stale auto-hide can't dismiss a newer presentation.
     @State private var tooltipToken = 0
-    /// While true, current-step taps are ignored (debounced for `tooltipDuration`).
+    /// While true, step taps are ignored (debounced for `tooltipDuration`).
     @State private var isTapCoolingDown = false
+    /// The step the tooltip is currently anchored to and speaking for. Defaults to
+    /// the current step (used for the auto-show on appear / step change); updated to
+    /// whichever step the user taps.
+    @State private var tooltipStep: ControlledStep?
     private let tooltipDuration: TimeInterval = 3
+
+    /// Instruction text for whichever step the tooltip is presenting. Each step
+    /// carries its own instruction via `displayText`; falls back to the host's
+    /// current-step `instructionText` before any step has been resolved.
+    private var tooltipText: String {
+        tooltipStep?.displayText ?? instructionText
+    }
 
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
-    /// iPhone in portrait — needs a stacked top bar and the steps row lifted
-    /// out of the bottom bar (the bottom bar can't fit everything in one line).
-    private var isIphonePortrait: Bool { !isIpad && !isLandscape }
+    /// Any device in portrait — the steps row is lifted out of the bottom bar
+    /// (the bottom bar can't fit everything in one line in portrait) and shown
+    /// above it. Applies to both iPhone and iPad portrait.
+    private var isPortrait: Bool { !isLandscape }
 
     // ── Data mirrors BottomControlsView so the displayed numbers are identical ──
 
@@ -126,13 +138,14 @@ struct PillCountLayout: View {
 
                 Spacer()
 
-                // On iPhone portrait the steps row is lifted out of the bottom
-                // bar (which can't fit everything in a single line) and shown above it.
-                if isIphonePortrait {
+                // In portrait (iPhone or iPad) the steps row is lifted out of the
+                // bottom bar (which can't fit everything in a single line) and
+                // shown above it.
+                if isPortrait {
                     StepProgressRow(
                         activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                         currentStep: pillScanViewModel.currentControlledStep,
-                        onTapCurrentStep: { handleCurrentStepTap() }
+                        onTapStep: { handleStepTap($0) }
                     )
                 }
 
@@ -143,8 +156,8 @@ struct PillCountLayout: View {
                     targetCount: targetCount,
                     isIpad: isIpad,
                     isLandscape: isLandscape,
-                    showSteps: !isIphonePortrait,
-                    onTapCurrentStep: { handleCurrentStepTap() },
+                    showSteps: !isPortrait,
+                    onTapStep: { handleStepTap($0) },
                     isOpenEndedCountStep: isOpenEndedStep,
                     isDoneEnabled: isDoneEnabled,
                     onShowDetailGrid: onShowDetailGrid,
@@ -152,15 +165,16 @@ struct PillCountLayout: View {
                 )
             }
         }
-        // Float the instruction tooltip above the current step icon, anchored to
-        // the frame the active StepProgressRow publishes — drawn here so it
-        // overflows the bottom bar instead of being clipped inside it.
-        .overlayPreferenceValue(CurrentStepAnchorKey.self) { anchor in
+        // Float the instruction tooltip above the tapped (or current) step icon,
+        // anchored to the per-step frames the active StepProgressRow publishes —
+        // drawn here so it overflows the bottom bar instead of being clipped inside it.
+        .overlayPreferenceValue(StepAnchorKey.self) { anchors in
             GeometryReader { proxy in
-                if showTooltip, !instructionText.isEmpty, let anchor {
+                if showTooltip, !tooltipText.isEmpty,
+                   let step = tooltipStep, let anchor = anchors[step] {
                     let rect = proxy[anchor]
                     TooltipBubble(
-                        text: instructionText,
+                        text: tooltipText,
                         isIpad: isIpad,
                         background: appColors.primaryBackground.opacity(0.5)
                     )
@@ -183,8 +197,8 @@ struct PillCountLayout: View {
             }
             .allowsHitTesting(false)
         }
-        .onAppear { presentTooltip() }
-        .onChange(of: pillScanViewModel.currentControlledStep) { _, _ in presentTooltip() }
+        .onAppear { presentTooltip(for: pillScanViewModel.currentControlledStep) }
+        .onChange(of: pillScanViewModel.currentControlledStep) { _, step in presentTooltip(for: step) }
     }
 }
 
@@ -216,27 +230,31 @@ private struct BottomPinnedAbove: ViewModifier {
 
 private extension PillCountLayout {
 
-    /// User tapped the current step: re-show the tooltip and replay the spoken
-    /// instruction. Forced so it always speaks — even if it was just spoken or the
-    /// global speech setting is off — because the tap is an explicit "say it again".
-    /// Debounced for `tooltipDuration` so rapid taps can't stutter the speech/UI.
-    func handleCurrentStepTap() {
+    /// User tapped a step (any step, not just the current one): float that step's
+    /// tooltip above its icon and replay its spoken instruction. Forced so it always
+    /// speaks — even if it was just spoken or the global speech setting is off —
+    /// because the tap is an explicit "say it again". Debounced for `tooltipDuration`
+    /// so rapid taps can't stutter the speech/UI.
+    func handleStepTap(_ step: ControlledStep) {
         guard !isTapCoolingDown else { return }
         isTapCoolingDown = true
         DispatchQueue.main.asyncAfter(deadline: .now() + tooltipDuration) {
             isTapCoolingDown = false
         }
 
-        presentTooltip()
-        if !instructionText.isEmpty {
-            SpeechManager.shared.speak(instructionText, force: true)
+        presentTooltip(for: step)
+        let text = step.displayText
+        if !text.isEmpty {
+            SpeechManager.shared.speak(text, force: true)
         }
     }
 
-    /// Show the bubble for `tooltipDuration`; a later call invalidates the
-    /// previous auto-hide via the token so the timer can't cut a newer one short.
-    func presentTooltip() {
-        guard !instructionText.isEmpty else { return }
+    /// Anchor the bubble to `step` and show it for `tooltipDuration`; a later call
+    /// invalidates the previous auto-hide via the token so the timer can't cut a
+    /// newer one short.
+    func presentTooltip(for step: ControlledStep) {
+        tooltipStep = step
+        guard !tooltipText.isEmpty else { return }
         tooltipToken += 1
         let token = tooltipToken
         // Springy pop-in with a hint of bounce.

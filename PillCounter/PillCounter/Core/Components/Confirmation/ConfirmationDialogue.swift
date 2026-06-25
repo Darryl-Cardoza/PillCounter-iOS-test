@@ -78,10 +78,10 @@ struct ConfirmationDialogue: View {
                         textColor: appColors.primary,
                         backgroundColor: .clear,
                         borderColor: appColors.primary,
-                        font: .system(size: 12, weight: .semibold),
+                        font: .system(size: 14, weight: .semibold),
                         cornerRadius: 30,
-                        horizontalPadding: 28,
-                        verticalPadding: 20,
+                        horizontalPadding: 32,
+                        verticalPadding: 18,
                         iconSize: 0,
                         action: onCancel
                     )
@@ -91,10 +91,10 @@ struct ConfirmationDialogue: View {
                         textColor: .white,
                         backgroundColor: appColors.primary,
                         borderColor: .clear,
-                        font: .system(size: 12, weight: .semibold),
+                        font: .system(size: 14, weight: .semibold),
                         cornerRadius: 30,
-                        horizontalPadding: 28,
-                        verticalPadding: 20,
+                        horizontalPadding: 32,
+                        verticalPadding: 18,
                         iconSize: 0,
                         action: onConfirm
                     )

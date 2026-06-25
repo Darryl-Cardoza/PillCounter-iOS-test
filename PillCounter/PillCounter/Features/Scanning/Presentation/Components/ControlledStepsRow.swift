@@ -14,15 +14,19 @@ private enum StepState {
     case upcoming
 }
 
-// MARK: - CURRENT-STEP ANCHOR PREFERENCE
+// MARK: - STEP ANCHOR PREFERENCE
 
-/// Published by `StepProgressRow` so a higher-level host (e.g. `PillCountLayout`)
-/// can render the instruction tooltip above the current step *outside* the
-/// clipped bottom bar — anchored exactly over the current step icon.
-struct CurrentStepAnchorKey: PreferenceKey {
-    static var defaultValue: Anchor<CGRect>? = nil
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
-        value = nextValue() ?? value
+/// Published by `StepProgressRow` — one anchor per step keyed by `ControlledStep`
+/// — so a higher-level host (e.g. `PillCountLayout`) can render the instruction
+/// tooltip above *any* tapped step *outside* the clipped bottom bar, anchored
+/// exactly over that step's icon.
+struct StepAnchorKey: PreferenceKey {
+    static var defaultValue: [ControlledStep: Anchor<CGRect>] = [:]
+    static func reduce(
+        value: inout [ControlledStep: Anchor<CGRect>],
+        nextValue: () -> [ControlledStep: Anchor<CGRect>]
+    ) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
@@ -34,9 +38,10 @@ struct StepProgressRow: View {
 
     let activeSteps: [ControlledStep]
     let currentStep: ControlledStep
-    /// Called when the user taps the current step (host decides whether to
-    /// re-show the tooltip). No-op by default for the non-hosted call sites.
-    var onTapCurrentStep: () -> Void = {}
+    /// Called when the user taps any step (host decides whether to show the
+    /// tooltip / speak that step's instruction). No-op by default for the
+    /// non-hosted call sites.
+    var onTapStep: (ControlledStep) -> Void = { _ in }
 
     private var isIpad: Bool {
         UIDevice.current.userInterfaceIdiom == .pad
@@ -113,15 +118,15 @@ private extension StepProgressRow {
             )
             .foregroundColor(appColors.text)
             .opacity(stateOpacity(for: state))
-            // Publish the current icon's frame so the host can float the tooltip
-            // above it, outside this (clipped) row. Tapping re-shows the tooltip.
-            .anchorPreference(key: CurrentStepAnchorKey.self, value: .bounds) {
-                state == .current ? $0 : nil
+            // Publish this icon's frame (keyed by step) so the host can float the
+            // tooltip above any tapped step, outside this (clipped) row.
+            .anchorPreference(key: StepAnchorKey.self, value: .bounds) {
+                [step: $0]
             }
             .contentShape(Circle())
-            .onTapGesture {
-                if state == .current { onTapCurrentStep() }
-            }
+            // Every step is tappable — taps show that step's instruction tooltip
+            // and speak it (handled by the host).
+            .onTapGesture { onTapStep(step) }
     }
 
     func stateOpacity(for state: StepState) -> Double {

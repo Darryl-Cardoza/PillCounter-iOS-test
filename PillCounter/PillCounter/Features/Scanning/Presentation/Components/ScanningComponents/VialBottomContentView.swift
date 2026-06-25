@@ -17,7 +17,7 @@ struct VialBottomContentView: View {
     
     // MARK: - Common Size Variables
     private var isIPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-    private var iconSize: CGFloat { isIPad ? 64 : 40 }
+    private var iconSize: CGFloat { isIPad ? 32 : 40 }
     private var captureButtonSize: CGFloat { isIPad ? 100 : 70 }
     private var captureIconSize: CGFloat { isIPad ? 42 : 28 }
     private var captureIconWeight: Font.Weight { .medium }
@@ -75,8 +75,7 @@ struct VialBottomContentView: View {
                 doneVial()
             }
         }
-        .padding(.vertical, isIPad ? 35 : 25)
-        .padding(.horizontal)
+        .padding(24)
         // Same translucent dark backdrop as the top / bottom bars.
         .background(Color.black.opacity(0.45))
         .clipShape(RoundedRectangle(cornerRadius: 12))

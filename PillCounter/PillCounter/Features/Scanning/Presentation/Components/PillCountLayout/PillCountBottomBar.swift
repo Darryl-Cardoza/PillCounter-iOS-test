@@ -21,6 +21,8 @@ struct PillCountBottomBar: View {
     let isLandscape: Bool
     /// When false (iPhone portrait), the steps row is rendered outside this bar.
     var showSteps: Bool = true
+    /// Forwarded to the steps row — host re-shows the tooltip on a current-step tap.
+    var onTapCurrentStep: () -> Void = {}
     /// Open-ended step (parent pour) — there is no target, so we show the live
     /// count plus an explicit "Done" button instead of a meaningless `current/0`
     /// progress bar.
@@ -54,7 +56,8 @@ struct PillCountBottomBar: View {
             if showSteps {
                 StepProgressRow(
                     activeSteps: activeSteps,
-                    currentStep: currentStep
+                    currentStep: currentStep,
+                    onTapCurrentStep: onTapCurrentStep
                 )
             }
 

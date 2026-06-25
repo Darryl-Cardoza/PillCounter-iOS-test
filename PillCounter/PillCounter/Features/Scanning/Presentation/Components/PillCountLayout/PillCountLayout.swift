@@ -32,6 +32,19 @@ struct PillCountLayout: View {
     let onAllDone: () -> Void
     let onShowDetailGrid: () -> Void
 
+    // ── Step instruction tooltip ───────────────────────────────────────────
+    // Rendered at this (full-screen) level so it can float above the current
+    // step icon without being clipped by the bottom bar. Auto-shown for
+    // `tooltipDuration` on appear and on every step change; re-shown when the
+    // user taps the current step.
+    @EnvironmentObject private var appColors: AppColors
+    @State private var showTooltip = false
+    /// Bumped on each show so a stale auto-hide can't dismiss a newer presentation.
+    @State private var tooltipToken = 0
+    /// While true, current-step taps are ignored (debounced for `tooltipDuration`).
+    @State private var isTapCoolingDown = false
+    private let tooltipDuration: TimeInterval = 3
+
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     /// iPhone in portrait — needs a stacked top bar and the steps row lifted
@@ -118,7 +131,8 @@ struct PillCountLayout: View {
                 if isIphonePortrait {
                     StepProgressRow(
                         activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
-                        currentStep: pillScanViewModel.currentControlledStep
+                        currentStep: pillScanViewModel.currentControlledStep,
+                        onTapCurrentStep: { handleCurrentStepTap() }
                     )
                 }
 
@@ -130,11 +144,110 @@ struct PillCountLayout: View {
                     isIpad: isIpad,
                     isLandscape: isLandscape,
                     showSteps: !isIphonePortrait,
+                    onTapCurrentStep: { handleCurrentStepTap() },
                     isOpenEndedCountStep: isOpenEndedStep,
                     isDoneEnabled: isDoneEnabled,
                     onShowDetailGrid: onShowDetailGrid,
                     onDone: onAllDone
                 )
+            }
+        }
+        // Float the instruction tooltip above the current step icon, anchored to
+        // the frame the active StepProgressRow publishes — drawn here so it
+        // overflows the bottom bar instead of being clipped inside it.
+        .overlayPreferenceValue(CurrentStepAnchorKey.self) { anchor in
+            GeometryReader { proxy in
+                if showTooltip, !instructionText.isEmpty, let anchor {
+                    let rect = proxy[anchor]
+                    TooltipBubble(
+                        text: instructionText,
+                        isIpad: isIpad,
+                        background: appColors.primaryBackground.opacity(0.5)
+                    )
+                    .fixedSize()
+                    // Pin the bubble's BOTTOM (its tail tip) just above the icon's
+                    // top edge: `.position` centres the view, so measure its height
+                    // and lift the centre by half of it plus a clearance gap.
+                    .modifier(
+                        BottomPinnedAbove(targetTopY: rect.minY, centerX: rect.midX, gap: 16)
+                    )
+                    // Asymmetric: pops up from the icon with a slight bounce, then
+                    // fades out gently while drifting up a touch.
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.7, anchor: .bottom)
+                            .combined(with: .opacity)
+                            .combined(with: .offset(y: 6)),
+                        removal: .opacity.combined(with: .offset(y: -6))
+                    ))
+                }
+            }
+            .allowsHitTesting(false)
+        }
+        .onAppear { presentTooltip() }
+        .onChange(of: pillScanViewModel.currentControlledStep) { _, _ in presentTooltip() }
+    }
+}
+
+// MARK: - TOOLTIP POSITIONING
+
+/// Places a `.fixedSize` view so its BOTTOM edge sits `gap` points above
+/// `targetTopY`, horizontally centred on `centerX`. `.position` centres a view,
+/// so we measure its height and offset the centre by half of it.
+private struct BottomPinnedAbove: ViewModifier {
+    let targetTopY: CGFloat
+    let centerX: CGFloat
+    let gap: CGFloat
+
+    @State private var height: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                GeometryReader { geo in
+                    Color.clear.onAppear { height = geo.size.height }
+                        .onChange(of: geo.size.height) { _, h in height = h }
+                }
+            )
+            .position(x: centerX, y: targetTopY - gap - height / 2)
+    }
+}
+
+// MARK: - TOOLTIP PRESENTATION
+
+private extension PillCountLayout {
+
+    /// User tapped the current step: re-show the tooltip and replay the spoken
+    /// instruction. Forced so it always speaks — even if it was just spoken or the
+    /// global speech setting is off — because the tap is an explicit "say it again".
+    /// Debounced for `tooltipDuration` so rapid taps can't stutter the speech/UI.
+    func handleCurrentStepTap() {
+        guard !isTapCoolingDown else { return }
+        isTapCoolingDown = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + tooltipDuration) {
+            isTapCoolingDown = false
+        }
+
+        presentTooltip()
+        if !instructionText.isEmpty {
+            SpeechManager.shared.speak(instructionText, force: true)
+        }
+    }
+
+    /// Show the bubble for `tooltipDuration`; a later call invalidates the
+    /// previous auto-hide via the token so the timer can't cut a newer one short.
+    func presentTooltip() {
+        guard !instructionText.isEmpty else { return }
+        tooltipToken += 1
+        let token = tooltipToken
+        // Springy pop-in with a hint of bounce.
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+            showTooltip = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + tooltipDuration) {
+            guard token == tooltipToken else { return }
+            // Smooth, slightly slower fade-out.
+            withAnimation(.easeOut(duration: 0.35)) {
+                showTooltip = false
             }
         }
     }

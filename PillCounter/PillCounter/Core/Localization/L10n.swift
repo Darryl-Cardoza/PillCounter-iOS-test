@@ -141,6 +141,8 @@ enum L10n {
         static let totalCount = NSLocalizedString("pillCount.totalCount", comment: "")
         static let redo = NSLocalizedString("pillCount.redo", comment: "")
         static let done = NSLocalizedString("pillCount.done", comment: "")
+        static let incorrectRxLabel = NSLocalizedString("pillCount.incorrectRxLabel", comment: "")
+        static let scanVialRxToCapture = NSLocalizedString("pillCount.scanVialRxToCapture", comment: "")
         static let transactionDetail = NSLocalizedString("pillCount.transactionDetail", comment: "")
     }
     

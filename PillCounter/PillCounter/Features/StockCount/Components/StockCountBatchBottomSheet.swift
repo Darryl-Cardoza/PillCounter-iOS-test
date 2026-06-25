@@ -112,46 +112,103 @@ struct StockCountBatchBottomSheet: View {
 
     // MARK: - iPad Portrait
     private var iPadPortraitLayout: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            // ── Base two-column sheet (dimmed while editing) ──────
+            VStack(spacing: 0) {
 
-            // ── Header ──────────────────────────────────────────
-            HStack(spacing: 8) {
-                Text(L10n.StockCountSheet.batchStockCount)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(appColors.text)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                scanPillsButtonView.fixedSize()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 20)
-
-            // ── Two-column body ──────────────────────────────────
-            HStack(alignment: .top, spacing: 0) {
-
-                // LEFT — raw list, no card background
-                StockCountBatchPanel(hideHeader: true, onScanPills: onScanPills) {
-                    EmptyView()
+                // ── Header ──────────────────────────────────────────
+                HStack(spacing: 8) {
+                    Text(L10n.StockCountSheet.batchStockCount)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(appColors.text)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    scanPillsButtonView.fixedSize()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 20)
 
-                // RIGHT — detail slot in a card
-                Group {
-                    detailSlot(isIpadPortrait: true)
+                // ── Two-column body ──────────────────────────────────
+                HStack(alignment: .top, spacing: 0) {
+
+                    // LEFT — raw list, no card background
+                    StockCountBatchPanel(hideHeader: true, onScanPills: onScanPills) {
+                        EmptyView()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    // RIGHT — detail slot in a card
+                    Group {
+                        iPadPortraitDetailSlot
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .background(appColors.secondaryBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 2)
+                    .padding(.leading, 4)
+                    .padding(.trailing, 20)
                 }
+                .padding(.bottom, 20)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(appColors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 2)
-                .padding(.leading, 4)
-                .padding(.trailing, 20)
             }
-            .padding(.bottom, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(appColors.primaryBackground)
+
+            // ── Full-width bottom Edit card overlay ───────────────
+            if showEditSheet, let txn = editableTxn {
+                iPadPortraitEditOverlay(txn: txn)
+                    .transition(.opacity)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(appColors.primaryBackground)
+        .animation(.easeInOut(duration: 0.2), value: showEditSheet)
+    }
+
+    /// Right-column detail slot for iPad portrait. Never hosts the edit
+    /// sheet — editing is presented as a full-width bottom card overlay.
+    @ViewBuilder
+    private var iPadPortraitDetailSlot: some View {
+        if showDrugDetails {
+            ScannedDrugDetailsSlot(
+                containerStatus: $containerStatus,
+                onCancel: onCancel,
+                onAdd: onAdd,
+                onEditTapped: { showEditSheet = true },
+                isIpadPortrait: true,
+                applyBottomSheetStyle: false,
+                isIPhone: false
+            )
+            .environmentObject(appColors)
+            .environmentObject(stockCountViewModel)
+        } else {
+            ScannedSummarySlot(onEndCount: onEndCount, isIpadPortrait: true, applyBottomSheetStyle: false, isIPhone: false)
+                .environmentObject(appColors)
+                .environmentObject(stockCountViewModel)
+        }
+    }
+
+    /// Dimmed backdrop + full-width rounded Edit card docked at the bottom.
+    private func iPadPortraitEditOverlay(txn: GroupedTransaction) -> some View {
+        ZStack(alignment: .bottom) {
+            // Dim the sheet behind the card. Tap-to-dismiss.
+            Color.black.opacity(0.28)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { showEditSheet = false }
+
+            StockCountEditDetailsSheet(txn: txn, onDismiss: { showEditSheet = false }, hugContentHeight: true)
+                .environmentObject(appColors)
+                .environmentObject(stockCountViewModel)
+                .frame(maxWidth: .infinity)
+                // Hug content when short, but cap at 85% of the screen so a long
+                // lot list scrolls internally instead of pushing the card past
+                // the top/bottom of the screen.
+                .frame(maxHeight: UIScreen.main.bounds.height * 0.85)
+                .background(appColors.primaryBackground)
+                .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .topRight]))
+                .shadow(color: Color.black.opacity(0.18), radius: 24, x: 0, y: -8)
+                .transition(.move(edge: .bottom))
+        }
     }
 
     // MARK: - iPhone Portrait

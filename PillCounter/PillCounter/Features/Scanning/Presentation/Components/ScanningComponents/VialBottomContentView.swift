@@ -47,6 +47,10 @@ struct VialBottomContentView: View {
                 pillScanViewModel.capturedVialImage = nil
                 pillScanViewModel.vialCapturedImagePath = nil
                 cameraService.resetInactivityTimer()
+                // Re-arm RX-label scanning so the operator can auto-capture again by
+                // presenting the matching vial, in addition to the manual button.
+                cameraService.resetBarcodeScanState()
+                cameraService.enableBarcodeScanning()
             }
 
             ZStack {

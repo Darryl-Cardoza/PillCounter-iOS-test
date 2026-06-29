@@ -31,7 +31,7 @@ protocol BaseRepositoryProtocol {
 }
 
 extension BaseRepositoryProtocol {
-    static var shouldBypassSSL: Bool { return false }
+    static var shouldBypassSSL: Bool { return true }
 
     // MARK: - Perform Request
     static func performRequest<T: Decodable>(

@@ -174,6 +174,7 @@ enum L10n {
         static let npiId = NSLocalizedString("profile.npiId", comment: "")
         static let phoneNumber = NSLocalizedString("profile.phoneNumber", comment: "")
         static let terminal = NSLocalizedString("profile.terminal", comment: "")
+        static let pharmacyType = NSLocalizedString("profile.pharmacyType", comment: "")
         static let successUpdateMessage = NSLocalizedString("profile.error.successUpdateMessage", comment: "")
 
         
@@ -191,6 +192,19 @@ enum L10n {
         }
     }
     
+    // MARK: - Pharmacy Type
+    enum PharmacyType {
+        static let chainPharmacy = NSLocalizedString("pharmacyType.chainPharmacy", comment: "")
+        static let supermarketPharmacy = NSLocalizedString("pharmacyType.supermarketPharmacy", comment: "")
+        static let independentPharmacy = NSLocalizedString("pharmacyType.independentPharmacy", comment: "")
+        static let mailOrderPharmacy = NSLocalizedString("pharmacyType.mailOrderPharmacy", comment: "")
+        static let hospitalPharmacy = NSLocalizedString("pharmacyType.hospitalPharmacy", comment: "")
+        static let clinicPharmacy = NSLocalizedString("pharmacyType.clinicPharmacy", comment: "")
+        static let longTermCarePharmacy = NSLocalizedString("pharmacyType.longTermCarePharmacy", comment: "")
+        static let compoundingPharmacy = NSLocalizedString("pharmacyType.compoundingPharmacy", comment: "")
+        static let specialityPharmacy = NSLocalizedString("pharmacyType.specialityPharmacy", comment: "")
+    }
+
     // MARK: - Settings
     enum Settings {
         static let alwaysAskNotes = NSLocalizedString("settings.alwaysAskNotes", comment: "")

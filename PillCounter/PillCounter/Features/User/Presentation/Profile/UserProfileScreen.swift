@@ -16,6 +16,7 @@ struct UserProfileScreen: View {
     @EnvironmentObject private var toastManager: ToastManager
 
     @State private var showDeleteConfirmation: Bool = false
+    @State private var selectedPharmacyType: PharmacyType? = nil
 
 //    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
 //        Bool = true
@@ -73,6 +74,7 @@ struct UserProfileScreen: View {
        
         }
         .onAppear {
+            selectedPharmacyType = AppStorageManager.shared.selectedPharmacyType
             Task {
                 // Force a remote refresh so the profile (and terminal list) is
                 // always up to date — if a prior auth/me call failed, the cached
@@ -155,6 +157,8 @@ struct UserProfileScreen: View {
             if !userViewModel.terminals.isEmpty {
                 terminalDropdown
             }
+
+            pharmacyTypeDropdown
         }
     }
 
@@ -188,6 +192,8 @@ struct UserProfileScreen: View {
             if !userViewModel.terminals.isEmpty {
                 terminalDropdown
             }
+
+            pharmacyTypeDropdown
         }
     }
 
@@ -213,6 +219,50 @@ struct UserProfileScreen: View {
                 keyboardType: .phonePad,
                 maxLength: 10
             )
+        }
+    }
+
+    private var pharmacyTypeDropdown: some View {
+        Menu {
+            ForEach(PharmacyType.allCases) { type in
+                Button {
+                    selectedPharmacyType = type
+                } label: {
+                    HStack {
+                        Text(type.displayText)
+                        if type == selectedPharmacyType {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            ZStack(alignment: .leading) {
+                Text(L10n.Profile.pharmacyType)
+                    .font(.caption)
+                    .foregroundColor(appColors.text.opacity(0.75))
+                    .offset(y: -16)
+                    .padding(.leading, 16)
+
+                HStack {
+                    Text(selectedPharmacyType?.displayText ?? "")
+                        .font(.body)
+                        .foregroundColor(selectedPharmacyType != nil ? appColors.primary : appColors.text)
+                        .padding(.leading, 16)
+                        .padding(.top, 10)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(appColors.text.opacity(0.75))
+                        .padding(.trailing, 16)
+                        .padding(.top, 10)
+                }
+            }
+            .frame(height: 64)
+            .background(appColors.secondaryBackground)
+            .cornerRadius(10)
         }
     }
 
@@ -242,7 +292,7 @@ struct UserProfileScreen: View {
                 HStack {
                     Text(userViewModel.pendingTerminal?.terminalName ?? "")
                         .font(.body)
-                        .foregroundColor(appColors.text)
+                        .foregroundColor(userViewModel.pendingTerminal != nil ? appColors.primary : appColors.text)
                         .padding(.leading, 16)
                         .padding(.top, 10)
 
@@ -368,6 +418,7 @@ struct UserProfileScreen: View {
                 userViewModel.isProfileUpdated = false
             }
 
+            AppStorageManager.shared.selectedPharmacyType = selectedPharmacyType
             toastManager.show(message: L10n.Profile.successUpdateMessage)
             AppStorageManager.shared.isNewUser = false
             router.navigateBack()

@@ -27,6 +27,9 @@ struct PillCountBottomBar: View {
     /// count plus an explicit "Done" button instead of a meaningless `current/0`
     /// progress bar.
     var isOpenEndedCountStep: Bool = false
+    /// REGULAR count type — no fixed target; hides progress bar, shows live count
+    /// and Proceed button (same visual treatment as the open-ended pour step).
+    var isRegularCountType: Bool = false
     /// Whether the "Done" button on the open-ended step is tappable (≥1 pill).
     var isDoneEnabled: Bool = true
 
@@ -37,21 +40,20 @@ struct PillCountBottomBar: View {
     /// iPhone in portrait — needs extra vertical padding so the bar isn't too thin.
     private var isPortrait: Bool { !isLandscape }
 
-    /// Bare live-count number — only the open-ended container-initiate pour shows it
-    /// (it has no target). `.containerPending` has a real target and uses the bar.
+    /// Bare live-count number — shown for the open-ended container-initiate pour
+    /// and for REGULAR count type (both have no meaningful fixed target).
     private var showsLiveCount: Bool {
-        isOpenEndedCountStep && currentStep != .containerPending
+        isRegularCountType || (isOpenEndedCountStep && currentStep != .containerPending)
     }
 
-    /// Target progress bar — shown for every step except the open-ended
-    /// container-initiate pour (which has no meaningful target).
+    /// Target progress bar — hidden for REGULAR count type and the open-ended
+    /// container-initiate pour (neither has a meaningful target).
     private var showsProgressBar: Bool {
-        !(isOpenEndedCountStep && currentStep != .containerPending)
+        !isRegularCountType && !(isOpenEndedCountStep && currentStep != .containerPending)
     }
 
-    /// Explicit Proceed button — shown on both open-ended steps
-    /// (container-initiate and container-pending).
-    private var showsProceedButton: Bool { isOpenEndedCountStep }
+    /// Explicit Proceed button — shown for open-ended steps and REGULAR count type.
+    private var showsProceedButton: Bool { isOpenEndedCountStep || isRegularCountType }
 
     var body: some View {
         HStack(alignment: .center, spacing: isIpad ? 24 : 12) {

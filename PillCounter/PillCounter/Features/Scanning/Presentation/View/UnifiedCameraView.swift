@@ -120,14 +120,8 @@ struct UnifiedCameraView: View {
     // ── Bluetooth HID scanner ─────────────────────────────────────────────────
     @State private var btScannerFocusTrigger: Int = 0
 
-    // ── Stock-count duplicate-scan suppression ────────────────────────────────
-    // The camera releases its barcode lock the instant the code leaves the frame,
-    // so the SAME bottle held steady can re-fire while its details are still showing.
-    // Track the last same-NDC increment so a repeat of the same code within the
-    // cooldown window doesn't double-count (see handleStockCountScan).
-    @State private var lastStockIncrementRawValue: String = ""
-    @State private var lastStockIncrementAt: Date = .distantPast
-    private let stockSameScanCooldown: TimeInterval = 5
+    // (Same-scan cooldown removed — the camera-level barcodeLockMissThreshold debounce
+    // now prevents a held-steady barcode from re-firing, making the view-layer cooldown unnecessary.)
 
     @StateObject private var locationService = LocationService.shared
     @Environment(\.scenePhase) private var scenePhase
@@ -286,7 +280,7 @@ struct UnifiedCameraView: View {
                                 instructionText: overlayInstructionText,
                                 showGloveIndicator: (currentScanType != .stockCount || isOpenPillScanMode)
                                     && cameraService.isGloveDetectionEnabled,
-                                onBack: { router.navigateBack() },
+                                onBack: { handleBack() },
                                 onAdd: { handleAdd() },
                                 onAllDone: { handleComplete() },
                                 onShowDetailGrid: { showDetailGrid = true }
@@ -1331,14 +1325,7 @@ extension UnifiedCameraView {
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.suppressListReload = false
         stockCountViewModel.reloadAllState()
-        resetStockSameScanCooldown()
         btScannerFocusTrigger += 1
-    }
-
-    /// Clears the same-scan cooldown so the next scan of any drug starts fresh.
-    private func resetStockSameScanCooldown() {
-        lastStockIncrementRawValue = ""
-        lastStockIncrementAt = .distantPast
     }
 
     /// Called by the Add button — dismisses the details panel and refreshes the list.
@@ -1347,7 +1334,6 @@ extension UnifiedCameraView {
         stockCountViewModel.suppressListReload = false
         stockCountViewModel.reset()
         stockCountViewModel.reloadAllState()
-        resetStockSameScanCooldown()
         btScannerFocusTrigger += 1
     }
 
@@ -1396,20 +1382,9 @@ extension UnifiedCameraView {
         }()
 
         if isSameNdc {
-            // Same barcode held in front. The camera lock releases the moment the code
-            // leaves the frame, so a steady bottle can re-fire this branch and double the
-            // count. Ignore a repeat of the same raw code within the cooldown window — a
-            // genuine re-scan of the same drug still increments once the window passes.
-            if rawValue == lastStockIncrementRawValue,
-               Date().timeIntervalSince(lastStockIncrementAt) < stockSameScanCooldown {
-                cameraService.resetBarcodeScanState()
-                cameraService.enableBarcodeScanning()
-                btScannerFocusTrigger += 1
-                return
-            }
-            lastStockIncrementRawValue = rawValue
-            lastStockIncrementAt = Date()
-            // Same barcode held in front — increment sealed bottle count, commit immediately.
+            // Same NDC scanned again — the camera-level lock (barcodeLockMissThreshold)
+            // already guarantees this fires only when the barcode genuinely left the
+            // frame and came back. Increment the bottle count and commit.
             stockCountViewModel.pendingBottleCount += 1
             await performStockCountAdd()
         } else {
@@ -1526,6 +1501,18 @@ extension UnifiedCameraView {
         // Voice is handled by the unified .onChange(of: unifiedInstructionText) observer.
         // Do NOT show the pill count panel here — it opens after the barcode is
         // scanned and handleDrugFoundState receives isDrugFound == true.
+    }
+
+
+    func handleBack() {
+        if isOpenPillScanMode && pillScanViewModel.currentControlledStep == .targetVerification {
+            showPillCountPanel = false
+            scanType = .stockCount
+            pillScanViewModel.currentControlledStep = .scan
+            restartFlow()
+        } else {
+            router.navigateBack()
+        }
     }
 
     func handleOpenPillCountComplete() {

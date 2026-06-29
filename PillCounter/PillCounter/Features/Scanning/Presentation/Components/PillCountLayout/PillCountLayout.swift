@@ -159,6 +159,7 @@ struct PillCountLayout: View {
                     showSteps: !isPortrait,
                     onTapStep: { handleStepTap($0) },
                     isOpenEndedCountStep: isOpenEndedStep,
+                    isRegularCountType: pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue,
                     isDoneEnabled: isDoneEnabled,
                     onShowDetailGrid: onShowDetailGrid,
                     onDone: onAllDone

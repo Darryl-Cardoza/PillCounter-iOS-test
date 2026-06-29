@@ -42,7 +42,12 @@ struct UnifiedCameraLayout: View {
             if showPillDetectionUI {
                 DetectionOverlay(
                     cameraService: cameraService,
-                    targetQuantity: pillScanViewModel.currentControlledTargetCount ?? 0
+                    targetQuantity: {
+                        let stepTarget = pillScanViewModel.currentControlledTargetCount ?? 0
+                        guard stepTarget > 0 else { return 0 }
+                        let alreadyAdded = Int(pillScanViewModel.getTotalCuntForCurrentStep())
+                        return max(0, stepTarget - alreadyAdded)
+                    }()
                 )
                     .ignoresSafeArea()
                     .allowsHitTesting(false)

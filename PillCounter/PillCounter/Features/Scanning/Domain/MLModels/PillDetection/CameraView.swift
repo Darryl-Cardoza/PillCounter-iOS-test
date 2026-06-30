@@ -22,7 +22,27 @@ struct CameraView: UIViewRepresentable {
 
         // Expose the preview layer to CameraService
         cameraService.previewLayer = view.previewLayer
+
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        view.addGestureRecognizer(tap)
         return view
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(cameraService: cameraService)
+    }
+
+    final class Coordinator: NSObject {
+        let cameraService: CameraService
+        init(cameraService: CameraService) { self.cameraService = cameraService }
+
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard let previewView = gesture.view as? PreviewView else { return }
+            let point = gesture.location(in: previewView)
+            // Convert from view coordinates to normalised camera coordinates (0–1)
+            let normalised = previewView.previewLayer.captureDevicePointConverted(fromLayerPoint: point)
+            cameraService.focusForBarcode(at: normalised)
+        }
     }
 
     func updateUIView(_ uiView: PreviewView, context: Context) {

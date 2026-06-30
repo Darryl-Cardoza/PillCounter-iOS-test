@@ -280,6 +280,7 @@ struct UnifiedCameraView: View {
                                 instructionText: overlayInstructionText,
                                 showGloveIndicator: (currentScanType != .stockCount || isOpenPillScanMode)
                                     && cameraService.isGloveDetectionEnabled,
+                                isOpenPillScanMode: isOpenPillScanMode,
                                 onBack: { handleBack() },
                                 onAdd: { handleAdd() },
                                 onAllDone: { handleComplete() },

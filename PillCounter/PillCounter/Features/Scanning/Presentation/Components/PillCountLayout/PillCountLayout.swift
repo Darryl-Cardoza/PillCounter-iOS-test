@@ -26,6 +26,9 @@ struct PillCountLayout: View {
     let instructionText: String
     /// Whether the glove-status indicator should show (old header content moved here).
     let showGloveIndicator: Bool
+    /// True when the user is counting open/loose pills — overrides the targetVerification
+    /// tooltip and voice label from "Count Prescribed Quantity" to "Count Open Pills".
+    let isOpenPillScanMode: Bool
 
     let onBack: () -> Void
     let onAdd: () -> Void
@@ -49,11 +52,16 @@ struct PillCountLayout: View {
     @State private var tooltipStep: ControlledStep?
     private let tooltipDuration: TimeInterval = 3
 
-    /// Instruction text for whichever step the tooltip is presenting. Each step
-    /// carries its own instruction via `displayText`; falls back to the host's
-    /// current-step `instructionText` before any step has been resolved.
+    /// Instruction text for whichever step the tooltip is presenting. Uses the host's
+    /// `instructionText` when showing the current step in open-pill mode (so the label
+    /// reads "Count Open Pills" instead of "Count Prescribed Quantity").
     private var tooltipText: String {
-        tooltipStep?.displayText ?? instructionText
+        guard let step = tooltipStep else { return instructionText }
+        if isOpenPillScanMode && step == .targetVerification
+            && step == pillScanViewModel.currentControlledStep {
+            return instructionText
+        }
+        return step.displayText
     }
 
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
@@ -244,7 +252,13 @@ private extension PillCountLayout {
         }
 
         presentTooltip(for: step)
-        let text = step.displayText
+        let text: String
+        if isOpenPillScanMode && step == .targetVerification
+            && step == pillScanViewModel.currentControlledStep {
+            text = instructionText
+        } else {
+            text = step.displayText
+        }
         if !text.isEmpty {
             SpeechManager.shared.speak(text, force: true)
         }

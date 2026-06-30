@@ -18,7 +18,7 @@ enum DosageFormIcon {
         let form = (dosageForm ?? "").uppercased()
 
         if form.contains("CAPSULE") {
-            return "icon_dashboard_dispense"
+            return "form_capsule"
         } else if form.contains("TABLET") {
             return "form_tablet"
         }

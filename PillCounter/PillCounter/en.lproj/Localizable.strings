@@ -415,6 +415,7 @@
 "controlled.scanStockCountBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanRxLabelBarcode" = "Scan Rx Label";
 "controlled.scanNdcToCountPills" = "Scan NDC to count pills";
+"controlled.countOpenPills" = "Count Open Pills";
 
 
 // MARK: - SECURITY

@@ -596,6 +596,9 @@ struct UnifiedCameraView: View {
         if raw == CountType.REGULAR.rawValue {
             return L10n.Controlled.regularTargetReverification
         }
+        if isOpenPillScanMode && pillScanViewModel.currentControlledStep == .targetVerification {
+            return L10n.Controlled.countOpenPills
+        }
         return pillScanViewModel.currentControlledStep.displayText
     }
 

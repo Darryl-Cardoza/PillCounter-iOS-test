@@ -500,6 +500,7 @@ enum L10n {
         static let scanStockCountBarcode = NSLocalizedString("controlled.scanStockCountBarcode", comment: "")
         static let scanRxLabelBarcode = NSLocalizedString("controlled.scanRxLabelBarcode", comment: "")
         static let scanNdcToCountPills = NSLocalizedString("controlled.scanNdcToCountPills", comment: "")
+        static let countOpenPills = NSLocalizedString("controlled.countOpenPills", comment: "")
     }
 
     // MARK: - HL7 Notifications

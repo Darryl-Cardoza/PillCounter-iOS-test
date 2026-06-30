@@ -317,7 +317,7 @@ struct DashboardView: View {
             HStack(spacing: 10) {
                 Image("icon_app")
                     .resizable()
-                    .frame(width: isIpad ? 36 : 30, height: isIpad ? 36 : 30)
+                    .frame(width: isIpad ? 50 : 30, height: isIpad ? 50 : 30)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(

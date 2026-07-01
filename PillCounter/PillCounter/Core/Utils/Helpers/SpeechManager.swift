@@ -15,9 +15,11 @@ final class SpeechManager {
 
     private init() {}
 
-    func speak(_ text: String) {
-        
-        guard AppStorageManager.shared.isSpeechEnabled else { return }
+    /// - Parameter force: when `true`, speak even if the global speech setting is
+    ///   off (used for explicit user actions like tapping the current step).
+    func speak(_ text: String, force: Bool = false) {
+
+        guard force || AppStorageManager.shared.isSpeechEnabled else { return }
 
         synthesizer.stopSpeaking(at: .immediate)
 

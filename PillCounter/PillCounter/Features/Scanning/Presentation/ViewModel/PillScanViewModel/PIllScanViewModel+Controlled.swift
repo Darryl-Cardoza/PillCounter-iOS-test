@@ -26,7 +26,8 @@ extension PillScanViewModel{
     /// hides the target progress bar and the button is always an explicit "Done"
     /// (completion is the user's decision, not a count == target check).
     var isOpenEndedCountStep: Bool {
-        currentControlledStep == .containerInitiate
+        currentControlledStep == .containerInitiate ||
+        currentControlledStep == .containerPending
     }
     
     

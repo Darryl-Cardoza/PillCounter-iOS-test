@@ -70,37 +70,66 @@ struct ConfirmationDialogue: View {
                 .padding(.top, 10)
 
             } else {
-
-                EqualWidthHStackButtons(spacing: 16) {
+ 
+                EqualWidthHStackButtons(spacing: 20) {
                     PillCountingButton(
                         iconName: nil,
                         title: cancelButtonText.uppercased(),
                         textColor: appColors.primary,
-                        backgroundColor: appColors.primaryBackground,
+                        backgroundColor: .clear,
                         borderColor: appColors.primary,
-                        font: buttonFont,
+                        font: .system(size: 14, weight: .semibold),
                         cornerRadius: 30,
-                        horizontalPadding: buttonHorizontalPadding,
-                        verticalPadding: buttonVerticalPadding,
+                        horizontalPadding: 32,
+                        verticalPadding: 18,
                         iconSize: 0,
                         action: onCancel
                     )
                     PillCountingButton(
                         iconName: nil,
                         title: confirmButtonText.uppercased(),
-                        textColor: appColors.text,
+                        textColor: .white,
                         backgroundColor: appColors.primary,
                         borderColor: .clear,
-                        font: buttonFont,
+                        font: .system(size: 14, weight: .semibold),
                         cornerRadius: 30,
-                        horizontalPadding: buttonHorizontalPadding,
-                        verticalPadding: buttonVerticalPadding,
+                        horizontalPadding: 32,
+                        verticalPadding: 18,
                         iconSize: 0,
                         action: onConfirm
                     )
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 10)
+
+//                EqualWidthHStackButtons(spacing: 16) {
+//                    PillCountingButton(
+//                        iconName: nil,
+//                        title: cancelButtonText.uppercased(),
+//                        textColor: appColors.primary,
+//                        backgroundColor: appColors.primaryBackground,
+//                        borderColor: appColors.primary,
+//                        font: buttonFont,
+//                        cornerRadius: 30,
+//                        horizontalPadding: buttonHorizontalPadding,
+//                        verticalPadding: buttonVerticalPadding,
+//                        iconSize: 0,
+//                        action: onCancel
+//                    )
+//                    PillCountingButton(
+//                        iconName: nil,
+//                        title: confirmButtonText.uppercased(),
+//                        textColor: appColors.text,
+//                        backgroundColor: appColors.primary,
+//                        borderColor: .clear,
+//                        font: buttonFont,
+//                        cornerRadius: 30,
+//                        horizontalPadding: buttonHorizontalPadding,
+//                        verticalPadding: buttonVerticalPadding,
+//                        iconSize: 0,
+//                        action: onConfirm
+//                    )
+//                }
+//                .frame(maxWidth: .infinity, alignment: .center)
+//                .padding(.top, 10)
             }
         }
         .frame(maxWidth: .infinity)

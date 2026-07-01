@@ -26,6 +26,7 @@ struct AppNavigation: View {
                     DashboardView()
                 } else {
                     LoginEmailView()
+//                    DashboardView()
                 }
             }
             .navigationDestination(for: PillCounterFlow.self) { destination in
@@ -109,6 +110,11 @@ struct AppNavigation: View {
         }
         .onChange(of: colorScheme) { _, newScheme in
             appColors.updateSystemAppearance(newScheme == .dark)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+        ) { _ in
+            appColors.updateSystemAppearance(colorScheme == .dark)
         }
     }
 }

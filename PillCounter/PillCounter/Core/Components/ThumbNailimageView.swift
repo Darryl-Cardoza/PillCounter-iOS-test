@@ -111,7 +111,7 @@ struct ThumbnailImageView: View {
                                     width: placeholderSize.width,
                                     height: placeholderSize.height
                                 )
-                                .foregroundStyle(placeholderBackgroundColor ?? appColors.secondary)
+                                .foregroundStyle(appColors.secondary)
                         )
                 }
             }

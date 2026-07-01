@@ -27,10 +27,21 @@ final class CameraService: NSObject, ObservableObject {
     @Published var scannedCodeType: String = ""
     private var barcodeEnabled: Bool = false
     // The value of the barcode currently locked in frame. Non-nil means we already
-    // fired the scan event and are waiting for the physical barcode to leave the
-    // camera's field of view before we fire again. Set to nil the moment the
-    // metadata delegate reports an empty (or different-value) frame.
+    // fired the scan event and are waiting for the physical barcode to physically
+    // leave the camera's field of view before we fire again.
+    //
+    // The lock is released only after barcodeLockMissThreshold consecutive frames
+    // with no matching barcode. This debounce absorbs brief metadata dropouts from
+    // camera shake (1-2 frames) without blocking a genuine remove-and-rescan — a
+    // physical hand moving a bottle away takes well over 5 frames at 30 fps.
     private var lockedBarcodeValue: String? = nil
+
+    // How many consecutive frames the locked barcode must be absent before the lock
+    // releases. 5 frames at 30 fps ≈ 165 ms — enough to survive a shake dropout but
+    // short enough that a real remove-and-rescan is never blocked.
+    private static let barcodeLockMissThreshold: Int = 5
+    // Running count of consecutive metadata frames where lockedBarcodeValue was absent.
+    private var barcodeLockMissFrames: Int = 0
 
     // MARK: - IMAGE PROCESSING
     // Three-model inference pipeline running on every captured camera frame:
@@ -103,7 +114,7 @@ final class CameraService: NSObject, ObservableObject {
     /// (~30 fps), but the three-model pipeline (glove + tray-seg + pill-detect)
     /// can't keep up, so excess frames are wasted motion-blurred work. We throttle
     /// inference to this rate in captureOutput; frames arriving sooner are dropped.
-    private static let targetInferenceFPS: Double = 15
+    private static let targetInferenceFPS: Double = 30
     private static let minInferenceInterval: TimeInterval = 1.0 / targetInferenceFPS
 
     /// Presentation timestamp (in seconds) of the last frame we ran inference on.
@@ -229,14 +240,11 @@ final class CameraService: NSObject, ObservableObject {
     private func configureSession() {
         sessionQueue.async {
             self.session.beginConfiguration()
-            // Use the 1280×720 VIDEO preset (matching the Android analysis stream),
-            // not .photo. The .photo preset runs continuous still-capture auto-
-            // exposure / auto-focus, so frame brightness and sharpness drift every
-            // frame — that drift pushes borderline pills across the confidence
-            // threshold and makes the overlay + count flicker even on a static tray.
-            // A fixed 720p video stream gives steady exposure and is also smaller →
-            // faster inference. Fall back to .photo if 720p is unsupported.
-            if self.session.canSetSessionPreset(.hd1280x720) {
+            // Use 1080p VIDEO preset for high-quality preview and inference.
+            // Falls back to 720p or .photo if unsupported.
+            if self.session.canSetSessionPreset(.hd1920x1080) {
+                self.session.sessionPreset = .hd1920x1080
+            } else if self.session.canSetSessionPreset(.hd1280x720) {
                 self.session.sessionPreset = .hd1280x720
             } else {
                 self.session.sessionPreset = .photo
@@ -260,14 +268,8 @@ final class CameraService: NSObject, ObservableObject {
             self.videoInput = input
             self.session.addInput(input)
 
-            // Cap capture to 15 fps. The three-model pipeline can't process 30 fps,
-            // so the extra frames are discarded as motion-blurred waste. Locking both
-            // min and max frame duration to 1/15 s also gives the sensor a longer,
-            // steadier exposure per frame, which further reduces the brightness
-            // jitter that flickers borderline pills. Clamped to a rate the active
-            // format supports so lockForConfiguration can't throw out of range.
             if let range = device.activeFormat.videoSupportedFrameRateRanges.first {
-                let fps = min(max(15.0, range.minFrameRate), range.maxFrameRate)
+                let fps = min(max(30.0, range.minFrameRate), range.maxFrameRate)
                 let duration = CMTimeMake(value: 1, timescale: Int32(fps.rounded()))
                 do {
                     try device.lockForConfiguration()
@@ -305,14 +307,7 @@ final class CameraService: NSObject, ObservableObject {
 
             self.session.commitConfiguration()
 
-            // Cap capture to 15 fps. Set AFTER commitConfiguration — iOS can
-            // silently override frame-duration set *during* configuration when a
-            // sessionPreset is active. Every captured frame fans out into three
-            // model inferences (pill 640², tray 384², glove 320²); at the sensor's
-            // native 30–60 fps that pins the ANE/GPU and overheats the device for
-            // no accuracy gain — the scene barely changes between frames. 15 fps is
-            // plenty for a hand placing pills and roughly halves sustained load.
-            self.configureFrameRate(fps: 15)
+            self.configureFrameRate(fps: 30)
         }
     }
 
@@ -401,6 +396,16 @@ final class CameraService: NSObject, ObservableObject {
             guard let self else { return }
             self.barcodeEnabled = true
             self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            // Boost to 30fps while barcode scanning is active. More frames per second
+            // means more decode attempts, which is critical for low-quality or curved
+            // labels (bottle, worn print) that the decoder only reads on a sharp frame.
+            // The ML pipeline is NOT running during barcode scanning so the higher rate
+            // does not increase CPU/ANE load.
+            self.configureFrameRate(fps: 30)
+            // Switch to continuous auto-focus so the camera tracks a label being moved
+            // into frame. The 3A lock (used during pill counting) is NOT active here —
+            // this call re-enables the continuous mode that gives the fastest sharp lock.
+            self.activateBarcodeAutoFocus()
         }
     }
 
@@ -413,6 +418,64 @@ final class CameraService: NSObject, ObservableObject {
             // it from immediately re-firing. The lock is only released when the
             // frame-presence check sees the barcode has left the camera view.
             self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
+            self.configureFrameRate(fps: 30)
+        }
+    }
+
+    /// Activates continuous auto-focus + auto-exposure for barcode scanning.
+    /// Called on the session queue; safe to call even when the device is not locked.
+    private func activateBarcodeAutoFocus() {
+        guard let device = captureDevice else { return }
+        do {
+            try device.lockForConfiguration()
+            // Interest-point focus at screen centre. For bottle / curved labels the
+            // default continuous-AF tends to focus at infinity (background). Seeding the
+            // focus point at (0.5, 0.5) nudges it toward the near object in frame so the
+            // first sharp frame arrives faster. After the initial lock it stays continuous.
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                if device.isFocusPointOfInterestSupported {
+                    device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                }
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                if device.isExposurePointOfInterestSupported {
+                    device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                }
+                device.exposureMode = .continuousAutoExposure
+            }
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Intentionally silent — barcode scanning still works without focus assist.
+        }
+    }
+
+    /// Triggers a one-shot auto-focus at the given point (normalised 0-1 coordinates,
+    /// AVFoundation convention: top-left = (0,0)). Call from the UI when the operator
+    /// taps the screen while the barcode scanner is showing, so the camera can lock
+    /// focus on a curved or worn label in that area.
+    func focusForBarcode(at point: CGPoint) {
+        guard let device = captureDevice else { return }
+        sessionQueue.async {
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusPointOfInterestSupported,
+                   device.isFocusModeSupported(.autoFocus) {
+                    device.focusPointOfInterest = point
+                    device.focusMode = .autoFocus
+                }
+                if device.isExposurePointOfInterestSupported,
+                   device.isExposureModeSupported(.autoExpose) {
+                    device.exposurePointOfInterest = point
+                    device.exposureMode = .autoExpose
+                }
+                device.unlockForConfiguration()
+            } catch {
+                // Intentionally silent.
+            }
         }
     }
 
@@ -420,8 +483,8 @@ final class CameraService: NSObject, ObservableObject {
         // Clears published values so the view's onChange does not re-fire with a
         // stale value. lockedBarcodeValue is NOT cleared here — the physical barcode
         // may still be in frame. Clearing it would re-fire the scan event on the
-        // very next metadata callback. The lock releases only when the frame-presence
-        // check confirms the barcode has physically left the camera view.
+        // very next metadata callback. The lock releases only after the barcode has
+        // been absent for barcodeLockMissThreshold consecutive frames.
         scannedCode = ""
         scannedCodeType = ""
     }
@@ -487,6 +550,7 @@ final class CameraService: NSObject, ObservableObject {
             // Session is fully stopped — no barcodes are visible. Clear the lock
             // so the next start() begins fresh rather than blocking on a stale value.
             self.lockedBarcodeValue = nil
+            self.barcodeLockMissFrames = 0
         }
     }
 
@@ -1106,11 +1170,32 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
             .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
             .compactMap { $0.stringValue }
 
-        // If the previously locked barcode is no longer in the frame, release the
-        // lock immediately — no timer, no cooldown. The next real barcode can fire
-        // the moment it enters the frame.
-        if let locked = lockedBarcodeValue, !visibleValues.contains(locked) {
-            lockedBarcodeValue = nil
+        // Release the lock only after the locked barcode has been absent for
+        // barcodeLockMissThreshold consecutive frames. A single-frame absence caused
+        // by camera shake does NOT release the lock — the miss counter must reach the
+        // threshold first. A different barcode appearing immediately clears the lock
+        // so the new code fires without waiting.
+        if let locked = lockedBarcodeValue {
+            if visibleValues.contains(locked) {
+                // Barcode still visible — reset miss counter, keep lock.
+                barcodeLockMissFrames = 0
+            } else if visibleValues.isEmpty {
+                // Barcode absent this frame (possible shake dropout) — count the miss.
+                barcodeLockMissFrames += 1
+                if barcodeLockMissFrames >= Self.barcodeLockMissThreshold {
+                    // Absent long enough — barcode was genuinely removed.
+                    lockedBarcodeValue = nil
+                    barcodeLockMissFrames = 0
+                }
+                // Lock not yet released — don't fire for any new barcode this frame.
+                return
+            } else {
+                // A DIFFERENT barcode is now in frame — release lock immediately so
+                // the new code fires right away. Same-barcode re-scan after genuine
+                // removal also reaches here (locked != nil, visible has a new value).
+                lockedBarcodeValue = nil
+                barcodeLockMissFrames = 0
+            }
         }
 
         // Fire a scan event only when:
@@ -1122,6 +1207,10 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         else { return }
 
         lockedBarcodeValue = value
+        barcodeLockMissFrames = 0
+        // Clear first so SwiftUI's onChange fires even when the same barcode value
+        // re-enters the frame after a genuine removal (onChange only fires on change).
+        scannedCode = ""
         scannedCode = value
         scannedCodeType = object.type.rawValue
     }

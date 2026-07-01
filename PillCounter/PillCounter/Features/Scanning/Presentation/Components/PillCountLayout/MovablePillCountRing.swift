@@ -223,40 +223,37 @@ struct MovablePillCountRing: View {
                     .transition(.scale.combined(with: .opacity))
             }
 
-            // "All Done" ripple — three soft, staggered waves that expand and
-            // fade outward, layered under the breathing ring below.
-            if isTargetReached {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .stroke(appColors.primary, lineWidth: isIpad ? 2 : 1.5)
-                        .frame(width: baseSize, height: baseSize)
-                        .scaleEffect(rippleActive ? 1.55 : 0.92)
-                        .opacity(rippleActive ? 0 : 0.5)
-                        .animation(
-                            .easeOut(duration: 3.0)
-                                .repeatForever(autoreverses: false)
-                                .delay(Double(i) * 1.0),
-                            value: rippleActive
-                        )
-                }
-
-                // Soft glow halo that breathes with the ring.
-                Circle()
-                    .fill(appColors.primary.opacity(0.18))
-                    .frame(width: baseSize, height: baseSize)
-                    .scaleEffect(donePulse ? 1.12 : 0.96)
-                    .opacity(donePulse ? 0.0 : 0.6)
-                    .blur(radius: baseSize * 0.06)
-                    .animation(
-                        .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
-                        value: donePulse
-                    )
-            }
-
             // Transparent dark backing for the ring.
             Circle()
                 .fill(ringBackground)
                 .frame(width: baseSize, height: baseSize)
+
+            // "All Done" ripple — three soft, staggered waves that grow OUTWARD
+            // from the centre (the text) to the ring edge, clipped inside the ring
+            // so they never spill past the outline. Layered above the backing but
+            // below the outline and text.
+            if isTargetReached {
+                ZStack {
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle()
+                            .stroke(appColors.primary, lineWidth: isIpad ? 2 : 1.5)
+                            // Full ring diameter at scale 1; starts tiny at the centre
+                            // and expands to fill the ring, fading as it reaches the edge.
+                            .frame(width: baseSize, height: baseSize)
+                            .scaleEffect(rippleActive ? 1.0 : 0.05)
+                            .opacity(rippleActive ? 0 : 0.6)
+                            .animation(
+                                .easeOut(duration: 3.0)
+                                    .repeatForever(autoreverses: false)
+                                    .delay(Double(i) * 1.0),
+                                value: rippleActive
+                            )
+                    }
+                }
+                .frame(width: baseSize, height: baseSize)
+                // Keep the waves strictly within the ring's circle.
+                .clipShape(Circle())
+            }
 
             Circle()
                 .stroke(ringColor, style: StrokeStyle(lineWidth: isIpad ? 3 : 2, lineCap: .round))
@@ -282,6 +279,13 @@ struct MovablePillCountRing: View {
                     .font(.system(size: baseSize * 0.16, weight: .bold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    // Small breathing on the label so the centre feels alive — the
+                    // ripple visually emanates from here.
+                    .scaleEffect(donePulse ? 1.06 : 0.98)
+                    .animation(
+                        .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
+                        value: donePulse
+                    )
                     .transition(.scale.combined(with: .opacity))
             } else {
                 VStack(spacing: baseSize * 0.04) {

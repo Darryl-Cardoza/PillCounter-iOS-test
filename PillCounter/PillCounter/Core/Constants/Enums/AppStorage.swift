@@ -54,6 +54,7 @@ final class AppStorageManager {
         static let deleteCompletedTransactions = "delete_completed_transactions"
         static let pillCountRingOffsetX = "pill_count_ring_offset_x"
         static let pillCountRingOffsetY = "pill_count_ring_offset_y"
+        static let selectedPharmacyType = "selected_pharmacy_type"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -337,6 +338,14 @@ final class AppStorageManager {
                 defaults.removeObject(forKey: AppStorageKeys.pillCountRingOffsetY)
             }
         }
+    }
+
+    var selectedPharmacyType: PharmacyType? {
+        get {
+            guard let raw = defaults.string(forKey: AppStorageKeys.selectedPharmacyType) else { return nil }
+            return PharmacyType(rawValue: raw)
+        }
+        set { defaults.setValue(newValue?.rawValue, forKey: AppStorageKeys.selectedPharmacyType) }
     }
 
     /// Clears the cached terminal list + selected terminal name.

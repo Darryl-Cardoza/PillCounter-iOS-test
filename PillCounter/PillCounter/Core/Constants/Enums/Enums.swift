@@ -341,6 +341,35 @@ enum SettingsSubScreen {
 
 
 
+// MARK: - Pharmacy Type
+public enum PharmacyType: String, CaseIterable, Identifiable, Codable {
+    case chainPharmacy = "Chain Pharmacy"
+    case supermarketPharmacy = "Supermarket/ Big Box Pharmacy"
+    case independentPharmacy = "Independent Pharmacy"
+    case mailOrderPharmacy = "Mail Order/ Online Pharmacy"
+    case hospitalPharmacy = "Hospital Pharmacy"
+    case clinicPharmacy = "Clinic Pharmacy"
+    case longTermCarePharmacy = "Long Term Care Pharmacy"
+    case compoundingPharmacy = "Compounding Pharmacy"
+    case specialityPharmacy = "Speciality Pharmacy"
+
+    public var id: String { rawValue }
+
+    var displayText: String {
+        switch self {
+        case .chainPharmacy: return L10n.PharmacyType.chainPharmacy
+        case .supermarketPharmacy: return L10n.PharmacyType.supermarketPharmacy
+        case .independentPharmacy: return L10n.PharmacyType.independentPharmacy
+        case .mailOrderPharmacy: return L10n.PharmacyType.mailOrderPharmacy
+        case .hospitalPharmacy: return L10n.PharmacyType.hospitalPharmacy
+        case .clinicPharmacy: return L10n.PharmacyType.clinicPharmacy
+        case .longTermCarePharmacy: return L10n.PharmacyType.longTermCarePharmacy
+        case .compoundingPharmacy: return L10n.PharmacyType.compoundingPharmacy
+        case .specialityPharmacy: return L10n.PharmacyType.specialityPharmacy
+        }
+    }
+}
+
 // MARK: History
 public enum HistoryFilterType: String, Codable, Hashable {
     case fixed

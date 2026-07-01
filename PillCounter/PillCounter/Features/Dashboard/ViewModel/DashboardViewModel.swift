@@ -29,6 +29,17 @@ enum DashboardQueueItem: Identifiable {
         case .inventory(let batch, _): return batch.start_date_time
         }
     }
+
+    var isHighPriority: Bool {
+        switch self {
+        case .dispense(let txn, _):
+            return txn.txn_priority?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == "high"
+        case .inventory:
+            return false
+        }
+    }
 }
 
 // MARK: - Stat card model
@@ -114,7 +125,8 @@ final class DashboardViewModel: ObservableObject {
             )
         }
         return (dispenseItems + inventoryItems).sorted {
-            $0.sortDate < $1.sortDate
+            if $0.isHighPriority != $1.isHighPriority { return $0.isHighPriority }
+            return $0.sortDate < $1.sortDate
         }
     }
 

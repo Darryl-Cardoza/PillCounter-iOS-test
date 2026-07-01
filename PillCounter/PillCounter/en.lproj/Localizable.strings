@@ -139,6 +139,7 @@
 "profile.npiId" = "Npi No.";
 "profile.phoneNumber" = "Phone Number";
 "profile.terminal" = "Terminal";
+"profile.pharmacyType" = "Pharmacy Type";
 
 "profile.popup.confirmDeleteTitle" = "Confirm Delete";
 "profile.popup.confirmDeleteMessage" = "Are you sure you want to delete your profile? This action cannot be undone.";
@@ -148,6 +149,18 @@
 "profile.error.errorUpdateTerminalMessage" = "Failed to update terminal. Please try again.";
 "profile.error.errorUpdateProfileMessage" = "Failed to update profile. Please try again.";
 "profile.error.successUpdateMessage" = "Profile updated successfully.";
+
+
+// MARK: - PHARMACY TYPE
+"pharmacyType.chainPharmacy" = "Chain Pharmacy";
+"pharmacyType.supermarketPharmacy" = "Supermarket/ Big Box Pharmacy";
+"pharmacyType.independentPharmacy" = "Independent Pharmacy";
+"pharmacyType.mailOrderPharmacy" = "Mail Order/ Online Pharmacy";
+"pharmacyType.hospitalPharmacy" = "Hospital Pharmacy";
+"pharmacyType.clinicPharmacy" = "Clinic Pharmacy";
+"pharmacyType.longTermCarePharmacy" = "Long Term Care Pharmacy";
+"pharmacyType.compoundingPharmacy" = "Compounding Pharmacy";
+"pharmacyType.specialityPharmacy" = "Speciality Pharmacy";
 
 
 // MARK: - USER SETTINGS
@@ -269,7 +282,7 @@
 "pillScan.noScansYet" = "No scans yet";
 "pillScan.deleteScans" = "Delete Scans";
 "pillScan.deleteScansMessage" = "Are you sure you want to delete the selected scans?";
-"pillScan.viewAllCounts" = "View all counts";
+"pillScan.viewAllCounts" = "View All";
 
 // MARK: - LOCATION
 "location.fetching" = "Fetching...";
@@ -402,6 +415,7 @@
 "controlled.scanStockCountBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanRxLabelBarcode" = "Scan Rx Label";
 "controlled.scanNdcToCountPills" = "Scan NDC to count pills";
+"controlled.countOpenPills" = "Count Open Pills";
 
 
 // MARK: - SECURITY

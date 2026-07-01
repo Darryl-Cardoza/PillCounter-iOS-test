@@ -108,7 +108,7 @@ struct PillCountTopBar: View {
             Text(drugName)
                 .font(.system(size: isIpad ? 18 : 14, weight: .semibold))
                 .foregroundStyle(appColors.text)
-                .lineLimit(2)
+                .lineLimit(1)
         }
     }
 
@@ -138,7 +138,7 @@ struct PillCountTopBar: View {
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(width: isIpad ? 28 : 16, height: isIpad ? 28 : 16)
+                .frame(width: isIpad ? 28 : 24, height: isIpad ? 28 : 16)
                 .foregroundStyle(appColors.text)
         }
     }

@@ -81,7 +81,7 @@ struct RxDetailsSheetContent: View {
             HStack(spacing: 10) {
                 ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: false)
                     .frame(maxWidth: .infinity)
-                FormBadge(isIpad: false)
+                FormBadge(isIpad: false, dosageForm: form)
                     .frame(maxWidth: .infinity)
                 ValueBadge(label: L10n.BarcodeScan.strength, value: strength, isIpad: false)
                     .frame(maxWidth: .infinity)
@@ -134,7 +134,7 @@ struct RxDetailsSheetContent: View {
             .padding(.horizontal, 16)
 
             HStack(spacing: 10) {
-                FormBadge(isIpad: false)
+                FormBadge(isIpad: false, dosageForm: form)
                     .frame(maxWidth: .infinity)
                 ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: false)
                     .frame(maxWidth: .infinity)
@@ -177,7 +177,7 @@ struct RxDetailsSheetContent: View {
             HStack(spacing: 16) {
                 ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: true)
                     .frame(maxWidth: .infinity)
-                FormBadge(isIpad: true)
+                FormBadge(isIpad: true, dosageForm: form)
                     .frame(maxWidth: .infinity)
                 ValueBadge(label: L10n.BarcodeScan.strength, value: strength, isIpad: true)
                     .frame(maxWidth: .infinity)
@@ -223,7 +223,7 @@ struct RxDetailsSheetContent: View {
             LazyVGrid(columns: columns, spacing: 16) {
                 ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: true)
                     .frame(height: 160)
-                FormBadge(isIpad: true)
+                FormBadge(isIpad: true, dosageForm: form)
                     .frame(height: 160)
                 ValueBadge(label: L10n.BarcodeScan.strength, value: strength, isIpad: true)
                     .frame(height: 160)
@@ -315,8 +315,8 @@ private struct FormBadge: View {
     @EnvironmentObject private var appColors: AppColors
 
     let isIpad: Bool
-    
-    
+    let dosageForm: String
+
     var body: some View {
         VStack(spacing: isIpad ? 10 : 6) {
             Text(L10n.BarcodeScan.form)
@@ -325,7 +325,7 @@ private struct FormBadge: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
-            Image("dispense_dashboard_icon")
+            Image(DosageFormIcon.iconName(for: dosageForm))
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()

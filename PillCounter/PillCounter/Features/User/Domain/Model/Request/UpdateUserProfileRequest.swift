@@ -19,6 +19,7 @@ struct UpdateUserProfileRequest: Codable {
     let notificationsEnabled: Bool?
     let language: String?
     let timezone: String?
+    let pharmacyType: String?
 
     enum CodingKeys: String, CodingKey {
         case fname = "fname"
@@ -31,5 +32,6 @@ struct UpdateUserProfileRequest: Codable {
         case notificationsEnabled = "notifications_enabled"
         case language
         case timezone
+        case pharmacyType = "pharmacy_type"
     }
 }

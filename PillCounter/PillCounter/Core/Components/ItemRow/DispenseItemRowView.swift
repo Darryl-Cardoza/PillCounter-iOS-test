@@ -73,7 +73,7 @@ struct DispenseItemRowView: View {
                 // Drug name
                 Text(data.drugName)
                     .foregroundColor(appColors.text)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
 

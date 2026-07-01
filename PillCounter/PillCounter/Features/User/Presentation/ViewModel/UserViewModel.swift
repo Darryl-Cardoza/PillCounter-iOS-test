@@ -292,7 +292,8 @@ class UserViewModel: ObservableObject {
                 avatarURL: "",
                 notificationsEnabled: false,
                 language: "",
-                timezone: ""
+                timezone: "",
+                pharmacyType: AppStorageManager.shared.selectedPharmacyType?.rawValue
             )
 
             // FIX: updateProfile returns UserResponse but the server may return

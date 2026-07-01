@@ -52,13 +52,10 @@ struct DashboardView: View {
         )
     }
 
+    @Environment(\.isLandscape) private var isLandscape
+
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
-    private var isLandscape: Bool {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.interfaceOrientation.isLandscape ?? false
-    }
 
     // Theme-aware stat cards (color injected so the view model stays theme-free).
     private var statCards: [DashboardStatCard] {
@@ -317,7 +314,7 @@ struct DashboardView: View {
             HStack(spacing: 10) {
                 Image("icon_app")
                     .resizable()
-                    .frame(width: isIpad ? 36 : 30, height: isIpad ? 36 : 30)
+                    .frame(width: isIpad ? 50 : 30, height: isIpad ? 50 : 30)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(

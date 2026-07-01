@@ -41,6 +41,22 @@ struct SwipeablePager<Page: View>: UIViewControllerRepresentable {
             direction: .forward,
             animated: false
         )
+
+        // Re-install the current page after foreground return. UIPageViewController
+        // can silently drop its child on background/foreground and not call any
+        // delegate, so the coordinator's currentIndex stays in sync with `selection`
+        // and updateUIViewController's guard skips the re-set — leaving the pager blank.
+        context.coordinator.foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak pager] _ in
+            guard let pager else { return }
+            let idx = context.coordinator.currentIndex
+            let vc = context.coordinator.controller(for: idx)
+            pager.setViewControllers([vc], direction: .forward, animated: false)
+        }
+
         return pager
     }
 
@@ -52,6 +68,17 @@ struct SwipeablePager<Page: View>: UIViewControllerRepresentable {
 
         // Refresh hosted content so data changes (filters, new items) re-render.
         context.coordinator.refreshHostedContent()
+
+        // If UIPageViewController has lost its visible child (e.g. after a
+        // background/foreground cycle, UIKit can discard the hosted content
+        // without notifying the coordinator), restore it non-animated so the
+        // pager is never blank on foreground return.
+        if pager.viewControllers?.isEmpty ?? true {
+            let restore = context.coordinator.controller(for: selection)
+            pager.setViewControllers([restore], direction: .forward, animated: false)
+            context.coordinator.currentIndex = selection
+            return
+        }
 
         let current = context.coordinator.currentIndex
         guard current != selection else { return }
@@ -76,6 +103,7 @@ struct SwipeablePager<Page: View>: UIViewControllerRepresentable {
     {
         var parent: SwipeablePager
         var currentIndex: Int
+        var foregroundObserver: Any?
         // One hosting controller per page, reused so swipe + programmatic paging
         // navigate between stable instances.
         private var hosts: [Int: UIHostingController<Page>] = [:]
@@ -83,6 +111,12 @@ struct SwipeablePager<Page: View>: UIViewControllerRepresentable {
         init(_ parent: SwipeablePager) {
             self.parent = parent
             self.currentIndex = parent.selection
+        }
+
+        deinit {
+            if let obs = foregroundObserver {
+                NotificationCenter.default.removeObserver(obs)
+            }
         }
 
         func controller(for index: Int) -> UIHostingController<Page> {

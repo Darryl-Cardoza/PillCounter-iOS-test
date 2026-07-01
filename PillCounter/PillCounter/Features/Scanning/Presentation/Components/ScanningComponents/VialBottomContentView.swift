@@ -17,7 +17,7 @@ struct VialBottomContentView: View {
     
     // MARK: - Common Size Variables
     private var isIPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-    private var iconSize: CGFloat { isIPad ? 64 : 40 }
+    private var iconSize: CGFloat { isIPad ? 32 : 40 }
     private var captureButtonSize: CGFloat { isIPad ? 100 : 70 }
     private var captureIconSize: CGFloat { isIPad ? 42 : 28 }
     private var captureIconWeight: Font.Weight { .medium }
@@ -79,8 +79,7 @@ struct VialBottomContentView: View {
                 doneVial()
             }
         }
-        .padding(.vertical, isIPad ? 35 : 25)
-        .padding(.horizontal)
+        .padding(24)
         // Same translucent dark backdrop as the top / bottom bars.
         .background(Color.black.opacity(0.45))
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -93,12 +92,28 @@ struct VialBottomContentView: View {
             return
         }
         guard let image = cameraService.captureSnapshot() else { return }
+
+        // Immediate shutter feedback — sound + haptic + a quick white flash — so the
+        // capture feels instant even though saving the file happens just after.
+        FeedbackManager.shared.playCameraShutterSound()
+        FeedbackManager.shared.vibrate()
+        withAnimation(.easeOut(duration: 0.08)) {
+            pillScanViewModel.vialCaptureFlash = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeIn(duration: 0.18)) {
+                pillScanViewModel.vialCaptureFlash = false
+            }
+        }
+
         // Do NOT stop the session — counting is already paused for the vial step. The
         // captured still is shown full-screen by UnifiedCameraLayout while
         // capturedVialImage is set; stopping would blank the live feed and cost a
         // restart on redo/done.
         let normalized = image.normalized()
-        pillScanViewModel.capturedVialImage = normalized
+        withAnimation(.easeInOut(duration: 0.2)) {
+            pillScanViewModel.capturedVialImage = normalized
+        }
         if let path = PhotoFileManager.shared.saveImage(normalized) {
             pillScanViewModel.vialCapturedImagePath = path
         }

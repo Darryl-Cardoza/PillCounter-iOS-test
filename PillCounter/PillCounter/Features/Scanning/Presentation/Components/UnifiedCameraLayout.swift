@@ -42,7 +42,12 @@ struct UnifiedCameraLayout: View {
             if showPillDetectionUI {
                 DetectionOverlay(
                     cameraService: cameraService,
-                    targetQuantity: pillScanViewModel.currentControlledTargetCount ?? 0
+                    targetQuantity: {
+                        let stepTarget = pillScanViewModel.currentControlledTargetCount ?? 0
+                        guard stepTarget > 0 else { return 0 }
+                        let alreadyAdded = Int(pillScanViewModel.getTotalCuntForCurrentStep())
+                        return max(0, stepTarget - alreadyAdded)
+                    }()
                 )
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
@@ -79,6 +84,17 @@ struct UnifiedCameraLayout: View {
                 .ignoresSafeArea()
                 .background(Color.black.ignoresSafeArea())
                 .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+
+            // ── Shutter flash ─────────────────────────────────────────────────
+            // Brief white flash overlaid the instant the vial still is captured,
+            // giving the classic camera "snap" feel alongside the shutter sound.
+            if pillScanViewModel.vialCaptureFlash {
+                Color.white
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
             }
 
             // ── Loading spinner ───────────────────────────────────────────────

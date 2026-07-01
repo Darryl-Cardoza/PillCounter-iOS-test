@@ -27,6 +27,11 @@ final class FeedbackManager {
         AudioServicesPlaySystemSound(1057)
     }
 
+    /// The classic camera shutter "click" used when capturing a still photo.
+    func playCameraShutterSound() {
+        AudioServicesPlaySystemSound(1108)
+    }
+
     func triggerDetectionFeedback(
         isHapticEnabled: Bool,
         isSoundEnabled: Bool

@@ -1,17 +1,15 @@
 {
   "images" : [
     {
-      "filename" : "icon_app@1x.png",
+      "filename" : "pill_24dp_1F1F1F_FILL0_wght300_GRAD0_opsz24 1.svg",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "icon_app@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "icon_app@3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

@@ -163,9 +163,17 @@ struct UserProfileScreen: View {
     }
 
     private var landscapeProfileColums: some View {
-        HStack(alignment: .top, spacing: 12) {
-            leftProfileColumn
-            rightProfileColumn
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                leftProfileColumn
+                rightProfileColumn
+            }
+            HStack(spacing: 12) {
+                if !userViewModel.terminals.isEmpty {
+                    terminalDropdown
+                }
+                pharmacyTypeDropdown
+            }
         }
     }
 
@@ -188,12 +196,6 @@ struct UserProfileScreen: View {
                 text: $userViewModel.email,
                 disabled: true
             )
-
-            if !userViewModel.terminals.isEmpty {
-                terminalDropdown
-            }
-
-            pharmacyTypeDropdown
         }
     }
 
@@ -247,7 +249,7 @@ struct UserProfileScreen: View {
                 HStack {
                     Text(selectedPharmacyType?.displayText ?? "")
                         .font(.body)
-                        .foregroundColor(selectedPharmacyType != nil ? appColors.primary : appColors.text)
+                        .foregroundColor(appColors.text)
                         .padding(.leading, 16)
                         .padding(.top, 10)
 
@@ -432,16 +434,7 @@ struct UserProfileScreen: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-
-                    HStack(alignment: .top, spacing: 20) {
-                        leftProfileColumn
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        rightProfileColumn
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                   
+                    landscapeProfileColums
                 }
                 .padding(.horizontal)
             }

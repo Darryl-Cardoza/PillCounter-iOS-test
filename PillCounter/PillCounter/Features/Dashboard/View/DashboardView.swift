@@ -52,13 +52,10 @@ struct DashboardView: View {
         )
     }
 
+    @Environment(\.isLandscape) private var isLandscape
+
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
-    private var isLandscape: Bool {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.interfaceOrientation.isLandscape ?? false
-    }
 
     // Theme-aware stat cards (color injected so the view model stays theme-free).
     private var statCards: [DashboardStatCard] {

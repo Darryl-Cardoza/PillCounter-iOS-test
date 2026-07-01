@@ -65,8 +65,15 @@ final class HL7CompletionBuilder {
             dosageFormText: nil,
             prescriptionNumber: txn.rx_no ?? "\(txn.txn_id)",
             pharmacistId: user?.user_id,
-            pharmacistFamilyName: nil,
-            pharmacistGivenName: user?.fname,
+            pharmacistFamilyName: {
+                guard let fname = user?.fname else { return nil }
+                let name = Formatter.segregateName(from: fname)
+                return name.lastName.isEmpty ? nil : name.lastName
+            }(),
+            pharmacistGivenName: {
+                guard let fname = user?.fname else { return nil }
+                return Formatter.segregateName(from: fname).firstName
+            }(),
             substituteCode: nil,
             deliverToLocation: user?.pharmacy_name,
             needsHumanReview: nil,

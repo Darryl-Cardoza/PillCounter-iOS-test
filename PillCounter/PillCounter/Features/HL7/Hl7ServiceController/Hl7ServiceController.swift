@@ -6,7 +6,7 @@
 import Foundation
 import SwiftUI
 import Combine
-import ComposeApp
+import Hl7Core
 
 @MainActor
 final class Hl7ServiceController: ObservableObject {

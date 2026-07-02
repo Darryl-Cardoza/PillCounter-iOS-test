@@ -6,7 +6,6 @@
 import Foundation
 import SwiftUI
 import CoreData
-import ComposeApp
 
 @MainActor
 class UserViewModel: ObservableObject {
@@ -448,58 +447,18 @@ class UserViewModel: ObservableObject {
         getAllTransactionsAndFilterByCountType()
     }
 
+    /// Sends the RDS^O13 dispense-completion message for `txnId` to the connected PMS.
+    /// Delegates to `Hl7ServiceController`, which builds the message via
+    /// `HL7CompletionBuilder.buildCompletionMessage` (new Hl7Core DSL) and owns the
+    /// send queue + retry logic.
     private func sendCompletionHL7(txnId: Int64) async {
-
         guard let txn = transactionDAO.fetchById(txnId) else {
             print("[HL7] Txn not found")
             return
         }
-        let messageId = "TXN_\(txnId)_\(Int(Date().timeIntervalSince1970))"
-        let header = MessageHeaderData(
-            fieldSeparator: "|", encodingCharacters: "^~\\&",
-            sendingApplication: "PILLCOUNTER", sendingFacility: "PC",
-            receivingApplication: "PMS", receivingFacility: "PMS",
-            messageDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
-            messageType: "RDS", triggerEvent: "O13",
-            messageControlId: messageId, processingId: "P",
-            versionId: "2.3", countryCode: nil
-        )
-        let order = OrderData(
-            orderControl: "RE", placerOrderId: "\(txnId)",
-            placerOrderNamespace: nil, fillerOrderId: nil, fillerOrderNamespace: nil,
-            orderStatus: "CM", orderDateTime: CurrentLocalDateTime_iosKt.currentLocalDateTime(),
-            orderingProviderId: nil, orderingProviderFamilyName: nil,
-            orderingProviderGivenName: nil, orderingFacility: nil
-        )
-        let message = CompleteHL7Message(
-            messageId: messageId,
-            messageType: "RDS",
-            triggerEvent: "O13",
-            timestamp: header.messageDateTime,
-            sendingFacility: "PILLCOUNTER",
-            header: header,
-            patient: nil,
-            visit: nil,
-            order: order,
-            medications: [],
-            routes: [],
-            components: [],
-            dispenses: [],
-            equipment: nil,
-            inventoryItems: [],
-            inventory: nil,
-            acknowledgment: nil,
-            notes: [],
-            inventoryResponseItems: [],
-            zinSegments: [],
-            priority: .unknown,
-            customSegments: [],
-            obxSegments: [],
-            errors: []
-        )
-
-        // 6. SEND using your controller (this handles queue + retry)
-//        Hl7ServiceController.shared./*    */(message)
+        await MainActor.run {
+            Hl7ServiceController.shared.sendTransaction(txn)
+        }
     }
     
     

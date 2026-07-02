@@ -5,7 +5,7 @@
 //  Created by Bhushan Patil on 17/03/26.
 //
 import SwiftUI
-import ComposeApp
+import Hl7Core
 
 extension PillScanViewModel{
     

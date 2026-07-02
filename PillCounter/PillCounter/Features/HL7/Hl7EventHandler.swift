@@ -1,4 +1,4 @@
-import ComposeApp
+import Hl7Core
 
 /// Handles HL7 events and bridges them to ViewModels and controllers.
 final class Hl7EventHandler: Hl7EventListener {
@@ -31,7 +31,7 @@ final class Hl7EventHandler: Hl7EventListener {
     }
 
     /// Called when a new HL7 message is received from PMS.
-    func onMessageReceived(message: CompleteHL7Message, rawHl7: String) {
+    func onMessageReceived(message: HL7Message, rawHl7: String) {
         Task { @MainActor in
             self.pillScanViewModel.handleReceivedMessage(
                 message: message,

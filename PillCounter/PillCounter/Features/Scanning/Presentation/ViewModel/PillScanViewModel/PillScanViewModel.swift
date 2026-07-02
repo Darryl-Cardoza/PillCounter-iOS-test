@@ -7,7 +7,7 @@
 
 import Foundation
 import SwiftUI
-import ComposeApp
+import Hl7Core
 import Combine
 
 @MainActor

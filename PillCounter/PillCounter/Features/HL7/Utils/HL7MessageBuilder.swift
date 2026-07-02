@@ -3,21 +3,9 @@
 //  PillCounter
 //
 
-import ComposeApp
+import Hl7Core
 import UIKit
 import Darwin
-
-//// MARK: - Constants
-//
-//private enum HL7BuilderConstants {
-//    static let imagePort = 8443
-//    static let encodingCharacters = "^~\\&"
-//    static let processingId = "P"
-//    static let versionId = "2.5"
-//}
-
-
-
 
 struct HL7Config {
     let sendingApplication: String
@@ -31,7 +19,11 @@ struct HL7Config {
 // MARK: - Builder
 
 final class HL7CompletionBuilder {
-    let encodingCharacters = "2.5"
+    let versionId = "2.5"
+
+    private let builder: HL7Builder = HL7Builder.companion.builder()
+        .defaultVersion(version: "2.5")
+        .build()
 
     // MARK: - Dispense Message (RDS O13)
     func buildCompletionMessage(
@@ -52,217 +44,75 @@ final class HL7CompletionBuilder {
             fatalError("Drug missing")
         }
 
-        let dispense = DispenseData(
-            dispenseSubId: "1",
-            drugCode: drug.ndc ?? "",
-            drugName: drug.drug_name ?? "",
-            drugCodeSystem: "NDC",
-            dateTimeDispensed: now,
-            quantityDispensed: "\(totalCount)",
-            unitCode: "TAB",
-            unitText: "Tablets",
-            dosageFormCode: nil,
-            dosageFormText: nil,
-            prescriptionNumber: txn.rx_no ?? "\(txn.txn_id)",
-            pharmacistId: user?.user_id,
-            pharmacistFamilyName: {
-                guard let fname = user?.fname else { return nil }
-                let name = Formatter.segregateName(from: fname)
-                return name.lastName.isEmpty ? nil : name.lastName
-            }(),
-            pharmacistGivenName: {
-                guard let fname = user?.fname else { return nil }
-                return Formatter.segregateName(from: fname).firstName
-            }(),
-            substituteCode: nil,
-            deliverToLocation: user?.pharmacy_name,
-            needsHumanReview: nil,
-            dispensingNotes: txn.note,
-            lotNumber: txn.lot_no,
-            expirationDate: txn.expiry,
-            substanceManufacturerName: nil,
-            cellId: nil,
-            cellLocation: nil,
-            dispensePriority: txn.txn_priority,
-            dispensePriorityText: txn.txn_priority
-        )
+        let orderId = txn.rx_no ?? "\(txn.txn_id)"
 
-        let order = OrderData(
-            orderControl: "RE",
-            placerOrderId: txn.rx_no ?? "\(txn.txn_id)",
-            placerOrderNamespace: nil,
-            fillerOrderId: nil,
-            fillerOrderNamespace: nil,
-            orderStatus: "CM",
-            orderDateTime: nil,
-            orderingProviderId: nil,
-            orderingProviderFamilyName: nil,
-            orderingProviderGivenName: nil,
-            orderingFacility: nil
-        )
+        let message = builder.rdsO13 { scope in
+            scope.msh { msh in
+                msh.sendingApplication = "PillCounter"
+                msh.sendingFacility = "ROBOT"
+                msh.receivingApplication = "PMS"
+                msh.receivingFacility = "PHARMACY"
+                msh.dateTimeOfMessage = now
+                msh.messageControlId = messageId
+                msh.processingId = "P"
+                msh.versionId = self.versionId
+            }
 
-        let patient = PatientData(
-            patientId: txn.rx_no ?? "\(txn.txn_id)",
-            patientIdAssigningAuthority: nil,
-            patientIdType: nil,
-            familyName: nil,
-            givenName: nil,
-            middleName: nil,
-            dateOfBirth: nil,
-            sex: nil,
-            streetAddress: nil,
-            city: nil,
-            state: nil,
-            zipCode: nil,
-            country: nil
-        )
+            scope.orc { orc in
+                orc.orderControl = "RE"
+                orc.placerOrderNumber = orderId
+                orc.orderStatus = "CM"
+            }
 
-        let message = CompleteHL7Message(
-            messageId: messageId,
-            messageType: "RDS",
-            triggerEvent: "O13",
-            timestamp: now,
-            sendingFacility: "ROBOT",
-            header: buildHeaderStyle(
-                type: "RDS",
-                trigger: "O13",
-                time: now,
-                messageId: messageId
-            ),
-            patient: patient,
-            visit: nil,
-            order: order,
-            medications: [],
-            routes: [],
-            components: [],
-            dispenses: [dispense],
-            equipment: nil,
-            inventoryItems: [],
-            inventory: nil,
-            acknowledgment: nil,
-            notes: buildCommonNotes(txn: txn, totalCount: totalCount),
-            inventoryResponseItems: [],
-            zinSegments: [],
-            priority: TxnPriority.companion.fromString(value: txn.txn_priority),
-            customSegments: [],
-            obxSegments: buildImageOBX(
+            scope.pid { pid in
+                pid.patientId = orderId
+            }
+
+            scope.rxd { rxd in
+                rxd.dispenseGiveCode = drug.ndc ?? ""
+                rxd.dispenseGiveName = drug.drug_name ?? ""
+                rxd.dispenseGiveCodeSystem = "NDC"
+                rxd.dateTimeDispensed = now
+                rxd.actualDispenseAmount = "\(totalCount)"
+                rxd.actualDispenseUnits = "TAB"
+                rxd.prescriptionNumber = orderId
+                rxd.lotNumber = txn.lot_no
+                rxd.expirationDate = txn.expiry
+                rxd.dispensingProviderId = user?.user_id
+                rxd.dispenseSubIdCounter = "1"
+            }
+
+            for note in self.buildCommonNotes(txn: txn, totalCount: totalCount) {
+                scope.nte { nte in
+                    nte.setId = note.setId
+                    nte.sourceOfComment = note.sourceOfComment
+                    nte.comment = note.comment
+                    nte.commentType = note.commentType
+                }
+            }
+
+            for obx in self.buildImageOBX(
                 txn: txn,
                 details: details,
                 observationId: "DISP_IMG",
                 label: "Dispense Image"
-            ),
-            errors: []
-        )
+            ) {
+                scope.obx { builder in
+                    builder.setId = obx.setId
+                    builder.valueType = obx.valueType
+                    builder.observationId = obx.observationId
+                    builder.observationText = obx.observationText
+                    builder.observationValue = obx.observationValue
+                    builder.resultStatus = obx.resultStatus
+                    builder.units = obx.units
+                }
+            }
+        }
 
-        return message.toHL7String()
-    }
-    
-    func buildHeaderStyle(
-        type: String,
-        trigger: String,
-        time: String,
-        messageId: String
-    ) -> MessageHeaderData {
-
-        return MessageHeaderData(
-            fieldSeparator: "|",
-            encodingCharacters: "^~\\&",
-            sendingApplication: "PillCounter",
-            sendingFacility: "ROBOT",             
-            receivingApplication: "PMS",
-            receivingFacility: "PHARMACY",
-            messageDateTime: time,
-            messageType: type,
-            triggerEvent: trigger,
-            messageControlId: messageId,
-            processingId: "P",
-            versionId: "2.5",
-            countryCode: nil
-        )
+        return message.encode()
     }
 
-  
-//    func buildInventoryMessage(
-//        batch: BatchCountEntity,
-//        user: UserEntity?
-//    ) -> String {
-//
-//        let now = DateUtils.currentTimestamp()
-//        let messageId = "RES\(Int(Date().timeIntervalSince1970))"
-//
-//        let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
-//        let orderId = batch.bucket_id ?? ""
-//
-//        let txns = TransactionDAO.shared.fetchByBatch(batchId: batch.batch_id)
-//
-//        // MARK: GROUPING
-//        struct Key: Hashable {
-//            let ndc: String
-//            let name: String
-//            let lot: String
-//            let expiry: String
-//        }
-//
-//        var grouped: [Key: (opened: Int32, sealed: Int32)] = [:]
-//
-//        for txn in txns {
-//
-//            guard let drug = txn.drug else { continue }
-//
-//            let ndc = drug.ndc ?? ""
-//            let name = drug.drug_name ?? ""
-//            let lot = txn.lot_no ?? ""
-//            let expiry = txn.expiry ?? ""
-//            let packageQty = drug.package_qty
-//
-//            let opened = txn.loose_qty
-//            let sealed = txn.bottle_qty * packageQty
-//
-//            let key = Key(ndc: ndc, name: name, lot: lot, expiry: expiry)
-//
-//            var existing = grouped[key] ?? (0, 0)
-//            existing.opened += opened
-//            existing.sealed += sealed
-//            grouped[key] = existing
-//        }
-//
-//        // MARK: BUILD HL7 STRING
-//
-//        var hl7 = ""
-//
-//        //  HEADER
-//        hl7 += "MSH|^~\\&|PILLCOUNTER|STORE|PMS|PHARMACY|\(now)||INR^U05|\(messageId)|P|2.5\n"
-//        hl7 += "MSA|AA|\(requestId)\n"
-//        hl7 += "ORC|RE|\(orderId)\n\n"
-//
-//        var index = 1
-//
-//        for (key, value) in grouped {
-//
-//            let total = value.opened + value.sealed
-//
-//            // INV
-//            hl7 += "INV|\(index)|\(key.ndc)^\(key.name)||||||||||\(total)|||||\n"
-//
-//            //  ZIN
-//            if value.opened == 0 && value.sealed == 0 {
-//                hl7 += "ZIN|\(index)|NA|0||\n"
-//            } else {
-//                if value.opened > 0 {
-//                    hl7 += "ZIN|\(index)|OPENED|\(value.opened)|\(key.lot)|\(key.expiry)\n"
-//                }
-//                if value.sealed > 0 {
-//                    hl7 += "ZIN|\(index)|SEALED|\(value.sealed)|\(key.lot)|\(key.expiry)\n"
-//                }
-//            }
-//
-//            hl7 += "\n"
-//            index += 1
-//        }
-//
-//        return hl7
-//    }
-    
+    // MARK: - Inventory Response (INR U05)
     func buildInventoryMessage(
         batch: BatchCountEntity,
         user: UserEntity?
@@ -293,228 +143,168 @@ final class HL7CompletionBuilder {
             grouped[key] = e
         }
 
-        // MARK: BUILD LIBRARY MODELS
-        var responseItems: [InventoryResponseItem] = []
-        var index: Int32 = 1
-
-        for (key, value) in grouped {
-            let total = value.opened + value.sealed
-
-            var zinRows: [ZinData] = []
-
-            if value.opened == 0 && value.sealed == 0 {
-                zinRows.append(ZinData(
-                    setId: index,
-                    dispenseType: "NA",
-                    quantity: 0,
-                    lotNumber: nil,
-                    expiry: nil
-                ))
-            } else {
-                if value.opened > 0 {
-                    zinRows.append(ZinData(
-                        setId: index,
-                        dispenseType: "OPENED",
-                        quantity: value.opened,
-                        lotNumber: key.lot.isEmpty ? nil : key.lot,
-                        expiry: key.expiry.isEmpty ? nil : key.expiry
-                    ))
-                }
-                if value.sealed > 0 {
-                    zinRows.append(ZinData(
-                        setId: index,
-                        dispenseType: "SEALED",
-                        quantity: value.sealed,
-                        lotNumber: key.lot.isEmpty ? nil : key.lot,
-                        expiry: key.expiry.isEmpty ? nil : key.expiry
-                    ))
-                }
+        let message = builder.inrU05 { scope in
+            scope.msh { msh in
+                msh.sendingApplication = "PILLCOUNTER"
+                msh.sendingFacility = "STORE"
+                msh.receivingApplication = "PMS"
+                msh.receivingFacility = "PHARMACY"
+                msh.dateTimeOfMessage = now
+                msh.messageControlId = messageId
+                msh.processingId = "P"
+                msh.versionId = self.versionId
             }
 
-            responseItems.append(InventoryResponseItem(
-                setId: index,
-                ndc: key.ndc,
-                drugName: key.name.isEmpty ? nil : key.name,
-                totalQuantity: total,
-                zinRows: zinRows
-            ))
-            index += 1
+            scope.orc { orc in
+                orc.orderControl = "RE"
+                orc.placerOrderNumber = orderId
+            }
+
+            var index: Int32 = 1
+            for (key, value) in grouped {
+                let total = value.opened + value.sealed
+
+                scope.inv { inv in
+                    inv.setId = "\(index)"
+                    // INV-2.1 (substance code / NDC) has no dedicated property on the
+                    // current INVBuilder — reusing inventoryLocationIdentifier as a
+                    // stopgap until the library exposes a proper substanceCode field.
+                    inv.inventoryLocationIdentifier = key.ndc
+                    inv.substanceCodeSystem = "NDC"
+                    inv.substanceName = key.name.isEmpty ? nil : key.name
+                    inv.inventoryOnHandQuantity = "\(total)"
+                }
+
+                if value.opened == 0 && value.sealed == 0 {
+                    scope.zin { zin in
+                        zin.setId = "\(index)"
+                        zin.dispenseType = "NA"
+                        zin.quantity = "0"
+                    }
+                } else {
+                    if value.opened > 0 {
+                        scope.zin { zin in
+                            zin.setId = "\(index)"
+                            zin.dispenseType = "OPENED"
+                            zin.quantity = "\(value.opened)"
+                            zin.lotNumber = key.lot.isEmpty ? nil : key.lot
+                            zin.expiry = key.expiry.isEmpty ? nil : key.expiry
+                        }
+                    }
+                    if value.sealed > 0 {
+                        scope.zin { zin in
+                            zin.setId = "\(index)"
+                            zin.dispenseType = "SEALED"
+                            zin.quantity = "\(value.sealed)"
+                            zin.lotNumber = key.lot.isEmpty ? nil : key.lot
+                            zin.expiry = key.expiry.isEmpty ? nil : key.expiry
+                        }
+                    }
+                }
+
+                index += 1
+            }
         }
 
-        // MARK: ASSEMBLE & SERIALIZE
-        let message = CompleteHL7Message(
-            messageId: messageId,
-            messageType: "INR",
-            triggerEvent: "U05",
-            timestamp: now,
-            sendingFacility: "STORE",
-            header: MessageHeaderData(
-                fieldSeparator: "|",
-                encodingCharacters: "^~\\&",
-                sendingApplication: "PILLCOUNTER",
-                sendingFacility: "STORE",
-                receivingApplication: "PMS",
-                receivingFacility: "PHARMACY",
-                messageDateTime: now,
-                messageType: "INR",
-                triggerEvent: "U05",
-                messageControlId: messageId,
-                processingId: "P",
-                versionId: "2.5",
-                countryCode: nil          // ← was missing
-            ),
-            patient: nil,
-            visit: nil,
-            order: OrderData(
-                orderControl: "RE",
-                placerOrderId: orderId,
-                placerOrderNamespace: nil,
-                fillerOrderId: nil,
-                fillerOrderNamespace: nil,
-                orderStatus: nil,
-                orderDateTime: nil,
-                orderingProviderId: nil,
-                orderingProviderFamilyName: nil,
-                orderingProviderGivenName: nil,
-                orderingFacility: nil
-            ),
-            medications: [],
-            routes: [],
-            components: [],
-            dispenses: [],
-            equipment: nil,
-            inventoryItems: [],
-            inventory: nil,
-            acknowledgment: AcknowledgmentData(
-                acknowledgmentCode: "AA",
-                messageControlId: requestId,
-                textMessage: nil,          // ← was missing
-                errorCondition: nil        // ← was missing
-            ),
-            notes: [],
-            inventoryResponseItems: responseItems,
-            zinSegments: [],
-            priority: .unknown,
-            customSegments: [],
-            obxSegments: [],
-            errors: []
-        )
+        // The ACK for the originating request (MSA-2 = requestId) is a separate
+        // message from this INR^U05 response; build/send it via `HL7.ack(message:)`
+        // or `HL7Builder().ack { ... }` where the inbound request is parsed, not here.
+        _ = requestId
 
-        return message.toHL7String()
+        return message.encode()
     }
 }
 
 // MARK: - Shared Private Helpers
 private extension HL7CompletionBuilder {
 
-    // MARK: Header Builder
-
-    func buildHeader(
-        type: String,
-        trigger: String,
-        time: String,
-        config: HL7Config,
-        messageId: String
-    ) -> MessageHeaderData {
-        return MessageHeaderData(
-            fieldSeparator: "|",
-            encodingCharacters: encodingCharacters,
-            sendingApplication: config.sendingApplication,
-            sendingFacility: config.sendingFacility,
-            receivingApplication: config.receivingApplication,
-            receivingFacility: config.receivingFacility,
-            messageDateTime: time,
-            messageType: type,
-            triggerEvent: trigger,
-            messageControlId: messageId,
-            processingId: encodingCharacters,
-            versionId: config.versionId,
-            countryCode: nil
-        )
+    // MARK: Image OBX Builder
+    struct ObxRow {
+        let setId: String
+        let valueType: String
+        let observationId: String
+        let observationText: String?
+        let observationValue: String
+        let resultStatus: String
+        let units: String?
     }
 
-    // MARK: Image OBX Builder
     func buildImageOBX(
         txn: PillCountTransactionEntity,
         details: [PillCountTransactionDetailsEntity],
         observationId: String,
         label: String
-    ) -> [ObservationData] {
-        
-        var obxList: [ObservationData] = []
-        
+    ) -> [ObxRow] {
+
+        var obxList: [ObxRow] = []
+
         for (index, detail) in details.enumerated() {
-            
+
             let count = detail.pill_count
             let type = detail.type ?? "UNKNOWN"
-            
+
             let fileName: String
             if let path = detail.image_path {
                 fileName = (path as NSString).lastPathComponent
             } else {
                 fileName = ""
             }
-            
+
             let observationValue = "count=\(count)|type=\(type)|image=\(fileName)"
-            
-            let obx = ObservationData.make(
-                setId: "\(index + 1)",
-                observationId: observationId,
-                observationText: "\(label) \(index + 1)",
-                codingSystem: "",
-                observationValue: observationValue
+
+            obxList.append(
+                ObxRow(
+                    setId: "\(index + 1)",
+                    valueType: "ST",
+                    observationId: observationId,
+                    observationText: "\(label) \(index + 1)",
+                    observationValue: observationValue,
+                    resultStatus: "F",
+                    units: nil
+                )
             )
-            
-            obxList.append(obx)
         }
-        
+
         // Barcode Image (same as Android)
         if let barcodePath = txn.barcode_image,
            !barcodePath.isEmpty {
-            
+
             let fileName = (barcodePath as NSString).lastPathComponent
-            
-            let barcodeObx = ObservationData(   
-                setId: "\(obxList.count + 1)",
-                valueType: "ST",
-                observationId: observationId,
-                observationText: "Barcode Image",
-                codingSystem: "",
-                subId: nil,
-                observationValue: "count=0|type=SCAN|image=\(fileName)",
-                units: nil,
-                referenceRange: nil,
-                abnormalFlags: nil,
-                probability: nil,
-                natureOfAbnormalTest: nil,
-                resultStatus: "F",
-                effectiveDateOfReferenceRange: nil,
-                userDefinedAccessChecks: nil,
-                dateTimeOfObservation: nil,
-                producerId: nil,
-                responsibleObserver: nil,
-                observationMethod: nil,
-                equipmentInstanceIdentifier: nil,
-                dateTimeOfAnalysis: nil
+
+            obxList.append(
+                ObxRow(
+                    setId: "\(obxList.count + 1)",
+                    valueType: "ST",
+                    observationId: observationId,
+                    observationText: "Barcode Image",
+                    observationValue: "count=0|type=SCAN|image=\(fileName)",
+                    resultStatus: "F",
+                    units: nil
+                )
             )
-            
-            obxList.append(barcodeObx)
         }
-        
+
         return obxList
     }
 
     // MARK: Notes Builder
+    struct NoteRow {
+        let setId: String
+        let sourceOfComment: String
+        let comment: String
+        let commentType: String
+    }
+
     func buildCommonNotes(
         txn: PillCountTransactionEntity,
         totalCount: Int
-    ) -> [NoteData] {
-        
-        var notes: [NoteData] = []
+    ) -> [NoteRow] {
+
+        var notes: [NoteRow] = []
         var index = 1
 
         notes.append(
-            NoteData(
+            NoteRow(
                 setId: "\(index)",
                 sourceOfComment: "L",
                 comment: "Transaction completed",
@@ -524,7 +314,7 @@ private extension HL7CompletionBuilder {
         index += 1
 
         notes.append(
-            NoteData(
+            NoteRow(
                 setId: "\(index)",
                 sourceOfComment: "L",
                 comment: "Total Count: \(totalCount)",
@@ -534,7 +324,7 @@ private extension HL7CompletionBuilder {
         index += 1
 
         notes.append(
-            NoteData(
+            NoteRow(
                 setId: "\(index)",
                 sourceOfComment: "L",
                 comment: "Transaction Id: \(txn.txn_id)",
@@ -547,7 +337,7 @@ private extension HL7CompletionBuilder {
            !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
 
             notes.append(
-                NoteData(
+                NoteRow(
                     setId: "\(index)",
                     sourceOfComment: "L",
                     comment: note,
@@ -558,74 +348,6 @@ private extension HL7CompletionBuilder {
 
         return notes
     }
-    
-    // MARK: Patient Builder
-
-    func buildPatient(txn: PillCountTransactionEntity) -> PatientData? {
-        guard let name = txn.patient_name else { return nil }
-
-        let parts = name.split(separator: " ")
-
-        return PatientData(
-            patientId: txn.rx_no ?? UUID().uuidString,
-            patientIdAssigningAuthority: nil,
-            patientIdType: "MR",
-            familyName: parts.last.map(String.init),
-            givenName: parts.first.map(String.init),
-            middleName: nil,
-            dateOfBirth: nil,
-            sex: nil,
-            streetAddress: nil,
-            city: nil,
-            state: nil,
-            zipCode: nil,
-            country: nil
-        )
-    }
-    
-    func buildZINSegments(
-        invIndex: Int,
-        opened: Int32,
-        sealed: Int32,
-        lot: String?,
-        expiry: String?
-    ) -> [CustomSegmentData] {
-
-        func makeZIN(_ type: String, _ qty: Int32) -> CustomSegmentData {
-            CustomSegmentData(
-                segmentType: "ZIN",
-                field1: "\(invIndex)",
-                field2: type,
-                field3: "\(qty)",
-                field4: lot ?? "",
-                field5: expiry ?? "",
-                field6: nil,
-                allFields: [
-                    1: "\(invIndex)",
-                    2: type,
-                    3: "\(qty)",
-                    4: lot ?? "",
-                    5: expiry ?? ""
-                ]
-            )
-        }
-
-        if opened == 0 && sealed == 0 {
-            return [makeZIN("NA", 0)]
-        }
-
-        var segments: [CustomSegmentData] = []
-
-        if opened > 0 {
-            segments.append(makeZIN("OPENED", opened))
-        }
-
-        if sealed > 0 {
-            segments.append(makeZIN("SEALED", sealed))
-        }
-
-        return segments
-    }
 
     // MARK: Detail Extractor
 
@@ -634,53 +356,5 @@ private extension HL7CompletionBuilder {
     ) -> [PillCountTransactionDetailsEntity] {
         return (txn.pillCountTransactionDetails as? Set<PillCountTransactionDetailsEntity>)
             .map { Array($0) } ?? []
-    }
-
-    // MARK: Image URL Builder
-    // Mirrors Android: "https://deviceIp:port/images/fileName"
-
-    func buildImageUrl(deviceIp: String, fileName: String, port: Int) -> String {
-//        return "https://\(deviceIp):\(port)/images/\(fileName)"
-        return "\(fileName)"
-    }
-}
-
-
-
-
-
-extension ObservationData {
-    static func make(
-        setId: String,
-        valueType: String = "ST",
-        observationId: String,
-        observationText: String? = nil,
-        codingSystem: String? = nil,
-        observationValue: String,
-        resultStatus: String = "F"
-    ) -> ObservationData {
-        return ObservationData(
-            setId: setId,
-            valueType: valueType,
-            observationId: observationId,
-            observationText: observationText,
-            codingSystem: codingSystem,
-            subId: nil,
-            observationValue: observationValue,
-            units: nil,
-            referenceRange: nil,
-            abnormalFlags: nil,
-            probability: nil,
-            natureOfAbnormalTest: nil,
-            resultStatus: resultStatus,
-            effectiveDateOfReferenceRange: nil,
-            userDefinedAccessChecks: nil,
-            dateTimeOfObservation: nil,
-            producerId: nil,
-            responsibleObserver: nil,
-            observationMethod: nil,
-            equipmentInstanceIdentifier: nil,
-            dateTimeOfAnalysis: nil
-        )
     }
 }

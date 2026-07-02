@@ -9,10 +9,9 @@
 /* Begin PBXBuildFile section */
 		5A67A8700F61F720CE951A3D /* Pods_PillCounterTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D047713FC8C3E6CB93B74F57 /* Pods_PillCounterTests.framework */; };
 		791DC6A72FD0134100DBB7AE /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 791DC6A62FD0134100DBB7AE /* FirebaseCore */; };
-		791DCB032FD2D67E00DBB7AE /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 791DCB022FD2D67E00DBB7AE /* ComposeApp */; };
-		791DCB062FD2D68E00DBB7AE /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 791DCB052FD2D68E00DBB7AE /* ComposeApp */; };
 		791DCB082FD2D6BB00DBB7AE /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 791DCB072FD2D6BB00DBB7AE /* FirebaseMessaging */; };
-		79CA0C472FE5371B00DB6063 /* ComposeApp in Frameworks */ = {isa = PBXBuildFile; productRef = 79CA0C462FE5371B00DB6063 /* ComposeApp */; };
+		79C738492FF6730400E82B4E /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 79C738482FF6730400E82B4E /* Hl7Core */; };
+		79C7384C2FF6731E00E82B4E /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 79C7384B2FF6731E00E82B4E /* Hl7Core */; };
 		88D04D902FD02CEB0079ED80 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		88E39F8E2FB311C800D6DEA2 /* (null) in Frameworks */ = {isa = PBXBuildFile; settings = {ATTRIBUTES = (Required, ); }; };
 		88E39F9D2FB31DAA00D6DEA2 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 88E39F9C2FB31DAA00D6DEA2 /* UIKit.framework */; platformFilters = (ios, xros, ); settings = {ATTRIBUTES = (Weak, ); }; };
@@ -106,19 +105,18 @@
 			files = (
 				791DCB082FD2D6BB00DBB7AE /* FirebaseMessaging in Frameworks */,
 				88E39FAB2FB31FA500D6DEA2 /* CoreAudio.framework in Frameworks */,
+				79C738492FF6730400E82B4E /* Hl7Core in Frameworks */,
 				88E39FA92FB31DFA00D6DEA2 /* CoreVideo.framework in Frameworks */,
 				791DC6A72FD0134100DBB7AE /* FirebaseCore in Frameworks */,
 				88E39FA72FB31DF200D6DEA2 /* CoreMedia.framework in Frameworks */,
 				88E39FA52FB31DDA00D6DEA2 /* AVFoundation.framework in Frameworks */,
+				79C7384C2FF6731E00E82B4E /* Hl7Core in Frameworks */,
 				88E39FA32FB31DD400D6DEA2 /* MetalKit.framework in Frameworks */,
-				791DCB062FD2D68E00DBB7AE /* ComposeApp in Frameworks */,
-				79CA0C472FE5371B00DB6063 /* ComposeApp in Frameworks */,
 				88E39FA12FB31DC500D6DEA2 /* Metal.framework in Frameworks */,
 				88E39F9F2FB31DBA00D6DEA2 /* SwiftUI.framework in Frameworks */,
 				88E39F9D2FB31DAA00D6DEA2 /* UIKit.framework in Frameworks */,
 				88D04D902FD02CEB0079ED80 /* (null) in Frameworks */,
 				88E39F8E2FB311C800D6DEA2 /* (null) in Frameworks */,
-				791DCB032FD2D67E00DBB7AE /* ComposeApp in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,10 +215,9 @@
 			name = PillCounter;
 			packageProductDependencies = (
 				791DC6A62FD0134100DBB7AE /* FirebaseCore */,
-				791DCB022FD2D67E00DBB7AE /* ComposeApp */,
-				791DCB052FD2D68E00DBB7AE /* ComposeApp */,
 				791DCB072FD2D6BB00DBB7AE /* FirebaseMessaging */,
-				79CA0C462FE5371B00DB6063 /* ComposeApp */,
+				79C738482FF6730400E82B4E /* Hl7Core */,
+				79C7384B2FF6731E00E82B4E /* Hl7Core */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -310,7 +307,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				79CA0C452FE5371B00DB6063 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */,
+				79C7384A2FF6731E00E82B4E /* XCLocalSwiftPackageReference "../../swiftpackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -611,7 +608,7 @@
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "x86-64";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PillCounter/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "DispenseSure";
+				INFOPLIST_KEY_CFBundleDisplayName = DispenseSure;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We will be using your camera to detect pills and scan the barcodes or qr codes.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app advertises and discovers HL7 services on the local network.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to tag pill count images.";
@@ -684,7 +681,7 @@
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "x86-64";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PillCounter/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "DispenseSure";
+				INFOPLIST_KEY_CFBundleDisplayName = DispenseSure;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We will be using your camera to detect pills and scan the barcodes or qr codes.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app advertises and discovers HL7 services on the local network.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to tag pill count images.";
@@ -861,9 +858,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		79CA0C452FE5371B00DB6063 /* XCLocalSwiftPackageReference "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage" */ = {
+		79C7384A2FF6731E00E82B4E /* XCLocalSwiftPackageReference "../../swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "../../../Downloads/PillCount-Hl7/hl7Core/swiftpackage";
+			relativePath = ../../swiftpackage;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -884,23 +881,18 @@
 			package = 791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCore;
 		};
-		791DCB022FD2D67E00DBB7AE /* ComposeApp */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = ComposeApp;
-		};
-		791DCB052FD2D68E00DBB7AE /* ComposeApp */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = ComposeApp;
-		};
 		791DCB072FD2D6BB00DBB7AE /* FirebaseMessaging */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
 		};
-		79CA0C462FE5371B00DB6063 /* ComposeApp */ = {
+		79C738482FF6730400E82B4E /* Hl7Core */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = ComposeApp;
+			productName = Hl7Core;
+		};
+		79C7384B2FF6731E00E82B4E /* Hl7Core */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Hl7Core;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

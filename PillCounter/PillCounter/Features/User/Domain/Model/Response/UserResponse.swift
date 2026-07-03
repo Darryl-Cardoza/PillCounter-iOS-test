@@ -113,15 +113,25 @@ struct UserSettings: Codable {
     let notificationsEnabled: Bool?
     let language: String?
     let timezone: String?
+    let country: String?
+    let hl7Version: String?
     let fcmToken: String?
     let terminals: [UserTerminal]?
+    let bucket: [String]?
+    let isPmsIntegrated: Bool?
+    let allowLocalStorage: Bool?
 
     enum CodingKeys: String, CodingKey {
         case notificationsEnabled = "notifications_enabled"
         case language
         case timezone
+        case country
+        case hl7Version = "hl7_version"
         case fcmToken = "fcm_token"
-        
+        case terminals
+        case bucket
+        case isPmsIntegrated = "is_pms_integrated"
+        case allowLocalStorage = "allow_local_storage"
     }
 }
 

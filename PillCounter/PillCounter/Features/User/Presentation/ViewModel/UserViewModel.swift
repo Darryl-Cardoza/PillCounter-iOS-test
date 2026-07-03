@@ -193,12 +193,14 @@ class UserViewModel: ObservableObject {
                     populateEditableFields(from: user)
                 }
 
-                print("[Terminals] data.user.terminals: \(String(describing: result.data?.user?.terminals))")
-                print("[Terminals] data.terminals: \(String(describing: result.data?.terminals))")
+                if let hl7Version = result.data?.settings?.hl7Version
+                    ?? result.data?.user?.settings?.hl7Version {
+                    AppStorageManager.shared.hl7Version = hl7Version
+                }
+
                 let fetchedTerminals = result.data?.user?.terminals
-                    ?? result.data?.terminals
+                    ?? result.data?.settings?.terminals
                     ?? []
-                print("[Terminals] fetchedTerminals count: \(fetchedTerminals.count)")
 
                 if !fetchedTerminals.isEmpty {
                     // Fresh data from the API — replace list, cache it locally,

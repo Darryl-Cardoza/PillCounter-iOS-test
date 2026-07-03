@@ -40,7 +40,7 @@ final class Hl7ServiceManager {
     ///   sealed quantity, lot, expiry) and ZPR (Rx priority) — is already pre-registered by
     ///   the library itself.
     private let hl7 = HL7(
-        version: "2.3",
+        version: AppStorageManager.shared.hl7Version,
         strictMode: false,
         validationConfig: .companion.DEFAULT,
         extraSegments: []

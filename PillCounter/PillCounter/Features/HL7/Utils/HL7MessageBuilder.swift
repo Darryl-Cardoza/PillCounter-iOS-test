@@ -19,11 +19,18 @@ struct HL7Config {
 // MARK: - Builder
 
 final class HL7CompletionBuilder {
-    let versionId = "2.5"
+    let versionId: String
+    private let builder: HL7Builder
 
-    private let builder: HL7Builder = HL7Builder.companion.builder()
-        .defaultVersion(version: "2.5")
-        .build()
+    /// `versionId` defaults to the HL7 version configured for this PMS integration
+    /// (`auth/me` → `settings.hl7_version`, cached in `AppStorageManager`), so
+    /// built messages always match what the connected PMS expects.
+    init(versionId: String = AppStorageManager.shared.hl7Version) {
+        self.versionId = versionId
+        self.builder = HL7Builder.companion.builder()
+            .defaultVersion(version: versionId)
+            .build()
+    }
 
     // MARK: - Dispense Message (RDS O13)
     func buildCompletionMessage(

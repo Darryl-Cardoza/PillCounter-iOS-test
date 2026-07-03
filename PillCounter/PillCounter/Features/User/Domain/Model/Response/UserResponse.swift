@@ -33,7 +33,7 @@ struct UserData: Codable {
     let user: UserDetails?
     let profile: UserProfile?
     let settings: UserSettings?
-    let terminals: [UserTerminal]?  
+   
 }
 
 // MARK: - UserDetails
@@ -114,12 +114,14 @@ struct UserSettings: Codable {
     let language: String?
     let timezone: String?
     let fcmToken: String?
+    let terminals: [UserTerminal]?
 
     enum CodingKeys: String, CodingKey {
         case notificationsEnabled = "notifications_enabled"
         case language
         case timezone
         case fcmToken = "fcm_token"
+        
     }
 }
 

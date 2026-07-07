@@ -13,22 +13,37 @@ struct HL7Config {
     let receivingApplication: String
     let receivingFacility: String
     let versionId: String
+
+    /// Sourced from `AppStorageManager`: the terminal name identifies this
+    /// station as the sending facility, and the configured PMS host name is
+    /// used as the receiving facility since the PMS routes by that identity.
+    static var current: HL7Config {
+        HL7Config(
+            sendingApplication: "DISPENSESURE",
+            sendingFacility: AppStorageManager.shared.selectedTerminalName,
+            receivingApplication: "PMS",
+            receivingFacility: AppStorageManager.shared.pmsHostName,
+            versionId: AppStorageManager.shared.hl7Version
+        )
+    }
 }
 
 
 // MARK: - Builder
 
 final class HL7CompletionBuilder {
-    let versionId: String
+    let config: HL7Config
+    private var versionId: String { config.versionId }
     private let builder: HL7Builder
 
-    /// `versionId` defaults to the HL7 version configured for this PMS integration
-    /// (`auth/me` → `settings.hl7_version`, cached in `AppStorageManager`), so
-    /// built messages always match what the connected PMS expects.
-    init(versionId: String = AppStorageManager.shared.hl7Version) {
-        self.versionId = versionId
+    /// `config` defaults to values sourced from `AppStorageManager` (terminal
+    /// name, PMS host name, HL7 version — the latter from `auth/me` →
+    /// `settings.hl7_version`), so built messages always match what the
+    /// connected PMS expects.
+    init(config: HL7Config = .current) {
+        self.config = config
         self.builder = HL7Builder.companion.builder()
-            .defaultVersion(version: versionId)
+            .defaultVersion(version: config.versionId)
             .build()
     }
 
@@ -55,10 +70,10 @@ final class HL7CompletionBuilder {
 
         let message = builder.rdsO13 { scope in
             scope.msh { msh in
-                msh.sendingApplication = "PillCounter"
-                msh.sendingFacility = "ROBOT"
-                msh.receivingApplication = "PMS"
-                msh.receivingFacility = "PHARMACY"
+                msh.sendingApplication = self.config.sendingApplication
+                msh.sendingFacility = self.config.sendingFacility
+                msh.receivingApplication = self.config.receivingApplication
+                msh.receivingFacility = self.config.receivingFacility
                 msh.dateTimeOfMessage = now
                 msh.messageControlId = messageId
                 msh.processingId = "P"
@@ -88,7 +103,7 @@ final class HL7CompletionBuilder {
                 rxd.dispensingProviderId = user?.user_id
                 rxd.dispenseSubIdCounter = "1"
             }
-
+            
             for note in self.buildCommonNotes(txn: txn, totalCount: totalCount) {
                 scope.nte { nte in
                     nte.setId = note.setId
@@ -114,12 +129,38 @@ final class HL7CompletionBuilder {
                     builder.units = obx.units
                 }
             }
+
+            for zsn in self.buildZSN(txn: txn, details: details, drug: drug, now: now) {
+                scope.zsn { builder in
+                    builder.setId = zsn.setId
+                    builder.nationalDrugCode = zsn.nationalDrugCode
+                    builder.lotNumber = "zsn.lotNumber"
+                    builder.expirationDate = "zsn.expirationDate"
+                    builder.packageSerialNumber = zsn.packageSerialNumber
+                    builder.quantityFromThisStockItem = zsn.quantityFromThisStockItem
+                    builder.captureSource = zsn.captureSource
+                    builder.captureTimestamp = zsn.captureTimestamp
+                    builder.transactionType = zsn.transactionType
+                }
+            }
+
+            let zsv = self.buildZSV(txn: txn, drug: drug, now: now)
+            scope.zsv { builder in
+                builder.setId = zsv.setId
+                builder.scannedNdc = zsv.scannedNdc
+                builder.dispensedNdc = zsv.dispensedNdc
+                builder.matchStrength = zsv.matchStrength
+                builder.validationResult = zsv.validationResult
+                builder.validator = zsv.validator
+                builder.validationTimestamp = zsv.validationTimestamp
+                builder.scanSource = zsv.scanSource
+            }
         }
 
         return message.encode()
     }
 
-    // MARK: - Inventory Response (INR U05)
+    // MARK: - Inventory Response (INR U06, INV + ZAD)
     func buildInventoryMessage(
         batch: BatchCountEntity,
         user: UserEntity?
@@ -150,12 +191,12 @@ final class HL7CompletionBuilder {
             grouped[key] = e
         }
 
-        let message = builder.inrU05 { scope in
+        let message = builder.inrU06 { scope in
             scope.msh { msh in
-                msh.sendingApplication = "PILLCOUNTER"
-                msh.sendingFacility = "STORE"
-                msh.receivingApplication = "PMS"
-                msh.receivingFacility = "PHARMACY"
+                msh.sendingApplication = self.config.sendingApplication
+                msh.sendingFacility = self.config.sendingFacility
+                msh.receivingApplication = self.config.receivingApplication
+                msh.receivingFacility = self.config.receivingFacility
                 msh.dateTimeOfMessage = now
                 msh.messageControlId = messageId
                 msh.processingId = "P"
@@ -167,6 +208,16 @@ final class HL7CompletionBuilder {
                 orc.placerOrderNumber = orderId
             }
 
+            let grandTotal = grouped.values.reduce(Int32(0)) { $0 + $1.opened + $1.sealed }
+            for note in self.buildCommonNotes(batch: batch, totalCount: grandTotal) {
+                scope.nte { nte in
+                    nte.setId = note.setId
+                    nte.sourceOfComment = note.sourceOfComment
+                    nte.comment = note.comment
+                    nte.commentType = note.commentType
+                }
+            }
+
             var index: Int32 = 1
             for (key, value) in grouped {
                 let total = value.opened + value.sealed
@@ -176,37 +227,21 @@ final class HL7CompletionBuilder {
                     // INV-2.1 (substance code / NDC) has no dedicated property on the
                     // current INVBuilder — reusing inventoryLocationIdentifier as a
                     // stopgap until the library exposes a proper substanceCode field.
-                    inv.inventoryLocationIdentifier = key.ndc
+                    inv.substanceCode = key.ndc
                     inv.substanceCodeSystem = "NDC"
                     inv.substanceName = key.name.isEmpty ? nil : key.name
                     inv.inventoryOnHandQuantity = "\(total)"
+                    inv.lotNumber = key.lot.isEmpty ? nil : key.lot
+                    inv.expirationDate = key.expiry.isEmpty ? nil : key.expiry
                 }
 
-                if value.opened == 0 && value.sealed == 0 {
-                    scope.zin { zin in
-                        zin.setId = "\(index)"
-                        zin.dispenseType = "NA"
-                        zin.quantity = "0"
-                    }
-                } else {
-                    if value.opened > 0 {
-                        scope.zin { zin in
-                            zin.setId = "\(index)"
-                            zin.dispenseType = "OPENED"
-                            zin.quantity = "\(value.opened)"
-                            zin.lotNumber = key.lot.isEmpty ? nil : key.lot
-                            zin.expiry = key.expiry.isEmpty ? nil : key.expiry
-                        }
-                    }
-                    if value.sealed > 0 {
-                        scope.zin { zin in
-                            zin.setId = "\(index)"
-                            zin.dispenseType = "SEALED"
-                            zin.quantity = "\(value.sealed)"
-                            zin.lotNumber = key.lot.isEmpty ? nil : key.lot
-                            zin.expiry = key.expiry.isEmpty ? nil : key.expiry
-                        }
-                    }
+                scope.zad { zad in
+                    zad.setId = "\(index)"
+                    zad.adjustmentType = "CYCLE_COUNT"
+                    zad.adjustmentQuantity = "\(total)"
+                    zad.adjustmentReason = ZadReasonCode.shared.CYCLE_COUNT
+                    zad.adjustmentDateTime = now
+                    zad.approvedBy = user?.fname ?? "Unknown"
                 }
 
                 index += 1
@@ -214,7 +249,7 @@ final class HL7CompletionBuilder {
         }
 
         // The ACK for the originating request (MSA-2 = requestId) is a separate
-        // message from this INR^U05 response; build/send it via `HL7.ack(message:)`
+        // message from this INR^U06 response; build/send it via `HL7.ack(message:)`
         // or `HL7Builder().ack { ... }` where the inbound request is parsed, not here.
         _ = requestId
 
@@ -294,6 +329,69 @@ private extension HL7CompletionBuilder {
         return obxList
     }
 
+    // MARK: ZSN/ZSV Builders
+
+    struct ZsnRow {
+        let setId: String
+        let nationalDrugCode: String?
+        let lotNumber: String?
+        let expirationDate: String?
+        let packageSerialNumber: String?
+        let quantityFromThisStockItem: String
+        let captureSource: String
+        let captureTimestamp: String
+        let transactionType: String
+    }
+
+    func buildZSN(
+        txn: PillCountTransactionEntity,
+        details: [PillCountTransactionDetailsEntity],
+        drug: DrugMasterEntity,
+        now: String
+    ) -> [ZsnRow] {
+        return details.enumerated().map { index, detail in
+            ZsnRow(
+                setId: "\(index + 1)",
+                nationalDrugCode: drug.ndc,
+                lotNumber: txn.lot_no,
+                expirationDate: txn.expiry,
+                packageSerialNumber: txn.serial_no,
+                quantityFromThisStockItem: "\(detail.pill_count)",
+                captureSource: detail.is_manual ? ScanSource.shared.MANUAL : ScanSource.shared.UNKNOWN,
+                captureTimestamp: now,
+                transactionType: ZsnTransactionType.shared.DISPENSE
+            )
+        }
+    }
+
+    struct ZsvRow {
+        let setId: String
+        let scannedNdc: String?
+        let dispensedNdc: String?
+        let matchStrength: String?
+        let validationResult: String
+        let validator: String
+        let validationTimestamp: String
+        let scanSource: String
+    }
+
+    func buildZSV(
+        txn: PillCountTransactionEntity,
+        drug: DrugMasterEntity,
+        now: String
+    ) -> ZsvRow {
+        return ZsvRow(
+            setId: "1",
+            scannedNdc: drug.ndc,
+            dispensedNdc: drug.ndc,
+            matchStrength: txn.is_ndc_verfied ? ZsvMatchStrength.shared.EXACT : nil,
+            validationResult: txn.is_ndc_verfied ? ZsvValidationResult.shared.MATCH : ZsvValidationResult.shared.MISMATCH,
+            validator: "PillCounter",
+            validationTimestamp: now,
+            scanSource: ScanSource.shared.UNKNOWN
+        )
+    }
+
     // MARK: Notes Builder
     struct NoteRow {
         let setId: String
@@ -307,53 +405,43 @@ private extension HL7CompletionBuilder {
         totalCount: Int
     ) -> [NoteRow] {
 
-        var notes: [NoteRow] = []
-        var index = 1
+        var comment = "Transaction Id: \(txn.txn_id) | Status: Completed | Total Count: \(totalCount)"
 
-        notes.append(
-            NoteRow(
-                setId: "\(index)",
-                sourceOfComment: "L",
-                comment: "Transaction completed",
-                commentType: "INFO"
-            )
-        )
-        index += 1
-
-        notes.append(
-            NoteRow(
-                setId: "\(index)",
-                sourceOfComment: "L",
-                comment: "Total Count: \(totalCount)",
-                commentType: "INFO"
-            )
-        )
-        index += 1
-
-        notes.append(
-            NoteRow(
-                setId: "\(index)",
-                sourceOfComment: "L",
-                comment: "Transaction Id: \(txn.txn_id)",
-                commentType: "INFO"
-            )
-        )
-        index += 1
-
-        if let note = txn.note,
-           !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-
-            notes.append(
-                NoteRow(
-                    setId: "\(index)",
-                    sourceOfComment: "L",
-                    comment: note,
-                    commentType: "INFO"
-                )
-            )
+        if let note = txn.note?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !note.isEmpty {
+            comment += " | Note: \(note)"
         }
 
-        return notes
+        return [
+            NoteRow(
+                setId: "1",
+                sourceOfComment: "L",
+                comment: comment,
+                commentType: "INFO"
+            )
+        ]
+    }
+
+    func buildCommonNotes(
+        batch: BatchCountEntity,
+        totalCount: Int32
+    ) -> [NoteRow] {
+
+        var comment = "Batch Id: \(batch.batch_id) | Status: Completed | Total Count: \(totalCount)"
+
+        if let note = batch.note?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !note.isEmpty {
+            comment += " | Note: \(note)"
+        }
+
+        return [
+            NoteRow(
+                setId: "1",
+                sourceOfComment: "L",
+                comment: comment,
+                commentType: "INFO"
+            )
+        ]
     }
 
     // MARK: Detail Extractor

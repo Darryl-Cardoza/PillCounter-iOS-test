@@ -198,6 +198,16 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.hl7Version = hl7Version
                 }
 
+                if let isPmsIntegrated = result.data?.settings?.isPmsIntegrated
+                    ?? result.data?.user?.settings?.isPmsIntegrated {
+                    AppStorageManager.shared.isPmsIntegrated = isPmsIntegrated
+                }
+
+                if let allowLocalStorage = result.data?.settings?.allowLocalStorage
+                    ?? result.data?.user?.settings?.allowLocalStorage {
+                    AppStorageManager.shared.allowLocalStorage = allowLocalStorage
+                }
+
                 let fetchedTerminals = result.data?.user?.terminals
                     ?? result.data?.settings?.terminals
                     ?? []

@@ -41,7 +41,7 @@ final class Hl7ServiceManager {
     ///   the library itself.
     private let hl7 = HL7(
         version: AppStorageManager.shared.hl7Version,
-        strictMode: false,
+        strictMode: false,	
         validationConfig: .companion.DEFAULT,
         extraSegments: []
     )

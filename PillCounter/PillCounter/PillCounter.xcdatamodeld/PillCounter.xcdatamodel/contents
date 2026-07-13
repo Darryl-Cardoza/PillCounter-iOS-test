@@ -56,12 +56,10 @@
     <entity name="PillCountTransactionEntity" representedClassName="PillCountTransactionEntity" syncable="YES" codeGenerationType="class">
         <attribute name="barcode_image" optional="YES" attributeType="String"/>
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="bucket_id" optional="YES" attributeType="String"/>
         <attribute name="count_type" optional="YES" attributeType="String"/>
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="expiry" optional="YES" attributeType="String"/>
         <attribute name="gloves_detected" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="hazardous_tray_detected" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_deleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
@@ -70,15 +68,11 @@
         <attribute name="is_substitute" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_synced" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="local_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="loose_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="lot_no" optional="YES" attributeType="String"/>
         <attribute name="note" optional="YES" attributeType="String"/>
-        <attribute name="open_bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="patient_name" optional="YES" attributeType="String"/>
         <attribute name="refill_no" optional="YES" attributeType="String"/>
         <attribute name="req_id" optional="YES" attributeType="String"/>
         <attribute name="rx_no" optional="YES" attributeType="String"/>
-        <attribute name="serial_no" optional="YES" attributeType="String"/>
         <attribute name="status" optional="YES" attributeType="String"/>
         <attribute name="substitute_drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="target_count" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>

@@ -195,8 +195,6 @@ struct HistoryTransactionDetailView: View {
                let input = DrugHistoryPDFInput(
                    drugName:          txn.drug?.drug_name ?? "",
                    ndc:               txn.drug?.ndc ?? "N/A",
-                   expiry:            txn.expiry ?? "",
-                   lotNo:             txn.lot_no ?? "",
                    date:              Formatter.getDateString(from: txn.created_at),
                    time:              Formatter.getTimeString(from: txn.created_at),
                    note:              txn.note,
@@ -516,18 +514,6 @@ extension HistoryTransactionDetailView {
             detailRow(
                 label: L10n.History.ndc,
                 value: transaction?.drug?.ndc ?? "N/A"
-            )
-            Divider().background(appColors.text.opacity(0.1))
-
-            detailRow(
-                label: L10n.History.expiryNo,
-                value: transaction?.expiry ?? "N/A"
-            )
-            Divider().background(appColors.text.opacity(0.1))
-
-            detailRow(
-                label: L10n.History.lotNo,
-                value: transaction?.lot_no ?? "N/A"
             )
             Divider().background(appColors.text.opacity(0.1))
 

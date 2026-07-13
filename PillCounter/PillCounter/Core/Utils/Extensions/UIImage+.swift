@@ -47,8 +47,6 @@ extension UIImage {
         workflowStep:  String,   // "Target Verification", "Recount", "Vial", etc.
         count:         Int,
         targetCount:   Int32?,
-        lotNo:         String,
-        expiry:        String,
         timestamp:     Int64,
         userInitials:  String,
         geolocation:   String,   // "37.33° N, 122.03° W — 94025"
@@ -81,8 +79,6 @@ extension UIImage {
             add("Count", "\(count)")
         }
 
-        add("Lot",    lotNo)
-        add("Exp",    expiry)
         add("User",   userInitials)
         add("Rx",     rx)
         add("Loc",    geolocation)

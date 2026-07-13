@@ -165,14 +165,108 @@ extension PillScanViewModel {
         print("Batch Stock Txn Created → NDC:", ndc, "Batch:", batchId)
     }
 
-    /// Called after open pill counting completes. Sets loose_qty to the final counted value
-    /// (absolute, not additive) on the specific opened BottleInfoEntity row created by the scan.
-    func updateOpenPillCount(bottleId: Int64, loosePillCount: Int) {
-        bottleInfoDAO.updateOpenedBottleLooseQty(bottleId: bottleId, looseQty: Int32(loosePillCount))
-        if let stockTxnId = currentStockTxn?.stock_txn_id, let updated = stockTxnDAO.fetchById(stockTxnId) {
+    /// Open-pill flow: resolve/create the drug + StockTxnEntity for the scanned NDC, but do
+    /// NOT write a BottleInfoEntity row yet — the user still has to count the loose pills and
+    /// tap Proceed. Lot/expiry/serial from the scan are stashed and applied when the row is
+    /// finally created in `createOpenedBottleFromPendingScan`.
+    func resolveStockTxnForOpenPillScan(
+        rawValueFromBarcodeOrQr: String?,
+        ndc: String,
+        drugName: String,
+        quantity: Int32,
+        batchId: Int64
+    ) async {
+        guard !ndc.isEmpty else { return }
+
+        let decoded = decoder.decode(rawValueFromBarcodeOrQr ?? "")
+        let gtin = decoded.gtin ?? ""
+        let expiryString = formatExpiry(decoded.expirationDate)
+
+        pendingOpenBottleLot = decoded.lotNumber
+        pendingOpenBottleExpiry = expiryString
+        pendingOpenBottleSerial = decoded.serialNumber
+
+        guard let batch = batchDAO.fetchById(batchId) else { return }
+
+        if let existingStockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) {
+            self.currentStockTxn = existingStockTxn
+            self.currentBottleInfo = nil
+            handlePostScanUI(containerStatus: .opened)
+            return
+        }
+
+        var drugIdToUse: Int64
+
+        if let existingDrug = drugMasterDAO.fetchByNdc(ndc) {
+            if (existingDrug.gtin ?? "").isEmpty, !gtin.isEmpty {
+                existingDrug.gtin = gtin
+                CoreDataManager.shared.save(context: CoreDataManager.shared.context)
+                Log("Updated GTIN for existing drug → \(ndc)")
+            }
+            drugIdToUse = existingDrug.drug_id
+        } else if !gtin.isEmpty, let existingByGtin = drugMasterDAO.fetchByGtin(gtin) {
+            drugIdToUse = existingByGtin.drug_id
+        } else {
+            let request = NdcValidationRequest(targetNdc: ndc, scannedNdc: ndc)
+            do {
+                let response = try await controlledRepo.getControlledDrugInfo(
+                    ndcValidationRequest: request
+                )
+                if let scannedNdc = response.data?.scannedNdc,
+                   let lookup = scannedNdc.lookupName,
+                   !lookup.isEmpty {
+                    let newId = generateUniqueDrugId()
+                    drugMasterDAO.upsertFromApi(
+                        ndc:    scannedNdc.drugCode ?? ndc,
+                        drugId: newId,
+                        drug:   scannedNdc,
+                        gtin:   gtin
+                    )
+                    if scannedNdc.safeQuantity == 0 {
+                        drugMasterDAO.update(drugId: newId, packageQty: quantity)
+                    }
+                    drugIdToUse = newId
+                } else {
+                    throw NSError(domain: "HL7", code: -1)
+                }
+            } catch {
+                Log("API failed → fallback create")
+                let newId = generateUniqueDrugId()
+                drugMasterDAO.saveManual(
+                    ndc: ndc,
+                    gtin: gtin,
+                    drugId: newId,
+                    drugName: drugName,
+                    packageQty: quantity
+                )
+                drugIdToUse = newId
+            }
+        }
+
+        let stockTxn = stockTxnDAO.fetchOrCreate(batch: batch, drugId: drugIdToUse, bucketId: batch.bucket_id)
+        self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
+        self.currentBottleInfo = nil
+
+        handlePostScanUI(containerStatus: .opened)
+    }
+
+    /// Called after open pill counting completes (Proceed) — creates the BottleInfoEntity row
+    /// for real, using the lot/expiry/serial stashed at scan time, with the final counted qty.
+    func createOpenedBottleFromPendingScan(loosePillCount: Int) {
+        guard let stockTxnId = currentStockTxn?.stock_txn_id else { return }
+        self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+            stockTxnId: stockTxnId,
+            looseQty: Int32(loosePillCount),
+            lotNo: pendingOpenBottleLot,
+            expNo: pendingOpenBottleExpiry,
+            serialNo: pendingOpenBottleSerial
+        )
+        if let updated = stockTxnDAO.fetchById(stockTxnId) {
             self.currentStockTxn = updated
         }
-        self.currentBottleInfo = bottleInfoDAO.fetchById(bottleId)
+        pendingOpenBottleLot = nil
+        pendingOpenBottleExpiry = nil
+        pendingOpenBottleSerial = nil
     }
 
     func formatExpiry(_ date: Date?) -> String? {

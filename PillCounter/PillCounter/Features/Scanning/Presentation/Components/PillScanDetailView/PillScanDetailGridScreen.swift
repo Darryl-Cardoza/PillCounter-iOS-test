@@ -31,7 +31,7 @@ struct PillScanDetailGridScreen: View {
     }
 
     private var drugName: String {
-        pillScanViewModel.currentTransaction?.drug?.drug_name ?? ""
+        pillScanViewModel.currentDrug?.drug_name ?? ""
     }
 
     private var pillCount: Int {

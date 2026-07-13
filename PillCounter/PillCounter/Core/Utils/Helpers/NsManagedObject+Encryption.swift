@@ -37,7 +37,6 @@ private let encryptedFieldRegistry: [String: [String]] = [
     "PillCountTransactionEntity": [
         "patient_name",
         "rx_no",
-        "lot_no",
         "note",
         "barcode_image"
     ],

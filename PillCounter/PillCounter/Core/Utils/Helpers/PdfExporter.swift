@@ -558,8 +558,6 @@ private final class BatchPDFRenderer {
 struct DrugHistoryPDFInput {
     let drugName: String
     let ndc: String
-    let expiry: String
-    let lotNo: String
     let date: String
     let time: String
     let note: String?
@@ -710,8 +708,6 @@ private final class DrugHistoryPDFRenderer {
         let rows: [(String, String)] = [
             ("Drug Name",     input.drugName),
             ("NDC / GTIN 14", input.ndc),
-            ("Expiry",        input.expiry.isEmpty ? "N/A" : input.expiry),
-            ("Lot No",        input.lotNo.isEmpty  ? "N/A" : input.lotNo),
             ("Date",          input.date),
             ("Time",          input.time),
             ("Count Type",    formatCountType(input.countType)),

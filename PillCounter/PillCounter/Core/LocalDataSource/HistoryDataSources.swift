@@ -50,8 +50,6 @@ protocol TransactionDataSource: AnyObject {
     func getWorkflowStep(txn: PillCountTransactionEntity) -> ControlledStep?
     func restoreDeleted(txnId: Int64)
     func updateStatus(txnId: Int64, status: CountStatus)
-    func updateCounts(txnId: Int64, bottleQty: Int32?, looseQty: Int32?, openBottleQty: Int32?)
-    func setAbsoluteCounts(txnId: Int64, bottleQty: Int32?, looseQty: Int32?, openBottleQty: Int32?)
     func updateNote(txnId: Int64, note: String)
     func updateTargetCount(txnId: Int64, targetCount: Int32)
     func updateWorkflowStep(txnId: Int64, step: ControlledStep)
@@ -62,8 +60,8 @@ protocol TransactionDataSource: AnyObject {
     func create(
         for user: UserEntity, drugId: Int64?, countType: CountType, batchId: Int64,
         barcodeImagePath: String, isFromPms: Bool, drugName: String?, targetCount: Int32,
-        isControlled: Bool?, expirationDate: String?, lotNumber: String?, serialNumber: String?,
-        rxNo: String?, bucketId: String?, priority: String?, workFlowStep: String?
+        isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
+        workFlowStep: String?
     ) -> PillCountTransactionEntity
     func update(
         txnId: Int64, drugId: Int64?, countType: CountType, targetCount: Int32?,
@@ -168,28 +166,19 @@ extension BatchDataSource {
 }
 
 extension TransactionDataSource {
-    func updateCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
-        updateCounts(txnId: txnId, bottleQty: bottleQty, looseQty: looseQty, openBottleQty: openBottleQty)
-    }
-    func setAbsoluteCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
-        setAbsoluteCounts(txnId: txnId, bottleQty: bottleQty, looseQty: looseQty, openBottleQty: openBottleQty)
-    }
-
     /// Convenience matching the store's defaulted `create` so call sites keep
     /// their short forms when working against the protocol type.
     func create(
         for user: UserEntity, drugId: Int64?, countType: CountType, batchId: Int64 = 0,
         barcodeImagePath: String = "", isFromPms: Bool = false, drugName: String? = nil,
-        targetCount: Int32 = 0, isControlled: Bool? = nil, expirationDate: String? = nil,
-        lotNumber: String? = nil, serialNumber: String? = nil, rxNo: String? = nil,
+        targetCount: Int32 = 0, isControlled: Bool? = nil, rxNo: String? = nil,
         bucketId: String? = nil, priority: String? = nil, workFlowStep: String? = nil
     ) -> PillCountTransactionEntity {
         create(
             for: user, drugId: drugId, countType: countType, batchId: batchId,
             barcodeImagePath: barcodeImagePath, isFromPms: isFromPms, drugName: drugName,
-            targetCount: targetCount, isControlled: isControlled, expirationDate: expirationDate,
-            lotNumber: lotNumber, serialNumber: serialNumber, rxNo: rxNo, bucketId: bucketId,
-            priority: priority, workFlowStep: workFlowStep
+            targetCount: targetCount, isControlled: isControlled, rxNo: rxNo,
+            bucketId: bucketId, priority: priority, workFlowStep: workFlowStep
         )
     }
 

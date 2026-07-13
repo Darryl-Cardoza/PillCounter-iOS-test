@@ -98,8 +98,6 @@ final class HL7CompletionBuilder {
                 rxd.actualDispenseAmount = "\(totalCount)"
                 rxd.actualDispenseUnits = "TAB"
                 rxd.prescriptionNumber = orderId
-                rxd.lotNumber = txn.lot_no
-                rxd.expirationDate = txn.expiry
                 rxd.dispensingProviderId = user?.user_id
                 rxd.dispenseSubIdCounter = "1"
             }
@@ -134,9 +132,6 @@ final class HL7CompletionBuilder {
                 scope.zsn { builder in
                     builder.setId = zsn.setId
                     builder.nationalDrugCode = zsn.nationalDrugCode
-                    builder.lotNumber = "zsn.lotNumber"
-                    builder.expirationDate = "zsn.expirationDate"
-                    builder.packageSerialNumber = zsn.packageSerialNumber
                     builder.quantityFromThisStockItem = zsn.quantityFromThisStockItem
                     builder.captureSource = zsn.captureSource
                     builder.captureTimestamp = zsn.captureTimestamp
@@ -337,9 +332,6 @@ private extension HL7CompletionBuilder {
     struct ZsnRow {
         let setId: String
         let nationalDrugCode: String?
-        let lotNumber: String?
-        let expirationDate: String?
-        let packageSerialNumber: String?
         let quantityFromThisStockItem: String
         let captureSource: String
         let captureTimestamp: String
@@ -356,9 +348,6 @@ private extension HL7CompletionBuilder {
             ZsnRow(
                 setId: "\(index + 1)",
                 nationalDrugCode: drug.ndc,
-                lotNumber: txn.lot_no,
-                expirationDate: txn.expiry,
-                packageSerialNumber: txn.serial_no,
                 quantityFromThisStockItem: "\(detail.pill_count)",
                 captureSource: detail.is_manual ? ScanSource.shared.MANUAL : ScanSource.shared.UNKNOWN,
                 captureTimestamp: now,

@@ -16,6 +16,8 @@ class HistoryViewModel: ObservableObject {
     private let transactionStore: TransactionDataSource
     private let transactionDetailStore: TransactionDetailDataSource
     private let batchStore: BatchDataSource
+    private let stockTxnStore: StockTxnDataSource
+    private let bottleInfoStore: BottleInfoDataSource
     private let userStore: UserDataSource
     private let userIdProvider: UserIdProviding
 
@@ -25,12 +27,16 @@ class HistoryViewModel: ObservableObject {
         transactionStore: TransactionDataSource = TransactionStore.shared,
         transactionDetailStore: TransactionDetailDataSource = TransactionDetailStore.shared,
         batchStore: BatchDataSource = BatchStore.shared,
+        stockTxnStore: StockTxnDataSource = StockTxnStore.shared,
+        bottleInfoStore: BottleInfoDataSource = BottleInfoStore.shared,
         userStore: UserDataSource = UserStore.shared,
         userIdProvider: UserIdProviding = AppStorageManager.shared
     ) {
         self.transactionStore = transactionStore
         self.transactionDetailStore = transactionDetailStore
         self.batchStore = batchStore
+        self.stockTxnStore = stockTxnStore
+        self.bottleInfoStore = bottleInfoStore
         self.userStore = userStore
         self.userIdProvider = userIdProvider
     }
@@ -298,40 +304,59 @@ class HistoryViewModel: ObservableObject {
     // MARK: - Batch Detail: Prepare grouped transactions
     func prepareBatchDetails(for batchId: Int64) {
         selectedBatch = batchStore.fetchById(batchId)
-        let txns = transactionStore.fetchByBatch(batchId: batchId)
-        groupedTransactionsForBatch = mapGroupedTransactions(txns: txns)
+        let stockTxns = stockTxnStore.fetchByBatch(batchId: batchId)
+        groupedTransactionsForBatch = mapGroupedStockTxns(stockTxns: stockTxns)
     }
 
-    private func mapGroupedTransactions(txns: [PillCountTransactionEntity]) -> [GroupedTransaction] {
-        let groupedByNdc = Dictionary(grouping: txns) { $0.drug?.ndc ?? "" }
-        return groupedByNdc.map { ndc, txnList in
-            let drugName = txnList.first?.drug?.drug_name ?? "Unknown"
-            let lotGrouped = Dictionary(grouping: txnList) { "\($0.lot_no ?? "")|\($0.expiry ?? "")" }
+    private func mapGroupedStockTxns(stockTxns: [StockTxnEntity]) -> [GroupedTransaction] {
+        let groupedByNdc = Dictionary(grouping: stockTxns) { $0.drug?.ndc ?? "" }
+
+        return groupedByNdc.map { ndc, stockTxnList in
+            let drugName = stockTxnList.first?.drug?.drug_name ?? "Unknown"
+            let packageQty = stockTxnList.first?.drug?.package_qty ?? 0
+
             var lotDetails: [LotDetail] = []
             var totalSealed: Int32 = 0
             var totalOpen: Int32 = 0
-            for (_, lotTxns) in lotGrouped {
-                let sealed = lotTxns.reduce(0) { $0 + ($1.bottle_qty * ($1.drug?.package_qty ?? 0)) }
-                let open = lotTxns.reduce(0) { $0 + $1.loose_qty }
-                totalSealed += sealed
-                totalOpen += open
-                lotDetails.append(LotDetail(
-                    lot: lotTxns.first?.lot_no ?? "",
-                    expiry: lotTxns.first?.expiry ?? "",
-                    sealedQty: sealed,
-                    openQty: open
-                ))
+            var sealedBottleQty: Int32 = 0
+
+            for stockTxn in stockTxnList {
+                let bottles = bottleInfoStore.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+
+                let sealedRows = bottles.filter { $0.bottle_qty > 0 && $0.loose_qty == 0 }
+                let openedRows = bottles.filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
+
+                for sealed in sealedRows {
+                    let sealedQty = sealed.bottle_qty * packageQty
+                    totalSealed += sealedQty
+                    sealedBottleQty += sealed.bottle_qty
+                    lotDetails.append(LotDetail(
+                        lot: sealed.lot_no ?? "", expiry: sealed.exp_no ?? "",
+                        sealedQty: sealedQty, openQty: 0
+                    ))
+                }
+
+                let openGrouped = Dictionary(grouping: openedRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
+                for (_, rows) in openGrouped {
+                    let open = rows.reduce(0) { $0 + $1.loose_qty }
+                    totalOpen += open
+                    lotDetails.append(LotDetail(
+                        lot: rows.first?.lot_no ?? "", expiry: rows.first?.exp_no ?? "",
+                        sealedQty: 0, openQty: open
+                    ))
+                }
             }
+
             return GroupedTransaction(
-                stockTxnId: txnList.first?.txn_id ?? 0,
-                ndc: ndc,
-                drugName: drugName,
-                total: totalSealed + totalOpen,
-                sealedBottles: totalSealed,
-                sealedBottleQty: txnList.first?.bottle_qty ?? 0,
-                packageQty: txnList.first?.drug?.package_qty ?? 0,
-                openPills: totalOpen,
-                lotDetails: lotDetails
+                stockTxnId:      stockTxnList.first?.stock_txn_id ?? 0,
+                ndc:             ndc,
+                drugName:        drugName,
+                total:           totalSealed + totalOpen,
+                sealedBottles:   totalSealed,
+                sealedBottleQty: sealedBottleQty,
+                packageQty:      packageQty,
+                openPills:       totalOpen,
+                lotDetails:      lotDetails
             )
         }
     }

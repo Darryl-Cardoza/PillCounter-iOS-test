@@ -75,10 +75,10 @@ struct PillCountLayout: View {
 
     /// Target for the current step (0 when there is no meaningful target, e.g. REGULAR).
     private var targetCount: Int {
-        if pillScanViewModel.currentTransaction?.is_from_pms == true {
-            return pillScanViewModel.currentControlledTargetCount ?? 0
-        } else if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
+        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
             return 0
+        } else if pillScanViewModel.currentTransaction?.is_from_pms == true {
+            return pillScanViewModel.currentControlledTargetCount ?? 0
         } else {
             return pillScanViewModel.currentControlledTargetCount ?? 0
         }
@@ -86,10 +86,10 @@ struct PillCountLayout: View {
 
     /// Total committed count for the current transaction / step.
     private var currentTotalCount: Int {
-        if pillScanViewModel.currentTransaction?.is_from_pms == true {
-            return Int(pillScanViewModel.getTotalCuntForCurrentStep())
-        } else if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
+        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
             return pillScanViewModel.addCurrentOpenPillCount
+        } else if pillScanViewModel.currentTransaction?.is_from_pms == true {
+            return Int(pillScanViewModel.getTotalCuntForCurrentStep())
         } else {
             return pillScanViewModel.getTotalPillCountOfCurrentTransaction()
         }
@@ -131,11 +131,12 @@ struct PillCountLayout: View {
             // ── Top + bottom bars ──────────────────────────────────────────
             VStack(spacing: 0) {
                 PillCountTopBar(
-                    ndc: pillScanViewModel.currentTransaction?.drug?.ndc ?? "-",
-                    drugName: pillScanViewModel.currentTransaction?.drug?.drug_name ?? "-",
-                    form: pillScanViewModel.currentTransaction?.drug?.dosage_form ?? "-",
-                    strength: pillScanViewModel.currentTransaction?.drug?.strength ?? "-",
-                    bucket: pillScanViewModel.currentTransaction?.bucket_id ?? "NORMAL",
+                    ndc: pillScanViewModel.currentDrug?.ndc ?? "-",
+                    drugName: pillScanViewModel.currentDrug?.drug_name ?? "-",
+                    form: pillScanViewModel.currentDrug?.dosage_form ?? "-",
+                    strength: pillScanViewModel.currentDrug?.strength ?? "-",
+                    bucket: pillScanViewModel.currentTransaction?.bucket_id
+                        ?? pillScanViewModel.currentStockTxn?.bucket_id ?? "NORMAL",
                     instructionText: instructionText,
                     isLandscape: isLandscape,
                     isIpad: isIpad,
@@ -151,14 +152,14 @@ struct PillCountLayout: View {
                 // shown above it.
                 if isPortrait {
                     StepProgressRow(
-                        activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
+                        activeSteps: isOpenPillScanMode ? [.scan, .targetVerification] : PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                         currentStep: pillScanViewModel.currentControlledStep,
                         onTapStep: { handleStepTap($0) }
                     )
                 }
 
                 PillCountBottomBar(
-                    activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
+                    activeSteps: isOpenPillScanMode ? [.scan, .targetVerification] : PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                     currentStep: pillScanViewModel.currentControlledStep,
                     currentTotalCount: currentTotalCount,
                     targetCount: targetCount,
@@ -167,7 +168,7 @@ struct PillCountLayout: View {
                     showSteps: !isPortrait,
                     onTapStep: { handleStepTap($0) },
                     isOpenEndedCountStep: isOpenEndedStep,
-                    isRegularCountType: pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue,
+                    isRegularCountType: isOpenPillScanMode || pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue,
                     isDoneEnabled: isDoneEnabled,
                     onShowDetailGrid: onShowDetailGrid,
                     onDone: onAllDone

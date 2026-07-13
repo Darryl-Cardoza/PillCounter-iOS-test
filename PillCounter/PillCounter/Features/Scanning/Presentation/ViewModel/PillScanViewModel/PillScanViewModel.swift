@@ -39,6 +39,19 @@ class PillScanViewModel: ObservableObject {
     @Published var currentStockTxn: StockTxnEntity?
     @Published var currentBottleInfo: BottleInfoEntity?
 
+    /// Lot/expiry/serial from the barcode scanned to start an open-pill count.
+    /// No BottleInfoEntity row is written until the count is confirmed (Proceed) —
+    /// see `createOpenedBottleFromPendingScan`.
+    var pendingOpenBottleLot: String?
+    var pendingOpenBottleExpiry: String?
+    var pendingOpenBottleSerial: String?
+
+    /// Drug for whichever flow is active — FIXED/REGULAR dispense (currentTransaction) or
+    /// stock-count open-pill counting (currentStockTxn), which has no PillCountTransactionEntity.
+    var currentDrug: DrugMasterEntity? {
+        currentTransaction?.drug ?? currentStockTxn?.drug
+    }
+
     // this will store the transaction details array for the current transaction.
     @Published var currentTransactionTransactionDetails:
         [PillCountTransactionDetailsEntity]?
@@ -198,9 +211,6 @@ class PillScanViewModel: ObservableObject {
         targetCount: Int32? = nil,
         drugName: String? = nil,
         batchId: Int64? = nil,
-        expirationDate: String? = nil,
-        lotNumber: String? = nil,
-        serialNumber: String? = nil,
         rxNo:String? = nil,
         bucketId: String? = nil,
         priority: String? = nil,
@@ -242,9 +252,6 @@ class PillScanViewModel: ObservableObject {
             drugName: drugName,
             targetCount: targetCount ?? 0,
             isControlled: isControlled,
-            expirationDate: expirationDate,
-            lotNumber: lotNumber,
-            serialNumber: serialNumber,
             rxNo: rxNo,
             bucketId: bucketId,
             priority: priority,

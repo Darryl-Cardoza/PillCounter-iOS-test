@@ -29,9 +29,6 @@ final class TransactionStore {
         drugName: String? = nil,
         targetCount: Int32 = 0,
         isControlled: Bool? = nil,
-        expirationDate: String? = nil,
-        lotNumber: String? = nil,
-        serialNumber: String? = nil,
         rxNo: String? = nil,
         bucketId: String? = nil,
         priority: String? = nil,
@@ -52,9 +49,6 @@ final class TransactionStore {
         entity.is_synced = false
         entity.target_count = targetCount
         entity.is_ndc_verfied = false
-        entity.expiry = expirationDate
-        entity.lot_no = lotNumber
-        entity.serial_no = serialNumber
         entity.bucket_id = bucketId
         entity.workflow_step = workFlowStep
         entity.user = user
@@ -69,7 +63,7 @@ final class TransactionStore {
         }
 
         CoreDataManager.shared.save(context: context)
-        print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), countType: \(countType.rawValue), batchId: \(batchId), isFromPms: \(isFromPms), lotNo: \(lotNumber ?? "-"), serialNo: \(serialNumber ?? "-"), expiry: \(expirationDate ?? "-")")
+        print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), countType: \(countType.rawValue), batchId: \(batchId), isFromPms: \(isFromPms)")
         transactionsDidChange.send()
         return entity
     }
@@ -269,7 +263,7 @@ final class TransactionStore {
         results.forEach { refreshDecrypted($0) }
         StoreLogger.log(
             dao: "TransactionDAO", op: "fetchAll",
-            columns: ["txn_id", "rx_no", "drug_name", "count_type", "status", "batch_id", "target_count", "lot_no", "serial_no"],
+            columns: ["txn_id", "rx_no", "drug_name", "count_type", "status", "batch_id", "target_count"],
             rows: results.map { [
                 "\($0.txn_id)",
                 $0.rx_no ?? "-",
@@ -278,11 +272,6 @@ final class TransactionStore {
                 $0.status ?? "-",
                 "\($0.batch_id)",
                 "\($0.target_count)",
-//                "\($0.is_from_pms)",
-//                "\($0.is_synced)",
-                "\($0.lot_no)",
-//                "\($0.expiry_date)",
-                $0.serial_no ?? "",
             ]}
         )
         return results
@@ -310,30 +299,6 @@ final class TransactionStore {
         guard let txn = fetchById(txnId) else { return 0 }
         let containerCount = TransactionDetailStore.shared.totalCountForStep(txnId: txnId, step: .containerInitiate)
         return max(containerCount - txn.target_count, 0)
-    }
-
-    /// Increments the given count fields by the provided amounts (additive).
-    func updateCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
-        guard let txn = fetchById(txnId) else { return }
-        if let bottleQty { txn.bottle_qty += bottleQty }
-        if let looseQty { txn.loose_qty += looseQty }
-        if let openBottleQty { txn.open_bottle_qty += openBottleQty }
-        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-        CoreDataManager.shared.save(context: context)
-        transactionsDidChange.send()
-        print("📋 [TransactionDAO] UPDATED counts — txnId: \(txnId), bottleQty: \(bottleQty.map { "+\($0)" } ?? "-"), looseQty: \(looseQty.map { "+\($0)" } ?? "-"), openBottleQty: \(openBottleQty.map { "+\($0)" } ?? "-")")
-    }
-
-    /// Sets the given count fields to absolute values (non-additive). Use for open pill count finalization.
-    func setAbsoluteCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
-        guard let txn = fetchById(txnId) else { return }
-        if let bottleQty { txn.bottle_qty = bottleQty }
-        if let looseQty { txn.loose_qty = looseQty }
-        if let openBottleQty { txn.open_bottle_qty = openBottleQty }
-        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-        CoreDataManager.shared.save(context: context)
-        transactionsDidChange.send()
-        print("📋 [TransactionDAO] SET absolute counts — txnId: \(txnId), bottleQty: \(String(describing: bottleQty)), looseQty: \(String(describing: looseQty)), openBottleQty: \(String(describing: openBottleQty))")
     }
 
     func countTransactions(for user: UserEntity, countType: CountType, status: CountStatus) -> Int {
@@ -553,7 +518,7 @@ final class TransactionStore {
     // MARK: - Private
 
     /// Deterministically decrypts the object's encrypted fields in place
-    /// (e.g. rx_no, barcode_image, lot_no, note). Replaces the old
+    /// (e.g. rx_no, barcode_image, note). Replaces the old
     /// context.refresh(_, mergeChanges: false) refault, which did NOT reliably
     /// re-run awakeFromFetch and could surface ciphertext written by willSave
     /// in the same session.

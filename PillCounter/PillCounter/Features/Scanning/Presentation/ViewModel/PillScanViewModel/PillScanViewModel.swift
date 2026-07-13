@@ -19,6 +19,8 @@ class PillScanViewModel: ObservableObject {
     let transactionDAO: TransactionDataSource
     let transactionDetailDAO: TransactionDetailDataSource
     let batchDAO: BatchDataSource
+    let stockTxnDAO: StockTxnDataSource
+    let bottleInfoDAO: BottleInfoDataSource
     let userDataLocalStorage: UserDataSource
     let decoder: BarcodeAndQRDecoder
     let userRepo: UserRepositoryProtocol
@@ -29,7 +31,13 @@ class PillScanViewModel: ObservableObject {
     @Published var targetCount: [String] = Array(repeating: "", count: 4)
 
     // this will hold the current scanning transaction that user is performing or working with.
+    // Only used by the regular (non-StockCount) FIXED/REGULAR dispense-counting flow.
     @Published var currentTransaction: PillCountTransactionEntity?
+
+    // Stock-count equivalents of currentTransaction — one NDC row (currentStockTxn) plus the
+    // specific BottleInfoEntity row (currentBottleInfo) written by the most recent scan.
+    @Published var currentStockTxn: StockTxnEntity?
+    @Published var currentBottleInfo: BottleInfoEntity?
 
     // this will store the transaction details array for the current transaction.
     @Published var currentTransactionTransactionDetails:
@@ -54,6 +62,8 @@ class PillScanViewModel: ObservableObject {
         transactionDAO: TransactionDataSource = TransactionStore.shared,
         transactionDetailDAO: TransactionDetailDataSource = TransactionDetailStore.shared,
         batchDAO: BatchDataSource = BatchStore.shared,
+        stockTxnDAO: StockTxnDataSource = StockTxnStore.shared,
+        bottleInfoDAO: BottleInfoDataSource = BottleInfoStore.shared,
         userDataLocalStorage: UserDataSource = UserStore.shared,
         decoder: BarcodeAndQRDecoder = BarcodeAndQRDecoder(),
         userRepo: UserRepositoryProtocol = UserRepository.shared,
@@ -63,6 +73,8 @@ class PillScanViewModel: ObservableObject {
         self.transactionDAO = transactionDAO
         self.transactionDetailDAO = transactionDetailDAO
         self.batchDAO = batchDAO
+        self.stockTxnDAO = stockTxnDAO
+        self.bottleInfoDAO = bottleInfoDAO
         self.userDataLocalStorage = userDataLocalStorage
         self.decoder = decoder
         self.userRepo = userRepo

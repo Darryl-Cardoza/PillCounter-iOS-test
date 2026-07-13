@@ -85,7 +85,7 @@ extension UnifiedCameraView {
                     }
                 } else {
                     stockCountViewModel.updateCounts(
-                        txnId: completedTxnId,
+                        bottleId: pillScanViewModel.currentBottleInfo?.bottle_id,
                         bottleQty: nil,
                         looseQty: pillScanViewModel.addCurrentOpenPillCount
                     )

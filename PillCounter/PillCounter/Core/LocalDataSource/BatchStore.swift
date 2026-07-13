@@ -128,16 +128,16 @@ final class BatchStore {
         return (try? context.fetch(request)) ?? []
     }
 
+    /// StockTxnEntity already has exactly one row per NDC per batch, so a plain count works
+    /// (no distinct-query needed, unlike the legacy PillCountTransactionEntity model).
     func getTransactionCount(for batchId: Int64) -> Int {
-        let request = NSFetchRequest<NSDictionary>(entityName: "PillCountTransactionEntity")
+        let request = NSFetchRequest<NSNumber>(entityName: "StockTxnEntity")
+        request.resultType = .countResultType
         request.predicate = NSPredicate(
-            format: "user.user_id == %@ AND batch_id == %lld AND is_deleted == false AND drug.ndc != nil",
-            currentUserId, batchId
+            format: "batch_id == %lld AND is_deleted == false AND drug.ndc != nil",
+            batchId
         )
-        request.propertiesToFetch = ["drug.ndc"]
-        request.returnsDistinctResults = true
-        request.resultType = .dictionaryResultType
-        return (try? context.fetch(request).count) ?? 0
+        return (try? context.count(for: request)) ?? 0
     }
 
     // MARK: - Update
@@ -183,14 +183,19 @@ final class BatchStore {
         let txnReq: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         txnReq.predicate = NSPredicate(format: "batch_id IN %@", ids)
 
+        let stockTxnReq: NSFetchRequest<StockTxnEntity> = StockTxnEntity.fetchRequest()
+        stockTxnReq.predicate = NSPredicate(format: "batch_id IN %@", ids)
+
         do {
             let batches = try context.fetch(batchReq)
             batches.forEach { $0.is_deleted = true }
             let transactions = try context.fetch(txnReq)
             transactions.forEach { $0.is_deleted = true }
+            let stockTxns = try context.fetch(stockTxnReq)
+            stockTxns.forEach { $0.is_deleted = true }
             try context.save()
             transactionsDidChange.send()
-            print("📦 [BatchDAO] SOFT DELETED — batchIds: \(ids), batches: \(batches.count), transactions: \(transactions.count)")
+            print("📦 [BatchDAO] SOFT DELETED — batchIds: \(ids), batches: \(batches.count), transactions: \(transactions.count), stockTxns: \(stockTxns.count)")
         } catch {
             print("❌ BatchDAO.softDelete failed:", error)
         }

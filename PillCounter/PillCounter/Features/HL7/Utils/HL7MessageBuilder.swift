@@ -273,7 +273,7 @@ final class HL7CompletionBuilder {
         let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
         let orderId = batch.bucket_id ?? ""
 
-        let txns = TransactionStore.shared.fetchByBatch(batchId: batch.batch_id)
+        let stockTxns = StockTxnStore.shared.fetchByBatch(batchId: batch.batch_id)
 
         // MARK: GROUPING
         struct Key: Hashable {
@@ -281,16 +281,19 @@ final class HL7CompletionBuilder {
         }
         var grouped: [Key: (opened: Int32, sealed: Int32)] = [:]
 
-        for txn in txns {
-            guard let drug = txn.drug else { continue }
-            let key = Key(
-                ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
-                lot: txn.lot_no ?? "", expiry: txn.expiry ?? ""
-            )
-            var e = grouped[key] ?? (0, 0)
-            e.opened += txn.loose_qty
-            e.sealed += txn.bottle_qty * drug.package_qty
-            grouped[key] = e
+        for stockTxn in stockTxns {
+            guard let drug = stockTxn.drug else { continue }
+            let bottles = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+            for bottle in bottles {
+                let key = Key(
+                    ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
+                    lot: bottle.lot_no ?? "", expiry: bottle.exp_no ?? ""
+                )
+                var e = grouped[key] ?? (0, 0)
+                e.opened += bottle.loose_qty
+                e.sealed += bottle.bottle_qty * drug.package_qty
+                grouped[key] = e
+            }
         }
 
         // MARK: BUILD LIBRARY MODELS

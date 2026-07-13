@@ -49,6 +49,10 @@ private let encryptedFieldRegistry: [String: [String]] = [
     ],
     "DrugMasterEntity": [
         // NDC and drug_name are not PII — stored plaintext
+    ],
+    "BottleInfoEntity": [
+        "lot_no",
+        "serial_no"
     ]
 ]
 

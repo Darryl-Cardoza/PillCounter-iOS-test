@@ -20,6 +20,8 @@ class StockCountViewModel: ObservableObject {
     let batchDAO: BatchDataSource
     let transactionDAO: TransactionDataSource
     let transactionDetailDAO: TransactionDetailDataSource
+    let stockTxnDAO: StockTxnDataSource
+    let bottleInfoDAO: BottleInfoDataSource
     let drugMasterDAO: DrugCatalogDataSource
     let userDataLocalStorage: UserDataSource
     let decoder: BarcodeAndQRDecoder
@@ -29,6 +31,8 @@ class StockCountViewModel: ObservableObject {
         batchDAO: BatchDataSource = BatchStore.shared,
         transactionDAO: TransactionDataSource = TransactionStore.shared,
         transactionDetailDAO: TransactionDetailDataSource = TransactionDetailStore.shared,
+        stockTxnDAO: StockTxnDataSource = StockTxnStore.shared,
+        bottleInfoDAO: BottleInfoDataSource = BottleInfoStore.shared,
         drugMasterDAO: DrugCatalogDataSource = DrugCatalogStore.shared,
         userDataLocalStorage: UserDataSource = UserStore.shared,
         decoder: BarcodeAndQRDecoder = BarcodeAndQRDecoder(),
@@ -37,6 +41,8 @@ class StockCountViewModel: ObservableObject {
         self.batchDAO = batchDAO
         self.transactionDAO = transactionDAO
         self.transactionDetailDAO = transactionDetailDAO
+        self.stockTxnDAO = stockTxnDAO
+        self.bottleInfoDAO = bottleInfoDAO
         self.drugMasterDAO = drugMasterDAO
         self.userDataLocalStorage = userDataLocalStorage
         self.decoder = decoder
@@ -69,8 +75,11 @@ class StockCountViewModel: ObservableObject {
     @Published var openPillScanNdc: String = ""
     var pendingBucketId: String = ""
 
-    /// Txn committed by the last auto-add. Stepper changes debounce-update this txn.
-    @Published var committedTxnId: Int64? = nil
+    /// StockTxn/BottleInfo committed by the last auto-add.
+    /// committedStockTxnId identifies the NDC row; committedBottleId is the sealed bottle row
+    /// the stepper writes to (debounced).
+    @Published var committedStockTxnId: Int64? = nil
+    @Published var committedBottleId: Int64? = nil
     private var stepperDebounceTask: Task<Void, Never>? = nil
 
     /// While true, DB-change publisher events do not trigger a list reload.
@@ -88,9 +97,10 @@ class StockCountViewModel: ObservableObject {
     /// Single subscription. Any DB write fires transactionsDidChange,
     /// which calls reloadAllState() — no manual reload calls needed anywhere.
     private func observeDataChanges() {
-        Publishers.Merge(
+        Publishers.Merge3(
             batchDAO.transactionsDidChange,
-            transactionDAO.transactionsDidChange
+            stockTxnDAO.stockTxnsDidChange,
+            bottleInfoDAO.bottleInfosDidChange
         )
         .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
         .sink { [weak self] in
@@ -114,9 +124,9 @@ class StockCountViewModel: ObservableObject {
             return
         }
 
-        let txns = transactionDAO.fetchByBatch(batchId: batchId)
-        groupedTransactions = mapGroupedTransactions(txns: txns)
-        batchNdcSet = Set(txns.compactMap { $0.drug?.ndc })
+        let stockTxns = stockTxnDAO.fetchByBatch(batchId: batchId)
+        groupedTransactions = mapGroupedStockTxns(stockTxns: stockTxns)
+        batchNdcSet = Set(stockTxns.compactMap { $0.drug?.ndc })
     }
 
     // MARK: - Batch
@@ -192,9 +202,9 @@ class StockCountViewModel: ObservableObject {
 //    }
     
     func completeBatch(batchId: Int64) {
-        let txns = transactionDAO.fetchByBatch(batchId: batchId)
-        txns.forEach {
-            transactionDAO.updateStatus(txnId: $0.txn_id, status: .COMPLETED)
+        let stockTxns = stockTxnDAO.fetchByBatch(batchId: batchId)
+        stockTxns.forEach {
+            stockTxnDAO.updateStatus(stockTxnId: $0.stock_txn_id, status: .COMPLETED)
         }
 
         // Save batch status THEN fire publisher — no race condition
@@ -214,31 +224,31 @@ class StockCountViewModel: ObservableObject {
     /// Call when the stepper changes after a drug has been auto-added.
     /// Debounces so rapid taps only fire one DB write after 600ms of silence.
     func debouncedUpdateBottleCount(_ count: Int) {
-        guard let txnId = committedTxnId else { return }
+        guard let bottleId = committedBottleId else { return }
         stepperDebounceTask?.cancel()
         stepperDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 600_000_000)
             guard !Task.isCancelled else { return }
-            transactionDAO.setAbsoluteCounts(txnId: txnId, bottleQty: Int32(count))
+            bottleInfoDAO.setAbsolute(bottleId: bottleId, bottleQty: Int32(count), looseQty: nil)
         }
     }
 
     /// Cancels any pending debounce and writes the current bottle count immediately.
     /// Call before Add/Clear so the latest stepper value is always committed.
     func flushPendingBottleCount() {
-        guard let txnId = committedTxnId else { return }
+        guard let bottleId = committedBottleId else { return }
         stepperDebounceTask?.cancel()
         stepperDebounceTask = nil
-        transactionDAO.setAbsoluteCounts(txnId: txnId, bottleQty: Int32(pendingBottleCount))
+        bottleInfoDAO.setAbsolute(bottleId: bottleId, bottleQty: Int32(pendingBottleCount), looseQty: nil)
     }
 
-    func updateCounts(txnId: Int64?, bottleQty: Int? = nil, looseQty: Int? = nil, openBottleQty: Int? = nil) {
-        guard let txnId else { return }
-        transactionDAO.updateCounts(
-            txnId: txnId,
-            bottleQty:     bottleQty.map     { Int32($0) },
-            looseQty:      looseQty.map      { Int32($0) },
-            openBottleQty: openBottleQty.map { Int32($0) }
+    /// Absolute-set on a specific BottleInfoEntity row.
+    func updateCounts(bottleId: Int64?, bottleQty: Int? = nil, looseQty: Int? = nil) {
+        guard let bottleId else { return }
+        bottleInfoDAO.setAbsolute(
+            bottleId: bottleId,
+            bottleQty: bottleQty.map { Int32($0) },
+            looseQty:  looseQty.map  { Int32($0) }
         )
         // reloadAllState() fires automatically via publisher
     }
@@ -397,7 +407,8 @@ class StockCountViewModel: ObservableObject {
         existingNdcBottleCount = 0
         openPillScanRequested = false
         openPillScanNdc = ""
-        committedTxnId = nil
+        committedStockTxnId = nil
+        committedBottleId = nil
         selectedGroupedTransaction = nil
         stepperDebounceTask?.cancel()
         stepperDebounceTask = nil
@@ -410,62 +421,74 @@ class StockCountViewModel: ObservableObject {
     /// The card reads `pendingBottleCount`, which was set once during scan; the Edit sheet
     /// writes straight to the DAO, so without this the card stays stale.
     ///
-    /// `pendingBottleCount` MUST stay equal to `committedTxnId`'s own `bottle_qty`, because the
-    /// Add flush (`flushPendingBottleCount`) writes it back to that single txn. Storing the
-    /// NDC-wide sum here instead would make the flush re-apply the edit and double the count.
+    /// `pendingBottleCount` MUST stay equal to the committed sealed bottle row's `bottle_qty`,
+    /// because the Add flush (`flushPendingBottleCount`) writes it back to that single row.
+    /// Storing the NDC-wide sum here instead would make the flush re-apply the edit and double
+    /// the count.
     func resyncScannedDrugCounts() {
         guard let ndc = scannedDrugData?.ndc else { return }
         existingNdcBottleCount = existingBottleCount(for: ndc)
-        if let txnId = committedTxnId, let txn = transactionDAO.fetchById(txnId) {
-            pendingBottleCount = Int(txn.bottle_qty)
+        if let bottleId = committedBottleId, let bottle = bottleInfoDAO.fetchById(bottleId) {
+            pendingBottleCount = Int(bottle.bottle_qty)
         } else {
             pendingBottleCount = existingNdcBottleCount
         }
     }
 
-    /// Returns the existing sealed bottle count for an NDC already in the current batch.
+    /// Returns the existing sealed bottle count for an NDC already in the current batch
+    /// (the single sealed BottleInfoEntity row's bottle_qty, or 0 if none yet).
     /// Displayed alongside the stepper so the user sees current total + how many they're adding.
     func existingBottleCount(for ndc: String) -> Int {
-        guard let batchId = currentBatch?.batch_id else { return 0 }
-        let txns = transactionDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
-        return txns.reduce(0) { $0 + Int($1.bottle_qty) }
+        guard let batchId = currentBatch?.batch_id,
+              let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) else { return 0 }
+        let sealedRow = bottleInfoDAO
+            .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+            .first { $0.bottle_qty > 0 && $0.loose_qty == 0 }
+        return Int(sealedRow?.bottle_qty ?? 0)
     }
 
     /// NDC-wide sealed bottle total shown in the scanned-detail card.
     ///
-    /// `pendingBottleCount` is bound to the single `committedTxnId` (the flush target), so it
-    /// only ever holds ONE lot's bottle count. The card must instead show the full NDC across
-    /// every lot — including counts written by the Edit sheet. We take the DB NDC-wide sum and
-    /// fold in the live, not-yet-flushed stepper delta for the committed txn so the number reacts
-    /// to +/- taps immediately (the DAO write is debounced 600ms and would otherwise lag).
+    /// `pendingBottleCount` is bound to the single committed sealed bottle row (the flush
+    /// target), so it only ever holds that row's own count. We take the DB value and fold in
+    /// the live, not-yet-flushed stepper delta so the number reacts to +/- taps immediately
+    /// (the DAO write is debounced 600ms and would otherwise lag).
     func displayBottleTotal(for ndc: String) -> Int {
         let ndcWide = existingBottleCount(for: ndc)
-        guard let txnId = committedTxnId, let txn = transactionDAO.fetchById(txnId) else {
+        guard let bottleId = committedBottleId, let bottle = bottleInfoDAO.fetchById(bottleId) else {
             return ndcWide
         }
-        let committedDbQty = Int(txn.bottle_qty)
+        let committedDbQty = Int(bottle.bottle_qty)
         return ndcWide - committedDbQty + pendingBottleCount
     }
 
-    /// Returns the existing open bottle count for an NDC in the current batch.
+    /// Returns the count of opened BottleInfoEntity rows for an NDC in the current batch
+    /// (each opened scan creates one row — this is the "number of opened bottles").
     func existingOpenBottleCount(for ndc: String) -> Int {
-        guard let batchId = currentBatch?.batch_id else { return 0 }
-        let txns = transactionDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
-        return txns.reduce(0) { $0 + Int($1.open_bottle_qty) }
+        guard let batchId = currentBatch?.batch_id,
+              let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) else { return 0 }
+        return bottleInfoDAO
+            .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+            .filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
+            .count
     }
 
-    /// Returns the existing open (loose) pill count for an NDC in the current batch.
+    /// Returns the existing open (loose) pill count for an NDC in the current batch —
+    /// the sum of loose_qty across every opened BottleInfoEntity row.
     /// Displayed alongside the bottle stepper so the user sees scanned open pills.
     func existingOpenPillCount(for ndc: String) -> Int {
-        guard let batchId = currentBatch?.batch_id else { return 0 }
-        let txns = transactionDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
-        return txns.reduce(0) { $0 + Int($1.loose_qty) }
+        guard let batchId = currentBatch?.batch_id,
+              let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) else { return 0 }
+        return bottleInfoDAO
+            .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+            .filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
+            .reduce(0) { $0 + Int($1.loose_qty) }
     }
 
-    /// Finds the transaction for the given NDC in the current batch (used by open pill flow).
-    func existingTxn(for ndc: String) -> PillCountTransactionEntity? {
+    /// Finds the StockTxnEntity for the given NDC in the current batch (used by open pill flow).
+    func existingTxn(for ndc: String) -> StockTxnEntity? {
         guard let batchId = currentBatch?.batch_id else { return nil }
-        return transactionDAO.fetchByBatch(batchId: batchId).first { $0.drug?.ndc == ndc && $0.is_deleted == false }
+        return stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc)
     }
 
     func selectTransaction(_ txn: GroupedTransaction) {
@@ -478,17 +501,22 @@ class StockCountViewModel: ObservableObject {
             lotNumber: firstLot?.lot ?? "",
             expiry:    firstLot?.expiry ?? ""
         )
-        committedTxnId = txn.txnId
-        // existingNdcBottleCount is the NDC-wide sum across every txn/batch (for display).
-        // pendingBottleCount MUST be the committed txn's OWN bottle_qty, not the NDC-wide
-        // sum — flushPendingBottleCount writes it absolutely onto committedTxnId, so storing
-        // the sum here would overwrite one lot with the whole-NDC total and double-count the
-        // other batches' bottles on the next reload. displayBottleTotal folds the per-txn
-        // pending value back into the NDC-wide sum, so the card still shows the full total.
+        committedStockTxnId = txn.stockTxnId
+        // existingNdcBottleCount is the NDC-wide sealed total (for display).
+        // pendingBottleCount MUST be the committed sealed row's OWN bottle_qty, not the
+        // NDC-wide sum — flushPendingBottleCount writes it absolutely onto committedBottleId,
+        // so storing the sum here would double-count. displayBottleTotal folds the pending
+        // value back into the NDC-wide sum, so the card still shows the full total.
         existingNdcBottleCount = Int(txn.sealedBottleQty)
-        if let txnId = committedTxnId, let entity = transactionDAO.fetchById(txnId) {
-            pendingBottleCount = Int(entity.bottle_qty)
+        if let batchId = currentBatch?.batch_id,
+           let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: txn.ndc) {
+            let sealedRow = bottleInfoDAO
+                .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+                .first { $0.bottle_qty > 0 && $0.loose_qty == 0 }
+            committedBottleId = sealedRow?.bottle_id
+            pendingBottleCount = Int(sealedRow?.bottle_qty ?? txn.sealedBottleQty)
         } else {
+            committedBottleId = nil
             pendingBottleCount = Int(txn.sealedBottleQty)
         }
         selectedGroupedTransaction = txn
@@ -496,42 +524,55 @@ class StockCountViewModel: ObservableObject {
 
     // MARK: - Mapper
 
-    func mapGroupedTransactions(txns: [PillCountTransactionEntity]) -> [GroupedTransaction] {
-        let groupedByNdc = Dictionary(grouping: txns) { $0.drug?.ndc ?? "" }
+    func mapGroupedStockTxns(stockTxns: [StockTxnEntity]) -> [GroupedTransaction] {
+        let groupedByNdc = Dictionary(grouping: stockTxns) { $0.drug?.ndc ?? "" }
 
-        return groupedByNdc.map { ndc, txnList in
-            let drugName   = txnList.first?.drug?.drug_name ?? "Unknown"
-            let lotGrouped = Dictionary(grouping: txnList) {
-                "\($0.lot_no ?? "")|\($0.expiry ?? "")"
-            }
+        return groupedByNdc.map { ndc, stockTxnList in
+            let drugName = stockTxnList.first?.drug?.drug_name ?? "Unknown"
+            let packageQty = stockTxnList.first?.drug?.package_qty ?? 0
 
-            var lotDetails:   [LotDetail] = []
-            var totalSealed:  Int32 = 0
-            var totalOpen:    Int32 = 0
+            var lotDetails:  [LotDetail] = []
+            var totalSealed: Int32 = 0
+            var totalOpen:   Int32 = 0
+            var sealedBottleQty: Int32 = 0
 
-            for (_, lotTxns) in lotGrouped {
-                let sealed = lotTxns.reduce(0) { $0 + ($1.bottle_qty * ($1.drug?.package_qty ?? 0)) }
-                let open   = lotTxns.reduce(0) { $0 + $1.loose_qty }
-                totalSealed += sealed
-                totalOpen   += open
-                lotDetails.append(LotDetail(
-                    lot:      lotTxns.first?.lot_no  ?? "",
-                    expiry:   lotTxns.first?.expiry  ?? "",
-                    sealedQty: sealed,
-                    openQty:   open
-                ))
+            for stockTxn in stockTxnList {
+                let bottles = bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+
+                let sealedRows = bottles.filter { $0.bottle_qty > 0 && $0.loose_qty == 0 }
+                let openedRows = bottles.filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
+
+                for sealed in sealedRows {
+                    let sealedQty = sealed.bottle_qty * packageQty
+                    totalSealed += sealedQty
+                    sealedBottleQty += sealed.bottle_qty
+                    lotDetails.append(LotDetail(
+                        lot: sealed.lot_no ?? "", expiry: sealed.exp_no ?? "",
+                        sealedQty: sealedQty, openQty: 0
+                    ))
+                }
+
+                let openGrouped = Dictionary(grouping: openedRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
+                for (_, rows) in openGrouped {
+                    let open = rows.reduce(0) { $0 + $1.loose_qty }
+                    totalOpen += open
+                    lotDetails.append(LotDetail(
+                        lot: rows.first?.lot_no ?? "", expiry: rows.first?.exp_no ?? "",
+                        sealedQty: 0, openQty: open
+                    ))
+                }
             }
 
             return GroupedTransaction(
-                txnId:       txnList.first?.txn_id ?? 0,
-                ndc:          ndc,
-                drugName:     drugName,
-                total:        totalSealed + totalOpen,
-                sealedBottles: totalSealed,
-                sealedBottleQty: txnList.reduce(0) { $0 + $1.bottle_qty },
-                packageQty:   txnList.first?.drug?.package_qty ?? 0,
-                openPills:    totalOpen,
-                lotDetails:   lotDetails
+                stockTxnId:      stockTxnList.first?.stock_txn_id ?? 0,
+                ndc:             ndc,
+                drugName:        drugName,
+                total:           totalSealed + totalOpen,
+                sealedBottles:   totalSealed,
+                sealedBottleQty: sealedBottleQty,
+                packageQty:      packageQty,
+                openPills:       totalOpen,
+                lotDetails:      lotDetails
             )
         }
     }
@@ -560,7 +601,7 @@ struct StockTransaction: Identifiable, Hashable {
 }
 
 struct GroupedTransaction {
-    let txnId:  Int64
+    let stockTxnId:    Int64
     let ndc:           String
     let drugName:      String
     let total:         Int32

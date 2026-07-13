@@ -20,44 +20,44 @@ extension PillScanViewModel {
         bottleCount: Int = 1,
         image: UIImage? = nil
     ) async {
-                
+
         guard !ndc.isEmpty else { return }
-        
+
         let decoded = decoder.decode(rawValueFromBarcodeOrQr ?? "")
         let gtin = decoded.gtin ?? ""
         let expiryString = formatExpiry(decoded.expirationDate)
-    
 
-        // MARK: 1️⃣ Check existing txn
-        let existingTxn = transactionDAO
-            .fetchByBatch(batchId: batchId)
-            .first {
-                $0.drug?.ndc == ndc &&
-                $0.drug?.package_qty == quantity &&
-                $0.is_deleted == false &&
-                $0.expiry == expiryString &&
-                $0.lot_no == decoded.lotNumber
+        // MARK: 1️⃣ Resolve/create the StockTxnEntity for this NDC in this batch
+        guard let batch = batchDAO.fetchById(batchId) else { return }
+
+        if let existingStockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) {
+
+            print("Existing stock txn found → merging")
+
+            // MARK: 2️⃣ Write the bottle info (absolute-set for sealed, new row for opened)
+            switch containerStatus {
+            case .sealed:
+                self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
+                    stockTxnId: existingStockTxn.stock_txn_id,
+                    bottleQty: Int32(bottleCount),
+                    lotNo: decoded.lotNumber,
+                    expNo: expiryString
+                )
+            case .opened:
+                self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+                    stockTxnId: existingStockTxn.stock_txn_id,
+                    looseQty: 0,
+                    lotNo: decoded.lotNumber,
+                    expNo: expiryString,
+                    serialNo: decoded.serialNumber
+                )
             }
 
-        if let txn = existingTxn {
-
-            print("Existing txn found → merging")
-
-            // MARK: 2️⃣ Update counts (absolute — bottleCount already includes existing)
-            transactionDAO.setAbsoluteCounts(
-                txnId: txn.txn_id,
-                bottleQty:     containerStatus == .sealed ? Int32(bottleCount) : nil,
-                openBottleQty: containerStatus == .opened ? (txn.open_bottle_qty + 1) : nil
-            )
-
-            // MARK: 3️⃣ Update current transaction (IMPORTANT FIX)
-            if let updatedTxn = transactionDAO.fetchById(txn.txn_id) {
-                self.currentTransaction = updatedTxn
-            }
+            // MARK: 3️⃣ Update current stock txn
+            self.currentStockTxn = stockTxnDAO.fetchById(existingStockTxn.stock_txn_id)
 
             // MARK: 4️⃣ UI Updates
             handlePostScanUI(containerStatus: containerStatus)
-//            getAllTransactionDetailsOfTheCurrentTransaction()
 
             return
         }
@@ -133,64 +133,46 @@ extension PillScanViewModel {
             }
         }
 
-        // MARK: 6️⃣ Create Transaction
-        await createTransaction(
-            drugId: drugIdToUse,
-            countType: countType,
-            barcodeImage: image,
-            drugName: drugName,
-            batchId: batchId,
-            expirationDate: expiryString,
-            lotNumber: decoded.lotNumber,
-            serialNumber: decoded.serialNumber
-        )
+        // MARK: 6️⃣ Create StockTxnEntity for this NDC in this batch
+        let stockTxn = stockTxnDAO.fetchOrCreate(batch: batch, drugId: drugIdToUse, bucketId: batch.bucket_id)
 
-        // MARK: 7️⃣ Fetch newly created txn
-        let allTxns = transactionDAO
-            .fetchByBatch(batchId: batchId)
-            .filter { $0.is_deleted == false }
-
-        // pick latest using txn_id (reliable)
-        guard let latestTxn = allTxns.max(by: { $0.txn_id < $1.txn_id }) else {
-            print("Failed to get latest txn")
-            return
+        // MARK: 7️⃣ Set initial bottle info (absolute-set for sealed, new row for opened)
+        switch containerStatus {
+        case .sealed:
+            self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
+                stockTxnId: stockTxn.stock_txn_id,
+                bottleQty: Int32(bottleCount),
+                lotNo: decoded.lotNumber,
+                expNo: expiryString
+            )
+        case .opened:
+            self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+                stockTxnId: stockTxn.stock_txn_id,
+                looseQty: 0,
+                lotNo: decoded.lotNumber,
+                expNo: expiryString,
+                serialNo: decoded.serialNumber
+            )
         }
 
-        // MARK: 8️⃣ Set initial counts (absolute)
-        transactionDAO.setAbsoluteCounts(
-            txnId: latestTxn.txn_id,
-            bottleQty:     containerStatus == .sealed ? Int32(bottleCount) : nil,
-            openBottleQty: containerStatus == .opened ? 1 : nil
-        )
+        // MARK: 8️⃣ Update current stock txn
+        self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
+        print("New stock txn set:", stockTxn.stock_txn_id)
 
-        // MARK: 9️⃣ Update current txn
-        if let updatedTxn = transactionDAO.fetchById(latestTxn.txn_id) {
-            self.currentTransaction = updatedTxn
-
-            print("New txn set:", updatedTxn.txn_id)
-        } else {
-            print("New txn not found")
-        }
-
-        // MARK: 🔟 UI Updates
+        // MARK: 9️⃣ UI Updates
         handlePostScanUI(containerStatus: containerStatus)
-//        getAllTransactionDetailsOfTheCurrentTransaction()
 
-        print("Batch Txn Created → NDC:", ndc, "Batch:", batchId)
+        print("Batch Stock Txn Created → NDC:", ndc, "Batch:", batchId)
     }
- 
-    /// Called after open pill counting completes. Sets loose_qty to the final counted value (absolute, not additive).
-    func updateOpenPillCount(ndc: String, batchId: Int64, loosePillCount: Int) {
-        let txns = transactionDAO.fetchByBatch(batchId: batchId).filter {
-            $0.drug?.ndc == ndc && $0.is_deleted == false
+
+    /// Called after open pill counting completes. Sets loose_qty to the final counted value
+    /// (absolute, not additive) on the specific opened BottleInfoEntity row created by the scan.
+    func updateOpenPillCount(bottleId: Int64, loosePillCount: Int) {
+        bottleInfoDAO.updateOpenedBottleLooseQty(bottleId: bottleId, looseQty: Int32(loosePillCount))
+        if let stockTxnId = currentStockTxn?.stock_txn_id, let updated = stockTxnDAO.fetchById(stockTxnId) {
+            self.currentStockTxn = updated
         }
-        // Prefer the transaction that already tracks open bottles; fall back to first.
-        let txn = txns.first { $0.open_bottle_qty > 0 } ?? txns.first
-        guard let txn else { return }
-        transactionDAO.setAbsoluteCounts(txnId: txn.txn_id, looseQty: Int32(loosePillCount))
-        if let updated = transactionDAO.fetchById(txn.txn_id) {
-            self.currentTransaction = updated
-        }
+        self.currentBottleInfo = bottleInfoDAO.fetchById(bottleId)
     }
 
     func formatExpiry(_ date: Date?) -> String? {
@@ -211,21 +193,37 @@ extension PillScanViewModel {
     }
     
     func updatePmsTxnCount(
-        txn: PillCountTransactionEntity,
+        stockTxn: StockTxnEntity,
         containerStatus: StockCountOptionContainerStatus,
         scannedQty: Int
     ) {
         switch containerStatus {
         case .sealed:
-            // additive: increment by 1 bottle
-            transactionDAO.updateCounts(txnId: txn.txn_id, bottleQty: 1)
+            // additive-by-one: sealed row's bottle_qty += 1
+            let existingQty = bottleInfoDAO
+                .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+                .first { $0.bottle_qty > 0 && $0.loose_qty == 0 }?
+                .bottle_qty ?? 0
+            self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
+                stockTxnId: stockTxn.stock_txn_id,
+                bottleQty: existingQty + 1,
+                lotNo: nil,
+                expNo: nil
+            )
             handlePostScanUI(containerStatus: containerStatus)
 
         case .opened:
-            // additive: increment loose count by the scanned package quantity
-            transactionDAO.updateCounts(txnId: txn.txn_id, looseQty: Int32(scannedQty))
+            // every opened scan is a new bottle row
+            self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+                stockTxnId: stockTxn.stock_txn_id,
+                looseQty: Int32(scannedQty),
+                lotNo: nil,
+                expNo: nil,
+                serialNo: nil
+            )
             handlePostScanUI(containerStatus: containerStatus)
         }
+        self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
     }
 
     @MainActor
@@ -326,22 +324,10 @@ extension PillScanViewModel {
             requestId: requestId
         ) else { return }
 
-        let batchId = batch.batch_id
-
-        // MARK: Create Transactions
+        // MARK: Create StockTxnEntity rows (one per requested NDC, no bottle data yet)
         for item in resolvedItems {
             print("Resolved Items \(resolvedItems)")
-            await createTransaction(
-                drugId: item.drugId,
-                countType: .REGULAR,
-                isComingFromPms: true,
-                targetCount: item.targetCount, // always 0 for request
-                drugName: item.resolvedName,
-                batchId: batchId,
-                expirationDate: item.expiry,
-                lotNumber: item.lot,
-                bucketId: bucketId
-            )
+            stockTxnDAO.fetchOrCreate(batch: batch, drugId: item.drugId, bucketId: bucketId)
         }
     }
     

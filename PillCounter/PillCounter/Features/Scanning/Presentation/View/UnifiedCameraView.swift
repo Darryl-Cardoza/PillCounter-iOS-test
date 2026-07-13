@@ -1295,14 +1295,15 @@ extension UnifiedCameraView {
         guard let batchId = stockCountViewModel.currentBatch?.batch_id,
               let drug = stockCountViewModel.scannedDrugData else { return }
         stockCountViewModel.suppressListReload = true
-        if pillScanViewModel.selectedTransaction?.is_from_pms == true,
-           let txn = pillScanViewModel.selectedTransaction {
+        if stockCountViewModel.currentBatch?.req_id_from_pms != nil,
+           let stockTxn = stockCountViewModel.stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: drug.ndc) {
             pillScanViewModel.updatePmsTxnCount(
-                txn: txn,
+                stockTxn: stockTxn,
                 containerStatus: scannedBottleContainerStatus,
                 scannedQty: Int(drug.quantity)
             )
-            stockCountViewModel.committedTxnId = txn.txn_id
+            stockCountViewModel.committedStockTxnId = stockTxn.stock_txn_id
+            stockCountViewModel.committedBottleId = pillScanViewModel.currentBottleInfo?.bottle_id
         } else {
             await pillScanViewModel.createTxnForBatchFromScan(
                 rawValueFromBarcodeOrQr: drug.rawBarcode,
@@ -1314,7 +1315,8 @@ extension UnifiedCameraView {
                 containerStatus: scannedBottleContainerStatus,
                 bottleCount: stockCountViewModel.pendingBottleCount
             )
-            stockCountViewModel.committedTxnId = pillScanViewModel.currentTransaction?.txn_id
+            stockCountViewModel.committedStockTxnId = pillScanViewModel.currentStockTxn?.stock_txn_id
+            stockCountViewModel.committedBottleId = pillScanViewModel.currentBottleInfo?.bottle_id
         }
         // Keep scannedDrugData alive so the details slot stays visible.
         stockCountViewModel.showStockCountScannedDetails = true
@@ -1448,7 +1450,7 @@ extension UnifiedCameraView {
     /// Treats the current details as "Add tapped" — refreshes list then clears for next scan.
     func autoCommitPendingStockScan() async {
         guard stockCountViewModel.scannedDrugData != nil else { return }
-        if stockCountViewModel.committedTxnId != nil {
+        if stockCountViewModel.committedStockTxnId != nil {
             // Already auto-added — flush suppression and reload list (same as tapping Add).
             stockCountViewModel.suppressListReload = false
             stockCountViewModel.reloadAllState()
@@ -1521,9 +1523,10 @@ extension UnifiedCameraView {
 
     func handleOpenPillCountComplete() {
         guard isOpenPillScanMode,
-              let batchId = stockCountViewModel.currentBatch?.batch_id else { return }
+              stockCountViewModel.currentBatch?.batch_id != nil,
+              let bottleId = pillScanViewModel.currentBottleInfo?.bottle_id else { return }
         let loosePills = pillScanViewModel.addCurrentOpenPillCount
-        pillScanViewModel.updateOpenPillCount(ndc: openPillScanNdc, batchId: batchId, loosePillCount: loosePills)
+        pillScanViewModel.updateOpenPillCount(bottleId: bottleId, loosePillCount: loosePills)
 
         // Reset all pill-scan state so the next stock-count barcode scan starts clean.
         pillScanViewModel.addCurrentOpenPillCount = 0

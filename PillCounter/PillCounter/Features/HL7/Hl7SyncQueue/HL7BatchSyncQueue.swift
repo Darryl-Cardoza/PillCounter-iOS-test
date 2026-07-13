@@ -31,7 +31,8 @@ final class HL7BatchSyncQueue {
 
     // MARK: Dependencies
     private let batchDAO = BatchStore.shared
-    private let transactionDAO = TransactionStore.shared
+    private let stockTxnDAO = StockTxnStore.shared
+    private let userDAO = UserStore.shared
     private let hl7Builder: HL7CompletionBuilder
     private weak var hl7Manager: Hl7ServiceManager?           // your existing socket manager
 
@@ -124,12 +125,12 @@ final class HL7BatchSyncQueue {
             return
         }
 
-        let txns = transactionDAO.fetchByBatch(batchId: item.batchId)
+        let stockTxns = stockTxnDAO.fetchByBatch(batchId: item.batchId)
 
-        print("📊 [Queue] Transactions count:", txns.count)
-        
-        guard !txns.isEmpty, let user = txns.first?.user else {
-            print("❌ [Queue] Missing txns or user for batch:", item.batchId)
+        print("📊 [Queue] StockTxns count:", stockTxns.count)
+
+        guard !stockTxns.isEmpty, let userId = batch.user_id, let user = userDAO.fetchByUserId(userId) else {
+            print("❌ [Queue] Missing stock txns or user for batch:", item.batchId)
             queue.removeFirst()
             processNext()
             return

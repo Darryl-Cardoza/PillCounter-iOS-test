@@ -72,6 +72,37 @@ protocol TransactionDataSource: AnyObject {
     func softDelete(txnId: Int64)
 }
 
+// MARK: - StockTxn store seam
+
+protocol StockTxnDataSource: AnyObject {
+    var stockTxnsDidChange: PassthroughSubject<Void, Never> { get }
+
+    @discardableResult
+    func fetchOrCreate(batch: BatchCountEntity, drugId: Int64, bucketId: String?) -> StockTxnEntity
+    func fetchById(_ stockTxnId: Int64) -> StockTxnEntity?
+    func fetchByBatch(batchId: Int64) -> [StockTxnEntity]
+    func fetchByBatchAndNdc(batchId: Int64, ndc: String) -> StockTxnEntity?
+    func updateStatus(stockTxnId: Int64, status: CountStatus)
+    func softDelete(stockTxnId: Int64)
+}
+
+// MARK: - BottleInfo store seam
+
+protocol BottleInfoDataSource: AnyObject {
+    var bottleInfosDidChange: PassthroughSubject<Void, Never> { get }
+
+    @discardableResult
+    func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity?
+    @discardableResult
+    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?) -> BottleInfoEntity?
+    func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32)
+    func fetchById(_ bottleId: Int64) -> BottleInfoEntity?
+    func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity]
+    func fetchByBatch(batchId: Int64) -> [BottleInfoEntity]
+    func setAbsolute(bottleId: Int64, bottleQty: Int32?, looseQty: Int32?)
+    func softDelete(bottleId: Int64)
+}
+
 // MARK: - Transaction-detail store seam
 
 protocol TransactionDetailDataSource: AnyObject {
@@ -233,6 +264,8 @@ protocol UserIdProviding: AnyObject {
 // MARK: - Conformances (no behaviour change — methods already exist)
 
 extension BatchStore: BatchDataSource {}
+extension StockTxnStore: StockTxnDataSource {}
+extension BottleInfoStore: BottleInfoDataSource {}
 extension TransactionStore: TransactionDataSource {}
 extension TransactionDetailStore: TransactionDetailDataSource {}
 extension UserStore: UserDataSource {}

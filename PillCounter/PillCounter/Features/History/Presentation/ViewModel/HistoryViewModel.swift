@@ -323,7 +323,7 @@ class HistoryViewModel: ObservableObject {
                 ))
             }
             return GroupedTransaction(
-                txnId: txnList.first?.txn_id ?? 0,
+                stockTxnId: txnList.first?.txn_id ?? 0,
                 ndc: ndc,
                 drugName: drugName,
                 total: totalSealed + totalOpen,

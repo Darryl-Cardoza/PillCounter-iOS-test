@@ -115,8 +115,14 @@ final class ImageWebServer {
                     self.send(self.errorResponse(400), on: connection)
                     return
                 }
-                let response = self.handleRequest(request)
-                self.send(response, on: connection)
+                let (response, deliveredFilenames) = self.handleRequest(request)
+                self.send(response, on: connection) { success in
+                    guard success, !deliveredFilenames.isEmpty else { return }
+                    ImageDeliveryTracker.shared.markDelivered(deliveredFilenames)
+                    for txnId in Self.txnIds(forDeliveredFilenames: deliveredFilenames) {
+                        TransactionStore.shared.attemptHardDeleteIfEligible(txnId: txnId)
+                    }
+                }
                 return
             }
 
@@ -139,29 +145,43 @@ final class ImageWebServer {
 
     // MARK: - Routing
 
-    /// Only endpoint: GET /images/<filename>
-    private func handleRequest(_ request: String) -> Data {
+    /// Endpoints (all nested under /images/):
+    ///   GET /images/<filename>                                — single image, base64 JSON
+    ///   GET /images/getbyrxnumber/<rxNumber>                   — all images for an Rx, zipped
+    ///   GET /images/getbymessagecontrolid/<messageControlId>   — all images for an HL7 message control id, zipped
+    private func handleRequest(_ request: String) -> (Data, [String]) {
 
         let lines = request.components(separatedBy: "\r\n")
 
         guard let firstLine = lines.first else {
-            return errorResponse(400)
+            return (errorResponse(400), [])
         }
 
 
         let parts = firstLine.components(separatedBy: " ")
         guard parts.count >= 2, parts[0] == "GET" else {
-            return errorResponse(405)
+            return (errorResponse(405), [])
         }
 
         let path = parts[1]
 
         guard path.hasPrefix("/images/") else {
-            return errorResponse(404)
+            return (errorResponse(404), [])
         }
 
-        let fileName = String(path.dropFirst("/images/".count))
-        return serveImage(fileName)
+        let subPath = String(path.dropFirst("/images/".count))
+
+        if subPath.hasPrefix("getbyrxnumber/") {
+            let rxNumber = String(subPath.dropFirst("getbyrxnumber/".count))
+            return serveImagesZip(rxNumber: rxNumber)
+        }
+
+        if subPath.hasPrefix("getbymessagecontrolid/") {
+            let messageControlId = String(subPath.dropFirst("getbymessagecontrolid/".count))
+            return (serveImagesZip(messageControlId: messageControlId), [])
+            }
+
+        return serveImage(subPath)
     }
 
 
@@ -169,22 +189,90 @@ final class ImageWebServer {
 
     /// Decrypts the .enc file in-memory and returns a base64 JSON response.
     /// PMS always receives the plain JPEG bytes — the encrypted file is never sent directly.
-    private func serveImage(_ fileName: String) -> Data {
+    private func serveImage(_ fileName: String) -> (Data, [String]) {
 
-        guard isSafe(fileName) else { return errorResponse(400) }
+        guard isSafe(fileName) else { return (errorResponse(400), []) }
 
         guard var decrypted = PhotoFileManager.shared.loadDecryptedData(from: fileName) else {
-            return errorResponse(404)
+            return (errorResponse(404), [])
         }
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
 
         let base64 = decrypted.base64EncodedString(options: [])
         let json = #"{"success":true,"base64":"\#(base64)"}"#
-        return httpResponse(json)
+        return (httpResponse(json), [fileName])
     }
 
     private func isSafe(_ name: String) -> Bool {
         !name.isEmpty && !name.contains("..") && !name.contains("/")
+    }
+
+    /// Builds a zip of every image tied to the given Rx number and returns it as the
+    /// HTTP response body. Each entry is named TYPE_SEQ_COUNT.jpg — TYPE is the
+    /// detail row's ControlledStep (e.g. TARGET_VERIFICATION), SEQ is its 1-based
+    /// occurrence index within that type for this Rx, COUNT is that row's pill_count.
+    /// The transaction's own barcode image (if any) is included as BARCODE_SEQ_0.jpg.
+    private func serveImagesZip(rxNumber: String) -> (Data, [String]) {
+        guard !rxNumber.isEmpty else { return (errorResponse(400), []) }
+
+        let transactions = TransactionStore.shared.fetchByRxNo(rxNumber)
+        guard !transactions.isEmpty else { return (errorResponse(404), []) }
+
+        var zip = ZipArchiveWriter()
+        var typeSequence: [String: Int] = [:]
+        var addedAny = false
+        var deliveredFilenames: [String] = []
+
+        for txn in transactions {
+            if let barcodeImage = txn.barcode_image, !barcodeImage.isEmpty,
+               let data = PhotoFileManager.shared.loadDecryptedData(from: barcodeImage) {
+                let seq = nextSequence(for: "BARCODE", in: &typeSequence)
+                zip.addEntry(name: "BARCODE_\(seq)_0.jpg", data: data)
+                addedAny = true
+                deliveredFilenames.append(barcodeImage)
+            }
+
+            for detail in TransactionDetailStore.shared.fetchAll(txnId: txn.txn_id) {
+                guard let imagePath = detail.image_path, !imagePath.isEmpty,
+                      let data = PhotoFileManager.shared.loadDecryptedData(from: imagePath) else { continue }
+                let type = detail.type ?? "UNKNOWN"
+                let seq = nextSequence(for: type, in: &typeSequence)
+                zip.addEntry(name: "\(type)_\(seq)_\(detail.pill_count).jpg", data: data)
+                addedAny = true
+                deliveredFilenames.append(imagePath)
+            }
+        }
+
+        guard addedAny else { return (errorResponse(404), []) }
+
+        return (zipResponse(zip.finalize(), fileName: "\(rxNumber).zip"), deliveredFilenames)
+    }
+
+    /// HL7 message control ids are not persisted against a transaction today,
+    /// so this endpoint has no data to match against and always reports not-found.
+    private func serveImagesZip(messageControlId: String) -> Data {
+        errorResponse(404)
+    }
+
+    /// Resolves which transaction(s) own the given delivered filenames, so a
+    /// successful delivery can immediately re-check that transaction for
+    /// hard-delete eligibility rather than waiting for the next ACK-driven
+    /// check.
+    private static func txnIds(forDeliveredFilenames filenames: [String]) -> Set<Int64> {
+        var txnIds: Set<Int64> = []
+        for filename in filenames {
+            if let txnId = TransactionStore.shared.txnId(forBarcodeImage: filename)
+                ?? TransactionDetailStore.shared.txnId(forImagePath: filename) {
+                txnIds.insert(txnId)
+            }
+        }
+        return txnIds
+    }
+
+    private func nextSequence(for type: String, in table: inout [String: Int]) -> Int {
+        let next = (table[type] ?? 0) + 1
+        table[type] = next
+        return next
     }
 
     // MARK: - Response
@@ -208,6 +296,20 @@ final class ImageWebServer {
         return response
     }
 
+    /// Builds an HTTP response with a binary (zip) body.
+    private func zipResponse(_ bodyData: Data, fileName: String) -> Data {
+        let header =
+            "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: application/zip\r\n" +
+            "Content-Disposition: attachment; filename=\"\(fileName)\"\r\n" +
+            "Content-Length: \(bodyData.count)\r\n" +
+            "Connection: close\r\n" +
+            "\r\n"
+        var response = Data(header.utf8)
+        response.append(bodyData)
+        return response
+    }
+
     private static func reasonPhrase(_ status: Int) -> String {
         switch status {
         case 200: return "OK"
@@ -223,13 +325,20 @@ final class ImageWebServer {
         httpResponse(#"{"success":false}"#, status: code)
     }
 
-    private func send(_ response: Data, on connection: NWConnection) {
+    /// Sends the response and reports via `onComplete` whether every byte was
+    /// handed off to the OS network stack with no error. This is the
+    /// strongest delivery signal available in this pull-based protocol: it
+    /// does not prove the PMS received/parsed the bytes, but it is strictly
+    /// stronger than "we built a response" and is what backs image-delivery
+    /// tracking for the hard-delete decision.
+    private func send(_ response: Data, on connection: NWConnection, onComplete: @escaping (Bool) -> Void = { _ in }) {
         connection.send(content: response,
         completion: .contentProcessed { error in
             if let error {
                 Log("Image server send error: \(error.localizedDescription)")
             }
             connection.cancel()
+            onComplete(error == nil)
         })
     }
 }

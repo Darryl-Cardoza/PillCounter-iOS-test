@@ -14,7 +14,7 @@ class LoginViewModel: ObservableObject {
     @Published var userEmail: String = ""
     @Published var isChecked: Bool = false
     @Published var userSavedEmails: [String] = []
-    @Published var otp: [String] = Array(repeating: "", count: 4)
+    @Published var otp: [String] = Array(repeating: "", count: 6)
     @Published var errorMessage: String?
     @Published var resendOTPSent: Bool = false
     @Published var isOtpSent: Bool = false
@@ -29,7 +29,7 @@ class LoginViewModel: ObservableObject {
 
     // MARK: - Derived
     var resendTimerText: String { "\(resendCooldown) s" }
-    var isOtpComplete: Bool { otp.joined().count == 4 }
+    var isOtpComplete: Bool { otp.joined().count == 6 }
 
     // MARK: - Injected dependencies
     private let loginrepo: LoginRepositoryProtocol
@@ -115,7 +115,7 @@ class LoginViewModel: ObservableObject {
         let otpString = otp.joined()
 
         guard !otpString.isEmpty else { errorMessage = "Please enter the OTP."; return }
-        guard otpString.count == 4 else { errorMessage = "Invalid OTP."; return }
+        guard otpString.count == 6 else { errorMessage = "Invalid OTP."; return }
 
         isLoading = true
         defer { isLoading = false }
@@ -128,7 +128,7 @@ class LoginViewModel: ObservableObject {
             )
 
             if result.isSuccess ?? false {
-                otp = ["", "", "", ""]
+                otp = Array(repeating: "", count: 6)
                 isOtpVerificationSuccess = true
 
                 // All sensitive values written to Keychain via AppStorageManager
@@ -195,7 +195,7 @@ class LoginViewModel: ObservableObject {
                 resendOTPSent = true
                 errorMessage = "A new OTP has been sent."
                 startResendTimer()
-                otp = ["", "", "", ""]
+                otp = Array(repeating: "", count: 6)
             } else {
                 errorMessage = result.message ?? "Something went wrong!"
             }

@@ -6,7 +6,7 @@
 import Foundation
 import SwiftUI
 import Combine
-import ComposeApp
+import Hl7Core
 
 @MainActor
 final class Hl7ServiceController: ObservableObject {
@@ -131,9 +131,14 @@ final class Hl7ServiceController: ObservableObject {
             .sink { [weak self] in
                 Log("🔄 [TxnObserver] Detected change → enqueue txn sync")
                 self?.txnSyncQueue?.enqueueUnsynced()
+                self?.transactionDAO.sweepStaleSyncedTransactions(olderThan: Self.retentionMaxAge)
             }
             .store(in: &cancellables)
     }
+
+    /// Backstop TTL for transactions whose PMS image delivery never
+    /// completes — see TransactionStore.sweepStaleSyncedTransactions.
+    private static let retentionMaxAge: TimeInterval = 24 * 60 * 60
 
     // MARK: - Events from Hl7EventHandler
 

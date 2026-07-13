@@ -152,6 +152,25 @@ final class TransactionStore {
         return results.filter { $0.rx_no == rxNo }
     }
 
+    /// Convenience overload for callers without a UserEntity reference (e.g. the image web server).
+    /// Resolves the currently logged-in user from storage; returns [] when no user is active.
+    func fetchByRxNo(_ rxNo: String) -> [PillCountTransactionEntity] {
+        guard let user = currentUserEntity() else { return [] }
+        return fetchByRxNo(rxNo, for: user)
+    }
+
+    /// Reverse lookup used by the image web server to resolve a delivered
+    /// barcode-image filename back to the owning transaction. `barcode_image`
+    /// is field-level encrypted at rest, so it cannot be matched via an
+    /// NSPredicate against the SQLite row (that would compare against
+    /// ciphertext) — fetch and compare the decrypted in-memory value instead.
+    func txnId(forBarcodeImage filename: String) -> Int64? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        guard let results = try? context.fetch(request) else { return nil }
+        results.forEach { refreshDecrypted($0) }
+        return results.first { $0.barcode_image == filename }?.txn_id
+    }
+
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user == %@ AND is_deleted == true", user)
@@ -396,21 +415,49 @@ final class TransactionStore {
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] UPDATED synced — txnId: \(txnId)")
 
-        // Once the dispense has been acknowledged by PMS (is_synced == true),
-        // delete it so it is not retained on the device — but only when local
-        // storage is NOT allowed for this account, and only for completed FIXED
-        // dispense transactions (never REGULAR stock counts). When
-        // allowLocalStorage is true the transaction is kept on the device.
-        // Until sync succeeds the transaction stays on the device regardless.
-        if !AppStorageManager.shared.allowLocalStorage,
-           txn.count_type == CountType.FIXED.rawValue,
-           txn.status == CountStatus.COMPLETED.rawValue
-            || txn.status == CountStatus.FORCE_COMPLETED.rawValue {
-            softDelete(txnId: txnId)
-            return
-        }
+        if attemptHardDeleteIfEligible(txnId: txnId) { return }
 
         transactionsDidChange.send()
+    }
+
+    /// All image filenames (barcode + detail images) that belong to this
+    /// transaction and must be confirmed delivered to the PMS before the
+    /// transaction is eligible for hard deletion.
+    func expectedImageFilenames(txnId: Int64) -> [String] {
+        guard let txn = fetchById(txnId) else { return [] }
+        var filenames: [String] = []
+        if let barcodeImage = txn.barcode_image, !barcodeImage.isEmpty {
+            filenames.append(barcodeImage)
+        }
+        filenames += TransactionDetailStore.shared.fetchAll(txnId: txnId)
+            .compactMap { $0.image_path }
+            .filter { !$0.isEmpty }
+        return filenames
+    }
+
+    /// Hard-deletes the transaction (and, via cascade, its details) once the
+    /// PMS has ACKed the dispense AND every one of its images has been
+    /// confirmed delivered — but only when local storage is not allowed for
+    /// this account. Called both after a positive ACK (`updateSynced`) and
+    /// after an image delivery is confirmed (`ImageWebServer`), since either
+    /// event can be the one that completes the pair. Returns true if the
+    /// transaction was deleted.
+    @discardableResult
+    func attemptHardDeleteIfEligible(txnId: Int64) -> Bool {
+        guard let txn = fetchById(txnId) else { return false }
+        guard !AppStorageManager.shared.allowLocalStorage,
+              txn.count_type == CountType.FIXED.rawValue,
+              txn.status == CountStatus.COMPLETED.rawValue
+                || txn.status == CountStatus.FORCE_COMPLETED.rawValue,
+              txn.is_synced
+        else { return false }
+
+        guard ImageDeliveryTracker.shared.allDelivered(expectedImageFilenames(txnId: txnId)) else {
+            return false
+        }
+
+        hardDelete(txnId: txnId)
+        return true
     }
 
     func update(
@@ -453,6 +500,43 @@ final class TransactionStore {
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] SOFT DELETED — txnId: \(txnId)")
+        transactionsDidChange.send()
+    }
+
+    /// Permanently removes the transaction row; its details cascade-delete
+    /// via the CoreData model's Cascade delete rule on
+    /// `pillCountTransactionDetails`.
+    func hardDelete(txnId: Int64) {
+        guard let txn = fetchById(txnId) else { return }
+        context.delete(txn)
+        CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] HARD DELETED — txnId: \(txnId)")
+        transactionsDidChange.send()
+    }
+
+    /// Backstop for when PMS image delivery never completes (misconfigured
+    /// rx number, integration abandoned, PMS offline indefinitely). Hard-
+    /// deletes any synced, completed FIXED transaction older than `maxAge`
+    /// once local storage is disallowed, regardless of image-delivery state
+    /// — bounding worst-case on-device retention. The primary deletion path
+    /// (`attemptHardDeleteIfEligible`) already deletes promptly once images
+    /// are confirmed delivered; this only catches what that path never will.
+    func sweepStaleSyncedTransactions(olderThan maxAge: TimeInterval) {
+        guard !AppStorageManager.shared.allowLocalStorage else { return }
+
+        let cutoff = Int64(Date().timeIntervalSince1970 * 1000) - Int64(maxAge * 1000)
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "is_deleted == false AND is_synced == true AND count_type == %@ AND (status == %@ OR status == %@) AND updated_at <= %lld",
+            CountType.FIXED.rawValue, CountStatus.COMPLETED.rawValue, CountStatus.FORCE_COMPLETED.rawValue, cutoff
+        )
+        guard let stale = try? context.fetch(request), !stale.isEmpty else { return }
+
+        for txn in stale {
+            print("📋 [TransactionDAO] TTL SWEEP hard-deleting stale synced txn — txnId: \(txn.txn_id), updatedAt: \(txn.updated_at)")
+            context.delete(txn)
+        }
+        CoreDataManager.shared.save(context: context)
         transactionsDidChange.send()
     }
 

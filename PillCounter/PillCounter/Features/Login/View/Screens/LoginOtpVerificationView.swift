@@ -73,7 +73,7 @@ struct OtpVerification: View {
                     .font(.system(size: 18))
             }
 
-            BoxesInputField(otp: $loginViewModel.otp, length: 4)
+            BoxesInputField(otp: $loginViewModel.otp, length: 6)
             
             if let errorMessage = loginViewModel.errorMessage {
                 Text(errorMessage)
@@ -134,7 +134,7 @@ struct OtpVerification: View {
                     .cornerRadius(50)
                     .frame(maxWidth: .infinity)
             }
-            .disabled(loginViewModel.otp.joined().count < 4 || loginViewModel.isLoading)
+            .disabled(loginViewModel.otp.joined().count < 6 || loginViewModel.isLoading)
 
         }
         .padding(.vertical, 32)

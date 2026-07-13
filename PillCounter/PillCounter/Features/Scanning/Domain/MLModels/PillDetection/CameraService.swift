@@ -1000,7 +1000,7 @@ extension CameraService {
             )
         }
 
-        // 3. Render
+        // 3. Renderz
         let renderer = UIGraphicsImageRenderer(size: imageSize)
         return renderer.image { ctx in
             let context = ctx.cgContext

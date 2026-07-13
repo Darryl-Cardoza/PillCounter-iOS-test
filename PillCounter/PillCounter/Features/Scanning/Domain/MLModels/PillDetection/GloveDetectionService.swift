@@ -72,7 +72,7 @@ final class GloveDetectionService {
     /// Minimum sigmoid(objectness) × sigmoid(class) required to emit a detection.
     /// Tuned for YOLOX-Nano at 320×320 — lower values increase recall but add
     /// false positives from glove-shaped objects (e.g. trays).
-    private let confThreshold: Float = 0.80
+    private let confThreshold: Float = 0.40
 
     /// IoU threshold used during Non-Maximum Suppression.
     private let iouThreshold: Float = 0.45
@@ -146,6 +146,10 @@ final class GloveDetectionService {
             dictionary: ["images": MLFeatureValue(multiArray: inputArray)]
         ) else { return [] }
 
+        print(String(format:
+            "── [GLOVE MODEL] REQUEST  frame=%.0f×%.0f letterboxed=%d×%d scale=%.4f padX=%.1f padY=%.1f",
+            frameSize.width, frameSize.height, inputSize, inputSize, scale, padX, padY))
+
         let inferenceStart = CACurrentMediaTime()
         guard let rawOutput = try? model.model.prediction(from: input) else {
             print("❌ [GLOVE MODEL] Inference failed")
@@ -153,21 +157,33 @@ final class GloveDetectionService {
         }
         let inferenceMs = (CACurrentMediaTime() - inferenceStart) * 1000
 
+        print(String(format:
+            "── [GLOVE MODEL] RESPONSE infer=%.1fms outputs=%@",
+            inferenceMs, rawOutput.featureNames.sorted().description))
+
         // ── Step 4: Collect per-stride FPN tensors ─────────────────────────
-        // Each output is [1, 7, H, W] Float32 (channel-first).
-        // The three tensors correspond to strides 8, 16, and 32.
-        let strideOutputs: [(tensor: MLMultiArray, stride: Int)] = [
-            // stride 8  → 40×40 grid detects smaller / closer hands
-            ("var_1542", 8),
-            // stride 16 → 20×20 grid
-            ("var_1742", 16),
-            // stride 32 → 10×10 grid detects larger / distant hands
-            ("var_1942", 32),
-        ].compactMap { name, stride in
-            guard let arr = rawOutput.featureValue(for: name)?.multiArrayValue else {
-                return nil
+        // Each output is [1, 7, H, W] Float32 (channel-first). We no longer
+        // hardcode output tensor names (they change across model re-exports
+        // e.g. var_1542 → var_1184) — instead identify each head by its grid
+        // size, which is stride-invariant: 320/8=40, 320/16=20, 320/32=10.
+        let strideOutputs: [(tensor: MLMultiArray, stride: Int)] = rawOutput.featureNames
+            .compactMap { name -> (MLMultiArray, Int)? in
+                guard let arr = rawOutput.featureValue(for: name)?.multiArrayValue,
+                      arr.shape.count == 4 else { return nil }
+                let gridW = arr.shape[3].intValue
+                switch gridW {
+                case inputSize / 8:  return (arr, 8)
+                case inputSize / 16: return (arr, 16)
+                case inputSize / 32: return (arr, 32)
+                default: return nil
+                }
             }
-            return (arr, stride)
+            .sorted { $0.1 < $1.1 }
+
+        for (tensor, stride) in strideOutputs {
+            print(String(format:
+                "   [GLOVE MODEL] head stride=%d shape=%@",
+                stride, tensor.shape))
         }
 
         guard !strideOutputs.isEmpty else { return [] }
@@ -190,6 +206,10 @@ final class GloveDetectionService {
         let gloveRaw   = candidates.filter { $0.gloveClass == .glove   }.count
         let noGloveRaw = candidates.filter { $0.gloveClass == .noGlove }.count
 
+        print(String(format:
+            "   [GLOVE MODEL] candidates glove=%d no_glove=%d (pre-NMS, conf>=%.2f)",
+            gloveRaw, noGloveRaw, confThreshold))
+
         guard !candidates.isEmpty else { return [] }
 
         // ── Step 6: Non-Maximum Suppression ───────────────────────────────
@@ -197,6 +217,16 @@ final class GloveDetectionService {
 
         let finalGlove   = final.filter { $0.gloveClass == .glove   }.count
         let finalNoGlove = final.filter { $0.gloveClass == .noGlove }.count
+
+        print(String(format:
+            "── [GLOVE MODEL] RESULT   glove=%d no_glove=%d (post-NMS)", finalGlove, finalNoGlove))
+        for det in final {
+            let cls = det.gloveClass == .glove ? "GLOVE" : "NO_GLOVE"
+            let r = det.rect
+            print(String(format:
+                "   %@ conf=%.2f frame=(%.0f,%.0f,%.0f×%.0f)",
+                cls, det.confidence, r.origin.x, r.origin.y, r.width, r.height))
+        }
 
         if !final.isEmpty { hasDetectedOnce = true }
 

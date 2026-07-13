@@ -31,6 +31,7 @@ final class AppStorageManager {
         static let tokenExpiryTimestamp = "token_expiry_timestamp"
         static let isPmsIntegrated      = "is_pms_integrated"
         static let allowLocalStorage    = "allow_local_storage"
+        static let hl7Version           = "hl7_version"
         static let pmsHostName          = "pms_host_name"
         static let pillCounterHostName  = "pillcounter_host_name"
         static let barcodeFormat        = "barcode_format"
@@ -126,7 +127,15 @@ final class AppStorageManager {
         get { Keychain.getPassword(for: AppStorageKeys.allowLocalStorage) == "true" }
         set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.allowLocalStorage) }
     }
-    
+
+    /// HL7 version the PMS integration should speak, provided by the server
+    /// (`auth/me` → `settings.hl7_version`, e.g. "2.3.1"). Falls back to "2.3"
+    /// when never set (fresh install / no PMS integration yet).
+    var hl7Version: String {
+        get { Keychain.getPassword(for: AppStorageKeys.hl7Version) ?? "2.3" }
+        set { Keychain.savePassword(newValue, for: AppStorageKeys.hl7Version) }
+    }
+
     var pmsHostName: String {
         get { Keychain.getPassword(for: AppStorageKeys.pmsHostName) ?? "" }
         set { Keychain.savePassword(newValue, for: AppStorageKeys.pmsHostName) }
@@ -316,6 +325,7 @@ final class AppStorageManager {
         }
     }
 
+    
     /// Last position the operator dragged the pill-count ring to, stored as an
     /// offset (in points) from the screen centre. `nil` when never moved — the
     /// layout then falls back to its default right-side resting position.

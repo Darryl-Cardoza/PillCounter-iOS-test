@@ -5,7 +5,7 @@
 //  Created by Bhushan Patil on 03/04/26.
 //
 import SwiftUI
-import ComposeApp
+import Hl7Core
 
 extension PillScanViewModel {
     
@@ -228,11 +228,11 @@ extension PillScanViewModel {
 
     @MainActor
     func createBatchAndTxnsFromHL7Request(
-        medications: [MedicationData],
+        medications: [RXESegment],
         requestId : String,
         bucketId: String?
     ) async {
-        
+
         print("Requset Comes here")
         guard !medications.isEmpty else {
             print("Meidcation is empty")
@@ -252,7 +252,7 @@ extension PillScanViewModel {
 
         for med in medications {
 
-            let ndc = med.drugCode 
+            let ndc = med.giveCode
             let lot = ""          // RXE usually doesn't send lot
             let expiry = ""       // RXE usually doesn't s expiry
             let targetCount: Int32 = 0 // request → no quantity

@@ -319,6 +319,7 @@ class HistoryViewModel: ObservableObject {
             var totalSealed: Int32 = 0
             var totalOpen: Int32 = 0
             var sealedBottleQty: Int32 = 0
+            var openedBottleCount: Int32 = 0
 
             for stockTxn in stockTxnList {
                 let bottles = bottleInfoStore.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
@@ -336,6 +337,10 @@ class HistoryViewModel: ObservableObject {
                     ))
                 }
 
+                // Every opened row IS one physical bottle — tracked separately from
+                // sealedBottleQty so "Sealed Bottles" vs "Opened Bottles" stay distinct.
+                openedBottleCount += Int32(openedRows.count)
+
                 let openGrouped = Dictionary(grouping: openedRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
                 for (_, rows) in openGrouped {
                     let open = rows.reduce(0) { $0 + $1.loose_qty }
@@ -348,12 +353,13 @@ class HistoryViewModel: ObservableObject {
             }
 
             return GroupedTransaction(
-                stockTxnId:      stockTxnList.first?.stock_txn_id ?? 0,
-                ndc:             ndc,
-                drugName:        drugName,
-                total:           totalSealed + totalOpen,
-                sealedBottles:   totalSealed,
-                sealedBottleQty: sealedBottleQty,
+                stockTxnId:        stockTxnList.first?.stock_txn_id ?? 0,
+                ndc:               ndc,
+                drugName:          drugName,
+                total:             totalSealed + totalOpen,
+                sealedBottles:     totalSealed,
+                sealedBottleQty:   sealedBottleQty,
+                openedBottleCount: openedBottleCount,
                 packageQty:      packageQty,
                 openPills:       totalOpen,
                 lotDetails:      lotDetails

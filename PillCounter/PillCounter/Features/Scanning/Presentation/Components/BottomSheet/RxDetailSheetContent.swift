@@ -24,6 +24,7 @@ struct RxDetailsSheetContent: View {
     var rxNumber: String
     var strength: String
     var form: String
+    var drugImagePath: String?
 
     private var isPad: Bool {
         hSizeClass == .regular && vSizeClass == .regular
@@ -81,7 +82,7 @@ struct RxDetailsSheetContent: View {
             HStack(spacing: 10) {
                 ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: false)
                     .frame(maxWidth: .infinity)
-                FormBadge(isIpad: false, dosageForm: form)
+                DrugImageBadge(isIpad: false, drugImagePath: drugImagePath, dosageForm: form)
                     .frame(maxWidth: .infinity)
                 ValueBadge(label: L10n.BarcodeScan.strength, value: strength, isIpad: false)
                     .frame(maxWidth: .infinity)
@@ -134,7 +135,7 @@ struct RxDetailsSheetContent: View {
             .padding(.horizontal, 16)
 
             HStack(spacing: 10) {
-                FormBadge(isIpad: false, dosageForm: form)
+                DrugImageBadge(isIpad: false, drugImagePath: drugImagePath, dosageForm: form)
                     .frame(maxWidth: .infinity)
                 ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: false)
                     .frame(maxWidth: .infinity)
@@ -177,7 +178,7 @@ struct RxDetailsSheetContent: View {
             HStack(spacing: 16) {
                 ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: true)
                     .frame(maxWidth: .infinity)
-                FormBadge(isIpad: true, dosageForm: form)
+                DrugImageBadge(isIpad: true, drugImagePath: drugImagePath, dosageForm: form)
                     .frame(maxWidth: .infinity)
                 ValueBadge(label: L10n.BarcodeScan.strength, value: strength, isIpad: true)
                     .frame(maxWidth: .infinity)
@@ -223,7 +224,7 @@ struct RxDetailsSheetContent: View {
             LazyVGrid(columns: columns, spacing: 16) {
                 ValueBadge(label: L10n.BarcodeScan.quantity, value: quantity, isIpad: true)
                     .frame(height: 160)
-                FormBadge(isIpad: true, dosageForm: form)
+                DrugImageBadge(isIpad: true, drugImagePath: drugImagePath, dosageForm: form)
                     .frame(height: 160)
                 ValueBadge(label: L10n.BarcodeScan.strength, value: strength, isIpad: true)
                     .frame(height: 160)
@@ -309,35 +310,36 @@ private struct LabeledText: View {
     }
 }
 
-// MARK: - Form Badge
+// MARK: - Drug Image Badge
 
-private struct FormBadge: View {
+/// Replaces the old Form badge — shows the drug catalog image (falls back to
+/// the dosage-form icon when no image is available) filling the badge box.
+/// `isSquare` distinguishes the iPad landscape grid cell (square) from the
+/// iPad portrait / iPhone row cell (rectangular).
+private struct DrugImageBadge: View {
     @EnvironmentObject private var appColors: AppColors
 
     let isIpad: Bool
+    let drugImagePath: String?
     let dosageForm: String
 
     var body: some View {
-        VStack(spacing: isIpad ? 10 : 6) {
-            Text(L10n.BarcodeScan.form)
-                .font(.system(size: isIpad ? 18 : 11, weight: .regular))
-                .foregroundColor(appColors.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-
-            Image(DosageFormIcon.iconName(for: dosageForm))
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .foregroundColor(appColors.secondary)
-                .frame(width: isIpad ? 30 : 20, height: isIpad ? 30 : 20)
+        GeometryReader { geo in
+            ThumbnailImageView(
+                imagePath: nil,
+                drugImagePath: drugImagePath,
+                width: geo.size.width,
+                height: geo.size.height,
+                cornerRadius: 12,
+                placeholderBackgroundColor: appColors.primaryBackground.opacity(0.5),
+                placeholderSize: CGSize(width: isIpad ? 30 : 20, height: isIpad ? 30 : 20),
+                showImageBackground: appColors.primaryBackground.opacity(0.5),
+                dosageForm: dosageForm,
+                strength: nil,
+                fillDrugImage: false
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(isIpad ? 12 : 6)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(appColors.primaryBackground.opacity(0.5))
-        )
     }
 }
 

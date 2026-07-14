@@ -46,10 +46,20 @@ class PillScanViewModel: ObservableObject {
     var pendingOpenBottleExpiry: String?
     var pendingOpenBottleSerial: String?
 
-    /// Drug for whichever flow is active — FIXED/REGULAR dispense (currentTransaction) or
-    /// stock-count open-pill counting (currentStockTxn), which has no PillCountTransactionEntity.
+    /// Resolved NDC/drug/batch identity for an open-pill scan, held in memory only.
+    /// No BatchCountEntity or StockTxnEntity is created until the count is confirmed
+    /// (Proceed) — see `createOpenedBottleFromPendingScan`. This lets the header/UI
+    /// show the scanned drug immediately without persisting anything for a count the
+    /// user might abandon (back out / kill the app before finishing).
+    @Published var pendingOpenBottleDrug: DrugMasterEntity?
+    var pendingOpenBottleDrugId: Int64?
+    var pendingOpenBottleBucketId: String?
+
+    /// Drug for whichever flow is active — FIXED/REGULAR dispense (currentTransaction),
+    /// stock-count open-pill counting with a persisted StockTxn (currentStockTxn), or an
+    /// open-pill scan still pending confirmation (pendingOpenBottleDrug).
     var currentDrug: DrugMasterEntity? {
-        currentTransaction?.drug ?? currentStockTxn?.drug
+        currentTransaction?.drug ?? currentStockTxn?.drug ?? pendingOpenBottleDrug
     }
 
     // this will store the transaction details array for the current transaction.

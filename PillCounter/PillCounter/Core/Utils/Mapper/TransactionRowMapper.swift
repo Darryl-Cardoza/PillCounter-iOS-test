@@ -23,6 +23,7 @@ extension PillCountTransactionEntity {
             drugName: self.drug?.drug_name ?? "Unknown Pill",
             createdAt: self.created_at,
             barcodeImagePath: self.barcode_image,
+            drugImagePath: self.drug?.drug_image,
             pillCount: totalCount,
             targetCount: Int(self.target_count),
             countType: self.count_type ?? "",

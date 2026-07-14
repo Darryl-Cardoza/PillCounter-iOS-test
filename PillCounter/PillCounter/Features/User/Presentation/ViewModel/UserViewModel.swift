@@ -780,6 +780,7 @@ class UserViewModel: ObservableObject {
             id: String(txn.txn_id), ndc: txn.drug?.ndc ?? "",
             drugName: txn.drug?.drug_name ?? "Unknown Pill",
             createdAt: txn.created_at, barcodeImagePath: txn.barcode_image,
+            drugImagePath: txn.drug?.drug_image,
             pillCount: pillCount, targetCount: Int(txn.target_count),
             countType: txn.count_type ?? "", status: txn.status ?? "",
             note: txn.note, bucketId: "360B", drugType: txn.drug?.drug_type ?? "",

@@ -489,6 +489,16 @@ final class CameraService: NSObject, ObservableObject {
         scannedCodeType = ""
     }
 
+    /// Force-releases the same-barcode lock. Use when starting a new scan session where
+    /// re-scanning the exact same physical barcode is expected and desired (e.g. entering
+    /// open-pill mode right after scanning that NDC's sealed bottle) — otherwise the lock
+    /// from the previous scan silently blocks the identical barcode from firing again
+    /// until it physically leaves and re-enters the camera frame.
+    func forceReleaseBarcodeLock() {
+        lockedBarcodeValue = nil
+        barcodeLockMissFrames = 0
+    }
+
     // MARK: - ZOOM CONTROL
     func setZoom(_ factor: CGFloat) {
         guard let device = captureDevice else { return }

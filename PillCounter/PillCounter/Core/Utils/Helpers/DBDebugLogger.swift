@@ -39,7 +39,7 @@ final class DBDebugLogger {
 
     static func printDrugMaster() {
         let rows = DrugCatalogStore.shared.fetchAll()
-        let header = "| drug_id | ndc | gtin | drug_name | drug_type | package_qty | created_at |"
+        let header = "| drug_id | ndc | gtin | drug_name | drug_type | package_qty | drug_image | created_at |"
         let sep    = String(repeating: "-", count: header.count)
         print("\n💊 DRUG MASTER (\(rows.count) rows)")
         print(sep)
@@ -47,7 +47,7 @@ final class DBDebugLogger {
         print(sep)
         for r in rows {
             let ts = r.created_at > 0 ? formatTs(r.created_at) : "-"
-            print("| \(r.drug_id) | \(r.ndc ?? "") | \(r.gtin ?? "") | \(r.drug_name ?? "") | \(r.drug_type ?? "") | \(r.package_qty) | \(ts) |")
+            print("| \(r.drug_id) | \(r.ndc ?? "") | \(r.gtin ?? "") | \(r.drug_name ?? "") | \(r.drug_type ?? "") | \(r.package_qty) | \(r.drug_image ?? "") | \(ts) |")
         }
         print(sep)
     }

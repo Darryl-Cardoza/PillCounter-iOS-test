@@ -133,6 +133,7 @@ struct PillCountLayout: View {
                 PillCountTopBar(
                     ndc: pillScanViewModel.currentDrug?.ndc ?? "-",
                     drugName: pillScanViewModel.currentDrug?.drug_name ?? "-",
+                    drugImagePath: pillScanViewModel.currentDrug?.drug_image,
                     form: pillScanViewModel.currentDrug?.dosage_form ?? "-",
                     strength: pillScanViewModel.currentDrug?.strength ?? "-",
                     bucket: pillScanViewModel.currentTransaction?.bucket_id

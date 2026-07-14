@@ -174,7 +174,7 @@ extension PillScanViewModel {
         ndc: String,
         drugName: String,
         quantity: Int32,
-        batchId: Int64
+        batchId: Int64?
     ) async {
         guard !ndc.isEmpty else { return }
 
@@ -186,11 +186,13 @@ extension PillScanViewModel {
         pendingOpenBottleExpiry = expiryString
         pendingOpenBottleSerial = decoded.serialNumber
 
-        guard let batch = batchDAO.fetchById(batchId) else { return }
-
-        if let existingStockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) {
+        // If a batch already exists and already has a StockTxn for this NDC, reuse it —
+        // no new persistence needed for an already-tracked NDC.
+        if let batchId, let existingStockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) {
             self.currentStockTxn = existingStockTxn
             self.currentBottleInfo = nil
+            self.pendingOpenBottleDrug = existingStockTxn.drug
+            self.pendingOpenBottleDrugId = existingStockTxn.drug_id
             handlePostScanUI(containerStatus: .opened)
             return
         }
@@ -243,30 +245,48 @@ extension PillScanViewModel {
             }
         }
 
-        let stockTxn = stockTxnDAO.fetchOrCreate(batch: batch, drugId: drugIdToUse, bucketId: batch.bucket_id)
-        self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
+        // Drug catalog resolution is safe to persist eagerly (it's shared reference data,
+        // not batch/count data). The StockTxnEntity/BottleInfoEntity — the actual count —
+        // is NOT created here. It's created only on Proceed (createOpenedBottleFromPendingScan),
+        // so backing out or killing the app mid-scan leaves no phantom 0-count NDC behind.
+        self.currentStockTxn = nil
         self.currentBottleInfo = nil
+        self.pendingOpenBottleDrug = DrugCatalogStore.shared.fetchById(drugIdToUse)
+        self.pendingOpenBottleDrugId = drugIdToUse
 
         handlePostScanUI(containerStatus: .opened)
     }
 
-    /// Called after open pill counting completes (Proceed) — creates the BottleInfoEntity row
-    /// for real, using the lot/expiry/serial stashed at scan time, with the final counted qty.
-    func createOpenedBottleFromPendingScan(loosePillCount: Int) {
-        guard let stockTxnId = currentStockTxn?.stock_txn_id else { return }
+    /// Called after open pill counting completes (Proceed) — creates the batch (if this is
+    /// the very first count of the session), the StockTxnEntity, and the BottleInfoEntity row,
+    /// all at once, using the drug/lot/expiry/serial stashed at scan time and the final
+    /// counted qty. Nothing is persisted before this point.
+    func createOpenedBottleFromPendingScan(existingBatch: BatchCountEntity?, bucketId: String?, loosePillCount: Int) {
+        guard let drugId = pendingOpenBottleDrugId else { return }
+
+        let batch: BatchCountEntity?
+        if let existingBatch {
+            batch = existingBatch
+        } else {
+            batch = batchDAO.create(bucketId: bucketId ?? "")
+        }
+        guard let batch else { return }
+
+        let stockTxn = stockTxnDAO.fetchOrCreate(batch: batch, drugId: drugId, bucketId: batch.bucket_id)
         self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
-            stockTxnId: stockTxnId,
+            stockTxnId: stockTxn.stock_txn_id,
             looseQty: Int32(loosePillCount),
             lotNo: pendingOpenBottleLot,
             expNo: pendingOpenBottleExpiry,
             serialNo: pendingOpenBottleSerial
         )
-        if let updated = stockTxnDAO.fetchById(stockTxnId) {
-            self.currentStockTxn = updated
-        }
+        self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
+
         pendingOpenBottleLot = nil
         pendingOpenBottleExpiry = nil
         pendingOpenBottleSerial = nil
+        pendingOpenBottleDrug = nil
+        pendingOpenBottleDrugId = nil
     }
 
     func formatExpiry(_ date: Date?) -> String? {

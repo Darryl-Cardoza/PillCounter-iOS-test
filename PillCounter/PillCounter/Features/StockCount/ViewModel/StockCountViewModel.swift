@@ -535,6 +535,7 @@ class StockCountViewModel: ObservableObject {
             var totalSealed: Int32 = 0
             var totalOpen:   Int32 = 0
             var sealedBottleQty: Int32 = 0
+            var openedBottleCount: Int32 = 0
 
             for stockTxn in stockTxnList {
                 let bottles = bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
@@ -552,6 +553,10 @@ class StockCountViewModel: ObservableObject {
                     ))
                 }
 
+                // Every opened row IS one physical bottle — tracked separately from
+                // sealedBottleQty so "Sealed Bottles" vs "Opened Bottles" stay distinct.
+                openedBottleCount += Int32(openedRows.count)
+
                 let openGrouped = Dictionary(grouping: openedRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
                 for (_, rows) in openGrouped {
                     let open = rows.reduce(0) { $0 + $1.loose_qty }
@@ -564,15 +569,16 @@ class StockCountViewModel: ObservableObject {
             }
 
             return GroupedTransaction(
-                stockTxnId:      stockTxnList.first?.stock_txn_id ?? 0,
-                ndc:             ndc,
-                drugName:        drugName,
-                total:           totalSealed + totalOpen,
-                sealedBottles:   totalSealed,
-                sealedBottleQty: sealedBottleQty,
-                packageQty:      packageQty,
-                openPills:       totalOpen,
-                lotDetails:      lotDetails
+                stockTxnId:        stockTxnList.first?.stock_txn_id ?? 0,
+                ndc:               ndc,
+                drugName:          drugName,
+                total:             totalSealed + totalOpen,
+                sealedBottles:     totalSealed,
+                sealedBottleQty:   sealedBottleQty,
+                openedBottleCount: openedBottleCount,
+                packageQty:        packageQty,
+                openPills:         totalOpen,
+                lotDetails:        lotDetails
             )
         }
     }
@@ -601,15 +607,21 @@ struct StockTransaction: Identifiable, Hashable {
 }
 
 struct GroupedTransaction {
-    let stockTxnId:    Int64
-    let ndc:           String
-    let drugName:      String
-    let total:         Int32
-    let sealedBottles: Int32
-    let sealedBottleQty: Int32
-    let packageQty:    Int32
-    let openPills:     Int32
-    let lotDetails:    [LotDetail]
+    let stockTxnId:        Int64
+    let ndc:               String
+    let drugName:          String
+    let total:             Int32
+    let sealedBottles:     Int32
+    /// Count of sealed physical bottles only (the single sealed BottleInfoEntity row's bottle_qty).
+    let sealedBottleQty:   Int32
+    /// Count of opened physical bottles (one BottleInfoEntity row each).
+    let openedBottleCount: Int32
+    let packageQty:        Int32
+    let openPills:         Int32
+    let lotDetails:        [LotDetail]
+
+    /// Total physical bottles for this NDC — sealed + opened — shown on the batch list row.
+    var totalBottleCount: Int32 { sealedBottleQty + openedBottleCount }
 }
 
 struct LotDetail {

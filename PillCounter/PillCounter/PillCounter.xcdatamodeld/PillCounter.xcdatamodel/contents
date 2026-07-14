@@ -32,6 +32,7 @@
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="dosage_form" optional="YES" attributeType="String"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="drug_image" optional="YES" attributeType="String"/>
         <attribute name="drug_name" optional="YES" attributeType="String"/>
         <attribute name="drug_type" optional="YES" attributeType="String"/>
         <attribute name="gtin" optional="YES" attributeType="String"/>

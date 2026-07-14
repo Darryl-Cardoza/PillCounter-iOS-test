@@ -19,7 +19,7 @@ struct PillCountLayout: View {
 
     let pillScanViewModel: PillScanViewModel
     let cameraService: CameraService
-    let countType: CountType
+    let isDispense: Bool
     let isLandscape: Bool
     let isAddDisabled: Bool
     /// Step instruction text — hosted in the top bar (old header content moved here).
@@ -75,7 +75,7 @@ struct PillCountLayout: View {
 
     /// Target for the current step (0 when there is no meaningful target, e.g. REGULAR).
     private var targetCount: Int {
-        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
+        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false {
             return 0
         } else if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return pillScanViewModel.currentControlledTargetCount ?? 0
@@ -86,7 +86,7 @@ struct PillCountLayout: View {
 
     /// Total committed count for the current transaction / step.
     private var currentTotalCount: Int {
-        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
+        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false {
             return pillScanViewModel.addCurrentOpenPillCount
         } else if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return Int(pillScanViewModel.getTotalCuntForCurrentStep())
@@ -101,7 +101,7 @@ struct PillCountLayout: View {
     }
 
     private var isFixed: Bool {
-        pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue
+        pillScanViewModel.currentTransaction?.is_dispense == true
     }
 
     /// Open-ended parent pour — no target; the bar shows the live count and an
@@ -169,7 +169,7 @@ struct PillCountLayout: View {
                     showSteps: !isPortrait,
                     onTapStep: { handleStepTap($0) },
                     isOpenEndedCountStep: isOpenEndedStep,
-                    isRegularCountType: isOpenPillScanMode || pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue,
+                    isRegularCountType: isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false,
                     isDoneEnabled: isDoneEnabled,
                     onShowDetailGrid: onShowDetailGrid,
                     onDone: onAllDone

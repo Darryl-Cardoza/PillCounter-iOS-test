@@ -175,23 +175,21 @@ class PillScanViewModel: ObservableObject {
     /// Returns the derived count type + scan type so the caller can route, or
     /// nil if the transaction no longer exists.
     @discardableResult
-    func startDispenseCount(txnId: Int64) -> (countType: CountType, scanType: ScanType)? {
+    func startDispenseCount(txnId: Int64) -> (isDispense: Bool, scanType: ScanType)? {
         guard let txn = transactionDAO.fetchById(txnId) else { return nil }
 
         selectedTransaction = txn
 
-        let countType: CountType =
-            txn.count_type?.uppercased() == CountType.REGULAR.rawValue
-            ? .REGULAR : .FIXED
+        let isDispense = txn.is_dispense
         let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
 
-        return (countType, scanType)
+        return (isDispense, scanType)
     }
 
-    private func postTransactionUIUpdate(countType: CountType) {
+    private func postTransactionUIUpdate(isDispense: Bool) {
         getAllTransactionDetailsOfTheCurrentTransaction()
 
-        if countType == .FIXED {
+        if isDispense {
             updateTargetCountForCurrentTransaction()
         }
 
@@ -214,7 +212,7 @@ class PillScanViewModel: ObservableObject {
     
     // create transaction for every new transaction that user scans the barcode or enters the ndc or the gtin number manually.
     func createTransaction(
-        drugId: Int64, countType: CountType,
+        drugId: Int64, isDispense: Bool,
         barcodeImage: UIImage? = nil,
         isComingFromPms:Bool = false,
         isControlled:Bool? = nil,
@@ -255,7 +253,7 @@ class PillScanViewModel: ObservableObject {
         transactionDAO.create(
             for: user,
             drugId: drugId,
-            countType: countType,
+            isDispense: isDispense,
             batchId: batchId ?? 0,
             barcodeImagePath: savedPath,
             isFromPms: isComingFromPms,
@@ -277,7 +275,7 @@ class PillScanViewModel: ObservableObject {
     
     func updaetTransaction(
         drugId: Int64,
-        countType: CountType,
+        isDispense: Bool,
         txnId:Int64,
         barcodeImage: UIImage? = nil,
         isComingFromPms:Bool = false,
@@ -313,7 +311,7 @@ class PillScanViewModel: ObservableObject {
         transactionDAO.update(
             txnId: txnId,
             drugId: drugId,
-            countType: countType,
+            isDispense: isDispense,
             targetCount: targetCount,
             barcodeImagePath: savedPath
         )

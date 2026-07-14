@@ -38,15 +38,15 @@ protocol TransactionDataSource: AnyObject {
     func fetchById(_ txnId: Int64) -> PillCountTransactionEntity?
     func fetchByBatch(batchId: Int64) -> [PillCountTransactionEntity]
     func fetchByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64) -> [PillCountTransactionEntity]
-    func fetchPartial(for user: UserEntity, countType: CountType) -> [PillCountTransactionEntity]
-    func fetchPartialFromPms(for user: UserEntity, countType: CountType) -> [PillCountTransactionEntity]
+    func fetchPartial(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity]
+    func fetchPartialFromPms(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity]
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity]
     func fetchCompletedUnsynced() -> [PillCountTransactionEntity]
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity?
     func fetchAllRxNos(for user: UserEntity) -> [String]
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity]
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity?
-    func countTransactions(for user: UserEntity, countType: CountType, status: CountStatus) -> Int
+    func countTransactions(for user: UserEntity, isDispense: Bool, status: CountStatus) -> Int
     func getWorkflowStep(txn: PillCountTransactionEntity) -> ControlledStep?
     func restoreDeleted(txnId: Int64)
     func updateStatus(txnId: Int64, status: CountStatus)
@@ -58,13 +58,13 @@ protocol TransactionDataSource: AnyObject {
     func updateNdcVerified(txnId: Int64, verified: Bool)
     func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?)
     func create(
-        for user: UserEntity, drugId: Int64?, countType: CountType, batchId: Int64,
+        for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64,
         barcodeImagePath: String, isFromPms: Bool, drugName: String?, targetCount: Int32,
         isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
         workFlowStep: String?
     ) -> PillCountTransactionEntity
     func update(
-        txnId: Int64, drugId: Int64?, countType: CountType, targetCount: Int32?,
+        txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
         barcodeImagePath: String?, substituedDrugId: Int64?, isSubstitue: Bool
     )
     func softDelete(txnId: Int64)
@@ -169,13 +169,13 @@ extension TransactionDataSource {
     /// Convenience matching the store's defaulted `create` so call sites keep
     /// their short forms when working against the protocol type.
     func create(
-        for user: UserEntity, drugId: Int64?, countType: CountType, batchId: Int64 = 0,
+        for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64 = 0,
         barcodeImagePath: String = "", isFromPms: Bool = false, drugName: String? = nil,
         targetCount: Int32 = 0, isControlled: Bool? = nil, rxNo: String? = nil,
         bucketId: String? = nil, priority: String? = nil, workFlowStep: String? = nil
     ) -> PillCountTransactionEntity {
         create(
-            for: user, drugId: drugId, countType: countType, batchId: batchId,
+            for: user, drugId: drugId, isDispense: isDispense, batchId: batchId,
             barcodeImagePath: barcodeImagePath, isFromPms: isFromPms, drugName: drugName,
             targetCount: targetCount, isControlled: isControlled, rxNo: rxNo,
             bucketId: bucketId, priority: priority, workFlowStep: workFlowStep
@@ -183,11 +183,11 @@ extension TransactionDataSource {
     }
 
     func update(
-        txnId: Int64, drugId: Int64?, countType: CountType, targetCount: Int32?,
+        txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
         barcodeImagePath: String?, substituedDrugId: Int64? = nil, isSubstitue: Bool = false
     ) {
         update(
-            txnId: txnId, drugId: drugId, countType: countType, targetCount: targetCount,
+            txnId: txnId, drugId: drugId, isDispense: isDispense, targetCount: targetCount,
             barcodeImagePath: barcodeImagePath, substituedDrugId: substituedDrugId,
             isSubstitue: isSubstitue
         )

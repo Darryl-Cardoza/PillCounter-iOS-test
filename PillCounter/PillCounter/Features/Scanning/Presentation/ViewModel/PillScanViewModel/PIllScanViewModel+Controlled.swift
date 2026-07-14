@@ -78,7 +78,7 @@ extension PillScanViewModel{
             return stepTotal >= target
             
         case .targetVerification:
-            if currentTransaction?.count_type == CountType.FIXED.rawValue {
+            if currentTransaction?.is_dispense == true {
                 return stepTotal == target
             } else {
                 return true
@@ -193,7 +193,7 @@ extension PillScanViewModel{
     func updateSubstitutedDrug(
         txnId: Int64,
         rawValue: String,
-        countType: CountType,
+        isDispense: Bool,
         image: UIImage?
     ) async {
         
@@ -234,7 +234,7 @@ extension PillScanViewModel{
         transactionDAO.update(
             txnId: txnId,
             drugId: isNdcEquivalent ? actualDrugId : nil,
-            countType: countType,
+            isDispense: isDispense,
             targetCount: nil,
             barcodeImagePath: savedPath,
             substituedDrugId: isNdcEquivalent ? nil : actualDrugId,

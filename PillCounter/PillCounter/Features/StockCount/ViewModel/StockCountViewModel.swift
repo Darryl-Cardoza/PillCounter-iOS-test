@@ -257,12 +257,12 @@ class StockCountViewModel: ObservableObject {
 
     // MARK: - NDC Requests (unaffected by publisher — different data set)
 
-    func getAllPartialTransactions(countType: CountType, userId: String) async {
+    func getAllPartialTransactions(isDispense: Bool, userId: String) async {
         guard let user = userDataLocalStorage.fetchByUserId(userId) else {
             regularCountTransactions = []
             return
         }
-        regularCountTransactions = transactionDAO.fetchPartialFromPms(for: user, countType: countType)
+        regularCountTransactions = transactionDAO.fetchPartialFromPms(for: user, isDispense: isDispense)
 
         totalNdcRequests = 0
         for transaction in regularCountTransactions {

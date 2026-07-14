@@ -46,7 +46,7 @@ struct CameraContentView: View {
                         ).ignoresSafeArea()
 //                        TrayOverlay(cameraService: cameraService).ignoresSafeArea()
                     }
-                    if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
+                    if pillScanViewModel.currentTransaction?.is_dispense == true {
                         VStack {
                             StepProgressRow(
                                 activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),

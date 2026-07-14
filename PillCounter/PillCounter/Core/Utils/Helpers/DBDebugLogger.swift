@@ -78,14 +78,14 @@ final class DBDebugLogger {
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let rows = (try? context.fetch(request)) ?? []
 
-        let header = "| txn_id | drug_id | drug_name | batch_id | count_type | status | target | is_from_pms | is_ndc_verified | is_deleted | is_synced | rx_no | bucket_id | note | created_at | updated_at |"
+        let header = "| txn_id | drug_id | drug_name | batch_id | is_dispense | status | target | is_from_pms | is_ndc_verified | is_deleted | is_synced | rx_no | bucket_id | note | created_at | updated_at |"
         let sep    = String(repeating: "-", count: header.count)
         print("\n📋 TRANSACTIONS (\(rows.count) rows)")
         print(sep)
         print(header)
         print(sep)
         for r in rows {
-            print("| \(r.txn_id) | \(r.drug_id) | \(r.drug?.drug_name ?? "") | \(r.batch_id) | \(r.count_type ?? "") | \(r.status ?? "") | \(r.target_count) | \(r.is_from_pms) | \(r.is_ndc_verfied) | \(r.is_deleted) | \(r.is_synced) | \(r.rx_no ?? "") | \(r.bucket_id ?? "") | \(r.note ?? "") | \(formatTs(r.created_at)) | \(formatTs(r.updated_at)) |")
+            print("| \(r.txn_id) | \(r.drug_id) | \(r.drug?.drug_name ?? "") | \(r.batch_id) | \(r.is_dispense) | \(r.status ?? "") | \(r.target_count) | \(r.is_from_pms) | \(r.is_ndc_verfied) | \(r.is_deleted) | \(r.is_synced) | \(r.rx_no ?? "") | \(r.bucket_id ?? "") | \(r.note ?? "") | \(formatTs(r.created_at)) | \(formatTs(r.updated_at)) |")
         }
         print(sep)
     }

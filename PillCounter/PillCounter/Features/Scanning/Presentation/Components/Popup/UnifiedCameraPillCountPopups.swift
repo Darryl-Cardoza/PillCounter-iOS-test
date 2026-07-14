@@ -65,8 +65,8 @@ extension UnifiedCameraView {
                 // currentTransaction, so read the id/type up front.
                 let completedTxnId = pillScanViewModel.currentTransaction?.txn_id ?? 0
                 let isFixed =
-                    pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue
-                let completedCountType = router.selectedPillScanningType ?? .FIXED
+                    pillScanViewModel.currentTransaction?.is_dispense == true
+                let completedIsDispense = router.selectedPillScanningIsDispense ?? true
 
                 if isFixed {
                     // Mark COMPLETED FIRST, then start the continuous-dispense flow.
@@ -77,7 +77,7 @@ extension UnifiedCameraView {
                     Task { @MainActor in
                         await userViewModel.completeTheSelectedTransaction(
                             txnId: completedTxnId,
-                            countType: completedCountType
+                            isDispense: completedIsDispense
                         )
                         // Continuous dispense — reset back to RX-scan in place and surface
                         // the "Today's Queue" sheet over it. No navigation. See UnifiedCameraView.
@@ -95,7 +95,7 @@ extension UnifiedCameraView {
                     Task(priority: .background) {
                         await userViewModel.completeTheSelectedTransaction(
                             txnId: completedTxnId,
-                            countType: completedCountType
+                            isDispense: completedIsDispense
                         )
                     }
                 }

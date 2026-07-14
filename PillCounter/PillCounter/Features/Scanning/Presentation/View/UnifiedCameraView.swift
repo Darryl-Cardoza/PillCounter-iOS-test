@@ -274,7 +274,7 @@ struct UnifiedCameraView: View {
                             PillCountLayout(
                                 pillScanViewModel: pillScanViewModel,
                                 cameraService: cameraService,
-                                countType: router.selectedPillScanningType ?? .FIXED,
+                                isDispense: router.selectedPillScanningIsDispense ?? true,
                                 isLandscape: isLandscape,
                                 isAddDisabled: isAddDisabled,
                                 instructionText: overlayInstructionText,
@@ -594,8 +594,7 @@ struct UnifiedCameraView: View {
     // MARK: - Computed helpers
 
     var controlledStepInstruction: String {
-        let raw = pillScanViewModel.currentTransaction?.count_type ?? ""
-        if raw == CountType.REGULAR.rawValue {
+        if pillScanViewModel.currentTransaction?.is_dispense == false {
             return L10n.Controlled.regularTargetReverification
         }
         if isOpenPillScanMode && pillScanViewModel.currentControlledStep == .targetVerification {
@@ -695,7 +694,7 @@ extension UnifiedCameraView {
         if let dispenseTxnId,
            let setup = pillScanViewModel.startDispenseCount(txnId: dispenseTxnId) {
             userViewModel.currentTransactionTxnId = dispenseTxnId
-            router.selectedPillScanningType = setup.countType
+            router.selectedPillScanningIsDispense = setup.isDispense
         }
 
         // Set up the stock-count session from the route payload (resume an
@@ -703,10 +702,10 @@ extension UnifiedCameraView {
         // `reset()`, which intentionally preserves currentBatch/pendingBucketId.
         if let stockBatchId {
             stockCountViewModel.startStockCount(batchId: stockBatchId)
-            router.selectedPillScanningType = .REGULAR
+            router.selectedPillScanningIsDispense = false
         } else if let newBatchBucketId {
             stockCountViewModel.startNewBatch(bucketId: newBatchBucketId)
-            router.selectedPillScanningType = .REGULAR
+            router.selectedPillScanningIsDispense = false
         }
 
         // Only clear transaction state for a truly fresh scan.
@@ -844,7 +843,7 @@ extension UnifiedCameraView {
 
         Task { @MainActor in
 
-            if router.selectedPillScanningType == .FIXED
+            if router.selectedPillScanningIsDispense == true
             {
                 switch scanType {
                 case .rx_label:
@@ -1034,7 +1033,7 @@ extension UnifiedCameraView {
             return false
         }
 
-        let fixed = TransactionStore.shared.fetchPartial(for: user, countType: .FIXED)
+        let fixed = TransactionStore.shared.fetchPartial(for: user, isDispense: true)
         let fresh = fixed
             .filter { $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue }
             .sorted { $0.created_at < $1.created_at }
@@ -1047,9 +1046,7 @@ extension UnifiedCameraView {
     func resumeSelectedTransactionInline(_ txn: PillCountTransactionEntity) {
         showDispenseQueueSheet = false
 
-        let countType: CountType =
-            txn.count_type?.uppercased() == CountType.REGULAR.rawValue ? .REGULAR : .FIXED
-        router.selectedPillScanningType = countType
+        router.selectedPillScanningIsDispense = txn.is_dispense
         userViewModel.currentTransactionTxnId = txn.txn_id
         pillScanViewModel.selectedTransaction = txn
 
@@ -1182,7 +1179,7 @@ extension UnifiedCameraView {
 
         if nextStep == nil {
             if pillScanViewModel.currentTransaction?.is_from_pms != true
-                && pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
+                && pillScanViewModel.currentTransaction?.is_dispense == true {
                 showNoteOption = true
             } else {
                 showConfirmCompletionPopup = true
@@ -1322,7 +1319,6 @@ extension UnifiedCameraView {
                 ndc: drug.ndc,
                 drugName: drug.drugName,
                 quantity: Int32(drug.quantity),
-                countType: .REGULAR,
                 batchId: batchId,
                 containerStatus: scannedBottleContainerStatus,
                 bottleCount: stockCountViewModel.pendingBottleCount
@@ -1480,7 +1476,6 @@ extension UnifiedCameraView {
             ndc: drug.ndc,
             drugName: drug.drugName,
             quantity: Int32(drug.quantity),
-            countType: .REGULAR,
             batchId: batchId,
             containerStatus: scannedBottleContainerStatus,
             bottleCount: stockCountViewModel.pendingBottleCount
@@ -1689,7 +1684,7 @@ extension UnifiedCameraView {
             await pillScanViewModel.updateSubstitutedDrug(
                 txnId: txnId,
                 rawValue: value,
-                countType: router.selectedPillScanningType ?? .FIXED,
+                isDispense: router.selectedPillScanningIsDispense ?? true,
                 image: capturedImage
             )
             pillScanViewModel.markNdcVerified()

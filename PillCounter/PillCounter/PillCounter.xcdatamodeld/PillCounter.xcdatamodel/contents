@@ -58,7 +58,7 @@
         <attribute name="barcode_image" optional="YES" attributeType="String"/>
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="bucket_id" optional="YES" attributeType="String"/>
-        <attribute name="count_type" optional="YES" attributeType="String"/>
+        <attribute name="is_dispense" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="gloves_detected" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>

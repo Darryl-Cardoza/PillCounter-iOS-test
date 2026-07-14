@@ -123,7 +123,7 @@ extension PillScanViewModel {
         guard 
               let ndc = txn.drug?.ndc,
               !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              txn.count_type == CountType.FIXED.rawValue
+              txn.is_dispense
         else {
             return nil
         }

@@ -168,11 +168,6 @@ enum TransactionDetailOption: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum CountType: String, Codable {
-    case REGULAR
-    case FIXED
-}
-
 enum CountStatus: String, Codable {
     case PARTIAL
     case COMPLETED

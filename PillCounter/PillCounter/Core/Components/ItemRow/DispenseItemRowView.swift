@@ -20,7 +20,7 @@ struct DispenseItemRowView: View {
     }
 
     private var isFixedCount: Bool {
-        data.countType.uppercased() == CountType.FIXED.rawValue
+        data.countType.uppercased() == "FIXED"
     }
 
 

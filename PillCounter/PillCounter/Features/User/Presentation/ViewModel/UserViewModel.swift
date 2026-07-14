@@ -376,17 +376,17 @@ class UserViewModel: ObservableObject {
 
         // Fixed count calculations
         fixedCountTransactionPartialCount =
-            transactionDAO.countTransactions(for: user, countType: .FIXED, status: .PARTIAL)
+            transactionDAO.countTransactions(for: user, isDispense: true, status: .PARTIAL)
 
         fixedCountTransactionCompletedCount =
-            transactionDAO.countTransactions(for: user, countType: .FIXED, status: .COMPLETED)
+            transactionDAO.countTransactions(for: user, isDispense: true, status: .COMPLETED)
 
         // Regular count calculations
         regularCountTransactionPartialCount =
-            transactionDAO.countTransactions(for: user, countType: .REGULAR, status: .PARTIAL)
+            transactionDAO.countTransactions(for: user, isDispense: false, status: .PARTIAL)
 
         regularCountTransactionCompletedCount =
-            transactionDAO.countTransactions(for: user, countType: .REGULAR, status: .COMPLETED)
+            transactionDAO.countTransactions(for: user, isDispense: false, status: .COMPLETED)
     }
 
     // MARK: TRANSACTION BY DATE
@@ -418,20 +418,20 @@ class UserViewModel: ObservableObject {
 
         let finalTransactions: [PillCountTransactionEntity]
         switch filter {
-        case .regular: finalTransactions = allTransactions.filter { $0.count_type == CountType.REGULAR.rawValue }
-        case .fixed:   finalTransactions = allTransactions.filter { $0.count_type == CountType.FIXED.rawValue }
+        case .regular: finalTransactions = allTransactions.filter { !$0.is_dispense }
+        case .fixed:   finalTransactions = allTransactions.filter { $0.is_dispense }
         }
 
         await MainActor.run { filteredTransactionsOfUserByDate = finalTransactions }
     }
 
-    func getAllPartialTransactions(countType: CountType) async {
+    func getAllPartialTransactions(isDispense: Bool) async {
         guard let user = userLocalDB.fetchByUserId( userID) else {
             self.historyCountTransactions = []
             return
         }
         self.historyCountTransactions =
-            transactionDAO.fetchPartial(for: user, countType: countType)
+            transactionDAO.fetchPartial(for: user, isDispense: isDispense)
 
         self.actualCountedPillsForTheTransactions = [:]
 
@@ -446,15 +446,15 @@ class UserViewModel: ObservableObject {
     // MARK: SOFT DELETE TRANSACITONS
     // func to soft delete a partular transaction.
     func softDeleteTheSelectedTransaction(
-        transactionId: Int64, countType: CountType
+        transactionId: Int64, isDispense: Bool
     ) async {
         transactionDAO.softDelete(txnId: transactionId)
 
-        if countType == .FIXED {
+        if isDispense {
             await sendCompletionHL7(txnId: transactionId)
-            await getAllPartialTransactions(countType: .FIXED)
+            await getAllPartialTransactions(isDispense: true)
         } else {
-            await getAllPartialTransactions(countType: .REGULAR)
+            await getAllPartialTransactions(isDispense: false)
         }
         getAllTransactionsAndFilterByCountType()
     }
@@ -496,31 +496,31 @@ class UserViewModel: ObservableObject {
 
     // MARK: - FORCE COMPLETE TRANSACTION
     // func to make the transaction as force completed.
-    func forceCompleteTheSelectedTransaction(txnId: Int64, countType: CountType)
+    func forceCompleteTheSelectedTransaction(txnId: Int64, isDispense: Bool)
         async
     {
         transactionDAO.updateStatus(txnId: txnId, status: .FORCE_COMPLETED)
 
-        if countType == .FIXED {
-            await getAllPartialTransactions(countType: .FIXED)
+        if isDispense {
+            await getAllPartialTransactions(isDispense: true)
         } else {
-            await getAllPartialTransactions(countType: .REGULAR)
+            await getAllPartialTransactions(isDispense: false)
         }
     }
 
     // MARK: - COMPLETE TRANSACTION
     func completeTheSelectedTransaction(
         txnId: Int64,
-        countType: CountType
+        isDispense: Bool
     ) async {
         // update the statuse
         transactionDAO.updateStatus(txnId: txnId, status: .COMPLETED)
         //  Refresh Partial Transactions
-        if countType == .FIXED {
+        if isDispense {
             await sendCompletionHL7(txnId: txnId)
-            await getAllPartialTransactions(countType: .FIXED)
+            await getAllPartialTransactions(isDispense: true)
         } else {
-            await getAllPartialTransactions(countType: .REGULAR)
+            await getAllPartialTransactions(isDispense: false)
         }
         getAllTransactionsAndFilterByCountType()
     }
@@ -586,7 +586,7 @@ class UserViewModel: ObservableObject {
 
     // MARK: - BATCH ACTIONS
     func softDeleteMultipleTransactions(
-        txnIds: Set<Int64>, countType: CountType
+        txnIds: Set<Int64>, isDispense: Bool
     ) async {
 
         // Iterate through the set of IDs and soft delete them
@@ -595,10 +595,10 @@ class UserViewModel: ObservableObject {
         }
 
         // Refresh the list based on the current context
-        if countType == .FIXED {
-            await getAllPartialTransactions(countType: .FIXED)
+        if isDispense {
+            await getAllPartialTransactions(isDispense: true)
         } else {
-            await getAllPartialTransactions(countType: .REGULAR)
+            await getAllPartialTransactions(isDispense: false)
         }
     }
 
@@ -782,7 +782,7 @@ class UserViewModel: ObservableObject {
             createdAt: txn.created_at, barcodeImagePath: txn.barcode_image,
             drugImagePath: txn.drug?.drug_image,
             pillCount: pillCount, targetCount: Int(txn.target_count),
-            countType: txn.count_type ?? "", status: txn.status ?? "",
+            countType: txn.is_dispense ? "FIXED" : "REGULAR", status: txn.status ?? "",
             note: txn.note, bucketId: "360B", drugType: txn.drug?.drug_type ?? "",
             strength: txn.drug?.strength ?? "",
             dosageForm: txn.drug?.dosage_form ?? ""

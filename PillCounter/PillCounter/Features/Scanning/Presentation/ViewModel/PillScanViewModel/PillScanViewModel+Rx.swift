@@ -178,7 +178,7 @@ extension PillScanViewModel {
 
     /// Called when user taps PROCEED on the Rx popup.
     /// Always updates the existing transaction found during parseScanData — never creates a new one.
-    func createTransactionFromRxScan(countType: CountType = .FIXED) async {
+    func createTransactionFromRxScan(isDispense: Bool = true) async {
         guard let rxData = scannedRxData else {
             print("[RxScan] No scanned Rx data available")
             return

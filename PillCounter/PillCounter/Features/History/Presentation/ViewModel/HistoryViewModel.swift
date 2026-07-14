@@ -101,7 +101,7 @@ class HistoryViewModel: ObservableObject {
             return
         case .fixed:
             finalTransactions = allTransactions.filter {
-                $0.count_type == CountType.FIXED.rawValue
+                $0.is_dispense
             }
         }
 

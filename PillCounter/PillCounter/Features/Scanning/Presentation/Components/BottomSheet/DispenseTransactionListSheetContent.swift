@@ -204,10 +204,7 @@ struct DispenseTransactionListSheetContent: View {
             return
         }
 
-        let countType: CountType =
-            txn.count_type?.uppercased() == CountType.REGULAR.rawValue
-            ? .REGULAR : .FIXED
-        router.selectedPillScanningType = countType
+        router.selectedPillScanningIsDispense = txn.is_dispense
         userViewModel.currentTransactionTxnId = txn.txn_id
         pillScanViewModel.selectedTransaction = txn
 
@@ -227,8 +224,8 @@ struct DispenseTransactionListSheetContent: View {
             return
         }
 
-        let fixed = transactionDAO.fetchPartial(for: user, countType: .FIXED)
-        let regular = transactionDAO.fetchPartial(for: user, countType: .REGULAR)
+        let fixed = transactionDAO.fetchPartial(for: user, isDispense: true)
+        let regular = transactionDAO.fetchPartial(for: user, isDispense: false)
 
         // Sort high-priority first, then oldest → newest within each priority tier.
         let fresh = (fixed + regular)

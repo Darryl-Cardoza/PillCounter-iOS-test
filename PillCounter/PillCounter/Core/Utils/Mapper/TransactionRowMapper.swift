@@ -26,7 +26,7 @@ extension PillCountTransactionEntity {
             drugImagePath: self.drug?.drug_image,
             pillCount: totalCount,
             targetCount: Int(self.target_count),
-            countType: self.count_type ?? "",
+            countType: self.is_dispense ? "FIXED" : "REGULAR",
             status: self.status ?? "",
             note: self.note,
             bucketId: self.bucket_id ?? "",

@@ -14,7 +14,6 @@ extension PillScanViewModel {
         ndc: String,
         drugName: String,
         quantity: Int32,
-        countType: CountType,
         batchId: Int64,
         containerStatus: StockCountOptionContainerStatus,
         bottleCount: Int = 1,

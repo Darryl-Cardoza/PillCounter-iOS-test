@@ -200,7 +200,7 @@ struct HistoryTransactionDetailView: View {
                    note:              txn.note,
                    userName:          userName.isEmpty ? nil : userName,
                    targetCount:       txn.target_count,
-                   countType:         txn.count_type,
+                   countType:         txn.is_dispense ? "FIXED" : "REGULAR",
                    substituteNdc:     txn.substitueDrug?.ndc,
                    substituteDrugName: txn.substitueDrug?.drug_name,
                    detailsByStep:     detailsByStep

@@ -482,7 +482,7 @@ extension PDFShareService {
                     txn.drug?.ndc ?? "—",
                     "\(pillCount)",
                     txn.status ?? "—",
-                    convertCountType(txn.count_type),
+                    convertCountType(txn.is_dispense ? "FIXED" : "REGULAR"),
                 ]
 
                 drawTableRow(

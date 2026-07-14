@@ -12,7 +12,7 @@ final class Router : ObservableObject {
     @Published var navigationPath = NavigationPath()
     
     // temporary value holding the type selected.
-    var selectedPillScanningType: CountType?
+    var selectedPillScanningIsDispense: Bool?
     
     func setRoot(to destination: PillCounterFlow) {
         navigationPath = NavigationPath()

@@ -42,4 +42,14 @@ struct DateUtils {
         return formatter.string(from: Date())
     }
 
+    /// GS1 AI 17 expiration date, formatted "MM-dd-yyyy" — used for bottle-info
+    /// lot/expiration/serial tracking (watermark, HL7 ZSN rows).
+    static func formatExpiryMMddyyyy(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd-yyyy"
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter.string(from: date)
+    }
+
 }

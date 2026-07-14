@@ -135,7 +135,13 @@ class PillScanViewModel: ObservableObject {
     @Published var ndcMismatchRestartFlow = false
     @Published var shouldAutoProceedToCount = false
     @Published var isNdcAdded: Bool = false
-    
+
+    // MARK: Multi-bottle tracking (dispense-only)
+    @Published var showAddBottlePopup: Bool = false
+    @Published var showReplaceBottlePopup: Bool = false
+    var pendingBottleRescan: BottleInfo?
+    var isProcessingBottleRescan: Bool = false
+
     // MARK: Stock Count State
     @Published var addCurrentOpenPillCount: Int = 0
 
@@ -355,13 +361,21 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        transactionDetailDAO.add(
+        let detail = transactionDetailDAO.add(
             txnId: txnId,
             pillCount: pillCount,
             imagePath: imagePath,
             type: type,
             isManual: isManual
         )
+
+        if currentTransaction?.is_dispense == true, let detailId = detail?.txn_details_id {
+            var bottles = transactionDAO.getBottleList(txnId: txnId)
+            if !bottles.isEmpty {
+                bottles[bottles.count - 1].txnDetailsIds.append(detailId)
+                transactionDAO.setBottleList(txnId: txnId, bottles)
+            }
+        }
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }

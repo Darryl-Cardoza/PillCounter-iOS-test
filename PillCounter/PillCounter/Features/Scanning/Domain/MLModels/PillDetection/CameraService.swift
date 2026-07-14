@@ -26,6 +26,17 @@ final class CameraService: NSObject, ObservableObject {
     @Published var scannedCode: String = ""
     @Published var scannedCodeType: String = ""
     private var barcodeEnabled: Bool = false
+
+    // MARK: - BOTTLE RESCAN (multi-bottle dispense tracking)
+    // A second, independent barcode-metadata listener that stays live during
+    // dispense counting (unlike `barcodeEnabled`, which is mutually exclusive
+    // with `isCountingEnabled`). Publishes to its own property so a mid-count
+    // rescan never collides with the primary NDC-scan path (`scannedCode`),
+    // which would otherwise wrongly restart the NDC-verify flow.
+    @Published var bottleRescanCode: String = ""
+    private var bottleRescanEnabled: Bool = false
+    private var lockedBottleRescanValue: String? = nil
+    private var bottleRescanLockMissFrames: Int = 0
     // The value of the barcode currently locked in frame. Non-nil means we already
     // fired the scan event and are waiting for the physical barcode to physically
     // leave the camera's field of view before we fire again.
@@ -417,8 +428,50 @@ final class CameraService: NSObject, ObservableObject {
             // while the same physical barcode is still in frame, the lock prevents
             // it from immediately re-firing. The lock is only released when the
             // frame-presence check sees the barcode has left the camera view.
-            self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
+            // Keep the metadata delegate attached if bottle-rescan listening is active.
+            if !self.bottleRescanEnabled {
+                self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
+            }
             self.configureFrameRate(fps: 30)
+        }
+    }
+
+    /// Keeps barcode-metadata reading live during dispense counting, without
+    /// touching `isCountingEnabled`/frame-rate state the ML pipeline depends on —
+    /// unlike `enableBarcodeScanning()`/`disableBarcodeScanning()`, which are
+    /// mutually exclusive with active pill counting. Publishes to
+    /// `bottleRescanCode`, a channel independent from `scannedCode`.
+    ///
+    /// Dense 2D codes (GS1 DataMatrix/QR) need continuous AF/AE to get a sharp
+    /// lock on a bottle label held at a different distance than the counting
+    /// scene — the previous approach (leave the pill-count 3A lock in place and
+    /// only pulse a one-shot autofocus once a second) too rarely landed a sharp
+    /// frame for the decoder to catch. So while rescan listening is active we
+    /// release the 3A lock and run continuous AF/AE, same as the primary
+    /// barcode-scan path. This trades some pill-count imaging stability for a
+    /// reliable rescan — acceptable because the operator physically pulls the
+    /// tray out of frame to hold up the second bottle anyway.
+    func enableBottleRescanListening() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.bottleRescanEnabled = true
+            self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            self.activateBarcodeAutoFocus()
+        }
+    }
+
+    func disableBottleRescanListening() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.bottleRescanEnabled = false
+            self.lockedBottleRescanValue = nil
+            self.bottleRescanLockMissFrames = 0
+            if !self.barcodeEnabled {
+                self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
+            }
+            // Re-lock 3A so the pill count settles back down once rescan listening ends.
+            self.is3ALocked = false
+            self.lock3AIfNeeded()
         }
     }
 
@@ -561,6 +614,8 @@ final class CameraService: NSObject, ObservableObject {
             // so the next start() begins fresh rather than blocking on a stale value.
             self.lockedBarcodeValue = nil
             self.barcodeLockMissFrames = 0
+            self.lockedBottleRescanValue = nil
+            self.bottleRescanLockMissFrames = 0
         }
     }
 
@@ -1173,13 +1228,23 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        guard barcodeEnabled else { return }
-
         // Collect all currently-visible barcode values this frame.
         let visibleValues = metadataObjects
             .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
             .compactMap { $0.stringValue }
 
+        if barcodeEnabled {
+            processBarcodeMetadata(metadataObjects: metadataObjects, visibleValues: visibleValues)
+        }
+        if bottleRescanEnabled {
+            processBottleRescanMetadata(metadataObjects: metadataObjects, visibleValues: visibleValues)
+        }
+    }
+
+    private func processBarcodeMetadata(
+        metadataObjects: [AVMetadataObject],
+        visibleValues: [String]
+    ) {
         // Release the lock only after the locked barcode has been absent for
         // barcodeLockMissThreshold consecutive frames. A single-frame absence caused
         // by camera shake does NOT release the lock — the miss counter must reach the
@@ -1223,5 +1288,39 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         scannedCode = ""
         scannedCode = value
         scannedCodeType = object.type.rawValue
+    }
+
+    /// Same lock/debounce mechanics as `processBarcodeMetadata`, on an independent
+    /// lock/channel so a mid-count bottle rescan never interferes with the primary
+    /// NDC-scan path.
+    private func processBottleRescanMetadata(
+        metadataObjects: [AVMetadataObject],
+        visibleValues: [String]
+    ) {
+        if let locked = lockedBottleRescanValue {
+            if visibleValues.contains(locked) {
+                bottleRescanLockMissFrames = 0
+            } else if visibleValues.isEmpty {
+                bottleRescanLockMissFrames += 1
+                if bottleRescanLockMissFrames >= Self.barcodeLockMissThreshold {
+                    lockedBottleRescanValue = nil
+                    bottleRescanLockMissFrames = 0
+                }
+                return
+            } else {
+                lockedBottleRescanValue = nil
+                bottleRescanLockMissFrames = 0
+            }
+        }
+
+        guard lockedBottleRescanValue == nil,
+              let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let value = object.stringValue
+        else { return }
+
+        lockedBottleRescanValue = value
+        bottleRescanLockMissFrames = 0
+        bottleRescanCode = ""
+        bottleRescanCode = value
     }
 }

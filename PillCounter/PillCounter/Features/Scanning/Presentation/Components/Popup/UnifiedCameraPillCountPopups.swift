@@ -103,6 +103,28 @@ extension UnifiedCameraView {
         )
     }
 
+    var showAddBottlePopupContent: some View {
+        ConfirmationDialogue(
+            title: L10n.BarcodeScan.addBottleTitle,
+            message: L10n.BarcodeScan.addBottleMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.ok,
+            onCancel: { pillScanViewModel.cancelAddBottle() },
+            onConfirm: { pillScanViewModel.confirmAddBottle() }
+        )
+    }
+
+    var showReplaceBottlePopupContent: some View {
+        ConfirmationDialogue(
+            title: L10n.BarcodeScan.replaceBottleTitle,
+            message: L10n.BarcodeScan.replaceBottleMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.ok,
+            onCancel: { pillScanViewModel.cancelReplaceBottle() },
+            onConfirm: { pillScanViewModel.confirmReplaceBottle() }
+        )
+    }
+
     var deleteAllTransactionDetailsPopup: some View {
         VStack(spacing: 20) {
             Text(L10n.PillCount.confirmDeletion)

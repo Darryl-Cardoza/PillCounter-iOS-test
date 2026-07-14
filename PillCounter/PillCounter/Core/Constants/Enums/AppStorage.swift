@@ -5,6 +5,23 @@
 
 import Foundation
 
+/// HL7 spec dialect selection, driven by `auth/me` → `settings.hl7_message_spec`.
+/// Sets MSH-3 sending application and which custom Z-segment (if any) gets
+/// emitted on outbound dispense messages.
+enum Hl7Format: String, Codable {
+    case dispensesure = "DISPENSESURE"
+    case eyecon = "EYECON"
+    case vivid = "VIVID"
+
+    /// `sendingApplication` is the MSH-3 wire value, which is this enum's own rawValue.
+    static func fromSendingApplication(_ value: String?) -> Hl7Format {
+        guard let value, let format = Hl7Format(rawValue: value.uppercased()) else {
+            return .dispensesure
+        }
+        return format
+    }
+}
+
 final class AppStorageManager {
     static let shared = AppStorageManager()
     private let defaults = UserDefaults.standard
@@ -38,6 +55,8 @@ final class AppStorageManager {
         static let bucketList           = "bucket_list"
         static let userSavedEmails      = "user_saved_emails"
         static let hazardousTrayColors  = "hazardous_tray_colors"
+        static let bypassSSL            = "bypass_ssl"
+        static let hl7MessageSpec       = "hl7_message_spec"
 
         // UserDefaults-backed (non-sensitive)
         static let drugIdCounter        = "drug_id_counter"
@@ -134,6 +153,24 @@ final class AppStorageManager {
     var hl7Version: String {
         get { Keychain.getPassword(for: AppStorageKeys.hl7Version) ?? "2.3" }
         set { Keychain.savePassword(newValue, for: AppStorageKeys.hl7Version) }
+    }
+
+    /// When true, HL7 MLLP and the image server skip TLS/cert trust entirely.
+    /// Server-driven (`auth/me` → `settings.bypass_ssl`), defaults to `true`
+    /// (matches Android's default) when never set.
+    var bypassSSL: Bool {
+        get {
+            guard let raw = Keychain.getPassword(for: AppStorageKeys.bypassSSL) else { return true }
+            return raw == "true"
+        }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.bypassSSL) }
+    }
+
+    /// HL7 spec dialect the PMS integration should speak, provided by the server
+    /// (`auth/me` → `settings.hl7_message_spec`). Falls back to `.dispensesure`.
+    var hl7MessageSpec: Hl7Format {
+        get { Hl7Format(rawValue: Keychain.getPassword(for: AppStorageKeys.hl7MessageSpec) ?? "") ?? .dispensesure }
+        set { Keychain.savePassword(newValue.rawValue, for: AppStorageKeys.hl7MessageSpec) }
     }
 
     var pmsHostName: String {

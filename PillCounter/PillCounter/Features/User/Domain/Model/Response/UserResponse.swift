@@ -120,6 +120,8 @@ struct UserSettings: Codable {
     let bucket: [String]?
     let isPmsIntegrated: Bool?
     let allowLocalStorage: Bool?
+    let bypassSSL: Bool?
+    let hl7MessageSpec: String?
 
     enum CodingKeys: String, CodingKey {
         case notificationsEnabled = "notifications_enabled"
@@ -132,6 +134,8 @@ struct UserSettings: Codable {
         case bucket
         case isPmsIntegrated = "is_pms_integrated"
         case allowLocalStorage = "allow_local_storage"
+        case bypassSSL = "bypass_ssl"
+        case hl7MessageSpec = "hl7_message_spec"
     }
 }
 

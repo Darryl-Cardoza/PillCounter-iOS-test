@@ -197,6 +197,11 @@
 "barcodeScan.copy" = "Copy";
 "barcodeScan.rescanRequired" = "Rescan Required";
 "barcodeScan.ndcDoesNotMatch" = "The scanned NDC does not match";
+"bottleRescan.alreadyScanned" = "Bottle already scanned.";
+"bottleRescan.addBottleTitle" = "New Bottle Detected";
+"bottleRescan.addBottleMessage" = "A new bottle of this drug was scanned. Do you want to add it and continue counting?";
+"bottleRescan.replaceBottleTitle" = "Replace Bottle Info";
+"bottleRescan.replaceBottleMessage" = "You have not dispensed any pills from the previously scanned bottle. Do you want to replace it with this new bottle's info?";
 "barcodeScan.substitute" = "Substitute";
 "barcodeScan.rescan" = "Rescan";
 "barcodeScan.qrScannedSuccessfully" = "Verify Stock Bottle Details";

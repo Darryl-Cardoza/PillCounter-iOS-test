@@ -153,6 +153,64 @@ final class TransactionStore {
         return fetchByRxNo(rxNo, for: user)
     }
 
+    /// HL7 identifier lookups used by the image web server's `getby*` endpoints.
+    /// Fields are encrypted at rest for some entities elsewhere in this store, but
+    /// these HL7 id columns are not, so they can be matched directly via NSPredicate.
+
+    func getByMessageControlId(_ messageControlId: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "hl7_message_control_id == %@ AND is_deleted == false", messageControlId)
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        request.fetchLimit = 1
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
+    }
+
+    func getBySequenceNumber(_ sequenceNumber: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "hl7_sequence_number == %@ AND is_deleted == false", sequenceNumber)
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        request.fetchLimit = 1
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
+    }
+
+    func getByTransactionOrderId(_ transactionOrderId: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "transaction_order_id == %@ AND is_deleted == false", transactionOrderId)
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        request.fetchLimit = 1
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
+    }
+
+    /// `rx_no` is field-level encrypted, so filter in-memory after decrypting rather
+    /// than via NSPredicate (which would compare against ciphertext).
+    func getByRxNoAndFillNo(_ rxNo: String, fillNo: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "is_deleted == false")
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
+            .filter { $0.rx_no == rxNo && $0.refill_no == fillNo }
+            .sorted { $0.created_at > $1.created_at }
+            .first
+    }
+
+    func getMostRecentByRxNo(_ rxNo: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "is_deleted == false")
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
+            .filter { $0.rx_no == rxNo }
+            .sorted { $0.created_at > $1.created_at }
+            .first
+    }
+
     /// Reverse lookup used by the image web server to resolve a delivered
     /// barcode-image filename back to the owning transaction. `barcode_image`
     /// is field-level encrypted at rest, so it cannot be matched via an
@@ -184,6 +242,21 @@ final class TransactionStore {
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] RESTORED deleted — txnId: \(txnId)")
         transactionsDidChange.send()
+    }
+
+    /// Stores the HL7 identifiers captured from an inbound order message, used as
+    /// lookup keys by the on-device image server's `getby*` endpoints.
+    func setHl7Identifiers(
+        txnId: Int64,
+        messageControlId: String? = nil,
+        sequenceNumber: String? = nil,
+        transactionOrderId: String? = nil
+    ) {
+        guard let txn = fetchById(txnId) else { return }
+        if let messageControlId { txn.hl7_message_control_id = messageControlId }
+        if let sequenceNumber { txn.hl7_sequence_number = sequenceNumber }
+        if let transactionOrderId { txn.transaction_order_id = transactionOrderId }
+        CoreDataManager.shared.save(context: context)
     }
 
     func updatePriority(txnId: Int64, priority: String?) {
@@ -371,6 +444,38 @@ final class TransactionStore {
         CoreDataManager.shared.save(context: context)
         transactionsDidChange.send()
         print("📋 [TransactionDAO] UPDATED ndcVerified — txnId: \(txnId), verified: \(verified)")
+    }
+
+    // MARK: - Bottle tracking
+
+    func getBottleList(txnId: Int64) -> [BottleInfo] {
+        guard let txn = fetchById(txnId) else { return [] }
+        return [BottleInfo].decode(from: txn.bottle_info_list_json)
+    }
+
+    func setBottleList(txnId: Int64, _ bottles: [BottleInfo]) {
+        guard let txn = fetchById(txnId) else { return }
+        txn.bottle_info_list_json = bottles.encodedJson()
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED bottleList — txnId: \(txnId), bottleCount: \(bottles.count), json: \(txn.bottle_info_list_json ?? "nil")")
+    }
+
+    @discardableResult
+    func appendBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo] {
+        var bottles = getBottleList(txnId: txnId)
+        bottles.append(bottle)
+        setBottleList(txnId: txnId, bottles)
+        return bottles
+    }
+
+    @discardableResult
+    func replaceLastBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo] {
+        var bottles = getBottleList(txnId: txnId)
+        guard !bottles.isEmpty else { return bottles }
+        bottles[bottles.count - 1] = bottle
+        setBottleList(txnId: txnId, bottles)
+        return bottles
     }
 
     func updateSynced(txnId: Int64) {

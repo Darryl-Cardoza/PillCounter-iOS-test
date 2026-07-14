@@ -57,6 +57,12 @@ protocol TransactionDataSource: AnyObject {
     func updateHazardousTrayDetected(txnId: Int64, detected: Bool)
     func updateNdcVerified(txnId: Int64, verified: Bool)
     func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?)
+    func getBottleList(txnId: Int64) -> [BottleInfo]
+    func setBottleList(txnId: Int64, _ bottles: [BottleInfo])
+    @discardableResult
+    func appendBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo]
+    @discardableResult
+    func replaceLastBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo]
     func create(
         for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64,
         barcodeImagePath: String, isFromPms: Bool, drugName: String?, targetCount: Int32,
@@ -106,12 +112,14 @@ protocol BottleInfoDataSource: AnyObject {
 protocol TransactionDetailDataSource: AnyObject {
     func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32
     func totalCount(txnId: Int64) -> Int
-    func add(txnId: Int64, pillCount: Int32, imagePath: String?, type: String?, isManual: Bool)
+    @discardableResult
+    func add(txnId: Int64, pillCount: Int32, imagePath: String?, type: String?, isManual: Bool) -> PillCountTransactionDetailsEntity?
     func addOrReplaceVial(txnId: Int64, imagePath: String?)
     func fetchForStep(txnId: Int64, step: ControlledStep) -> [PillCountTransactionDetailsEntity]
     func lastCompletedStep(txnId: Int64) -> ControlledStep?
     func softDeleteForStep(txnId: Int64, step: ControlledStep)
     func update(detailId: Int64, block: (PillCountTransactionDetailsEntity) -> Void)
+    func sumPillCount(detailIds: [Int64]) -> Int
 }
 
 // MARK: - Drug-catalog store seam

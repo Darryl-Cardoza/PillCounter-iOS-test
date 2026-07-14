@@ -193,6 +193,12 @@ class UserViewModel: ObservableObject {
                     populateEditableFields(from: user)
                 }
 
+                if let bucket = result.data?.profile?.bucket
+                    ?? result.data?.settings?.bucket
+                    ?? result.data?.user?.settings?.bucket {
+                    self.bucket = bucket
+                }
+
                 if let hl7Version = result.data?.settings?.hl7Version
                     ?? result.data?.user?.settings?.hl7Version {
                     AppStorageManager.shared.hl7Version = hl7Version
@@ -206,6 +212,16 @@ class UserViewModel: ObservableObject {
                 if let allowLocalStorage = result.data?.settings?.allowLocalStorage
                     ?? result.data?.user?.settings?.allowLocalStorage {
                     AppStorageManager.shared.allowLocalStorage = allowLocalStorage
+                }
+
+                if let bypassSSL = result.data?.settings?.bypassSSL
+                    ?? result.data?.user?.settings?.bypassSSL {
+                    AppStorageManager.shared.bypassSSL = bypassSSL
+                }
+
+                if let hl7MessageSpec = result.data?.settings?.hl7MessageSpec
+                    ?? result.data?.user?.settings?.hl7MessageSpec {
+                    AppStorageManager.shared.hl7MessageSpec = Hl7Format.fromSendingApplication(hl7MessageSpec)
                 }
 
                 let fetchedTerminals = result.data?.user?.terminals

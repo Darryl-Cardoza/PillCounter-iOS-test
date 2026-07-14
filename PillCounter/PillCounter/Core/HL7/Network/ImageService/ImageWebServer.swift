@@ -15,20 +15,28 @@ import Network
 final class ImageWebServer {
 
     private var listener: NWListener?
-    private let port: NWEndpoint.Port = 8443
+    /// Server-driven (`auth/me` -> `settings.bypass_ssl`, default true): bypass
+    /// enabled -> plain HTTP on 8080; disabled -> HTTPS on 8443.
+    private var port: NWEndpoint.Port {
+        AppStorageManager.shared.bypassSSL ? 8080 : 8443
+    }
     private let queue = DispatchQueue(label: "com.pillcounter.imageserver", qos: .utility)
 
 
     // MARK: - Lifecycle
 
-    /// Starts HTTPS image server. Returns the session token the C# client must use.
+    /// Starts the image server, plain HTTP or HTTPS depending on the bypass setting.
     func start() {
         guard listener == nil else { return }
 
         do {
-            let parameters = NWParameters(tls: try configureTLS())
+            let bypassSSL = AppStorageManager.shared.bypassSSL
+            let parameters: NWParameters = bypassSSL
+                ? .tcp
+                : NWParameters(tls: try configureTLS())
             parameters.allowLocalEndpointReuse = true
 
+            let port = self.port
             let listener = try NWListener(using: parameters, on: port)
 
             listener.stateUpdateHandler = { state in
@@ -145,10 +153,13 @@ final class ImageWebServer {
 
     // MARK: - Routing
 
-    /// Endpoints (all nested under /images/):
-    ///   GET /images/<filename>                                — single image, base64 JSON
-    ///   GET /images/getbyrxnumber/<rxNumber>                   — all images for an Rx, zipped
-    ///   GET /images/getbymessagecontrolid/<messageControlId>   — all images for an HL7 message control id, zipped
+    /// Endpoints — mirrors Android's `ImageNanoServer`:
+    ///   GET /images/<filename>                                       — single image, base64 JSON
+    ///   GET /images/getbymessagecontrolid/<messageControlId>         — zip, by HL7 message control id
+    ///   GET /images/getbysequencenumber/<sequenceNumber>             — zip, by HL7 sequence number
+    ///   GET /images/getbytransactionorderid/<transactionOrderId>     — zip, by ZUI transaction order id
+    ///   GET /images/getbyrxnumber/<rxNumber>/<fillNo>                — zip, exact Rx + fill number
+    ///   GET /images/getbyrxnumber/<rxNumber>                         — zip, most recent transaction for Rx
     private func handleRequest(_ request: String) -> (Data, [String]) {
 
         let lines = request.components(separatedBy: "\r\n")
@@ -164,26 +175,40 @@ final class ImageWebServer {
         }
 
         let path = parts[1]
+        let segments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+
+        if segments.count == 3, segments[0] == "images", segments[1] == "getbymessagecontrolid" {
+            return serveTxnLookup(decode(segments[2])) { TransactionStore.shared.getByMessageControlId($0) }
+        }
+
+        if segments.count == 3, segments[0] == "images", segments[1] == "getbysequencenumber" {
+            return serveTxnLookup(decode(segments[2])) { TransactionStore.shared.getBySequenceNumber($0) }
+        }
+
+        if segments.count == 3, segments[0] == "images", segments[1] == "getbytransactionorderid" {
+            return serveTxnLookup(decode(segments[2])) { TransactionStore.shared.getByTransactionOrderId($0) }
+        }
+
+        if segments.count == 4, segments[0] == "images", segments[1] == "getbyrxnumber" {
+            let rxNumber = decode(segments[2])
+            let fillNo = decode(segments[3])
+            return serveTxnLookup(rxNumber) { TransactionStore.shared.getByRxNoAndFillNo($0, fillNo: fillNo) }
+        }
+
+        if segments.count == 3, segments[0] == "images", segments[1] == "getbyrxnumber" {
+            return serveTxnLookup(decode(segments[2])) { TransactionStore.shared.getMostRecentByRxNo($0) }
+        }
 
         guard path.hasPrefix("/images/") else {
             return (errorResponse(404), [])
         }
 
-        let subPath = String(path.dropFirst("/images/".count))
-
-        if subPath.hasPrefix("getbyrxnumber/") {
-            let rxNumber = String(subPath.dropFirst("getbyrxnumber/".count))
-            return serveImagesZip(rxNumber: rxNumber)
-        }
-
-        if subPath.hasPrefix("getbymessagecontrolid/") {
-            let messageControlId = String(subPath.dropFirst("getbymessagecontrolid/".count))
-            return (serveImagesZip(messageControlId: messageControlId), [])
-            }
-
-        return serveImage(subPath)
+        return serveImage(String(path.dropFirst("/images/".count)))
     }
 
+    private func decode(_ segment: String) -> String {
+        segment.removingPercentEncoding ?? segment
+    }
 
     // MARK: - Image Logic
 
@@ -199,7 +224,7 @@ final class ImageWebServer {
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
 
         let base64 = decrypted.base64EncodedString(options: [])
-        let json = #"{"success":true,"base64":"\#(base64)"}"#
+        let json = #"{"success":true,"file":"\#(fileName)","base64":"\#(base64)"}"#
         return (httpResponse(json), [fileName])
     }
 
@@ -207,51 +232,65 @@ final class ImageWebServer {
         !name.isEmpty && !name.contains("..") && !name.contains("/")
     }
 
-    /// Builds a zip of every image tied to the given Rx number and returns it as the
-    /// HTTP response body. Each entry is named TYPE_SEQ_COUNT.jpg — TYPE is the
-    /// detail row's ControlledStep (e.g. TARGET_VERIFICATION), SEQ is its 1-based
-    /// occurrence index within that type for this Rx, COUNT is that row's pill_count.
-    /// The transaction's own barcode image (if any) is included as BARCODE_SEQ_0.jpg.
-    private func serveImagesZip(rxNumber: String) -> (Data, [String]) {
-        guard !rxNumber.isEmpty else { return (errorResponse(400), []) }
-
-        let transactions = TransactionStore.shared.fetchByRxNo(rxNumber)
-        guard !transactions.isEmpty else { return (errorResponse(404), []) }
-
-        var zip = ZipArchiveWriter()
-        var typeSequence: [String: Int] = [:]
-        var addedAny = false
-        var deliveredFilenames: [String] = []
-
-        for txn in transactions {
-            if let barcodeImage = txn.barcode_image, !barcodeImage.isEmpty,
-               let data = PhotoFileManager.shared.loadDecryptedData(from: barcodeImage) {
-                let seq = nextSequence(for: "BARCODE", in: &typeSequence)
-                zip.addEntry(name: "BARCODE_\(seq)_0.jpg", data: data)
-                addedAny = true
-                deliveredFilenames.append(barcodeImage)
-            }
-
-            for detail in TransactionDetailStore.shared.fetchAll(txnId: txn.txn_id) {
-                guard let imagePath = detail.image_path, !imagePath.isEmpty,
-                      let data = PhotoFileManager.shared.loadDecryptedData(from: imagePath) else { continue }
-                let type = detail.type ?? "UNKNOWN"
-                let seq = nextSequence(for: type, in: &typeSequence)
-                zip.addEntry(name: "\(type)_\(seq)_\(detail.pill_count).jpg", data: data)
-                addedAny = true
-                deliveredFilenames.append(imagePath)
-            }
-        }
-
-        guard addedAny else { return (errorResponse(404), []) }
-
-        return (zipResponse(zip.finalize(), fileName: "\(rxNumber).zip"), deliveredFilenames)
+    /// One image resolved to bytes, with the naming metadata needed for the zip entry.
+    private struct ImageEntry {
+        let type: String
+        let pillCount: Int32
+        let data: Data
+        let fileName: String
     }
 
-    /// HL7 message control ids are not persisted against a transaction today,
-    /// so this endpoint has no data to match against and always reports not-found.
-    private func serveImagesZip(messageControlId: String) -> Data {
-        errorResponse(404)
+    /// Looks up a single transaction via `lookup`, collects every image tied to it
+    /// (barcode + detail images), and returns the images as a zip. Returns 404 if
+    /// the transaction isn't found or has no images.
+    private func serveTxnLookup(
+        _ key: String,
+        lookup: (String) -> PillCountTransactionEntity?
+    ) -> (Data, [String]) {
+        guard !key.isEmpty, let txn = lookup(key) else { return (errorResponse(404), []) }
+
+        var entries: [ImageEntry] = []
+        var deliveredFilenames: [String] = []
+
+        if let barcodeImage = txn.barcode_image, !barcodeImage.isEmpty,
+           let data = PhotoFileManager.shared.loadDecryptedData(from: barcodeImage) {
+            entries.append(ImageEntry(type: "BARCODE", pillCount: 0, data: data, fileName: barcodeImage))
+            deliveredFilenames.append(barcodeImage)
+        }
+
+        for detail in TransactionDetailStore.shared.fetchAll(txnId: txn.txn_id) {
+            guard let imagePath = detail.image_path, !imagePath.isEmpty,
+                  let data = PhotoFileManager.shared.loadDecryptedData(from: imagePath) else { continue }
+            entries.append(ImageEntry(type: detail.type ?? "IMAGE", pillCount: detail.pill_count, data: data, fileName: imagePath))
+            deliveredFilenames.append(imagePath)
+        }
+
+        guard !entries.isEmpty else { return (errorResponse(404), []) }
+
+        return (zipResponse(entries), deliveredFilenames)
+    }
+
+    /// Builds a zip whose entries are named `${seq}_rx_${label}_${batchNum}B${batchTotal}_qty${pillCount}.$ext`
+    /// — `seq` is the 1-based overall position across all entries, `label` is the
+    /// business-meaning image label (`toImageLabel`), `batchNum`/`batchTotal` are
+    /// this entry's 1-based position/count within entries sharing that label.
+    private func zipResponse(_ entries: [ImageEntry]) -> Data {
+        let labels = entries.map { $0.type.toImageLabel }
+        let batchTotalsByLabel = Dictionary(grouping: labels, by: { $0 }).mapValues { $0.count }
+        var batchCounters: [String: Int] = [:]
+
+        var zip = ZipArchiveWriter()
+        for (index, entry) in entries.enumerated() {
+            let seq = index + 1
+            let label = labels[index]
+            let batchNum = (batchCounters[label] ?? 0) + 1
+            batchCounters[label] = batchNum
+            let batchTotal = batchTotalsByLabel[label] ?? 1
+            let ext = (entry.fileName as NSString).pathExtension.isEmpty ? "jpg" : (entry.fileName as NSString).pathExtension
+            zip.addEntry(name: "\(seq)_rx_\(label)_\(batchNum)B\(batchTotal)_qty\(entry.pillCount).\(ext)", data: entry.data)
+        }
+
+        return zipResponse(zip.finalize(), fileName: "images.zip")
     }
 
     /// Resolves which transaction(s) own the given delivered filenames, so a
@@ -267,12 +306,6 @@ final class ImageWebServer {
             }
         }
         return txnIds
-    }
-
-    private func nextSequence(for type: String, in table: inout [String: Int]) -> Int {
-        let next = (table[type] ?? 0) + 1
-        table[type] = next
-        return next
     }
 
     // MARK: - Response

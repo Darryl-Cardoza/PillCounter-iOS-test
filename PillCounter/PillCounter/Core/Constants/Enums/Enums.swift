@@ -232,6 +232,32 @@ extension ControlledStep {
 
         return orderedSteps[index + 1]
     }
+
+    /// Business-meaning label sent over HL7 (OBX observationValue) and used as
+    /// the zip entry name prefix for image delivery — mirrors Android's
+    /// `imageLabel()` mapping (`StepState.kt`).
+    var imageLabel: String {
+        switch self {
+        case .scan:                 return "dispense_bottle"
+        case .containerInitiate:    return "before_dispense_stock_bottle_count"
+        case .targetVerification:   return "dispense_count"
+        case .targetReverification: return "dispense_recount"
+        case .vial:                 return "dispense_vial"
+        case .containerPending:     return "after_dispense_stock_bottle_count"
+        }
+    }
+}
+
+extension String {
+    /// Maps a raw detail/image type string to its HL7/zip-naming label. If the
+    /// raw value matches a `ControlledStep` case, uses that step's `imageLabel`;
+    /// otherwise lowercases the raw string as-is (mirrors Android's `toImageLabel()`).
+    var toImageLabel: String {
+        if let step = ControlledStep(rawValue: self) {
+            return step.imageLabel
+        }
+        return self.lowercased()
+    }
 }
 
 

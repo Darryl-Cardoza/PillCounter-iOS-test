@@ -325,7 +325,7 @@ enum MLLP {
     /// Wraps HL7 message with MLLP framing.
     static func frame(_ message: String) -> Data {
         var data = Data([start])
-        data.append(message.data(using: .utf8)!) // HL7 payload
+        data.append(message.data(using: .utf8) ?? Data())
         data.append(contentsOf: [end1, end2])    // End markers
         return data
     }
@@ -334,7 +334,8 @@ enum MLLP {
     static func unwrap(_ data: Data) -> String? {
         guard
             let startIndex = data.firstIndex(of: start),
-            let endIndex = data.firstIndex(of: end1)
+            let endIndex = data.firstIndex(of: end1),
+            startIndex < endIndex
         else { return nil }
 
         let payload = data[(startIndex + 1)..<endIndex]

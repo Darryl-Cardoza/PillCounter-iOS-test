@@ -446,9 +446,18 @@ final class Hl7ServiceManager {
         let end2:  UInt8 = 0x0D
 
         while true {
+            guard let startIndex = receiveBuffer.firstIndex(of: start) else { return }
+
+            guard let endIndex = receiveBuffer.firstIndex(where: { $0 == end1 }) else { return }
+
+            guard startIndex < endIndex else {
+                // Stray end-block byte before the next start-block — drop the
+                // garbage prefix (e.g. TLS/plaintext mismatch) and resync.
+                receiveBuffer.removeSubrange(0...endIndex)
+                continue
+            }
+
             guard
-                let startIndex = receiveBuffer.firstIndex(of: start),
-                let endIndex   = receiveBuffer.firstIndex(where: { $0 == end1 }),
                 endIndex + 1 < receiveBuffer.count,
                 receiveBuffer[endIndex + 1] == end2
             else { return }

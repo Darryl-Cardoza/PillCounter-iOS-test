@@ -252,8 +252,11 @@ final class ImageWebServer {
         var entries: [ImageEntry] = []
         var deliveredFilenames: [String] = []
 
-        if let barcodeImage = txn.barcode_image, !barcodeImage.isEmpty,
-           let data = PhotoFileManager.shared.loadDecryptedData(from: barcodeImage) {
+        let bottleBarcodePaths = [BottleInfo].decode(from: txn.bottle_info_list_json)
+            .compactMap { $0.barcodeImagePath }
+            .filter { !$0.isEmpty }
+        for barcodeImage in bottleBarcodePaths {
+            guard let data = PhotoFileManager.shared.loadDecryptedData(from: barcodeImage) else { continue }
             entries.append(ImageEntry(type: "BARCODE", pillCount: 0, data: data, fileName: barcodeImage))
             deliveredFilenames.append(barcodeImage)
         }

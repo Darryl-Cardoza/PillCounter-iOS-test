@@ -457,6 +457,7 @@ final class CameraService: NSObject, ObservableObject {
             self.bottleRescanEnabled = true
             self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
             self.activateBarcodeAutoFocus()
+            print("📷 [CameraService] bottle rescan listening ENABLED")
         }
     }
 
@@ -464,6 +465,7 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.bottleRescanEnabled = false
+            print("📷 [CameraService] bottle rescan listening DISABLED")
             self.lockedBottleRescanValue = nil
             self.bottleRescanLockMissFrames = 0
             if !self.barcodeEnabled {
@@ -1320,6 +1322,7 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
 
         lockedBottleRescanValue = value
         bottleRescanLockMissFrames = 0
+        print("📷 [CameraService] bottle rescan metadata decoded: \(value)")
         bottleRescanCode = ""
         bottleRescanCode = value
     }

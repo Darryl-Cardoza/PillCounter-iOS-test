@@ -55,7 +55,6 @@
         <relationship name="pillCountTransaction" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PillCountTransactionEntity" inverseName="pillCountTransactionDetails" inverseEntity="PillCountTransactionEntity"/>
     </entity>
     <entity name="PillCountTransactionEntity" representedClassName="PillCountTransactionEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="barcode_image" optional="YES" attributeType="String"/>
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="bottle_info_list_json" optional="YES" attributeType="String"/>
         <attribute name="bucket_id" optional="YES" attributeType="String"/>

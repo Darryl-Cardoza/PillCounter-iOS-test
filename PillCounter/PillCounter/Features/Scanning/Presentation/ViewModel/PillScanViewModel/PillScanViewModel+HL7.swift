@@ -53,6 +53,11 @@ extension PillScanViewModel {
                     message: message,
                     callback: callback
                 )
+            case .zniDispenseResult:
+                await handleZniDispenseResult(
+                    message: message,
+                    callback: callback
+                )
             }
         }
     }
@@ -83,13 +88,20 @@ extension PillScanViewModel {
             return .dispenseOrder
         }
 
-        // Vivid ZUI order-data-packet — RDE^O11, PMSS -> Vivid, no RXE/ORC present.
+        // Vivid ZUI order-data-packet — RDE^O01 or O11, PMSS -> Vivid, no RXE/ORC present.
         if message.messageType == "RDE",
-           message.triggerEvent == "O11",
            message.order == nil,
            message.medications.isEmpty,
            message.zuiOrder != nil {
             return .zuiOrderPacket
+        }
+
+        // Eyecon ZNI dispense-result packet — RDE^O01 (or O11), no RXE/ORC present.
+        if message.messageType == "RDE",
+           message.order == nil,
+           message.medications.isEmpty,
+           message.zniSegment != nil {
+            return .zniDispenseResult
         }
 
         // Inventory Request
@@ -588,6 +600,42 @@ extension PillScanViewModel {
         callback?(true)
     }
 
+    /// Eyecon dispense-result packet: RDE^O01 (or O11) carrying only a ZNI
+    /// segment (no RXE/ORC) — parse the drug/quantity/Rx info directly from ZNI.
+    /// Warn and ignore if the NDC is missing.
+    @MainActor
+    private func handleZniDispenseResult(
+        message: HL7Message,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+        guard let zni = message.zniSegment else {
+            callback?(false)
+            return
+        }
+
+        let ndc = zni.ndc.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !ndc.isEmpty else {
+            Log("HL7 ZNI dispense result: missing NDC — ignoring")
+            callback?(false)
+            return
+        }
+
+        let targetCount = Int32(zni.dispenseAmount) ?? 0
+        let rxNo = zni.prescriptionNumber.isEmpty ? nil : zni.prescriptionNumber
+
+        await processHl7DrugAndCreateTransaction(
+            ndc: ndc,
+            drugName: zni.drugName,
+            isDispense: true,
+            targetCount: targetCount,
+            rxNo: rxNo,
+            messageControlId: message.messageControlId,
+            transactionOrderId: zni.fillerOrderNumber.isEmpty ? nil : zni.fillerOrderNumber
+        )
+
+        callback?(true)
+    }
+
     @MainActor
     private func cancelOrderTransactions(
         message: HL7Message,
@@ -690,6 +738,7 @@ enum MessageType {
     case inventoryRequest
     case cancelOrder
     case zuiOrderPacket
+    case zniDispenseResult
 }
 
 extension String {

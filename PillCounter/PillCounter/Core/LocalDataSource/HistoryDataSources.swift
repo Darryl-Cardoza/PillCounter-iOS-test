@@ -65,13 +65,13 @@ protocol TransactionDataSource: AnyObject {
     func replaceLastBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo]
     func create(
         for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64,
-        barcodeImagePath: String, isFromPms: Bool, drugName: String?, targetCount: Int32,
+        isFromPms: Bool, drugName: String?, targetCount: Int32,
         isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
         workFlowStep: String?
     ) -> PillCountTransactionEntity
     func update(
         txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
-        barcodeImagePath: String?, substituedDrugId: Int64?, isSubstitue: Bool
+        substituedDrugId: Int64?, isSubstitue: Bool
     )
     func softDelete(txnId: Int64)
 }
@@ -178,13 +178,13 @@ extension TransactionDataSource {
     /// their short forms when working against the protocol type.
     func create(
         for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64 = 0,
-        barcodeImagePath: String = "", isFromPms: Bool = false, drugName: String? = nil,
+        isFromPms: Bool = false, drugName: String? = nil,
         targetCount: Int32 = 0, isControlled: Bool? = nil, rxNo: String? = nil,
         bucketId: String? = nil, priority: String? = nil, workFlowStep: String? = nil
     ) -> PillCountTransactionEntity {
         create(
             for: user, drugId: drugId, isDispense: isDispense, batchId: batchId,
-            barcodeImagePath: barcodeImagePath, isFromPms: isFromPms, drugName: drugName,
+            isFromPms: isFromPms, drugName: drugName,
             targetCount: targetCount, isControlled: isControlled, rxNo: rxNo,
             bucketId: bucketId, priority: priority, workFlowStep: workFlowStep
         )
@@ -192,11 +192,11 @@ extension TransactionDataSource {
 
     func update(
         txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
-        barcodeImagePath: String?, substituedDrugId: Int64? = nil, isSubstitue: Bool = false
+        substituedDrugId: Int64? = nil, isSubstitue: Bool = false
     ) {
         update(
             txnId: txnId, drugId: drugId, isDispense: isDispense, targetCount: targetCount,
-            barcodeImagePath: barcodeImagePath, substituedDrugId: substituedDrugId,
+            substituedDrugId: substituedDrugId,
             isSubstitue: isSubstitue
         )
     }

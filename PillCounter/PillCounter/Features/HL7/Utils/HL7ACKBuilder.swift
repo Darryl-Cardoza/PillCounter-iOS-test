@@ -88,9 +88,9 @@ struct HL7Validator {
 
     static func validate(_ message: String) -> ValidationResult {
 
-        // Split segments safely
+        // Split segments safely — real devices (Vivid) send \n instead of \r
         let segments = message
-            .components(separatedBy: "\r")
+            .components(separatedBy: CharacterSet(charactersIn: "\r\n"))
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
 
         // MARK: - 1. MSH validation

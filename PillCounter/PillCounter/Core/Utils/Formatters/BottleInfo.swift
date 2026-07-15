@@ -11,6 +11,7 @@ struct BottleInfo: Codable, Equatable {
     var serialNumber: String?
     var txnDetailsIds: [Int64] = []
     var scannedAt: Int64
+    var barcodeImagePath: String?
 }
 
 extension Array where Element == BottleInfo {

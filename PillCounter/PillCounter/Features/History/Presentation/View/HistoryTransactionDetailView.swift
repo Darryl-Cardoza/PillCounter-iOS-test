@@ -37,7 +37,11 @@ struct HistoryTransactionDetailView: View {
     
     /// Resolved once in .onAppear, kept locally so the view doesn't re-resolve on every render.
     @State private var transaction: PillCountTransactionEntity? = nil
-    
+
+    private var firstBottleBarcodeImagePath: String? {
+        [BottleInfo].decode(from: transaction?.bottle_info_list_json).first?.barcodeImagePath
+    }
+
     // MARK: - Body
     var body: some View {
         ZStack {
@@ -341,7 +345,7 @@ extension HistoryTransactionDetailView {
             } else {
                 HStack(spacing: 20) {
                     ThumbnailImageView(
-                        imagePath: transaction?.barcode_image,
+                        imagePath: firstBottleBarcodeImagePath,
                         width: 140,
                         height: 100,
                         cornerRadius: 12,
@@ -349,7 +353,7 @@ extension HistoryTransactionDetailView {
                         placeholderSize: CGSize(width: 20, height: 20)
                     )
                     .onTapGesture {
-                        if let path = transaction?.barcode_image,
+                        if let path = firstBottleBarcodeImagePath,
                            let loaded = PhotoFileManager.shared.loadImage(from: path) {
                             fullScreenImage = loaded
                         }

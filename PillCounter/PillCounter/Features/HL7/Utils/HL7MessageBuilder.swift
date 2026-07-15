@@ -348,10 +348,12 @@ private extension HL7CompletionBuilder {
             )
         }
 
-        // Barcode Image (same as Android)
-        if let barcodePath = txn.barcode_image,
-           !barcodePath.isEmpty {
+        // Barcode Image — one row per scanned bottle that has a captured image.
+        let bottleBarcodePaths = [BottleInfo].decode(from: txn.bottle_info_list_json)
+            .compactMap { $0.barcodeImagePath }
+            .filter { !$0.isEmpty }
 
+        for barcodePath in bottleBarcodePaths {
             let fileName = (barcodePath as NSString).lastPathComponent
 
             obxList.append(

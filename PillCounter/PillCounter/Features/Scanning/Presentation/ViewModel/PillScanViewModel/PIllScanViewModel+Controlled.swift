@@ -223,12 +223,8 @@ extension PillScanViewModel{
             return
         }
         
-        var savedPath = ""
-
         if let img = image {
-            if let path = PhotoFileManager.shared.saveImage(img) {
-                savedPath = path
-            }
+            pendingBarcodeImagePath = PhotoFileManager.shared.saveImage(img)
         }
 
         transactionDAO.update(
@@ -236,7 +232,6 @@ extension PillScanViewModel{
             drugId: isNdcEquivalent ? actualDrugId : nil,
             isDispense: isDispense,
             targetCount: nil,
-            barcodeImagePath: savedPath,
             substituedDrugId: isNdcEquivalent ? nil : actualDrugId,
             isSubstitue: isNdcEquivalent
         )

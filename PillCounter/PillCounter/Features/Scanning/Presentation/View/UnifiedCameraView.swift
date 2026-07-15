@@ -314,19 +314,29 @@ struct UnifiedCameraView: View {
                         restartFlow()
                     },
                     onProceed: {
-                        pillScanViewModel.proceedFromRxScan()
-                        userViewModel.currentTransactionTxnId = pillScanViewModel.selectedTransaction?.txn_id
-                        scanType = .barcode
-                        restartFlow()
+                        Task {
+                            await pillScanViewModel.proceedFromRxScan()
+                            userViewModel.currentTransactionTxnId = pillScanViewModel.selectedTransaction?.txn_id
+                            scanType = .barcode
+                            restartFlow()
+                        }
                     },
-                    drugName: pillScanViewModel.fetchedRxTransaction?.drug?.drug_name ?? "-",
-                    quantity: pillScanViewModel.fetchedRxTransaction?.target_count.description ?? "-",
-                    ndcNumber: pillScanViewModel.fetchedRxTransaction?.drug?.ndc ?? "-",
-                    bucket: pillScanViewModel.fetchedRxTransaction?.bucket_id ?? "NORMAL",
-                    rxNumber: pillScanViewModel.fetchedRxTransaction?.rx_no ?? "-",
-                    strength: pillScanViewModel.fetchedRxTransaction?.drug?.strength ?? "-",
-                    form: pillScanViewModel.fetchedRxTransaction?.drug?.dosage_form ?? "-",
+                    drugName: pillScanViewModel.fetchedRxTransaction?.drug?.drug_name
+                        ?? pillScanViewModel.scannedRxData?.drugName ?? "-",
+                    quantity: pillScanViewModel.fetchedRxTransaction?.target_count.description
+                        ?? pillScanViewModel.scannedRxData?.qty ?? "-",
+                    ndcNumber: pillScanViewModel.fetchedRxTransaction?.drug?.ndc
+                        ?? pillScanViewModel.scannedRxData?.ndcNo ?? "-",
+                    bucket: pillScanViewModel.fetchedRxTransaction?.bucket_id
+                        ?? (pillScanViewModel.selectedBucket.isEmpty ? "NORMAL" : pillScanViewModel.selectedBucket),
+                    rxNumber: pillScanViewModel.fetchedRxTransaction?.rx_no
+                        ?? pillScanViewModel.scannedRxData?.rxNo ?? "-",
+                    strength: pillScanViewModel.fetchedRxTransaction?.drug?.strength
+                        ?? pillScanViewModel.scannedRxDrugMaster?.strength ?? "-",
+                    form: pillScanViewModel.fetchedRxTransaction?.drug?.dosage_form
+                        ?? pillScanViewModel.scannedRxDrugMaster?.dosage_form ?? "-",
                     drugImagePath: pillScanViewModel.fetchedRxTransaction?.drug?.drug_image
+                        ?? pillScanViewModel.scannedRxDrugMaster?.drug_image
                 )
                 .environmentObject(appColors)
             }
@@ -565,6 +575,7 @@ struct UnifiedCameraView: View {
             showPillCountPanel = true
             if pillScanViewModel.currentControlledStep != .vial {
                 cameraService.resumeCounting()
+                cameraService.enableBottleRescanListening()
             } else {
                 enableVialRxScanning()
             }
@@ -584,17 +595,22 @@ struct UnifiedCameraView: View {
                 // Bottle rescan only applies to active counting steps, not the vial photo step.
                 cameraService.disableBottleRescanListening()
             } else {
-                // Leaving the vial step — keep barcode scanning enabled (GS1
-                // must stay live across pill-counting steps), just resume ML counting.
+                // Leaving the vial step — keep barcode/QR scanning live across every
+                // pill-counting step via the bottle-rescan channel (coexists with ML
+                // counting, unlike enableBarcodeScanning()), just resume ML counting.
                 cameraService.resumeCounting()
-                if pillScanViewModel.currentTransaction?.is_dispense == true {
-                    cameraService.enableBottleRescanListening()
-                }
+                cameraService.enableBottleRescanListening()
             }
         }
         .onChange(of: cameraService.bottleRescanCode) { _, code in
             guard !code.isEmpty else { return }
             pillScanViewModel.handleBottleRescan(rawBarcode: code)
+        }
+        .onChange(of: pillScanViewModel.showAddBottlePopup) { _, showing in
+            handleBottleConfirmationPopupVisibility(showing)
+        }
+        .onChange(of: pillScanViewModel.showReplaceBottlePopup) { _, showing in
+            handleBottleConfirmationPopupVisibility(showing)
         }
         .onChange(of: unifiedInstructionText) { _, newText in
             speakInstruction(newText)
@@ -905,6 +921,20 @@ extension UnifiedCameraView {
         }
     }
 
+    /// Bottle rescan add/replace confirmation is shown as a popup over the live
+    /// camera view. Pause counting while it's up so the frame doesn't keep
+    /// advancing under the dialog; on dismiss (confirm OR cancel) resume — the
+    /// snapshot for a confirmed bottle is grabbed at the moment of confirm
+    /// (see showAddBottlePopupContent/showReplaceBottlePopupContent), not here.
+    func handleBottleConfirmationPopupVisibility(_ showing: Bool) {
+        guard currentScanType != .stockCount else { return }
+        if showing {
+            cameraService.pauseCounting()
+        } else {
+            cameraService.resumeCounting()
+        }
+    }
+
     func initializeTransaction() {
         guard currentScanType != .stockCount || isOpenPillScanMode else { return }
 
@@ -934,9 +964,7 @@ extension UnifiedCameraView {
                     enableVialRxScanning()
                 } else {
                     cameraService.resumeCounting()
-                    if pillScanViewModel.currentTransaction?.is_dispense == true {
-                        cameraService.enableBottleRescanListening()
-                    }
+                    cameraService.enableBottleRescanListening()
                 }
             }
         }
@@ -1094,6 +1122,7 @@ extension UnifiedCameraView {
         cameraService.disableBarcodeScanning()
         if pillScanViewModel.currentControlledStep != .vial {
             cameraService.resumeCounting()
+            cameraService.enableBottleRescanListening()
         } else {
             cameraService.pauseCounting()
             enableVialRxScanning()
@@ -1401,12 +1430,11 @@ extension UnifiedCameraView {
         print("    expirationDate: \(expiryString)")
         #endif
 
-        let rawDigitsOnly = rawValue.components(separatedBy: .decimalDigits.inverted).joined()
-        let scannedGtin: String = {
-            if let g = decoded.gtin, !g.isEmpty { return g }
-            if rawDigitsOnly.count >= 8 && rawDigitsOnly.count <= 14 { return rawDigitsOnly }
-            return rawValue
-        }()
+        // Only a real GS1 AI(01) decode is a valid GTIN — a bare NDC/UPC digit
+        // string is NOT a GTIN (no packaging-indicator digit, no check digit) and
+        // must never be written to DrugMasterEntity.gtin, or later rescans that
+        // decode the real GS1 GTIN will never match what's stored.
+        let scannedGtin: String = decoded.gtin ?? rawValue
 
         // Check if this is the same drug already showing
         let isSameNdc: Bool = {
@@ -1472,7 +1500,6 @@ extension UnifiedCameraView {
             quantity: drug.quantity,
             batchId: batchId
         )
-        // isDrugFound = true fires from handlePostScanUI → handleDrugFoundState starts pill counting
     }
 
     /// Called when a new barcode is scanned while a drug's details are showing.

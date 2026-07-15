@@ -436,7 +436,7 @@ struct CountHistoryView: View {
                 + (router.selectedPillScanningIsDispense == true
                     ? " / \(txn.target_count)" : ""),
             icon: "ellipsis",
-            barcodeImagePath: txn.barcode_image,
+            barcodeImagePath: [BottleInfo].decode(from: txn.bottle_info_list_json).first?.barcodeImagePath,
             isFromPms: txn.is_from_pms,
             onIconTap: {
                 if !isEditing {

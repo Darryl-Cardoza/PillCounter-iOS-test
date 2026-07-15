@@ -795,7 +795,7 @@ class UserViewModel: ObservableObject {
         TransactionRowData(
             id: String(txn.txn_id), ndc: txn.drug?.ndc ?? "",
             drugName: txn.drug?.drug_name ?? "Unknown Pill",
-            createdAt: txn.created_at, barcodeImagePath: txn.barcode_image,
+            createdAt: txn.created_at, barcodeImagePath: [BottleInfo].decode(from: txn.bottle_info_list_json).first?.barcodeImagePath,
             drugImagePath: txn.drug?.drug_image,
             pillCount: pillCount, targetCount: Int(txn.target_count),
             countType: txn.is_dispense ? "FIXED" : "REGULAR", status: txn.status ?? "",

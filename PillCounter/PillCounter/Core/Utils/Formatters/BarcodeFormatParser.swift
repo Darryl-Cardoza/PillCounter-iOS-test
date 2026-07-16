@@ -41,7 +41,7 @@ enum BarcodeFormatParser {
 
     /// Placeholder keys treated as optional when they're the last field in the format.
     /// Add new optional trailing fields here — no other change needed.
-    static let optionalTrailingKeys: Set<String> = ["BUCKET", "REFIL"]
+    static let optionalTrailingKeys: Set<String> = ["BUCKET", "REFILLNO"]
 
     // MARK: Extract Keys / Values
 

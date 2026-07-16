@@ -30,6 +30,7 @@ struct APIConstants {
     /// Services
     static let updateProfile = "\(baseURL)/users/update/profile"
     static let deleteProfile = "\(baseURL)/users/delete/profile"
+    static let pharmacyTypes = "\(baseURL)/users/pharmacy-types"
     
     
     // MARK: - MOBILE

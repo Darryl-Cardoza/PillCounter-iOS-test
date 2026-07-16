@@ -75,6 +75,7 @@ final class AppStorageManager {
         static let pillCountRingOffsetX = "pill_count_ring_offset_x"
         static let pillCountRingOffsetY = "pill_count_ring_offset_y"
         static let selectedPharmacyType = "selected_pharmacy_type"
+        static let pharmacyTypeOptions  = "pharmacy_type_options"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -387,12 +388,26 @@ final class AppStorageManager {
         }
     }
 
-    var selectedPharmacyType: PharmacyType? {
+    /// Selected pharmacy type **code** (server value, e.g. "chain_pharmacy") —
+    /// not the display label. Backed by the server-driven list in `pharmacyTypeOptions`.
+    var selectedPharmacyTypeCode: String? {
+        get { defaults.string(forKey: AppStorageKeys.selectedPharmacyType) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.selectedPharmacyType) }
+    }
+
+    /// Pharmacy type list fetched from `/users/pharmacy-types`, cached so the
+    /// dropdown still has options offline / before the next fetch completes.
+    var pharmacyTypeOptions: [PharmacyTypeOption] {
         get {
-            guard let raw = defaults.string(forKey: AppStorageKeys.selectedPharmacyType) else { return nil }
-            return PharmacyType(rawValue: raw)
+            guard let data = defaults.data(forKey: AppStorageKeys.pharmacyTypeOptions),
+                  let options = try? JSONDecoder().decode([PharmacyTypeOption].self, from: data)
+            else { return [] }
+            return options
         }
-        set { defaults.setValue(newValue?.rawValue, forKey: AppStorageKeys.selectedPharmacyType) }
+        set {
+            let data = try? JSONEncoder().encode(newValue)
+            defaults.setValue(data, forKey: AppStorageKeys.pharmacyTypeOptions)
+        }
     }
 
     /// Clears the cached terminal list + selected terminal name.

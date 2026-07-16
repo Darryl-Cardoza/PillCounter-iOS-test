@@ -16,7 +16,7 @@ struct UserProfileScreen: View {
     @EnvironmentObject private var toastManager: ToastManager
 
     @State private var showDeleteConfirmation: Bool = false
-    @State private var selectedPharmacyType: PharmacyType? = nil
+    @State private var selectedPharmacyType: PharmacyTypeOption? = nil
 
 //    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
 //        Bool = true
@@ -74,13 +74,13 @@ struct UserProfileScreen: View {
        
         }
         .onAppear {
-            selectedPharmacyType = AppStorageManager.shared.selectedPharmacyType
-            Task {
-                // Force a remote refresh so the profile (and terminal list) is
-                // always up to date — if a prior auth/me call failed, the cached
-                // user may be missing terminals, so we re-fetch rather than serve
-                // stale local data.
-                await userViewModel.getUser(forceRemote: true)
+            // App launch already hydrated user/terminals/pharmacy-type from
+            // auth/me into local storage — just read the cached data, no
+            // network call on every profile visit.
+            Task { await userViewModel.getUser(forceRemote: false) }
+            let savedCode = AppStorageManager.shared.selectedPharmacyTypeCode
+            selectedPharmacyType = userViewModel.pharmacyTypeOptions.first {
+                $0.code == (savedCode ?? userViewModel.userProfileDetails?.pharmacyType)
             }
         }
         .onTapGesture {
@@ -226,12 +226,12 @@ struct UserProfileScreen: View {
 
     private var pharmacyTypeDropdown: some View {
         Menu {
-            ForEach(PharmacyType.allCases) { type in
+            ForEach(userViewModel.pharmacyTypeOptions) { type in
                 Button {
                     selectedPharmacyType = type
                 } label: {
                     HStack {
-                        Text(type.displayText)
+                        Text(type.label)
                         if type == selectedPharmacyType {
                             Image(systemName: "checkmark")
                         }
@@ -247,7 +247,7 @@ struct UserProfileScreen: View {
                     .padding(.leading, 16)
 
                 HStack {
-                    Text(selectedPharmacyType?.displayText ?? "")
+                    Text(selectedPharmacyType?.label ?? "")
                         .font(.body)
                         .foregroundColor(appColors.text)
                         .padding(.leading, 16)
@@ -329,35 +329,37 @@ struct UserProfileScreen: View {
     private var actionButtons: some View {
         EqualWidthHStackButtons(spacing: 16) {
 
-            // DELETE
-            PillCountingButton(
-                iconName: nil,
-                title: L10n.Common.delete,
-                textColor: appColors.primary,
-                backgroundColor: .clear,
-                borderColor: appColors.primary,
-                font: .system(size: 16, weight: .semibold),
-                cornerRadius: 40,
-                horizontalPadding: 22,
-                verticalPadding: 15,
-                iconSize: 24,
-                action: onDeleteTapped
-            )
-
-            // SKIP
-//            PillCountingButton(
-//                iconName: nil,
-//                title: NSLocalizedString("SKIP", comment: ""),
-//                textColor: appColors.primary,
-//                backgroundColor: .clear,
-//                borderColor: appColors.primary,
-//                font: .system(size: 16, weight: .semibold),
-//                cornerRadius: 40,
-//                horizontalPadding: 22,
-//                verticalPadding: 15,
-//                iconSize: 24,
-//                action: onSkipTapped
-//            )
+            if AppStorageManager.shared.isNewUser {
+                // SKIP
+                PillCountingButton(
+                    iconName: nil,
+                    title: NSLocalizedString("SKIP", comment: ""),
+                    textColor: appColors.primary,
+                    backgroundColor: .clear,
+                    borderColor: appColors.primary,
+                    font: .system(size: 16, weight: .semibold),
+                    cornerRadius: 40,
+                    horizontalPadding: 22,
+                    verticalPadding: 15,
+                    iconSize: 24,
+                    action: onSkipTapped
+                )
+            } else {
+                // DELETE
+                PillCountingButton(
+                    iconName: nil,
+                    title: L10n.Common.delete,
+                    textColor: appColors.primary,
+                    backgroundColor: .clear,
+                    borderColor: appColors.primary,
+                    font: .system(size: 16, weight: .semibold),
+                    cornerRadius: 40,
+                    horizontalPadding: 22,
+                    verticalPadding: 15,
+                    iconSize: 24,
+                    action: onDeleteTapped
+                )
+            }
 
             // SAVE
             PillCountingButton(
@@ -381,6 +383,7 @@ struct UserProfileScreen: View {
     }
 
     private func onSkipTapped() {
+        AppStorageManager.shared.isNewUser = false
         router.navigateBack()
     }
 
@@ -409,9 +412,9 @@ struct UserProfileScreen: View {
                 Hl7ServiceController.shared.restartForTerminalChange()
             }
 
-            let profileChanged = userViewModel.hasProfileChanged()
+            let profileChanged = userViewModel.hasProfileChanged(pharmacyTypeCode: selectedPharmacyType?.code)
             if profileChanged {
-                await userViewModel.updateUserProfile()
+                await userViewModel.updateUserProfile(pharmacyTypeCode: selectedPharmacyType?.code)
                 if !userViewModel.isProfileUpdated {
                     toastManager.show(message: L10n.Profile.Error.errorUpdateProfileMessage)
                     return
@@ -420,7 +423,6 @@ struct UserProfileScreen: View {
                 userViewModel.isProfileUpdated = false
             }
 
-            AppStorageManager.shared.selectedPharmacyType = selectedPharmacyType
             toastManager.show(message: L10n.Profile.successUpdateMessage)
             AppStorageManager.shared.isNewUser = false
             router.navigateBack()

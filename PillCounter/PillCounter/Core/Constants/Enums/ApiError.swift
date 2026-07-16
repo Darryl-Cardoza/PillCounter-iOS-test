@@ -13,10 +13,11 @@ public enum APIError: Error {
     case unauthorized       // 401
     case forbidden          // 403
     case notFound           // 404
+    case tooManyRequests    // 429
     case serverError(statusCode: Int)
     case parsingError
     case unknown(Error)
-    
+
     var localizedDescription: String {
         switch self {
         case .invalidURL:
@@ -29,6 +30,8 @@ public enum APIError: Error {
             return NSLocalizedString("FORBIDDEN", comment: "API error")
         case .notFound:
             return NSLocalizedString("NOT_FOUND", comment: "API error")
+        case .tooManyRequests:
+            return NSLocalizedString("TOO_MANY_REQUESTS", comment: "API error")
         case .serverError(let statusCode):
             let format = NSLocalizedString("SERVER_ERROR", comment: "API error")
             return String(format: format, statusCode)

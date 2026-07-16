@@ -82,7 +82,7 @@ extension PillScanViewModel {
                         ndcNo:    ndc.isEmpty ? nil : ndc,
                         drugName: drugName,
                         qty:      mappedData["QTY"],
-                        refil:    mappedData["REFIL"],
+                        refil:    mappedData["REFILLNO"],
                         rawMap:   mappedData
                     )
                     fetchedRxTransaction = nil
@@ -101,7 +101,7 @@ extension PillScanViewModel {
                     ndcNo:    ndc.isEmpty ? nil : ndc,
                     drugName: drugName,
                     qty:      mappedData["QTY"],
-                    refil:    mappedData["REFIL"],
+                    refil:    mappedData["REFILLNO"],
                     rawMap:   mappedData
                 )
                 fetchedRxTransaction = existingTxn

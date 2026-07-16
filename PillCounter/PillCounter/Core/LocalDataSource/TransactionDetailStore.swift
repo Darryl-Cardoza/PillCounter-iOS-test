@@ -90,6 +90,19 @@ final class TransactionDetailStore {
         return results
     }
 
+    /// Reverse lookup used by the image web server to resolve a delivered
+    /// detail-image filename back to the owning transaction. `image_path` is
+    /// field-level encrypted at rest, so it cannot be matched via an
+    /// NSPredicate against the SQLite row (that would compare against
+    /// ciphertext) — fetch and compare the decrypted in-memory value instead.
+    func txnId(forImagePath filename: String) -> Int64? {
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> = PillCountTransactionDetailsEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "is_deleted == false")
+        guard let results = try? context.fetch(request) else { return nil }
+        results.forEach { refreshDecrypted($0) }
+        return results.first { $0.image_path == filename }?.txn_id
+    }
+
     func totalCount(txnId: Int64) -> Int {
         fetchAll(txnId: txnId).reduce(0) { $0 + Int($1.pill_count) }
     }

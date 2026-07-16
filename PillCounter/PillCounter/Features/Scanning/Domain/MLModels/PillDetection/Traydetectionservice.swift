@@ -180,12 +180,9 @@ final class TrayDetectionService {
         }
 
         // ── Step 2: Run inference (image input) ───────────────────────────
-        let inferenceStart = CACurrentMediaTime()
         guard let output = try? model.prediction(images: lbBuffer) else {
-            print("❌ [TRAY MODEL] Inference failed")
             return []
         }
-        let inferenceMs = (CACurrentMediaTime() - inferenceStart) * 1000
 
         // ── Step 3: Decode the per-pixel logits → per-class bounding boxes ─
         let results = decodeSegmentation(
@@ -193,22 +190,6 @@ final class TrayDetectionService {
             scale: scale, padX: padX, padY: padY,
             frameSize: frameSize
         )
-
-        // ── Debug: print every detection ──────────────────────────────────
-        let trayCount  = results.filter { $0.trayClass == .tray  }.count
-        let chuteCount = results.filter { $0.trayClass == .chute }.count
-        print(String(format:
-            "── [TRAY MODEL] tray=%@ chute=%@ | infer=%.1fms frame=%.0f×%.0f",
-            trayCount  > 0 ? "yes" : "no",
-            chuteCount > 0 ? "yes" : "no",
-            inferenceMs, frameSize.width, frameSize.height))
-        for det in results {
-            let cls = det.trayClass == .tray ? "TRAY" : "CHUTE"
-            let r = det.rect
-            print(String(format:
-                "   %@ frame=(%.0f,%.0f,%.0f×%.0f)",
-                cls, r.origin.x, r.origin.y, r.width, r.height))
-        }
 
         return results
     }

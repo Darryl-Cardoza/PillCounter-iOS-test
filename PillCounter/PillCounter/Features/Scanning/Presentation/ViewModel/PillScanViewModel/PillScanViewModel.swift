@@ -148,6 +148,10 @@ class PillScanViewModel: ObservableObject {
     @Published var showReplaceBottlePopup: Bool = false
     var pendingBottleRescan: BottleInfo?
     var isProcessingBottleRescan: Bool = false
+    /// Snapshot captured at the moment the barcode was detected — used for the
+    /// confirmation popup instead of re-capturing at confirm-tap time, so a camera
+    /// move while the popup is up can't swap in the wrong frame.
+    var pendingBottleRescanImage: UIImage?
 
     // MARK: Stock Count State
     @Published var addCurrentOpenPillCount: Int = 0

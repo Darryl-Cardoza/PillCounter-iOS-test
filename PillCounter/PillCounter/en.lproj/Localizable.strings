@@ -16,6 +16,7 @@
 "common.add" = "ADD";
 "common.no" = "NO";
 "common.yes" = "YES";
+"common.of" = "of";
 "common.save" = "SAVE";
 "common.delete" = "DELETE";
 "common.skip" = "SKIP";
@@ -23,6 +24,7 @@
 "common.note" = "NOTE";
 "common.date" = "Date";
 "common.time" = "Time";
+"common.dateTime" = "Date and Time";
 "common.unselectAll" = "Unselect All";
 "common.selectAll" = "Select All";
 "common.done" = "Done";
@@ -247,13 +249,16 @@
 "history.dispensedDrugDetails" = "DISPENSED DRUG DETAILS";
 "history.pillRecount" = "PILL RECOUNT";
 "history.dispensedVial" = "DISPENSED VIAL";
+"history.containerQrCode" = "CONTAINER QR CODE";
 "history.remainingContainerCount" = "REMAINING PILL COUNT IN STOCK BOTTLE";
 "history.totalCount" = "TOTAL COUNT";
 "history.substitutedDrug" = "Substituted Drug";
+"history.dispensedDrug" = "Dispensed Drug";
 "history.drugName" = "Drug Name";
 "history.ndc" = "NDC";
 "history.expiryNo" = "Expiry No";
 "history.lotNo" = "Lot No";
+"history.serialNo" = "Serial No";
 "history.title" = "HISTORY";
 "history.confirmDelete" = "Confirm Delete";
 "history.deleteConfirmMessage" = "Are you sure you want to delete the records for the selected date? This action cannot be undone.";

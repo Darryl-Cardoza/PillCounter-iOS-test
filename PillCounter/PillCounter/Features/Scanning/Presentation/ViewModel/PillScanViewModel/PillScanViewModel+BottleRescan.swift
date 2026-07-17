@@ -43,7 +43,7 @@ extension PillScanViewModel {
     /// compares against the active bottle and either toasts (duplicate),
     /// stages an "add bottle" confirmation, or stages a "replace bottle"
     /// confirmation, depending on whether anything has been counted yet.
-    func handleBottleRescan(rawBarcode: String) {
+    func handleBottleRescan(rawBarcode: String, snapshot: UIImage? = nil) {
         print("📦 [BottleRescan] scanned raw: \(rawBarcode)")
         guard !isProcessingBottleRescan else {
             print("📦 [BottleRescan] ignored — already processing a scan")
@@ -53,8 +53,8 @@ extension PillScanViewModel {
             print("📦 [BottleRescan] ignored — no active dispense transaction")
             return
         }
-        guard currentControlledStep != .vial else {
-            print("📦 [BottleRescan] ignored — on vial step")
+        guard currentControlledStep == .containerInitiate || currentControlledStep == .targetVerification else {
+            print("📦 [BottleRescan] ignored — not on containerInitiate/targetVerification step")
             return
         }
 
@@ -92,10 +92,13 @@ extension PillScanViewModel {
             return
         }
 
-        // Image is captured only once the user confirms add/replace in the popup
-        // (confirmAddBottle/confirmReplaceBottle), not at raw-scan time — a
-        // cancelled or duplicate scan should never persist a photo.
+        // Snapshot is taken at detection time (passed in here) so the confirmation
+        // popup always saves the frame that was actually scanned, not whatever the
+        // camera happens to be pointed at when the user taps confirm. It's only
+        // persisted to disk once the user confirms — a cancelled or duplicate scan
+        // never writes a photo.
         pendingBottleRescan = candidate
+        pendingBottleRescanImage = snapshot
         if transactionDetailDAO.totalCount(txnId: txn.txn_id) > 0 {
             showAddBottlePopup = true
         } else {
@@ -105,31 +108,35 @@ extension PillScanViewModel {
 
     func confirmAddBottle(image: UIImage? = nil) {
         guard let txn = currentTransaction, var candidate = pendingBottleRescan else { return }
-        if let image {
+        if let image = image ?? pendingBottleRescanImage {
             candidate.barcodeImagePath = PhotoFileManager.shared.saveImage(image)
         }
         transactionDAO.appendBottle(txnId: txn.txn_id, candidate)
         pendingBottleRescan = nil
+        pendingBottleRescanImage = nil
         showAddBottlePopup = false
     }
 
     func cancelAddBottle() {
         pendingBottleRescan = nil
+        pendingBottleRescanImage = nil
         showAddBottlePopup = false
     }
 
     func confirmReplaceBottle(image: UIImage? = nil) {
         guard let txn = currentTransaction, var candidate = pendingBottleRescan else { return }
-        if let image {
+        if let image = image ?? pendingBottleRescanImage {
             candidate.barcodeImagePath = PhotoFileManager.shared.saveImage(image)
         }
         transactionDAO.replaceLastBottle(txnId: txn.txn_id, candidate)
         pendingBottleRescan = nil
+        pendingBottleRescanImage = nil
         showReplaceBottlePopup = false
     }
 
     func cancelReplaceBottle() {
         pendingBottleRescan = nil
+        pendingBottleRescanImage = nil
         showReplaceBottlePopup = false
     }
 }

@@ -144,6 +144,7 @@
 "history.dispensedDrugDetails" = "वितरित दवा विवरण";
 "history.pillRecount" = "गोलियों की पुनर्गणना";
 "history.dispensedVial" = "वितरित वायल";
+"history.containerQrCode" = "CONTAINER QR CODE";
 "history.remainingContainerCount" = "स्टॉक बोतल में शेष गोलियों की गिनती";
 "history.totalCount" = "कुल गिनती";
 "history.substitutedDrug" = "प्रतिस्थापित दवा";

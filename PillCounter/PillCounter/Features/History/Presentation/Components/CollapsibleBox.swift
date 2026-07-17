@@ -12,16 +12,26 @@ struct CollapsibleBox<Content: View>: View {
     let content: Content
     var allowCollapse: Bool = true
     let bgColor: Color?
+    var countText: String? = nil
 
     @State private var isExpanded: Bool
 
     @EnvironmentObject private var appColors: AppColors
+
+    private var isPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
+    private var showChevron: Bool {
+        allowCollapse && !isPad
+    }
 
     init(
         title: String,
         allowCollapse: Bool = true,
         defaultExpanded: Bool = false,
         bgColor: Color? = nil,
+        countText: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -29,9 +39,10 @@ struct CollapsibleBox<Content: View>: View {
         self._isExpanded = State(initialValue: allowCollapse ? defaultExpanded : true)
         self.content = content()
         self.bgColor = bgColor
+        self.countText = countText
     }
 
-  
+
     var body: some View {
         VStack(spacing: 0) {
             // HEADER
@@ -42,7 +53,14 @@ struct CollapsibleBox<Content: View>: View {
 
                 Spacer()
 
-                if allowCollapse{
+                if let countText {
+                    Text(countText)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(appColors.primary)
+                        .padding(.trailing, showChevron ? 8 : 0)
+                }
+
+                if showChevron {
                     Image(systemName: "chevron.down")
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         .animation(.easeInOut, value: isExpanded)
@@ -52,7 +70,7 @@ struct CollapsibleBox<Content: View>: View {
             .padding()
             .contentShape(Rectangle())
             .onTapGesture {
-                if allowCollapse{
+                if allowCollapse && !isPad {
                     withAnimation(.easeInOut(duration: 0.4)) {
                         isExpanded.toggle()
                     }
@@ -60,9 +78,9 @@ struct CollapsibleBox<Content: View>: View {
             }
 
             // CONTENT
-            if isExpanded {
+            if isExpanded || isPad {
                 content
-                    .padding()
+                    .padding(EdgeInsets(top: 0, leading: 16, bottom: 16, trailing: 16))
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }

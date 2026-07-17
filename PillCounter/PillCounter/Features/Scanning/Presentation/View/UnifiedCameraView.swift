@@ -604,7 +604,7 @@ struct UnifiedCameraView: View {
         }
         .onChange(of: cameraService.bottleRescanCode) { _, code in
             guard !code.isEmpty else { return }
-            pillScanViewModel.handleBottleRescan(rawBarcode: code)
+            pillScanViewModel.handleBottleRescan(rawBarcode: code, snapshot: cameraService.captureSnapshot())
         }
         .onChange(of: pillScanViewModel.showAddBottlePopup) { _, showing in
             handleBottleConfirmationPopupVisibility(showing)

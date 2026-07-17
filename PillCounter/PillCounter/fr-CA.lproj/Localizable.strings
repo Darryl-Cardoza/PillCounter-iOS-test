@@ -175,6 +175,7 @@
 "history.dispensedDrugDetails" = "DÉTAILS DU MÉDICAMENT DISTRIBUÉ";
 "history.pillRecount" = "RECOMPTAGE DES COMPRIMÉS";
 "history.dispensedVial" = "FLACON DISTRIBUÉ";
+"history.containerQrCode" = "CONTAINER QR CODE";
 "history.remainingContainerCount" = "COMPRIMÉS RESTANTS DANS LE FLACON DE STOCK";
 "history.totalCount" = "COMPTAGE TOTAL";
 "history.substitutedDrug" = "Médicament substitué";

@@ -110,7 +110,7 @@ extension UnifiedCameraView {
             cancelButtonText: L10n.Common.cancel,
             confirmButtonText: L10n.Common.ok,
             onCancel: { pillScanViewModel.cancelAddBottle() },
-            onConfirm: { pillScanViewModel.confirmAddBottle(image: cameraService.captureSnapshot()) }
+            onConfirm: { pillScanViewModel.confirmAddBottle() }
         )
     }
 
@@ -121,7 +121,7 @@ extension UnifiedCameraView {
             cancelButtonText: L10n.Common.cancel,
             confirmButtonText: L10n.Common.ok,
             onCancel: { pillScanViewModel.cancelReplaceBottle() },
-            onConfirm: { pillScanViewModel.confirmReplaceBottle(image: cameraService.captureSnapshot()) }
+            onConfirm: { pillScanViewModel.confirmReplaceBottle() }
         )
     }
 

@@ -490,13 +490,22 @@ struct UnifiedCameraView: View {
                 cameraService.isTrayColorDetectionEnabled = showingPopup ? false : showPillCountPanel
             }
             .onChange(of: pillScanViewModel.currentTransaction) { _, txn in
-                cameraService.isGloveDetectionEnabled =
-                    (txn?.drug?.is_hazardous == true) && AppStorageManager.shared.isHazardousDrugSetting
+                syncGloveDetectionEnabled()
                 // New transaction (e.g. continuous dispense): re-arm tray-colour
                 // sampling so the same physical tray re-emits its colour and the
                 // hazardous-tray check/marking runs for this transaction too.
                 cameraService.resetTrayColorSampling()
                 pillScanViewModel.resetTrayColorTracking()
+            }
+            // currentTransaction only covers the FIXED/REGULAR dispense flow — open-pill
+            // scan and stock-count flows carry their drug on currentStockTxn /
+            // pendingOpenBottleDrug instead (see PillScanViewModel.currentDrug), so the
+            // hazardous gate must also react to those two changing.
+            .onChange(of: pillScanViewModel.currentStockTxn) { _, _ in
+                syncGloveDetectionEnabled()
+            }
+            .onChange(of: pillScanViewModel.pendingOpenBottleDrug) { _, _ in
+                syncGloveDetectionEnabled()
             }
     }
 
@@ -684,6 +693,16 @@ struct UnifiedCameraView: View {
 // MARK: - Lifecycle
 extension UnifiedCameraView {
 
+    /// Recomputes the glove-detection gate from whichever drug source is active
+    /// for the current flow — currentTransaction (FIXED/REGULAR dispense),
+    /// currentStockTxn (stock-count), or pendingOpenBottleDrug (open-pill scan).
+    /// See PillScanViewModel.currentDrug for the same fallback chain.
+    func syncGloveDetectionEnabled() {
+        cameraService.isGloveDetectionEnabled =
+            (pillScanViewModel.currentDrug?.is_hazardous == true)
+            && AppStorageManager.shared.isHazardousDrugSetting
+    }
+
     func onAppear() {
         pillScanViewModel.showRxFlowPopup = false
         pillScanViewModel.showRxOnHoldPopup = false
@@ -707,6 +726,11 @@ extension UnifiedCameraView {
         // already shown (e.g. .resumeCount), since onChange won't fire on appear.
         cameraService.isTrayColorDetectionEnabled = showPillCountPanel
         pillScanViewModel.resetTrayColorTracking()
+        // Same reasoning for the glove gate: if the drug is already set when this
+        // view appears (resume, or multi-bottle-dispense/open-pill-scan handing off
+        // a pre-selected drug), the onChange handlers below never fire on the value
+        // already present, so isGloveDetectionEnabled would stay stuck at its default.
+        syncGloveDetectionEnabled()
         cameraState = .scanning
         scannedRawValue = nil
         capturedImage = nil
@@ -838,16 +862,6 @@ extension UnifiedCameraView {
         // normal RX/NDC parse flow below.
         if showPillCountPanel && pillScanViewModel.currentControlledStep == .vial {
             handleVialRxScan(newValue)
-            return
-        }
-
-        // HL7/PMS gate: the dispense (RX-label) flow depends on HL7. When the
-        // account has HL7 disabled, block the scan entirely — show the
-        // "feature not available" popup and run no parse/proceed logic.
-        if scanType == .rx_label && !AppStorageManager.shared.isPmsIntegrated {
-            cameraService.disableBarcodeScanning()
-            cameraService.pauseCounting()
-            showHl7UnavailablePopup = true
             return
         }
 

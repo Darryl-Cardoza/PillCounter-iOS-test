@@ -964,7 +964,13 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             }
 
             let hazardous        = gloves.contains { $0.isHazardous }
-            let glovesNowSafe    = !self.glovesConfirmed && gloves.contains { $0.gloveClass == .glove }
+            // A glove box existing somewhere in frame isn't enough — a bare hand can
+            // also trigger a spurious low-confidence glove box elsewhere (clutter,
+            // background) while the hand itself is correctly flagged noGlove. Only
+            // confirm safe when gloves are detected AND no bare-hand box is present
+            // in the same frame.
+            let glovesNowSafe    = !self.glovesConfirmed && !hazardous
+                && gloves.contains { $0.gloveClass == .glove }
 
             DispatchQueue.main.async {
                 guard self.isCountingEnabled else { return }

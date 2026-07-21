@@ -56,7 +56,7 @@ struct ConfirmationDialogue: View {
                 PillCountingButton(
                     iconName: nil,
                     title: confirmButtonText.uppercased(),
-                    textColor: appColors.text,
+                    textColor: .white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,
                     font: buttonFont,

@@ -156,13 +156,6 @@ extension PillScanViewModel {
         }
 
         guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
-            guard !AppStorageManager.shared.isPmsIntegrated else {
-                print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB, PMS integrated, not creating txn")
-                showRxFlowPopup = false
-                showToastMessage(text: L10n.BarcodeScan.rxNotFound)
-                rxScanFailed = true
-                return
-            }
             print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB, creating new txn")
             await createTransactionFromRxScan()
             return
@@ -208,13 +201,6 @@ extension PillScanViewModel {
         }
 
         guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
-            guard !AppStorageManager.shared.isPmsIntegrated else {
-                print("[RxScan] Rx \(rxNo) not found in DB, PMS integrated — not creating txn")
-                showRxFlowPopup = false
-                showToastMessage(text: L10n.BarcodeScan.rxNotFound)
-                rxScanFailed = true
-                return
-            }
             print("[RxScan] Rx \(rxNo) not found in DB — creating new txn")
 
             await createTransaction(

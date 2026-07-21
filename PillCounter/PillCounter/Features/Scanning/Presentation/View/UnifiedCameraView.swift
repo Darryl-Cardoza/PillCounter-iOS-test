@@ -98,6 +98,10 @@ struct UnifiedCameraView: View {
     /// Shown when an RX label is scanned but HL7/PMS is disabled for this account.
     /// The scan is blocked entirely — no parse/proceed logic runs.
     @State var showHl7UnavailablePopup: Bool = false
+    /// Bumped on transactionsDidChange while the Rx sheet is showing, to force the
+    /// sheet content closure to re-read scannedRxDrugMaster.drug_image once the
+    /// async catalog-image download finishes.
+    @State var rxSheetImageRefreshTick: Int = 0
     /// "Today's Queue" dispense list shown after a FIXED dispense count is confirmed complete.
     @State var showDispenseQueueSheet: Bool = false
     // Stock count end-count popups
@@ -307,6 +311,12 @@ struct UnifiedCameraView: View {
                     restartFlow()
                 }
             ) {
+                // Drug image for a brand-new Rx downloads async in the background
+                // (DrugCatalogStore) and only lands on scannedRxDrugMaster afterwards.
+                // Bump this on transactionsDidChange while the sheet is up so the
+                // content closure re-reads scannedRxDrugMaster and picks up the image.
+                let _ = rxSheetImageRefreshTick
+
                 RxDetailsSheetContent(
                     onCancel: {
                         pillScanViewModel.showRxFlowPopup = false
@@ -339,6 +349,9 @@ struct UnifiedCameraView: View {
                         ?? pillScanViewModel.scannedRxDrugMaster?.drug_image
                 )
                 .environmentObject(appColors)
+            }
+            .onReceive(TransactionStore.shared.transactionsDidChange.receive(on: DispatchQueue.main)) {
+                if pillScanViewModel.showRxFlowPopup { rxSheetImageRefreshTick &+= 1 }
             }
             .bottomSheet(
                 isPresented: $pillScanViewModel.showVerifyStockBottlePopup,
@@ -888,6 +901,11 @@ extension UnifiedCameraView {
             {
                 switch scanType {
                 case .rx_label:
+                    guard AppStorageManager.shared.isPmsIntegrated else {
+                        cameraState = .rxDetected
+                        showHl7UnavailablePopup = true
+                        return
+                    }
                     if pillScanViewModel.matchesBarcodeFormat(newValue) {
                         cameraState = .rxDetected
                         pillScanViewModel.parseScanData(actualValue: newValue)

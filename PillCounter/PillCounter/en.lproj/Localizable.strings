@@ -131,7 +131,7 @@
 "menu.logoutButton" = "Logout";
 "menu.toast.noLastBatchFound" = "No last batch found";
 "menu.featureNotAvailableTitle" = "Feature Not Available";
-"menu.featureNotAvailableMessage" = "This feature is not available for your account.";
+"menu.featureNotAvailableMessage" = "This feature is not available for your account. contact Dispensure.com for more info";
 
 
 // MARK: - PROFILE

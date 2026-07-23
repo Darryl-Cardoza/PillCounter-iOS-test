@@ -275,18 +275,22 @@ extension BaseView {
         Button {
             handleBackAction()
         } label: {
-            HStack {
+            HStack(spacing: 4) {
                 PillCountingIconView(
                     imageName: "back_icon",
                     size: 24,
-                    padding: 12,
+                    padding: 4,
                     foregroundColor: appColors.primary,
                     backgroundColor: backButtonBackground ?? Color.clear,
                     scaleOnIpad: true
                 )
-                Text((title.count > 25 ? "\(title.prefix(25))..." : title).uppercased())
-                    .foregroundStyle(appColors.text)
-                    .font(.headline)
+                Text(title.uppercased())
+                  .foregroundStyle(appColors.text)
+                  .font(.headline)
+                  .multilineTextAlignment(.leading)
+                  .lineLimit(2)
+                  .fixedSize(horizontal: false, vertical: true)
+                  .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

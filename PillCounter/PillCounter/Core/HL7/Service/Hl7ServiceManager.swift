@@ -84,7 +84,13 @@ final class Hl7ServiceManager {
         self.pmsServiceType = pmsServiceType
         self.server         = HL7TLSServer(port: port)
         self.listener       = listener
-        startMonitoringNetwork()
+
+        // TEST ONLY — bypass the "connect to PMS first, then start server" flow.
+        // Start the TCP/TLS server + image server immediately at launch instead of
+        // waiting for a Bonjour-discovered client connection. Revert by restoring
+        // startMonitoringNetwork() and removing the direct startServerIfNeeded() call.
+        // startMonitoringNetwork()
+        startServerIfNeeded()
     }
 
     // MARK: - Stop
@@ -262,9 +268,11 @@ final class Hl7ServiceManager {
         }
 
         guard case let .service(name, _, _, _) = result.endpoint else { return }
-        currentServiceName      = name
+        currentServiceName = name
         isConnectingOrConnected = true
         print("[HL7][CLIENT] Connecting to PMS service: \(name)")
+
+        let directEndpoint = result.endpoint
 
         // Server-driven (`auth/me` -> `settings.bypass_ssl`, default true): when
         // enabled, skip TLS entirely and connect over plain TCP. When disabled,
@@ -286,7 +294,7 @@ final class Hl7ServiceManager {
         }
         parameters.includePeerToPeer = true
 
-        let connection = NWConnection(to: result.endpoint, using: parameters)
+        let connection = NWConnection(to: directEndpoint, using: parameters)
         clientConnection = connection
         connection.stateUpdateHandler = { [weak self] state in self?.handleClientStateChange(state) }
         connection.start(queue: clientQueue)
@@ -389,6 +397,94 @@ final class Hl7ServiceManager {
             else         { print("[HL7][CLIENT] Send SUCCESS") }
         })
         return true
+    }
+
+    /// Test-only: sends an MLLP-framed HL7 message over a one-off connection to a
+    /// fixed IP/port, bypassing the Bonjour-discovered `clientConnection` entirely.
+    /// Opens, sends, waits for the ACK (or a timeout), then cancels its own connection —
+    /// does not touch `isClientConnected`.
+    func sendTestHL7(_ hl7: String, orderId: String? = nil, host: String = "192.168.0.41", port: UInt16 = 8080) {
+        let tag = orderId.map { "[order:\($0)] " } ?? ""
+        print("[HL7][TEST] \(tag)Connecting to \(host):\(port) …")
+        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
+        let parameters: NWParameters = AppStorageManager.shared.bypassSSL ? .tcp : {
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+            sec_protocol_options_set_verify_block(
+                tlsOptions.securityProtocolOptions,
+                { _, _, completion in completion(true) },
+                DispatchQueue.global()
+            )
+            return NWParameters(tls: tlsOptions)
+        }()
+
+        let connection = NWConnection(to: endpoint, using: parameters)
+        let framed = MLLP.frame(hl7)
+        var didFinish = false
+
+        func finish(_ reason: String) {
+            guard !didFinish else { return }
+            didFinish = true
+            print("[HL7][TEST] Closing connection to \(host):\(port) — \(reason)")
+            connection.cancel()
+        }
+
+        func receiveLoop() {
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, isComplete, error in
+                if let error {
+                    print("[HL7][TEST] Receive FAILED: \(error)")
+                    finish("receive error")
+                    return
+                }
+                if let data, !data.isEmpty {
+                    if let ack = MLLP.unwrap(data) {
+                        print("[HL7][TEST] ACK RECEIVED from \(host):\(port):\n\(ack)")
+                    } else {
+                        print("[HL7][TEST] Raw bytes received (\(data.count)) — not MLLP-framed: \(data as NSData)")
+                    }
+                    finish("ACK received")
+                    return
+                }
+                if isComplete {
+                    print("[HL7][TEST] Connection closed by peer before ACK")
+                    finish("peer closed")
+                    return
+                }
+                receiveLoop()
+            }
+        }
+
+        connection.stateUpdateHandler = { state in
+            print("[HL7][TEST] State → \(state)")
+            switch state {
+            case .ready:
+                print("[HL7][TEST] Connected. Sending HL7 message:\n\(hl7)")
+                connection.send(content: framed, completion: .contentProcessed { error in
+                    if let error {
+                        print("[HL7][TEST] Send FAILED: \(error)")
+                        finish("send error")
+                        return
+                    }
+                    print("[HL7][TEST] Send SUCCESS to \(host):\(port) — waiting for ACK…")
+                    receiveLoop()
+                })
+
+                self.clientQueue.asyncAfter(deadline: .now() + 10) {
+                    if !didFinish { print("[HL7][TEST] No ACK within 10s") }
+                    finish("timeout")
+                }
+            case .failed(let error):
+                print("[HL7][TEST] Connect FAILED: \(error)")
+                finish("connect failed")
+            case .waiting(let error):
+                print("[HL7][TEST] Connect FAILED (waiting/unreachable): \(error)")
+            case .cancelled:
+                print("[HL7][TEST] Connection cancelled")
+            default:
+                break
+            }
+        }
+        connection.start(queue: clientQueue)
     }
 
     // MARK: - Heartbeat

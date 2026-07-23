@@ -72,6 +72,7 @@ final class HL7CompletionBuilder {
         }
 
         let orderId = txn.rx_no ?? "\(txn.txn_id)"
+        let transactionOrderId = txn.transaction_order_id ?? orderId
 
         let message = builder.rdsO13 { scope in
             scope.msh { msh in
@@ -162,20 +163,21 @@ final class HL7CompletionBuilder {
             // Custom Z-segment per HL7 spec dialect (server-driven via config.format).
             switch self.config.format {
             case .vivid:
-                let drugImagePath = details.last?.image_path.map { ($0 as NSString).lastPathComponent } ?? ""
                 // No "Anonymous Mode" preference exists on iOS today — falls back
                 // to "Anonymous" only when no user name is available.
                 let vividUserName = user?.fname ?? "Anonymous"
+                // Response only needs to identify the order — drug image/lot/serial/
+                // expiration (optional fields) are dropped, not re-sent back to Vivid.
                 scope.zui { zui in
                     zui.ndc = drug.ndc ?? ""
                     zui.vividUserName = vividUserName
-                    zui.transactionOrderId = orderId
+                    zui.transactionOrderId = transactionOrderId
                     zui.rxNumber = orderId
                     zui.fillNumber = "1"
                     zui.dispensedQuantity = "\(totalCount)"
                     zui.transactionStatus = "CM"
-                    zui.drugImage = drugImagePath
-                    zui.drugLotNumber = details.last?.type
+                    zui.drugImage = nil
+                    zui.drugLotNumber = nil
                     zui.drugSerialNumber = nil
                     zui.drugExpirationDate = nil
                 }
@@ -320,6 +322,11 @@ private extension HL7CompletionBuilder {
     ) -> [ObxRow] {
 
         var obxList: [ObxRow] = []
+        var imgCounter = 1
+        func nextImgId() -> String {
+            defer { imgCounter += 1 }
+            return "IMG" + String(format: "%03d", imgCounter)
+        }
 
         for (index, detail) in details.enumerated() {
 
@@ -333,19 +340,24 @@ private extension HL7CompletionBuilder {
                 fileName = ""
             }
 
-            let observationValue = "count=\(count)|type=\(type)|image=\(fileName)"
+            // let observationValue = "count=\(count)|type=\(type)|image=\(fileName)"
+            let observationValue = detail.image_path.map { "/images/\($0)" } ?? ""
 
             obxList.append(
                 ObxRow(
                     setId: "\(index + 1)",
-                    valueType: "ST",
-                    observationId: observationId,
-                    observationText: "\(label) \(index + 1)",
+                    // valueType: "ST",
+                    valueType: "RP",
+                    // observationId: observationId,
+                    observationId: nextImgId(),
+                    // observationText: "\(label) \(index + 1)",
+                    observationText: type,
                     observationValue: observationValue,
                     resultStatus: "F",
                     units: nil
                 )
             )
+            _ = count; _ = fileName
         }
 
         // Barcode Image — one row per scanned bottle that has a captured image.
@@ -359,14 +371,18 @@ private extension HL7CompletionBuilder {
             obxList.append(
                 ObxRow(
                     setId: "\(obxList.count + 1)",
-                    valueType: "ST",
-                    observationId: observationId,
+                    // valueType: "ST",
+                    valueType: "RP",
+                    // observationId: observationId,
+                    observationId: nextImgId(),
                     observationText: "Barcode Image",
-                    observationValue: "count=0|type=\(ControlledStep.scan.imageLabel)|image=\(fileName)",
+                    // observationValue: "count=0|type=\(ControlledStep.scan.imageLabel)|image=\(fileName)",
+                    observationValue: "/images/\(barcodePath)",
                     resultStatus: "F",
                     units: nil
                 )
             )
+            _ = fileName
         }
 
         return obxList

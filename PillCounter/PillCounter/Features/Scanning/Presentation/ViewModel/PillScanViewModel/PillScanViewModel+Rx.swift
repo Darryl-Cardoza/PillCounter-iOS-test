@@ -208,7 +208,8 @@ extension PillScanViewModel {
                 isDispense: isDispense,
                 drugName: rxData.drugName,
                 rxNo: rxNo,
-                bucketId: selectedBucket
+                bucketId: selectedBucket,
+                refillNo: rxData.refil
             )
 
             await MainActor.run {
@@ -219,7 +220,8 @@ extension PillScanViewModel {
                         txnId: txnId,
                         drugId: drug.drug_id,
                         targetCount: targetQty,
-                        priority: currentTransaction?.txn_priority
+                        priority: currentTransaction?.txn_priority,
+                        refillNo: rxData.refil
                     )
                     self.currentTransaction = transactionDAO.fetchById(txnId)
                 }
@@ -253,7 +255,8 @@ extension PillScanViewModel {
             txnId: txnId,
             drugId: drug.drug_id,
             targetCount: targetQty,
-            priority: existingTxn.txn_priority
+            priority: existingTxn.txn_priority,
+            refillNo: rxData.refil
         )
 
         await MainActor.run {

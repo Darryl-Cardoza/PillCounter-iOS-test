@@ -56,7 +56,7 @@ protocol TransactionDataSource: AnyObject {
     func updateGlovesDetected(txnId: Int64, detected: Bool)
     func updateHazardousTrayDetected(txnId: Int64, detected: Bool)
     func updateNdcVerified(txnId: Int64, verified: Bool)
-    func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?)
+    func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?, refillNo: String?)
     func getBottleList(txnId: Int64) -> [BottleInfo]
     func setBottleList(txnId: Int64, _ bottles: [BottleInfo])
     @discardableResult
@@ -67,7 +67,7 @@ protocol TransactionDataSource: AnyObject {
         for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64,
         isFromPms: Bool, drugName: String?, targetCount: Int32,
         isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
-        workFlowStep: String?
+        workFlowStep: String?, refillNo: String?
     ) -> PillCountTransactionEntity
     func update(
         txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,

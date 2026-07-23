@@ -321,7 +321,8 @@ extension PillScanViewModel {
             txnId: txnId,
             drugId: resolvedDrugId,
             targetCount: newTargetCount,
-            priority: newPriority
+            priority: newPriority,
+            refillNo: nil
         )
 
         Log("HL7 ORC|XO applied: txnId=\(txnId), rxNo=\(rxNo), drugId=\(resolvedDrugId), targetCount=\(newTargetCount), priority=\(newPriority ?? "nil")")
@@ -491,7 +492,8 @@ extension PillScanViewModel {
                 txnId: existing.txn_id,
                 drugId: drugIdToUse,
                 targetCount: targetCount ?? existing.target_count,
-                priority: priority ?? existing.txn_priority
+                priority: priority ?? existing.txn_priority,
+                refillNo: nil
             )
             TransactionStore.shared.setHl7Identifiers(
                 txnId: existing.txn_id,

@@ -31,7 +31,8 @@ final class TransactionStore {
         rxNo: String? = nil,
         bucketId: String? = nil,
         priority: String? = nil,
-        workFlowStep: String? = nil
+        workFlowStep: String? = nil,
+        refillNo: String? = nil
     ) -> PillCountTransactionEntity {
         let entity = PillCountTransactionEntity(context: context)
         entity.txn_id = generateUniqueId()
@@ -39,6 +40,7 @@ final class TransactionStore {
         entity.drug_id = drugId ?? 0
         entity.batch_id = batchId
         entity.rx_no = rxNo
+        entity.refill_no = refillNo
         entity.txn_priority = priority
         entity.is_dispense = isDispense
         entity.status = CountStatus.PARTIAL.rawValue
@@ -103,6 +105,7 @@ final class TransactionStore {
         ]
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
+        logRefillNos(op: "fetchPartial", results: results)
         return results
     }
 
@@ -119,6 +122,7 @@ final class TransactionStore {
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
+        logRefillNos(op: "fetchByTimeRange", results: results)
         return results
     }
 
@@ -257,6 +261,7 @@ final class TransactionStore {
         if let sequenceNumber { txn.hl7_sequence_number = sequenceNumber }
         if let transactionOrderId { txn.transaction_order_id = transactionOrderId }
         CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] SET HL7 identifiers — txnId: \(txnId), messageControlId: \(messageControlId ?? "nil"), sequenceNumber: \(sequenceNumber ?? "nil"), transactionOrderId: \(transactionOrderId ?? "nil")")
     }
 
     func updatePriority(txnId: Int64, priority: String?) {
@@ -267,17 +272,18 @@ final class TransactionStore {
         print("📋 [TransactionDAO] UPDATED priority — txnId: \(txnId), priority: \(priority ?? "nil")")
     }
 
-    func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?) {
+    func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?, refillNo: String? = nil) {
         guard let txn = fetchById(txnId),
               let drug = DrugCatalogStore.shared.fetchById(drugId) else { return }
         txn.drug_id = drugId
         txn.drug = drug
         txn.target_count = targetCount
         txn.txn_priority = priority
+        if let refillNo { txn.refill_no = refillNo }
         txn.is_synced = false
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
-        print("📋 [TransactionDAO] HL7 EDIT applied — txnId: \(txnId), drugId: \(drugId), targetCount: \(targetCount), priority: \(priority ?? "nil")")
+        print("📋 [TransactionDAO] HL7 EDIT applied — txnId: \(txnId), drugId: \(drugId), targetCount: \(targetCount), priority: \(priority ?? "nil"), refillNo: \(refillNo ?? "nil")")
         transactionsDidChange.send()
     }
 
@@ -291,6 +297,7 @@ final class TransactionStore {
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
+        logRefillNos(op: "fetchByBatch", results: results)
         return results
     }
 
@@ -306,6 +313,7 @@ final class TransactionStore {
         ]
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
+        logRefillNos(op: "fetchPartialFromPms", results: results)
         return results
     }
 
@@ -318,6 +326,7 @@ final class TransactionStore {
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
+        logRefillNos(op: "fetchCompletedUnsynced", results: results)
         return results
     }
 
@@ -629,6 +638,11 @@ final class TransactionStore {
     /// in the same session.
     private func refreshDecrypted(_ object: NSManagedObject) {
         object.decryptEncryptedFieldsInPlace()
+    }
+
+    private func logRefillNos(op: String, results: [PillCountTransactionEntity]) {
+        let rows = results.map { "txnId: \($0.txn_id), rxNo: \($0.rx_no ?? "-"), refillNo: \($0.refill_no ?? "-")" }
+        print("📋 [TransactionDAO] \(op) refillNos — \(rows)")
     }
 
     /// Resolves the currently logged-in user from CoreData.

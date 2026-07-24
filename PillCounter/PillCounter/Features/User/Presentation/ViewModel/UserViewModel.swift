@@ -232,6 +232,16 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.hl7MessageSpec = Hl7Format.fromSendingApplication(hl7MessageSpec)
                 }
 
+                AppStorageManager.shared.useStaticPMSConnection = result.data?.settings?.useStaticPMSConnection
+                    ?? result.data?.user?.settings?.useStaticPMSConnection
+                    ?? false
+
+                AppStorageManager.shared.pmsIpAddress = result.data?.settings?.pmsIpAddress
+                    ?? result.data?.user?.settings?.pmsIpAddress
+
+                AppStorageManager.shared.pmsPort = result.data?.settings?.pmsPort
+                    ?? result.data?.user?.settings?.pmsPort
+
                 let fetchedTerminals = result.data?.user?.terminals
                     ?? result.data?.settings?.terminals
                     ?? []

@@ -116,7 +116,7 @@ final class HL7TxnSyncQueue {
         pendingRequestId = item.requestId
 
         DispatchQueue.main.async {
-            manager.sendTestHL7(hl7, orderId: item.requestId)
+            manager.sendHL7ToPMS(hl7, orderId: item.requestId)
         }
 
         scheduleAckTimeout(for: item.requestId)

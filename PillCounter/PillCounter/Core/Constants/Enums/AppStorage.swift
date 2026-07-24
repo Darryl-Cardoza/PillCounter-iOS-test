@@ -58,6 +58,9 @@ final class AppStorageManager {
         static let hazardousTrayColors  = "hazardous_tray_colors"
         static let bypassSSL            = "bypass_ssl"
         static let hl7MessageSpec       = "hl7_message_spec"
+        static let useStaticPMSConnection = "use_static_pms_connection"
+        static let pmsIpAddress         = "pms_ip_address"
+        static let pmsPort              = "pms_port"
 
         // UserDefaults-backed (non-sensitive)
         static let drugIdCounter        = "drug_id_counter"
@@ -154,6 +157,35 @@ final class AppStorageManager {
     var isStandalone: Bool {
         get { Keychain.getPassword(for: AppStorageKeys.isStandalone) == "true" }
         set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isStandalone) }
+    }
+
+    /// Server-driven PMS discovery gate (`auth/me` → `settings.use_static_pms_connection`).
+    /// false → Bonjour discovery (current default). true → connect direct via `pmsIpAddress`/`pmsPort`.
+    /// Defaults to false until `auth/me` returns a value.
+    var useStaticPMSConnection: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.useStaticPMSConnection) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.useStaticPMSConnection) }
+    }
+
+    /// PMS computer's direct IP address, server-provided (`auth/me` → `settings.pms_ip_address`).
+    var pmsIpAddress: String? {
+        get { Keychain.getPassword(for: AppStorageKeys.pmsIpAddress) }
+        set {
+            if let v = newValue { Keychain.savePassword(v, for: AppStorageKeys.pmsIpAddress) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.pmsIpAddress) }
+        }
+    }
+
+    /// PMS computer's direct port, server-provided (`auth/me` → `settings.pms_port`).
+    var pmsPort: Int? {
+        get {
+            guard let s = Keychain.getPassword(for: AppStorageKeys.pmsPort) else { return nil }
+            return Int(s)
+        }
+        set {
+            if let v = newValue { Keychain.savePassword(String(v), for: AppStorageKeys.pmsPort) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.pmsPort) }
+        }
     }
 
     /// HL7 version the PMS integration should speak, provided by the server

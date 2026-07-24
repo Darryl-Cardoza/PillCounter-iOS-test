@@ -187,7 +187,7 @@ final class Hl7ServiceController: ObservableObject {
         retryCount += 1
         let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
         currentMessageId = messageId
-        hl7Manager?.sendTestHL7(buildHl7Message(txn: txn), orderId: txn.rx_no ?? "\(txn.txn_id)")
+        hl7Manager?.sendHL7ToPMS(buildHl7Message(txn: txn), orderId: txn.rx_no ?? "\(txn.txn_id)")
     }
 
     private func handleSendFailure() {

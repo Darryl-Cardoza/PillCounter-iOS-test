@@ -305,6 +305,30 @@ struct UserSettingsView: View {
                     }
                 }
 
+                if AppStorageManager.shared.useStaticPMSConnection {
+                    Divider().background(appColors.primaryBackground)
+
+                    // MARK: PMS Connection Info (read-only diagnostics)
+                    HStack {
+                        Text(L10n.Settings.connectionInfo)
+                            .foregroundStyle(appColors.text)
+                            .padding(.horizontal)
+                            .fontWeight(.regular)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .opacity(isPmsDisabled ? 0.6 : 1.0)
+                    .onTapGesture {
+                        if isPmsDisabled {
+                            showFeatureUnavailableToast()
+                            return
+                        }
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            activeSubScreen = .connectionInfo
+                        }
+                    }
+                }
+
                 Divider().background(appColors.primaryBackground)
 
                 HStack{
@@ -342,6 +366,8 @@ struct UserSettingsView: View {
                     saveHistoryContent
                 case .schedule:
                     scheduleContent
+                case .connectionInfo:
+                    PMSConnectionInfoView()
                 }
             },
             bottomContent: { EmptyView() },
@@ -362,6 +388,7 @@ struct UserSettingsView: View {
         switch screen {
         case .saveHistory: return L10n.Settings.saveHistoryScreenTitle
         case .schedule: return L10n.Settings.scheduleScreenTitle
+        case .connectionInfo: return L10n.Settings.connectionInfoScreenTitle
         }
     }
     

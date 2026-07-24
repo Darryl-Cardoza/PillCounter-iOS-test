@@ -63,7 +63,7 @@ extension Hl7ServiceController {
         else { return }
 
         let hl7 = HL7CompletionBuilder().buildInventoryMessage(batch: batch, user: user)
-        hl7Manager?.sendTestHL7(hl7, orderId: batch.bucket_id)
+        hl7Manager?.sendHL7ToPMS(hl7, orderId: batch.bucket_id)
 
         batchDAO.markSynced(batchId: batchId)
     }

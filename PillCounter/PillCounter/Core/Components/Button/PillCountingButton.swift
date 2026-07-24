@@ -91,7 +91,7 @@ struct PillCountingButton: View {
             }
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .frame(maxWidth: .infinity, alignment: .center)
+            .frame(minWidth: width, maxWidth: width == nil ? .infinity : nil,  alignment: .center)
             .background(backgroundColor)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)

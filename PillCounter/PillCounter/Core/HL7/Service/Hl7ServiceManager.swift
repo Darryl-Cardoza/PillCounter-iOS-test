@@ -12,7 +12,9 @@ import Combine
 final class Hl7ServiceManager {
 
     // MARK: - Configuration
-    private let port: UInt16
+    /// This device's own MLLP listener port — read by the connection-info settings
+    /// screen so it can show the PMS side where to dial in.
+    let port: UInt16
     private let serviceName: String
     private let serviceType: String
     private var pmsServiceType: String
@@ -85,12 +87,81 @@ final class Hl7ServiceManager {
         self.server         = HL7TLSServer(port: port)
         self.listener       = listener
 
-        // TEST ONLY — bypass the "connect to PMS first, then start server" flow.
-        // Start the TCP/TLS server + image server immediately at launch instead of
-        // waiting for a Bonjour-discovered client connection. Revert by restoring
-        // startMonitoringNetwork() and removing the direct startServerIfNeeded() call.
-        // startMonitoringNetwork()
-        startServerIfNeeded()
+        startPMSConnection()
+    }
+
+    // MARK: - PMS Connection Mode (Bonjour discovery vs server-provided static address)
+
+    /// Server-driven gate (`auth/me` -> `settings.use_static_pms_connection`):
+    /// - `false` (Bonjour, default): browse the LAN and connect to the PMS as a client
+    ///   first. Only once that connection succeeds — proving the PMS is actually
+    ///   reachable — do we start our own TLS + image server (see the `.ready` case in
+    ///   `handleClientStateChange`). That server then stays up until `stop()` is called
+    ///   or the underlying client connection drops; it does not depend on a live PMS
+    ///   client being connected at every instant.
+    /// - `true` (static): the server already told us the PMS's exact IP/port, so there's
+    ///   nothing to discover or verify — start our server and dial the PMS at the same time.
+    private func startPMSConnection() {
+        if AppStorageManager.shared.useStaticPMSConnection {
+            startServerIfNeeded()
+            connectDirectToPMS()
+        } else {
+            startMonitoringNetwork()
+        }
+    }
+
+    /// Static mode only: dials the PMS at the server-provided IP/port with no discovery
+    /// or reachability check first. Reuses the same TLS/plaintext parameter setup and
+    /// `.ready`/`.failed`/`.waiting` state handling as the Bonjour path (`connectToResult`),
+    /// just against a fixed endpoint instead of a browse result.
+    private func connectDirectToPMS() {
+        guard !isConnectingOrConnected else {
+            print("[HL7][STATIC] Connect guard hit — already in progress")
+            return
+        }
+
+        guard
+            let host = AppStorageManager.shared.pmsIpAddress, !host.isEmpty,
+            let rawPort = AppStorageManager.shared.pmsPort,
+            let rawPortU16 = UInt16(exactly: rawPort),
+            let pmsPort = NWEndpoint.Port(rawValue: rawPortU16)
+        else {
+            print("[HL7][STATIC] useStaticPMSConnection is true but pmsIpAddress/pmsPort is missing or invalid — cannot connect")
+            return
+        }
+
+        print("[HL7][STATIC] Connecting to PMS at \(host):\(pmsPort) — no discovery/verification")
+        isConnectingOrConnected = true
+        currentServiceName = "\(host):\(pmsPort)"
+
+        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: pmsPort)
+        let connection = NWConnection(to: endpoint, using: pmsConnectionParameters())
+        clientConnection = connection
+        connection.stateUpdateHandler = { [weak self] state in self?.handleClientStateChange(state) }
+        connection.start(queue: clientQueue)
+    }
+
+    /// Shared TLS/plaintext parameter setup for both the Bonjour and static connect
+    /// paths — server-driven (`auth/me` -> `settings.bypass_ssl`). Extracted from
+    /// `connectToResult` so static mode doesn't duplicate this logic.
+    private func pmsConnectionParameters() -> NWParameters {
+        let parameters: NWParameters
+        if AppStorageManager.shared.bypassSSL {
+            parameters = NWParameters.tcp
+        } else {
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(
+                tlsOptions.securityProtocolOptions, .TLSv12
+            )
+            sec_protocol_options_set_verify_block(
+                tlsOptions.securityProtocolOptions,
+                { _, _, completion in completion(true) },
+                DispatchQueue.global()
+            )
+            parameters = NWParameters(tls: tlsOptions)
+        }
+        parameters.includePeerToPeer = true
+        return parameters
     }
 
     // MARK: - Stop
@@ -119,11 +190,12 @@ final class Hl7ServiceManager {
         isConnectingOrConnected = false
         receiveBuffer.removeAll()
 
-        stopServerIfRunning()
-
+        // Server (TLS + image listener) stays up independent of the outbound client
+        // connection — the PMS may dial back in at any time, and dropping the server
+        // here would take down the one thing that lets it reconnect.
         if notifyListener { listener?.onClientDisconnected() }
 
-        print("[HL7][CLIENT] Disconnected. Browser keeps running.")
+        print("[HL7][CLIENT] Disconnected. Server keeps running.")
     }
 
     private func stopServerIfRunning() {
@@ -252,7 +324,9 @@ final class Hl7ServiceManager {
 
     /// Call this after mobile settings have been fetched and pmsHostName is populated.
     /// Updates the stored service type and starts (or restarts) the Bonjour browser.
+    /// No-op in static-connect mode — there is no browser to restart.
     func restartBrowsingIfNeeded(pmsServiceType: String) {
+        guard !AppStorageManager.shared.useStaticPMSConnection else { return }
         guard !pmsServiceType.isEmpty else { return }
         self.pmsServiceType = pmsServiceType
         stopBrowsing()
@@ -276,25 +350,9 @@ final class Hl7ServiceManager {
 
         // Server-driven (`auth/me` -> `settings.bypass_ssl`, default true): when
         // enabled, skip TLS entirely and connect over plain TCP. When disabled,
-        // negotiate TLS (self-signed PMS cert accepted, as before).
-        let parameters: NWParameters
-        if AppStorageManager.shared.bypassSSL {
-            parameters = NWParameters.tcp
-        } else {
-            let tlsOptions = NWProtocolTLS.Options()
-            sec_protocol_options_set_min_tls_protocol_version(
-                tlsOptions.securityProtocolOptions, .TLSv12
-            )
-            sec_protocol_options_set_verify_block(
-                tlsOptions.securityProtocolOptions,
-                { _, _, completion in completion(true) },
-                DispatchQueue.global()
-            )
-            parameters = NWParameters(tls: tlsOptions)
-        }
-        parameters.includePeerToPeer = true
-
-        let connection = NWConnection(to: directEndpoint, using: parameters)
+        // negotiate TLS (self-signed PMS cert accepted, as before). Shared with the
+        // static-connect path via pmsConnectionParameters().
+        let connection = NWConnection(to: directEndpoint, using: pmsConnectionParameters())
         clientConnection = connection
         connection.stateUpdateHandler = { [weak self] state in self?.handleClientStateChange(state) }
         connection.start(queue: clientQueue)
@@ -399,11 +457,28 @@ final class Hl7ServiceManager {
         return true
     }
 
-    /// Test-only: sends an MLLP-framed HL7 message over a one-off connection to a
-    /// fixed IP/port, bypassing the Bonjour-discovered `clientConnection` entirely.
-    /// Opens, sends, waits for the ACK (or a timeout), then cancels its own connection —
-    /// does not touch `isClientConnected`.
-    func sendTestHL7(_ hl7: String, orderId: String? = nil, host: String = "192.168.0.41", port: UInt16 = 8080) {
+    /// Sends an MLLP-framed HL7 message to the PMS.
+    /// - Static mode (`useStaticPMSConnection`): sends over the configured
+    ///   `pmsIpAddress`/`pmsPort` via a one-off connection, bypassing `clientConnection`.
+    /// - Bonjour mode (default, unchanged): uses the discovered `clientConnection`
+    ///   via `sendClientHL7`, exactly as before.
+    /// No hardcoded fallback host/port — static mode with a missing/invalid configured
+    /// value skips the send rather than dialing a guess.
+    func sendHL7ToPMS(_ hl7: String, orderId: String? = nil) {
+        guard AppStorageManager.shared.useStaticPMSConnection else {
+            sendClientHL7(hl7)
+            return
+        }
+
+        guard
+            let host = AppStorageManager.shared.pmsIpAddress, !host.isEmpty,
+            let rawPort = AppStorageManager.shared.pmsPort,
+            let port = UInt16(exactly: rawPort)
+        else {
+            print("[HL7][STATIC] sendHL7ToPMS skipped — pmsIpAddress/pmsPort missing or invalid")
+            return
+        }
+
         let tag = orderId.map { "[order:\($0)] " } ?? ""
         print("[HL7][TEST] \(tag)Connecting to \(host):\(port) …")
         let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
@@ -485,6 +560,88 @@ final class Hl7ServiceManager {
             }
         }
         connection.start(queue: clientQueue)
+    }
+
+    /// One-off reachability check for the Settings "Test Connection" button — opens a
+    /// connection to the given host/port, reports `.ready`/`.failed`/`.waiting`/timeout,
+    /// then cancels. Does not send any HL7 payload and does not touch `clientConnection`
+    /// or `isClientConnected` — purely a point-in-time diagnostic.
+    enum TestConnectionResult {
+        case success
+        case failure(String)
+    }
+
+    static func testConnection(host: String, port: UInt16, timeout: TimeInterval = 6, completion: @escaping (TestConnectionResult) -> Void) {
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            completion(.failure("Invalid port"))
+            return
+        }
+
+        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: nwPort)
+        let connection = NWConnection(to: endpoint, using: Self.testConnectionParameters())
+
+        var didFinish = false
+        func finish(_ result: TestConnectionResult) {
+            guard !didFinish else { return }
+            didFinish = true
+            connection.cancel()
+            DispatchQueue.main.async { completion(result) }
+        }
+
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                finish(.success)
+            case .failed(let error):
+                finish(.failure(Self.describeConnectError(error)))
+            case .waiting(let error):
+                finish(.failure(Self.describeConnectError(error)))
+            default:
+                break
+            }
+        }
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+            finish(.failure("Timed out"))
+        }
+
+        connection.start(queue: .global())
+    }
+
+    /// Standalone TLS/plaintext setup for `testConnection`, mirroring
+    /// `pmsConnectionParameters()` — kept separate since the test can run without a
+    /// live `Hl7ServiceManager` instance.
+    private static func testConnectionParameters() -> NWParameters {
+        let parameters: NWParameters
+        if AppStorageManager.shared.bypassSSL {
+            parameters = NWParameters.tcp
+        } else {
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(
+                tlsOptions.securityProtocolOptions, .TLSv12
+            )
+            sec_protocol_options_set_verify_block(
+                tlsOptions.securityProtocolOptions,
+                { _, _, completion in completion(true) },
+                DispatchQueue.global()
+            )
+            parameters = NWParameters(tls: tlsOptions)
+        }
+        parameters.includePeerToPeer = true
+        return parameters
+    }
+
+    private static func describeConnectError(_ error: NWError) -> String {
+        if case .posix(let code) = error {
+            switch code {
+            case .ECONNREFUSED: return "Connection refused"
+            case .ETIMEDOUT: return "Connection timed out"
+            case .ECONNRESET: return "Connection reset by peer"
+            case .EHOSTUNREACH, .ENETUNREACH: return "Host unreachable"
+            default: return "Connection failed (\(code.rawValue))"
+            }
+        }
+        return error.localizedDescription
     }
 
     // MARK: - Heartbeat

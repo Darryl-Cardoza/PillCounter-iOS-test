@@ -144,7 +144,7 @@ final class HL7BatchSyncQueue {
         pendingRequestId = item.requestId
 
         DispatchQueue.main.async { [weak self] in
-            self?.hl7Manager?.sendTestHL7(hl7, orderId: item.batchId.description)
+            self?.hl7Manager?.sendHL7ToPMS(hl7, orderId: item.batchId.description)
             print("📤 [HL7] Sent to server for batch:", item.batchId)
         }
 

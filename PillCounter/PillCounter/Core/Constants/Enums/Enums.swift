@@ -359,6 +359,7 @@ enum DrugSchedule: String, CaseIterable, Identifiable {
 enum SettingsSubScreen {
     case saveHistory
     case schedule
+    case connectionInfo
 }
 
 

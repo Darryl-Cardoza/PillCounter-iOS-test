@@ -66,7 +66,7 @@ final class Hl7ServiceController: ObservableObject {
 
     private var shouldStartService: Bool {
         AppStorageManager.shared.isLoggedIn
-            && AppStorageManager.shared.isPmsIntegrated
+            && (AppStorageManager.shared.isPmsIntegrated || AppStorageManager.shared.isStandalone)
             && !SecurityManager.isDeviceCompromised()
     }
 
@@ -187,7 +187,7 @@ final class Hl7ServiceController: ObservableObject {
         retryCount += 1
         let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
         currentMessageId = messageId
-        hl7Manager?.sendClientHL7(buildHl7Message(txn: txn))
+        hl7Manager?.sendTestHL7(buildHl7Message(txn: txn), orderId: txn.rx_no ?? "\(txn.txn_id)")
     }
 
     private func handleSendFailure() {

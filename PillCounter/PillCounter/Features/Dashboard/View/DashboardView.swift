@@ -24,7 +24,9 @@ struct DashboardView: View {
     private var userId: String { AppStorageManager.shared.userId ?? "" }
     @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
         Bool = true
-    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
+    private var isPmsIntegrated: Bool {
+        AppStorageManager.shared.isPmsIntegrated || AppStorageManager.shared.isStandalone
+    }
     @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
     var selectedTerminalName: String = ""
 

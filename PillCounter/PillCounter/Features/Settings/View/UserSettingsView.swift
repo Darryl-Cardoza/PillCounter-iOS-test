@@ -27,7 +27,9 @@ struct UserSettingsView: View {
     @EnvironmentObject private var router: Router
     
     
-    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
+    private var isPmsIntegrated: Bool {
+        AppStorageManager.shared.isPmsIntegrated || AppStorageManager.shared.isStandalone
+    }
     /// PMS-gated rows are disabled when PMS integration is off for this account.
     private var isPmsDisabled: Bool { !isPmsIntegrated }
 

@@ -75,6 +75,13 @@ extension PillScanViewModel {
                 print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
 
                 guard let existingTxn else {
+                    guard AppStorageManager.shared.isStandalone else {
+                        print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
+                        showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                        rxScanFailed = true
+                        return
+                    }
+
                     print("[RxScan] Rx \(rxNo) not found in DB — showing Rx popup to create new txn")
 
                     scannedRxData = ParsedScanData(
@@ -201,6 +208,12 @@ extension PillScanViewModel {
         }
 
         guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+            guard AppStorageManager.shared.isStandalone else {
+                print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
+                showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                return
+            }
+
             print("[RxScan] Rx \(rxNo) not found in DB — creating new txn")
 
             await createTransaction(

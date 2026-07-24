@@ -18,6 +18,7 @@ protocol TokenStore: AnyObject {
 
     var isLoggedIn: Bool { get set }
     var isPmsIntegrated: Bool { get set }
+    var isStandalone: Bool { get set }
     var allowLocalStorage: Bool { get set }
     var accessToken: String? { get set }
     var refreshToken: String? { get set }

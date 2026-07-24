@@ -17,8 +17,6 @@ import Combine
 private struct TxnSyncQueueItem {
     let txnId: Int64
     let requestId: String
-    var retryCount: Int = 0
-    static let maxRetries = 3
 }
 
 // MARK: - HL7TxnSyncQueue
@@ -114,27 +112,11 @@ final class HL7TxnSyncQueue {
             return
         }
 
-        // Only commit to "in-flight" (set isSending + arm the ACK timeout) once the
-        // message has actually been handed to a live connection. If the PMS isn't
-        // connected, sendClientHL7 returns false and silently drops it — previously we
-        // had already set isSending=true and armed a 10s ACK timeout, so the queue sat
-        // BLOCKED for the full timeout. The reconnect path (onClientConnected →
-        // enqueueUnsynced → processNext) then early-returned on `guard !isSending`, so
-        // even reconnecting didn't flush the txn until the timeout expired — the "not
-        // sent immediately" symptom. Now: not connected → stay idle at the head of the
-        // queue, and the reconnect re-trigger sends it right away.
-        guard manager.isClientConnected else {
-            print("⏸️ [TxnQueue] PMS not connected — holding txn \(item.txnId) at head; will retry on reconnect")
-            isSending = false
-            pendingRequestId = nil
-            return
-        }
-
         isSending = true
         pendingRequestId = item.requestId
 
         DispatchQueue.main.async {
-            manager.sendClientHL7(hl7)
+            manager.sendTestHL7(hl7, orderId: item.requestId)
         }
 
         scheduleAckTimeout(for: item.requestId)
@@ -149,10 +131,10 @@ final class HL7TxnSyncQueue {
 
         if isPositiveAck(message) {
             markCurrentTxnSynced()
-            advanceQueue()
         } else {
-            handleRetry()
+            print("❌ [TxnQueue] Negative/invalid ACK — leaving txn unsynced:", requestId)
         }
+        advanceQueue()
     }
 
     private func isPositiveAck(_ message: String) -> Bool {
@@ -174,31 +156,14 @@ final class HL7TxnSyncQueue {
         processNext()
     }
 
-    private func handleRetry() {
-        guard !queue.isEmpty else { return }
-
-        queue[0].retryCount += 1
-
-        if queue[0].retryCount >= TxnSyncQueueItem.maxRetries {
-            let failed = queue.removeFirst()
-            queue.append(failed)
-        }
-
-        isSending = false
-        pendingRequestId = nil
-
-        processingQueue.asyncAfter(deadline: .now() + 2.0) {
-            self.processNext()
-        }
-    }
-
     // MARK: - TIMEOUT
 
     private func scheduleAckTimeout(for requestId: String) {
         let work = DispatchWorkItem { [weak self] in
             self?.processingQueue.async {
-                guard self?.pendingRequestId == requestId else { return }
-                self?.handleRetry()
+                guard let self, self.pendingRequestId == requestId else { return }
+                print("⏰ [TxnQueue] ACK timeout — leaving txn unsynced:", requestId)
+                self.advanceQueue()
             }
         }
         ackTimeoutWork = work

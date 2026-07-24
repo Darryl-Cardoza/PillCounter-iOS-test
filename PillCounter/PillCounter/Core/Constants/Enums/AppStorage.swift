@@ -47,6 +47,7 @@ final class AppStorageManager {
         static let rememberMe           = "remember_me"
         static let tokenExpiryTimestamp = "token_expiry_timestamp"
         static let isPmsIntegrated      = "is_pms_integrated"
+        static let isStandalone         = "is_standalone"
         static let allowLocalStorage    = "allow_local_storage"
         static let hl7Version           = "hl7_version"
         static let pmsHostName          = "pms_host_name"
@@ -146,6 +147,13 @@ final class AppStorageManager {
     var allowLocalStorage: Bool {
         get { Keychain.getPassword(for: AppStorageKeys.allowLocalStorage) == "true" }
         set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.allowLocalStorage) }
+    }
+
+    /// When true, HL7 server runs regardless of `isPmsIntegrated` — server-driven
+    /// (`auth/me` → `settings.is_standalone`).
+    var isStandalone: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.isStandalone) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isStandalone) }
     }
 
     /// HL7 version the PMS integration should speak, provided by the server

@@ -21,8 +21,6 @@ import Combine
 private struct SyncQueueItem {
     let batchId: Int64
     let requestId: String   // req_id_from_pms or generated fallback
-    var retryCount: Int = 0
-    static let maxRetries = 3
 }
 
 // MARK: - HL7BatchSyncQueue
@@ -146,7 +144,7 @@ final class HL7BatchSyncQueue {
         pendingRequestId = item.requestId
 
         DispatchQueue.main.async { [weak self] in
-            self?.hl7Manager?.sendClientHL7(hl7)
+            self?.hl7Manager?.sendTestHL7(hl7, orderId: item.batchId.description)
             print("📤 [HL7] Sent to server for batch:", item.batchId)
         }
 
@@ -166,10 +164,10 @@ final class HL7BatchSyncQueue {
 
         if isPositiveAck(message) {
             markCurrentBatchSynced()
-            advanceQueue()
         } else {
-            handleNackOrInvalid()
+            print("❌ [Queue] Negative/invalid ACK — leaving batch unsynced:", requestId)
         }
+        advanceQueue()
     }
 
     private func isPositiveAck(_ message: String) -> Bool {
@@ -190,36 +188,14 @@ final class HL7BatchSyncQueue {
         processNext()
     }
 
-    private func handleNackOrInvalid() {
-        guard !queue.isEmpty else {
-            isSending = false
-            return
-        }
-
-        queue[0].retryCount += 1
-
-        if queue[0].retryCount >= SyncQueueItem.maxRetries {
-            // Move to end — do not block other batches
-            let failed = queue.removeFirst()
-            queue.append(failed)
-        }
-
-        isSending        = false
-        pendingRequestId = nil
-
-        // Back-off before next attempt
-        processingQueue.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.processNext()
-        }
-    }
-
     // MARK: - Private: ACK Timeout
 
     private func scheduleAckTimeout(for requestId: String) {
         let work = DispatchWorkItem { [weak self] in
             self?.processingQueue.async {
-                guard self?.pendingRequestId == requestId else { return }
-                self?.handleNackOrInvalid()
+                guard let self, self.pendingRequestId == requestId else { return }
+                print("⏰ [Queue] ACK timeout — leaving batch unsynced:", requestId)
+                self.advanceQueue()
             }
         }
         ackTimeoutWork = work

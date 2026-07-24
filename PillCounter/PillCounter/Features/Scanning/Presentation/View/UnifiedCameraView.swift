@@ -901,7 +901,7 @@ extension UnifiedCameraView {
             {
                 switch scanType {
                 case .rx_label:
-                    guard AppStorageManager.shared.isPmsIntegrated else {
+                    guard AppStorageManager.shared.isPmsIntegrated || AppStorageManager.shared.isStandalone else {
                         cameraState = .rxDetected
                         showHl7UnavailablePopup = true
                         return

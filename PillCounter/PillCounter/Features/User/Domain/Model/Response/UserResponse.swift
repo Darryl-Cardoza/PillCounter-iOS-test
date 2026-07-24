@@ -116,6 +116,7 @@ struct UserSettings: Codable {
     let language: String?
     let timezone: String?
     let country: String?
+    let state: String?
     let hl7Version: String?
     let fcmToken: String?
     let terminals: [UserTerminal]?
@@ -124,12 +125,16 @@ struct UserSettings: Codable {
     let allowLocalStorage: Bool?
     let bypassSSL: Bool?
     let hl7MessageSpec: String?
+    let isStandalone: Bool?
+    
 
     enum CodingKeys: String, CodingKey {
         case notificationsEnabled = "notifications_enabled"
         case language
         case timezone
         case country
+        
+        case state
         case hl7Version = "hl7_version"
         case fcmToken = "fcm_token"
         case terminals
@@ -138,6 +143,7 @@ struct UserSettings: Codable {
         case allowLocalStorage = "allow_local_storage"
         case bypassSSL = "bypass_ssl"
         case hl7MessageSpec = "hl7_message_spec"
+        case isStandalone = "is_standalone"
     }
 }
 

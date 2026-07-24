@@ -212,6 +212,11 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.isPmsIntegrated = isPmsIntegrated
                 }
 
+                if let isStandalone = result.data?.settings?.isStandalone
+                    ?? result.data?.user?.settings?.isStandalone {
+                    AppStorageManager.shared.isStandalone = isStandalone
+                }
+
                 if let allowLocalStorage = result.data?.settings?.allowLocalStorage
                     ?? result.data?.user?.settings?.allowLocalStorage {
                     AppStorageManager.shared.allowLocalStorage = allowLocalStorage

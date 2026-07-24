@@ -15,6 +15,10 @@ import Network
 final class ImageWebServer {
 
     private var listener: NWListener?
+    /// Plain-HTTP listener on port 80 so PMS can hit the server with a bare IP
+    /// (no port in the URL). Runs alongside the primary listener regardless of
+    /// bypassSSL — port 80 is always plain HTTP.
+    private var portEightyListener: NWListener?
     /// Server-driven (`auth/me` -> `settings.bypass_ssl`, default true): bypass
     /// enabled -> plain HTTP on 8080; disabled -> HTTPS on 8443.
     private var port: NWEndpoint.Port {
@@ -26,6 +30,7 @@ final class ImageWebServer {
     // MARK: - Lifecycle
 
     /// Starts the image server, plain HTTP or HTTPS depending on the bypass setting.
+    /// Also starts a plain-HTTP listener on port 80 for bare-IP requests (no port in URL).
     func start() {
         guard listener == nil else { return }
 
@@ -61,12 +66,48 @@ final class ImageWebServer {
             Log("Failed to start image server: \(error.localizedDescription)")
         }
 
+        startPortEighty()
+    }
+
+    /// Starts the plain-HTTP port-80 listener (bare-IP, no port in URL).
+    private func startPortEighty() {
+        guard portEightyListener == nil else { return }
+
+        do {
+            let parameters: NWParameters = .tcp
+            parameters.allowLocalEndpointReuse = true
+
+            let listener = try NWListener(using: parameters, on: 80)
+
+            listener.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    Log("Image server running on port 80")
+                case .failed(let error):
+                    Log("Image server (port 80) failed: \(error.localizedDescription)")
+                default:
+                    break
+                }
+            }
+
+            listener.newConnectionHandler = { [weak self] connection in
+                self?.handle(connection)
+            }
+
+            listener.start(queue: queue)
+            self.portEightyListener = listener
+
+        } catch {
+            Log("Failed to start image server on port 80: \(error.localizedDescription)")
+        }
     }
 
     /// Stops server.
     func stop() {
         listener?.cancel()
         listener = nil
+        portEightyListener?.cancel()
+        portEightyListener = nil
     }
 
     // MARK: - TLS
@@ -154,6 +195,7 @@ final class ImageWebServer {
     // MARK: - Routing
 
     /// Endpoints — mirrors Android's `ImageNanoServer`:
+    ///   GET /?pic=*&format=zip&orderid=<transactionOrderId>          — zip, PMS root-path format
     ///   GET /images/<filename>                                       — single image, base64 JSON
     ///   GET /images/getbymessagecontrolid/<messageControlId>         — zip, by HL7 message control id
     ///   GET /images/getbysequencenumber/<sequenceNumber>             — zip, by HL7 sequence number
@@ -180,6 +222,11 @@ final class ImageWebServer {
         if let queryIndex = rawPath.firstIndex(of: "?") {
             path = String(rawPath[rawPath.startIndex..<queryIndex])
             query = Self.parseQuery(String(rawPath[rawPath.index(after: queryIndex)...]))
+        } else if rawPath.contains("=") {
+            // PMS sends query params with no leading "?", e.g. "/pic=*&format=zip&orderId=...&Last".
+            // Treat everything after the leading "/" as the query string; no separate path segment.
+            path = ""
+            query = Self.parseQuery(String(rawPath.drop(while: { $0 == "/" })))
         } else {
             path = rawPath
             query = [:]
@@ -187,8 +234,10 @@ final class ImageWebServer {
         let segments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
 
         // GET /images?pic=*&format=zip&orderid=<transactionOrderId>
+        // GET /?pic=*&format=zip&orderid=<transactionOrderId>[&Last]
         // `pic` accepted but ignored for now (future: select which images; "*" = all).
-        if segments.count == 1, segments[0] == "images",
+        // `Last` (or any other bare flag) is accepted but ignored.
+        if (segments.isEmpty || (segments.count == 1 && segments[0] == "images")),
            query["format"] == "zip", let orderId = query["orderid"], !orderId.isEmpty {
             return serveTxnLookup(orderId, zipFileName: "\(orderId).zip", naming: .pmsFileNaming) { TransactionStore.shared.getByTransactionOrderId($0) }
         }

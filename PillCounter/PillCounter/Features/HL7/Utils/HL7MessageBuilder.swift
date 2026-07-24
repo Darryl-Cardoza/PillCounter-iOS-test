@@ -105,6 +105,8 @@ final class HL7CompletionBuilder {
                 rxd.actualDispenseUnits = "TAB"
                 rxd.prescriptionNumber = orderId
                 rxd.dispensingProviderId = user?.user_id
+//                rxd.dispensingProviderFamilyName = user?.lname
+//                rxd.dispensingProviderGivenName = user?.fname
                 rxd.dispenseSubIdCounter = "1"
             }
             
@@ -117,12 +119,25 @@ final class HL7CompletionBuilder {
                 }
             }
 
-            for obx in self.buildImageOBX(
+            let imageObx = self.buildImageOBX(
                 txn: txn,
                 details: details,
                 observationId: "DISP_IMG",
                 label: "Dispense Image"
-            ) {
+            )
+            for obx in imageObx {
+                scope.obx { builder in
+                    builder.setId = obx.setId
+                    builder.valueType = obx.valueType
+                    builder.observationId = obx.observationId
+                    builder.observationText = obx.observationText
+                    builder.observationValue = obx.observationValue
+                    builder.resultStatus = obx.resultStatus
+                    builder.units = obx.units
+                }
+            }
+
+            for obx in self.buildDrugFlagOBX(drug: drug, startingSetId: imageObx.count + 1) {
                 scope.obx { builder in
                     builder.setId = obx.setId
                     builder.valueType = obx.valueType
@@ -197,7 +212,47 @@ final class HL7CompletionBuilder {
             }
         }
 
-        return message.encode()
+        let encoded = message.encode()
+
+        switch config.format {
+        case .eyecon:
+            let verifiedByName = String((user?.fname ?? "").prefix(10))
+            let fillStatus = "F"
+            let ndcNoDash = (drug.ndc ?? "").replacingOccurrences(of: "-", with: "")
+
+            var zuiFields = Array(repeating: "", count: 25)
+            zuiFields[0] = ndcNoDash               // ZUI-1: NDC
+            zuiFields[1] = drug.drug_name ?? ""    // ZUI-2: Drug Name
+            zuiFields[2] = user?.fname ?? ""       // ZUI-3: Patient/User Name
+            zuiFields[3] = orderId                  // ZUI-4: Prescription Number
+            zuiFields[4] = "1"                      // ZUI-5: Fill Number
+            zuiFields[5] = verifiedByName            // ZUI-6: Verified By
+            zuiFields[6] = txn.is_ndc_verfied ? "A" : "N" // ZUI-7: Stock Bottle Verification
+            zuiFields[7] = ""                       // ZUI-8: reserved
+            zuiFields[8] = "1"                      // ZUI-9: Packet Version
+            zuiFields[9] = user?.fname ?? ""       // ZUI-10: User/Tech Name
+            zuiFields[10] = transactionOrderId        // ZUI-11: Transaction Order Id
+            zuiFields[17] = "\(totalCount)"          // ZUI-18: Amount Actually Filled
+            zuiFields[18] = fillStatus                // ZUI-19: Fill Status
+            zuiFields[20] = ndcNoDash                 // ZUI-21: Stock Bottle Barcode NDC
+            let zuiSegment = "ZUI|" + zuiFields.joined(separator: "|")
+
+            return insertSegment(zuiSegment, afterMSHIn: encoded)
+        default:
+            return encoded
+        }
+    }
+
+    /// Inserts `segment` immediately after the MSH segment in an already-encoded
+    /// HL7 message (segments CR-separated). Used for segments not modeled by the
+    /// Hl7Core builder (e.g. the Eyecon-specific ZUI field layout).
+    private func insertSegment(_ segment: String, afterMSHIn encoded: String) -> String {
+        var segments = encoded.components(separatedBy: "\r")
+        guard let mshIndex = segments.firstIndex(where: { $0.hasPrefix("MSH") }) else {
+            return encoded
+        }
+        segments.insert(segment, at: mshIndex + 1)
+        return segments.joined(separator: "\r")
     }
 
     // MARK: - Inventory Response (INR U06, INV + ZAD)
@@ -386,6 +441,36 @@ private extension HL7CompletionBuilder {
         }
 
         return obxList
+    }
+
+    // MARK: Controlled/Hazardous OBX Builder
+
+    /// Controlled = `drug.drug_type` set (DEA schedule string, e.g. "II"); Hazardous
+    /// = `drug.is_hazardous`. Two CE-typed OBX rows after the image OBX segments,
+    /// per PMS spec: OBX-3 identifier^text^L, OBX-5 Y/N^Yes/No^HL70136.
+    func buildDrugFlagOBX(drug: DrugMasterEntity, startingSetId: Int) -> [ObxRow] {
+        let isControlled = !(drug.drug_type ?? "").isEmpty
+
+        return [
+            ObxRow(
+                setId: "\(startingSetId)",
+                valueType: "CE",
+                observationId: "CONTROLLED_SUBSTANCE^Controlled Substance^L",
+                observationText: nil,
+                observationValue: isControlled ? "Y^Yes^HL70136" : "N^No^HL70136",
+                resultStatus: "F",
+                units: nil
+            ),
+            ObxRow(
+                setId: "\(startingSetId + 1)",
+                valueType: "CE",
+                observationId: "HAZARDOUS_DRUG^Hazardous Drug^L",
+                observationText: nil,
+                observationValue: drug.is_hazardous ? "Y^Yes^HL70136" : "N^No^HL70136",
+                resultStatus: "F",
+                units: nil
+            )
+        ]
     }
 
     // MARK: ZSN/ZSV Builders

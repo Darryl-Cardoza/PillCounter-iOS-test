@@ -29,7 +29,7 @@ struct PharmacyTypeData: Codable {
     }
 }
 
-struct PharmacyTypeOption: Codable, Identifiable, Equatable {
+struct PharmacyTypeOption: Codable, Identifiable, Hashable {
     let code: String
     let label: String
 

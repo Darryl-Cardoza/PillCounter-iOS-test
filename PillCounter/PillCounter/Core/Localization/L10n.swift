@@ -177,6 +177,9 @@ enum L10n {
         static let phoneNumber = NSLocalizedString("profile.phoneNumber", comment: "")
         static let terminal = NSLocalizedString("profile.terminal", comment: "")
         static let pharmacyType = NSLocalizedString("profile.pharmacyType", comment: "")
+        static let country = NSLocalizedString("profile.country", comment: "")
+        static let state = NSLocalizedString("profile.state", comment: "")
+        static let searchState = NSLocalizedString("profile.searchState", comment: "")
         static let successUpdateMessage = NSLocalizedString("profile.error.successUpdateMessage", comment: "")
 
         

@@ -31,8 +31,10 @@ struct APIConstants {
     static let updateProfile = "\(baseURL)/users/update/profile"
     static let deleteProfile = "\(baseURL)/users/delete/profile"
     static let pharmacyTypes = "\(baseURL)/users/pharmacy-types"
-    
-    
+
+    // MARK: - REFERENCE
+    static let countries = "\(baseURL)/reference/countries"
+
     // MARK: - MOBILE
     static let getMobileSettings = "\(baseURL)/mobile/get/settings?platform" // need to add query parameter to send the ios version.
     

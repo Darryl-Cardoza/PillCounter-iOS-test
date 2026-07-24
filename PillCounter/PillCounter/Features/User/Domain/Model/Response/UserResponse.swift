@@ -203,18 +203,20 @@ struct UserRole: Codable {
 }
 
 // MARK: - Terminal
-struct UserTerminal: Codable {
+struct UserTerminal: Codable, Identifiable, Hashable {
     let terminalId: String?
     let terminalName: String?
     let isActive: Bool?
     let createdAt: String?
     let updatedAt: String?
 
+    var id: String { terminalId ?? "" }
+
     enum CodingKeys: String, CodingKey {
         case terminalId = "terminal_id"
         case terminalName = "terminal_name"
         case isActive = "is_active"
-        
+
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

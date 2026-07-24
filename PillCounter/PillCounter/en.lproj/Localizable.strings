@@ -142,6 +142,9 @@
 "profile.phoneNumber" = "Phone Number";
 "profile.terminal" = "Terminal";
 "profile.pharmacyType" = "Pharmacy Type";
+"profile.country" = "Country";
+"profile.state" = "State";
+"profile.searchState" = "Search state";
 
 "profile.popup.confirmDeleteTitle" = "Confirm Delete";
 "profile.popup.confirmDeleteMessage" = "Are you sure you want to delete your profile? This action cannot be undone.";

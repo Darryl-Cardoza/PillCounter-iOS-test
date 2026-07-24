@@ -80,6 +80,9 @@ final class AppStorageManager {
         static let pillCountRingOffsetY = "pill_count_ring_offset_y"
         static let selectedPharmacyType = "selected_pharmacy_type"
         static let pharmacyTypeOptions  = "pharmacy_type_options"
+        static let countryOptions       = "country_options"
+        static let selectedCountryCode  = "selected_country_code"
+        static let selectedStateCode    = "selected_state_code"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -448,6 +451,33 @@ final class AppStorageManager {
             let data = try? JSONEncoder().encode(newValue)
             defaults.setValue(data, forKey: AppStorageKeys.pharmacyTypeOptions)
         }
+    }
+
+    /// Country list fetched from `/reference/countries`, cached so the dropdown
+    /// still has options offline / before the next fetch completes.
+    var countryOptions: [CountryOption] {
+        get {
+            guard let data = defaults.data(forKey: AppStorageKeys.countryOptions),
+                  let options = try? JSONDecoder().decode([CountryOption].self, from: data)
+            else { return [] }
+            return options
+        }
+        set {
+            let data = try? JSONEncoder().encode(newValue)
+            defaults.setValue(data, forKey: AppStorageKeys.countryOptions)
+        }
+    }
+
+    /// Selected country **code**, driven by `auth/me` → `settings.country`.
+    var selectedCountryCode: String? {
+        get { defaults.string(forKey: AppStorageKeys.selectedCountryCode) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.selectedCountryCode) }
+    }
+
+    /// Selected state **code**, driven by `auth/me` → `settings.state`.
+    var selectedStateCode: String? {
+        get { defaults.string(forKey: AppStorageKeys.selectedStateCode) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.selectedStateCode) }
     }
 
     /// Clears the cached terminal list + selected terminal name.

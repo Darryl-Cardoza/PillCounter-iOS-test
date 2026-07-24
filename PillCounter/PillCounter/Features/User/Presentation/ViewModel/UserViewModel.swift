@@ -51,6 +51,7 @@ class UserViewModel: ObservableObject {
     @Published var pharmacyName: String = ""
     @Published var npiID: String = ""
     @Published var pharmacyTypeOptions: [PharmacyTypeOption] = []
+    @Published var countryOptions: [CountryOption] = []
 
     // terminals
     @Published var terminals: [UserTerminal] = []
@@ -207,6 +208,16 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.hl7Version = hl7Version
                 }
 
+                if let country = result.data?.settings?.country
+                    ?? result.data?.user?.settings?.country {
+                    AppStorageManager.shared.selectedCountryCode = country
+                }
+
+                if let state = result.data?.settings?.state
+                    ?? result.data?.user?.settings?.state {
+                    AppStorageManager.shared.selectedStateCode = state
+                }
+
                 if let isPmsIntegrated = result.data?.settings?.isPmsIntegrated
                     ?? result.data?.user?.settings?.isPmsIntegrated {
                     AppStorageManager.shared.isPmsIntegrated = isPmsIntegrated
@@ -337,10 +348,31 @@ class UserViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Countries
+
+    /// Fetches the server-driven country/state list and caches it so the
+    /// dropdown still has options offline / before the next fetch completes.
+    func fetchCountries() async {
+        let cached = AppStorageManager.shared.countryOptions
+        if !cached.isEmpty {
+            countryOptions = cached
+        }
+
+        do {
+            let result = try await userRepo.getCountries(accessToken: accessToken)
+            if result.isSuccess ?? false, let countries = result.data?.countries {
+                countryOptions = countries
+                AppStorageManager.shared.countryOptions = countries
+            }
+        } catch {
+            Log("❌ Failed to fetch countries: \(error)")
+        }
+    }
+
     // MARK: - Update User Profile
 
-    func updateUserProfile(pharmacyTypeCode: String?) async {
-        guard hasUserProfileChanged(pharmacyTypeCode: pharmacyTypeCode) else { return }
+    func updateUserProfile(pharmacyTypeCode: String?, countryCode: String? = nil, stateCode: String? = nil) async {
+        guard hasUserProfileChanged(pharmacyTypeCode: pharmacyTypeCode, countryCode: countryCode, stateCode: stateCode) else { return }
 
         isLoading = true
         defer { isLoading = false }
@@ -360,7 +392,9 @@ class UserViewModel: ObservableObject {
                 notificationsEnabled: false,
                 language: "",
                 timezone: "",
-                pharmacyType: pharmacyTypeCode
+                pharmacyType: pharmacyTypeCode,
+                country: countryCode,
+                state: stateCode
             )
 
             // FIX: updateProfile returns UserResponse but the server may return
@@ -392,17 +426,19 @@ class UserViewModel: ObservableObject {
                 }
 
                 AppStorageManager.shared.selectedPharmacyTypeCode = pharmacyTypeCode
+                AppStorageManager.shared.selectedCountryCode = countryCode
+                AppStorageManager.shared.selectedStateCode = stateCode
             }
         } catch {
             Log("updateUserProfile error: \(error)")
         }
     }
     // func to check if any updates were there in the profile.
-    func hasProfileChanged(pharmacyTypeCode: String?) -> Bool {
-        return hasUserProfileChanged(pharmacyTypeCode: pharmacyTypeCode)
+    func hasProfileChanged(pharmacyTypeCode: String?, countryCode: String? = nil, stateCode: String? = nil) -> Bool {
+        return hasUserProfileChanged(pharmacyTypeCode: pharmacyTypeCode, countryCode: countryCode, stateCode: stateCode)
     }
 
-    private func hasUserProfileChanged(pharmacyTypeCode: String?) -> Bool {
+    private func hasUserProfileChanged(pharmacyTypeCode: String?, countryCode: String? = nil, stateCode: String? = nil) -> Bool {
         guard let original = userProfileDetails else { return true }  // if no original data, treat as changed
 
         let firstNameChanged   = firstName.trimmingCharacters(in: .whitespaces) != (original.fname ?? "")
@@ -411,7 +447,9 @@ class UserViewModel: ObservableObject {
         let phoneChanged       = phoneNumber  != (original.phoneNumber ?? "")
         let npiChanged         = npiID        != (original.npiID ?? "")
         let pharmacyTypeChanged = (pharmacyTypeCode ?? "") != (original.pharmacyType ?? "")
-        return firstNameChanged || lastNameChanged || pharmacyChanged || phoneChanged || npiChanged || pharmacyTypeChanged
+        let countryChanged = (countryCode ?? "") != (AppStorageManager.shared.selectedCountryCode ?? "")
+        let stateChanged   = (stateCode ?? "")   != (AppStorageManager.shared.selectedStateCode ?? "")
+        return firstNameChanged || lastNameChanged || pharmacyChanged || phoneChanged || npiChanged || pharmacyTypeChanged || countryChanged || stateChanged
     }
 
     // MARK: - Transactions

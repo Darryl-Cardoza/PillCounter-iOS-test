@@ -72,9 +72,10 @@ struct UserProfileScreen: View {
                     PillCountingLoader()
                 }
             }
-            
-       
+
+
         }
+        .dropdownOverlayHost()
         .onAppear {
             // App launch already hydrated user/terminals/pharmacy-type from
             // auth/me into local storage — just read the cached data, no
@@ -259,7 +260,7 @@ struct UserProfileScreen: View {
             placeholder: L10n.Profile.country,
             selection: $selectedCountry,
             options: userViewModel.countryOptions,
-            labelText: { $0.name },
+            labelText: { "\($0.code) - \($0.name)" },
             onSelect: { _ in selectedState = nil }
         )
     }
@@ -273,7 +274,7 @@ struct UserProfileScreen: View {
             placeholder: L10n.Profile.state,
             selection: $selectedState,
             options: selectedCountry?.states ?? [],
-            labelText: { $0.name },
+            labelText: { "\($0.code) - \($0.name)" },
             disabled: isStateDropdownDisabled,
             searchable: true,
             searchPlaceholder: L10n.Profile.searchState
@@ -416,15 +417,19 @@ struct UserProfileScreen: View {
     private func profileScreenLandscape() -> some View {
         VStack(spacing: 0) {
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    landscapeProfileColums
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(spacing: 20) {
+                        landscapeProfileColums
+                    }
+                    .padding(.horizontal)
+                    .environment(\.dropdownScrollProxy, scrollProxy)
                 }
-                .padding(.horizontal)
+                .modifier(KeyboardAdaptive())
             }
-            
+
             Spacer()
-            
+
             HStack {
                 Spacer()
                 actionButtons
@@ -435,19 +440,23 @@ struct UserProfileScreen: View {
         .padding(.top, 65 )
         .background(appColors.primaryBackground)
     }
-    
+
     private func profileScreenPotrait() -> some View {
         VStack(spacing: 0) {
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    potraitProfileColums
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        potraitProfileColums
+                    }
+                    .environment(\.dropdownScrollProxy, scrollProxy)
                 }
+                .padding(.horizontal)
+                .modifier(KeyboardAdaptive())
             }
-            .padding(.horizontal)
 
             Spacer()
-            
+
             HStack {
                 Spacer()
                 actionButtons

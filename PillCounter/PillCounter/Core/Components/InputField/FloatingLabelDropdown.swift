@@ -1,6 +1,81 @@
 import SwiftUI
 import Combine
 
+/// Carries a request to render a dropdown's floating panel outside any
+/// clipping ScrollView. Read at a root-level `.overlayPreferenceValue` (see
+/// `DropdownOverlayHost`) so the panel is never clipped or overlapped by
+/// sibling fields inside the same scroll content.
+struct DropdownOverlayKey: PreferenceKey {
+    struct Request: Identifiable {
+        let id: AnyHashable
+        let anchor: Anchor<CGRect>
+        /// Builds the panel given the field's resolved frame and the available
+        /// height below it (both already in the host's own coordinate space,
+        /// with the keyboard's height already subtracted) so it can size/flip
+        /// itself relative to the field without touching `UIScreen` at all.
+        let panel: (_ fieldFrame: CGRect, _ availableBelow: CGFloat) -> AnyView
+        let onDismiss: () -> Void
+    }
+
+    static var defaultValue: [Request] = []
+    static func reduce(value: inout [Request], nextValue: () -> [Request]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+/// Drop this once at the root of a screen (outside any ScrollView) so every
+/// `FloatingLabelDropdown` inside it can float its panel above sibling
+/// content instead of being clipped/pushed by the surrounding scroll view.
+struct DropdownOverlayHost: ViewModifier {
+    @State private var keyboardHeight: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .overlayPreferenceValue(DropdownOverlayKey.self) { requests in
+                GeometryReader { proxy in
+                    // The keyboard sits above everything in its own window, so the
+                    // panel must fit within the space that's actually still visible
+                    // above it — measured in this same host coordinate space, not
+                    // UIScreen's, which would drift from `proxy` once the keyboard
+                    // resizes/scrolls surrounding content.
+                    let visibleBottom = proxy.size.height - max(0, keyboardHeight - proxy.safeAreaInsets.bottom)
+
+                    ZStack(alignment: .topLeading) {
+                        ForEach(requests) { request in
+                            let frame = proxy[request.anchor]
+                            Color.black.opacity(0.001)
+                                .frame(width: proxy.size.width, height: proxy.size.height)
+                                .contentShape(Rectangle())
+                                .onTapGesture { request.onDismiss() }
+                            request.panel(frame, visibleBottom - frame.maxY)
+                        }
+                    }
+                }
+                .allowsHitTesting(!requests.isEmpty)
+            }
+            .onReceive(Publishers.keyboardHeight) { height in
+                withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = height }
+            }
+    }
+}
+
+extension View {
+    func dropdownOverlayHost() -> some View { modifier(DropdownOverlayHost()) }
+}
+
+private struct DropdownScrollProxyKey: EnvironmentKey {
+    static let defaultValue: ScrollViewProxy? = nil
+}
+
+extension EnvironmentValues {
+    /// The enclosing ScrollView's proxy, if any — lets a `FloatingLabelDropdown`
+    /// scroll itself into view above the keyboard when it opens.
+    var dropdownScrollProxy: ScrollViewProxy? {
+        get { self[DropdownScrollProxyKey.self] }
+        set { self[DropdownScrollProxyKey.self] = newValue }
+    }
+}
+
 struct FloatingLabelDropdown<Option: Hashable>: View {
 
     // MARK: - Public API (matches your call site)
@@ -14,13 +89,16 @@ struct FloatingLabelDropdown<Option: Hashable>: View {
     var onSelect: ((Option) -> Void)? = nil
 
     @EnvironmentObject private var appColors: AppColors
+    @Environment(\.dropdownScrollProxy) private var scrollProxy
 
     // MARK: - Private state
     @State private var isExpanded = false
-    @State private var searchText = ""
+    /// Backs the field's text. Always shows the selected label when nothing
+    /// is being typed; becomes the live search query as soon as the user edits it.
+    @State private var text = ""
     @State private var panelSize: CGSize = .zero
-    @State private var keyboardHeight: CGFloat = 0
     @FocusState private var searchFocused: Bool
+    private let instanceId = UUID()
 
     private let fieldHeight: CGFloat = 64
     private let listMaxHeight: CGFloat = 260
@@ -29,62 +107,56 @@ struct FloatingLabelDropdown<Option: Hashable>: View {
     private var isActive: Bool { searchFocused || hasSelection || isExpanded }
 
     private var filteredOptions: [Option] {
-        guard searchable, isExpanded, !searchText.isEmpty else { return options }
+        guard searchable, !text.isEmpty else { return options }
         return options.filter {
-            labelText($0).localizedCaseInsensitiveContains(searchText)
+            labelText($0).localizedCaseInsensitiveContains(text)
         }
-    }
-
-    /// What the field's text shows: the live search text while searching, else the selected label.
-    private var displayText: String {
-        if searchable && isExpanded { return searchText }
-        return selection.map(labelText) ?? ""
     }
 
     var body: some View {
         fieldButton
-            // The menu lives in an overlay -> it never affects the layout
-            // of siblings, it just draws on top of them.
-            .overlay(alignment: .topLeading) {
-                if isExpanded {
-                    GeometryReader { proxy in
-                        let frame = proxy.frame(in: .global)
-                        let screen = UIScreen.main.bounds.size
-                        let availableBelow = screen.height - keyboardHeight - frame.maxY
-                        // Flip upward if there isn't room below (keyboard included).
-                        let opensUp = availableBelow < panelSize.height + 6
-                            && frame.minY - panelSize.height - 6 > 0
-
-                        ZStack(alignment: .topLeading) {
-                            // Full-area tap catcher to dismiss on outside tap.
-                            Color.black.opacity(0.001)
-                                .frame(width: screen.width, height: screen.height)
-                                .offset(x: -frame.minX, y: -frame.minY)
-                                .onTapGesture { close() }
-
-                            menuPanel
-                                .frame(width: frame.width)
-                                .background(
-                                    GeometryReader { g in
-                                        Color.clear
-                                            .preference(key: SizeKey.self, value: g.size)
-                                    }
-                                )
-                                .offset(y: opensUp ? -(panelSize.height + 6)
-                                                   : fieldHeight + 6)
-                        }
-                    }
-                    .onPreferenceChange(SizeKey.self) { panelSize = $0 }
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-                }
+            .anchorPreference(key: DropdownOverlayKey.self, value: .bounds) { anchor in
+                guard isExpanded else { return [] }
+                return [DropdownOverlayKey.Request(
+                    id: instanceId,
+                    anchor: anchor,
+                    panel: { frame, availableBelow in
+                        AnyView(floatingPanel(fieldFrame: frame, availableBelow: availableBelow))
+                    },
+                    onDismiss: close
+                )]
             }
-            .onReceive(Publishers.keyboardHeight) { height in
-                withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = height }
-            }
-            // Lift the whole control above neighboring views while open.
-            .zIndex(isExpanded ? 9999 : 0)
             .disabled(disabled)
             .opacity(disabled ? 0.5 : 1)
+    }
+
+    /// The panel positioned relative to the field's own frame. Both `frame`
+    /// and `availableBelow` are supplied by `DropdownOverlayHost` in its own
+    /// coordinate space, with the keyboard's height already subtracted from
+    /// `availableBelow` — so the panel always fits above the keyboard instead
+    /// of being covered by it.
+    private func floatingPanel(fieldFrame frame: CGRect, availableBelow: CGFloat) -> some View {
+        // Default to opening below (standard combo-box behavior). Only flip
+        // upward once we've actually measured the panel's real height and
+        // confirmed there's genuinely no room below but there is above —
+        // using a stale/zero size here would place the panel right on top
+        // of the field instead of cleanly above or below it.
+        let opensUp = panelSize.height > 0
+            && availableBelow < panelSize.height + 6
+            && frame.minY - panelSize.height - 6 > 0
+
+        return menuPanel
+            .frame(width: frame.width)
+            .background(
+                GeometryReader { g in
+                    Color.clear.preference(key: SizeKey.self, value: g.size)
+                }
+            )
+            .offset(x: frame.minX,
+                    y: opensUp ? frame.minY - (panelSize.height + 6)
+                               : frame.minY + fieldHeight + 6)
+            .onPreferenceChange(SizeKey.self) { panelSize = $0 }
+            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
     }
 
     // MARK: - Field
@@ -102,13 +174,12 @@ struct FloatingLabelDropdown<Option: Hashable>: View {
             HStack(spacing: 8) {
                 Group {
                     if searchable {
-                        TextField("", text: $searchText)
+                        TextField("", text: $text)
                             .focused($searchFocused)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                            .onTapGesture { if !isExpanded { open() } }
                     } else {
-                        Text(displayText)
+                        Text(text)
                     }
                 }
                 .padding(.leading, 8)
@@ -119,16 +190,6 @@ struct FloatingLabelDropdown<Option: Hashable>: View {
                 .animation(.easeIn(duration: 0.15).delay(0.1), value: isActive)
 
                 Spacer(minLength: 0)
-
-                if searchable && isExpanded && !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(appColors.text.opacity(0.75))
-                    }
-                    .buttonStyle(.plain)
-                }
 
                 Image(systemName: "chevron.down")
                     .font(.system(size: 13, weight: .semibold))
@@ -142,9 +203,15 @@ struct FloatingLabelDropdown<Option: Hashable>: View {
         .background(appColors.secondaryBackground)
         .cornerRadius(10)
         .contentShape(Rectangle())
+        .id(instanceId)
         .onTapGesture {
-            guard !disabled else { return }
-            isExpanded ? close() : open()
+            guard !disabled, !isExpanded else { return }
+            open()
+        }
+        .onAppear { text = selection.map(labelText) ?? "" }
+        .onChange(of: selection) { _, newValue in
+            guard !isExpanded else { return }
+            text = newValue.map(labelText) ?? ""
         }
     }
 
@@ -176,6 +243,7 @@ struct FloatingLabelDropdown<Option: Hashable>: View {
     private func optionRow(_ option: Option) -> some View {
         Button {
             selection = option
+            text = labelText(option)
             onSelect?(option)
             close()
         } label: {
@@ -202,15 +270,21 @@ struct FloatingLabelDropdown<Option: Hashable>: View {
     private func open() {
         guard !disabled else { return }
         withAnimation(.easeInOut(duration: 0.18)) { isExpanded = true }
-        if searchable {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { searchFocused = true }
+        if searchable { searchFocused = true }
+        // Give the keyboard-show animation a moment to start before scrolling,
+        // so the field lands just above the keyboard's final resting position
+        // instead of wherever it was before the keyboard appeared.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                scrollProxy?.scrollTo(instanceId, anchor: .top)
+            }
         }
     }
 
     private func close() {
         withAnimation(.easeInOut(duration: 0.18)) { isExpanded = false }
         searchFocused = false
-        searchText = ""
+        text = selection.map(labelText) ?? ""
     }
 }
 

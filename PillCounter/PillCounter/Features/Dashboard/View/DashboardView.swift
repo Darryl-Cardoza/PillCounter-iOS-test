@@ -567,14 +567,8 @@ struct DashboardView: View {
             router.navigate(to: .authentication(.user(.userSettings(.profile))))
         } else {
             Task {
-                // Pharmacy types are fetched once at app launch / login
-                // (see PillCounterApp.loadLoggedInUserData) — not repeated here.
-                // auth/me only re-fires when the token was actually refreshed,
-                // to pick up any profile changes tied to the new session.
-                let didRefresh = await userViewModel.checkAndRefreshTokenIfNeeded()
-                if didRefresh {
-                    await userViewModel.getUser(forceRemote: true)
-                }
+                await userViewModel.checkAndRefreshTokenIfNeeded()
+                await userViewModel.getUser(forceRemote: true)
                 await MainActor.run { viewModel.loadQueueData(userId: userId) }
             }
         }

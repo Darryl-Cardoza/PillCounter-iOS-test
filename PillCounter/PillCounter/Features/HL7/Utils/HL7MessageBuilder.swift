@@ -546,6 +546,15 @@ private extension HL7CompletionBuilder {
         let scanSource: String
     }
 
+    private func validatorName(for txn: PillCountTransactionEntity) -> String {
+        guard let user = txn.user else { return "PillCounter" }
+        let name = [user.fname, user.lname]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return name.isEmpty ? "PillCounter" : name
+    }
+
     func buildZSV(
         txn: PillCountTransactionEntity,
         drug: DrugMasterEntity,
@@ -557,7 +566,7 @@ private extension HL7CompletionBuilder {
             dispensedNdc: drug.ndc,
             matchStrength: txn.is_ndc_verfied ? ZsvMatchStrength.shared.EXACT : nil,
             validationResult: txn.is_ndc_verfied ? ZsvValidationResult.shared.MATCH : ZsvValidationResult.shared.MISMATCH,
-            validator: "PillCounter",
+            validator: validatorName(for: txn),
             validationTimestamp: now,
             scanSource: ScanSource.shared.UNKNOWN
         )
@@ -576,7 +585,14 @@ private extension HL7CompletionBuilder {
         totalCount: Int
     ) -> [NoteRow] {
 
-        var comment = "Transaction Id: \(txn.txn_id) | Status: Completed | Total Count: \(totalCount)"
+        let status = txn.status ?? CountStatus.COMPLETED.rawValue
+        var comment = "Transaction Id: \(txn.txn_id) | Status: \(status) | Total Count: \(totalCount)"
+
+        let expected = Int(txn.target_count)
+        if expected != totalCount {
+            let diff = totalCount - expected
+            comment += " | Count Mismatch: Expected \(expected), Counted \(totalCount), Diff \(diff)"
+        }
 
         if let note = txn.note?.trimmingCharacters(in: .whitespacesAndNewlines),
            !note.isEmpty {

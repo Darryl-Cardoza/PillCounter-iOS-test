@@ -232,8 +232,8 @@ extension BaseView {
                 if showBackButton {
                     HStack {
                         backButton
+                        Spacer()
                     }
-                  
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
@@ -290,9 +290,9 @@ extension BaseView {
                   .multilineTextAlignment(.leading)
                   .lineLimit(2)
                   .fixedSize(horizontal: false, vertical: true)
-                  .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .contentShape(Rectangle())
     }
 
     private func handleBackAction() {

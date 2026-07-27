@@ -50,7 +50,7 @@ struct PillScanDetailCard: View {
             .background(appColors.secondaryBackground)
         }
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .selectableEffect(isSelected: isSelected, highlightColor: appColors.secondary)
+        .selectableEffect(isSelected: isSelected, highlightColor: appColors.secondary, shadowRadius: 8, shadowY: 4)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
     

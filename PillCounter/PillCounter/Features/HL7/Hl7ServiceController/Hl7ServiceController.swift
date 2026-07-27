@@ -149,8 +149,8 @@ final class Hl7ServiceController: ObservableObject {
     }
 
     func onAckReceived(messageId: String?, ackCode: String, hl7: String) {
-        batchSyncQueue?.handleAck(hl7)
-        txnSyncQueue?.handleAck(hl7)
+        batchSyncQueue?.handleAck(messageId: messageId, hl7: hl7)
+        txnSyncQueue?.handleAck(messageId: messageId, hl7: hl7)
     }
 
     func onAckTimeout() {

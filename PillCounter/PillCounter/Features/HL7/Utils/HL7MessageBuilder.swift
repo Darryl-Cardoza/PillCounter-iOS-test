@@ -105,8 +105,8 @@ final class HL7CompletionBuilder {
                 rxd.actualDispenseUnits = "TAB"
                 rxd.prescriptionNumber = orderId
                 rxd.dispensingProviderId = user?.user_id
-//                rxd.dispensingProviderFamilyName = user?.lname
-//                rxd.dispensingProviderGivenName = user?.fname
+                rxd.dispensingProviderFamilyName = user?.lname
+                rxd.dispensingProviderGivenName = user?.fname
                 rxd.dispenseSubIdCounter = "1"
             }
             

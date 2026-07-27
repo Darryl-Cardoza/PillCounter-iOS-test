@@ -145,23 +145,7 @@ final class Hl7ServiceManager {
     /// paths — server-driven (`auth/me` -> `settings.bypass_ssl`). Extracted from
     /// `connectToResult` so static mode doesn't duplicate this logic.
     private func pmsConnectionParameters() -> NWParameters {
-        let parameters: NWParameters
-        if AppStorageManager.shared.bypassSSL {
-            parameters = NWParameters.tcp
-        } else {
-            let tlsOptions = NWProtocolTLS.Options()
-            sec_protocol_options_set_min_tls_protocol_version(
-                tlsOptions.securityProtocolOptions, .TLSv12
-            )
-            sec_protocol_options_set_verify_block(
-                tlsOptions.securityProtocolOptions,
-                { _, _, completion in completion(true) },
-                DispatchQueue.global()
-            )
-            parameters = NWParameters(tls: tlsOptions)
-        }
-        parameters.includePeerToPeer = true
-        return parameters
+        Self.makeConnectionParameters()
     }
 
     // MARK: - Stop
@@ -457,109 +441,13 @@ final class Hl7ServiceManager {
         return true
     }
 
-    /// Sends an MLLP-framed HL7 message to the PMS.
-    /// - Static mode (`useStaticPMSConnection`): sends over the configured
-    ///   `pmsIpAddress`/`pmsPort` via a one-off connection, bypassing `clientConnection`.
-    /// - Bonjour mode (default, unchanged): uses the discovered `clientConnection`
-    ///   via `sendClientHL7`, exactly as before.
-    /// No hardcoded fallback host/port — static mode with a missing/invalid configured
-    /// value skips the send rather than dialing a guess.
+    /// Sends an MLLP-framed HL7 message to the PMS over the same `clientConnection`
+    /// used by both Bonjour and static-IP modes — ACKs flow back through the normal
+    /// `startReceiving`/`processReceiveBuffer`/`handleIncomingHL7` pipeline into
+    /// `listener?.onAckReceived`, so batch/txn sync-queue retry and ack-tracking apply
+    /// identically regardless of connection mode.
     func sendHL7ToPMS(_ hl7: String, orderId: String? = nil) {
-        guard AppStorageManager.shared.useStaticPMSConnection else {
-            sendClientHL7(hl7)
-            return
-        }
-
-        guard
-            let host = AppStorageManager.shared.pmsIpAddress, !host.isEmpty,
-            let rawPort = AppStorageManager.shared.pmsPort,
-            let port = UInt16(exactly: rawPort)
-        else {
-            print("[HL7][STATIC] sendHL7ToPMS skipped — pmsIpAddress/pmsPort missing or invalid")
-            return
-        }
-
-        let tag = orderId.map { "[order:\($0)] " } ?? ""
-        print("[HL7][TEST] \(tag)Connecting to \(host):\(port) …")
-        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!)
-        let parameters: NWParameters = AppStorageManager.shared.bypassSSL ? .tcp : {
-            let tlsOptions = NWProtocolTLS.Options()
-            sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-            sec_protocol_options_set_verify_block(
-                tlsOptions.securityProtocolOptions,
-                { _, _, completion in completion(true) },
-                DispatchQueue.global()
-            )
-            return NWParameters(tls: tlsOptions)
-        }()
-
-        let connection = NWConnection(to: endpoint, using: parameters)
-        let framed = MLLP.frame(hl7)
-        var didFinish = false
-
-        func finish(_ reason: String) {
-            guard !didFinish else { return }
-            didFinish = true
-            print("[HL7][TEST] Closing connection to \(host):\(port) — \(reason)")
-            connection.cancel()
-        }
-
-        func receiveLoop() {
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, isComplete, error in
-                if let error {
-                    print("[HL7][TEST] Receive FAILED: \(error)")
-                    finish("receive error")
-                    return
-                }
-                if let data, !data.isEmpty {
-                    if let ack = MLLP.unwrap(data) {
-                        print("[HL7][TEST] ACK RECEIVED from \(host):\(port):\n\(ack)")
-                    } else {
-                        print("[HL7][TEST] Raw bytes received (\(data.count)) — not MLLP-framed: \(data as NSData)")
-                    }
-                    finish("ACK received")
-                    return
-                }
-                if isComplete {
-                    print("[HL7][TEST] Connection closed by peer before ACK")
-                    finish("peer closed")
-                    return
-                }
-                receiveLoop()
-            }
-        }
-
-        connection.stateUpdateHandler = { state in
-            print("[HL7][TEST] State → \(state)")
-            switch state {
-            case .ready:
-                print("[HL7][TEST] Connected. Sending HL7 message:\n\(hl7)")
-                connection.send(content: framed, completion: .contentProcessed { error in
-                    if let error {
-                        print("[HL7][TEST] Send FAILED: \(error)")
-                        finish("send error")
-                        return
-                    }
-                    print("[HL7][TEST] Send SUCCESS to \(host):\(port) — waiting for ACK…")
-                    receiveLoop()
-                })
-
-                self.clientQueue.asyncAfter(deadline: .now() + 10) {
-                    if !didFinish { print("[HL7][TEST] No ACK within 10s") }
-                    finish("timeout")
-                }
-            case .failed(let error):
-                print("[HL7][TEST] Connect FAILED: \(error)")
-                finish("connect failed")
-            case .waiting(let error):
-                print("[HL7][TEST] Connect FAILED (waiting/unreachable): \(error)")
-            case .cancelled:
-                print("[HL7][TEST] Connection cancelled")
-            default:
-                break
-            }
-        }
-        connection.start(queue: clientQueue)
+        sendClientHL7(hl7)
     }
 
     /// One-off reachability check for the Settings "Test Connection" button — opens a
@@ -578,7 +466,7 @@ final class Hl7ServiceManager {
         }
 
         let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: nwPort)
-        let connection = NWConnection(to: endpoint, using: Self.testConnectionParameters())
+        let connection = NWConnection(to: endpoint, using: Self.makeConnectionParameters())
 
         var didFinish = false
         func finish(_ result: TestConnectionResult) {
@@ -608,10 +496,13 @@ final class Hl7ServiceManager {
         connection.start(queue: .global())
     }
 
-    /// Standalone TLS/plaintext setup for `testConnection`, mirroring
-    /// `pmsConnectionParameters()` — kept separate since the test can run without a
-    /// live `Hl7ServiceManager` instance.
-    private static func testConnectionParameters() -> NWParameters {
+    /// Single shared TLS/plaintext parameter builder for every PMS connection path —
+    /// Bonjour (`pmsConnectionParameters()`), static-IP, and the Settings "Test
+    /// Connection" check. Accepting the peer's cert unconditionally (`completion(true)`)
+    /// is intentional: PMS integrations use self-signed certs, so this trades cert
+    /// validation for encryption-only TLS. Centralized here so that tradeoff is
+    /// visible and changeable in exactly one place.
+    private static func makeConnectionParameters() -> NWParameters {
         let parameters: NWParameters
         if AppStorageManager.shared.bypassSSL {
             parameters = NWParameters.tcp
@@ -694,34 +585,8 @@ final class Hl7ServiceManager {
     }
 
     private func processReceiveBuffer() {
-        let start: UInt8 = 0x0B
-        let end1:  UInt8 = 0x1C
-        let end2:  UInt8 = 0x0D
-
-        while true {
-            guard let startIndex = receiveBuffer.firstIndex(of: start) else { return }
-
-            guard let endIndex = receiveBuffer.firstIndex(where: { $0 == end1 }) else { return }
-
-            guard startIndex < endIndex else {
-                // Stray end-block byte before the next start-block — drop the
-                // garbage prefix (e.g. TLS/plaintext mismatch) and resync.
-                receiveBuffer.removeSubrange(0...endIndex)
-                continue
-            }
-
-            guard
-                endIndex + 1 < receiveBuffer.count,
-                receiveBuffer[endIndex + 1] == end2
-            else { return }
-
-            let messageData = receiveBuffer[(startIndex + 1)..<endIndex]
-            receiveBuffer.removeSubrange(0...(endIndex + 1))
-
-            guard let hl7 = String(data: messageData, encoding: .utf8) else {
-                print("[HL7][CLIENT] Failed to decode MLLP frame")
-                continue
-            }
+        let frames = MLLP.extractFrames(from: &receiveBuffer)
+        for hl7 in frames {
             handleIncomingHL7(hl7)
         }
     }

@@ -14,6 +14,10 @@ final class HL7TLSServer {
     // Keyed by ObjectIdentifier so removal is O(1).
     private var activeConnections: [ObjectIdentifier: NWConnection] = [:]
 
+    // Per-connection receive buffer — MLLP frames can arrive split across
+    // multiple TCP reads, or several to a read; keyed alongside activeConnections.
+    private var receiveBuffers: [ObjectIdentifier: Data] = [:]
+
     private var onMessage: ((String, String) -> Void)?
     private var onAckSent: ((String) -> Void)?
 
@@ -120,7 +124,9 @@ final class HL7TLSServer {
     }
 
     private func untrack(_ connection: NWConnection) {
-        activeConnections.removeValue(forKey: ObjectIdentifier(connection))
+        let key = ObjectIdentifier(connection)
+        activeConnections.removeValue(forKey: key)
+        receiveBuffers.removeValue(forKey: key)
         Log("HL7 active connections: \(activeConnections.count)")
     }
 
@@ -183,11 +189,18 @@ final class HL7TLSServer {
     // MARK: - MLLP Processing
 
     private func processData(_ data: Data, on connection: NWConnection) {
-        guard let hl7 = MLLP.unwrap(data) else {
-            Log("HL7 received data that is not a valid MLLP frame — ignoring")
-            return
-        }
+        let key = ObjectIdentifier(connection)
+        var buffer = receiveBuffers[key] ?? Data()
+        buffer.append(data)
+        let frames = MLLP.extractFrames(from: &buffer)
+        receiveBuffers[key] = buffer
 
+        for hl7 in frames {
+            handleFrame(hl7, on: connection)
+        }
+    }
+
+    private func handleFrame(_ hl7: String, on connection: NWConnection) {
         let messageId = UUID().uuidString
         let validation = HL7Validator.validate(hl7)
 

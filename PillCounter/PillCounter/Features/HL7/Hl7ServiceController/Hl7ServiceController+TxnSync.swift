@@ -37,8 +37,8 @@ extension Hl7ServiceController {
 
     // MARK: - Called from Hl7EventHandler when ACK arrives
 
-    func onTxnAckReceived(_ hl7: String) {
-        txnSyncQueue?.handleAck(hl7)
+    func onTxnAckReceived(messageId: String?, hl7: String) {
+        txnSyncQueue?.handleAck(messageId: messageId, hl7: hl7)
     }
 
     // MARK: - Called after a transaction is saved in CoreData

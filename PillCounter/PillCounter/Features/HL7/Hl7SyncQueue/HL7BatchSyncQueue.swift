@@ -64,10 +64,13 @@ final class HL7BatchSyncQueue {
         }
     }
 
-    /// Call with the raw ACK string received from the PMS socket.
-    func handleAck(_ ackMessage: String) {
+    /// Call with the raw ACK string received from the PMS socket. `messageId` (MSA-2)
+    /// must match this queue's own in-flight `pendingRequestId` — otherwise the ACK
+    /// belongs to the other sync queue (txn vs batch) and is ignored here.
+    func handleAck(messageId: String?, hl7 ackMessage: String) {
         processingQueue.async { [weak self] in
-            self?.processAck(ackMessage)
+            guard let self, self.pendingRequestId != nil, messageId == self.pendingRequestId else { return }
+            self.processAck(ackMessage)
         }
     }
 

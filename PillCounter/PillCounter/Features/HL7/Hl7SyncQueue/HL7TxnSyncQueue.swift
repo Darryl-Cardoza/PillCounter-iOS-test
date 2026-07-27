@@ -51,9 +51,10 @@ final class HL7TxnSyncQueue {
         }
     }
 
-    func handleAck(_ ackMessage: String) {
+    func handleAck(messageId: String?, hl7 ackMessage: String) {
         processingQueue.async { [weak self] in
-            self?.processAck(ackMessage)
+            guard let self, self.pendingRequestId != nil, messageId == self.pendingRequestId else { return }
+            self.processAck(ackMessage)
         }
     }
 

@@ -16,8 +16,10 @@ struct HL7Config {
     let format: Hl7Format
 
     /// Sourced from `AppStorageManager`: the terminal name identifies this
-    /// station as the sending facility, and the configured PMS host name is
-    /// used as the receiving facility since the PMS routes by that identity.
+    /// station as the sending facility. The receiving facility is the live
+    /// resolved PMS service name (set on connect — see
+    /// `Hl7ServiceManager.handleClientStateChange`), falling back to the
+    /// configured PMS host name if not yet connected.
     /// `format` (server-driven, `auth/me` → `settings.hl7_message_spec`) sets
     /// MSH-3 sending application and which custom Z-segment gets emitted.
     static var current: HL7Config {
@@ -26,7 +28,7 @@ struct HL7Config {
             sendingApplication: format.rawValue,
             sendingFacility: AppStorageManager.shared.selectedTerminalName,
             receivingApplication: "PMS",
-            receivingFacility: AppStorageManager.shared.pmsHostName,
+            receivingFacility: AppStorageManager.shared.resolvedPMSServiceName ?? AppStorageManager.shared.pmsHostName,
             versionId: AppStorageManager.shared.hl7Version,
             format: format
         )
@@ -63,9 +65,7 @@ final class HL7CompletionBuilder {
 
         let allDetails = pillCountDetails(from: txn)
         let details = allDetails.filter { !$0.is_deleted }
-        let totalCount = details
-            .map { Int($0.pill_count) }
-            .reduce(0, +)
+        let totalCount = dispensedCount(txn: txn, details: details)
 
         guard let drug = txn.drug else {
             fatalError("Drug missing")
@@ -73,6 +73,13 @@ final class HL7CompletionBuilder {
 
         let orderId = txn.rx_no ?? "\(txn.txn_id)"
         let transactionOrderId = txn.transaction_order_id ?? orderId
+
+        let imageObx = self.buildImageOBX(
+            txn: txn,
+            details: details,
+            observationId: "DISP_IMG",
+            label: "Dispense Image"
+        )
 
         let message = builder.rdsO13 { scope in
             scope.msh { msh in
@@ -119,25 +126,7 @@ final class HL7CompletionBuilder {
                 }
             }
 
-            let imageObx = self.buildImageOBX(
-                txn: txn,
-                details: details,
-                observationId: "DISP_IMG",
-                label: "Dispense Image"
-            )
             for obx in imageObx {
-                scope.obx { builder in
-                    builder.setId = obx.setId
-                    builder.valueType = obx.valueType
-                    builder.observationId = obx.observationId
-                    builder.observationText = obx.observationText
-                    builder.observationValue = obx.observationValue
-                    builder.resultStatus = obx.resultStatus
-                    builder.units = obx.units
-                }
-            }
-
-            for obx in self.buildDrugFlagOBX(drug: drug, startingSetId: imageObx.count + 1) {
                 scope.obx { builder in
                     builder.setId = obx.setId
                     builder.valueType = obx.valueType
@@ -191,6 +180,9 @@ final class HL7CompletionBuilder {
                     zui.fillNumber = "1"
                     zui.dispensedQuantity = "\(totalCount)"
                     zui.transactionStatus = "CM"
+                    // Placeholder — real value is spliced in as raw text below because
+                    // `^`/`&` inside this string would otherwise come back HL7-escaped
+                    // (see buildZuiDrugImageField doc).
                     zui.drugImage = nil
                     zui.drugLotNumber = nil
                     zui.drugSerialNumber = nil
@@ -212,8 +204,26 @@ final class HL7CompletionBuilder {
             }
         }
 
-        let encoded = message.encode()
+        var encoded = message.encode()
 
+        let drugFlagObx = self.buildDrugFlagOBX(drug: drug, startingSetId: imageObx.count + 1)
+        encoded = insertSegments(
+            drugFlagObx.map { self.rawObxSegment($0) },
+            afterLastPrefixIn: encoded,
+            prefix: "OBX"
+        )
+
+        if config.format == .vivid {
+            let zuiImageField = self.buildZuiDrugImageField(details: details)
+            encoded = self.setZuiField8(zuiImageField, in: encoded)
+            // Hl7Core's `scope.zui { }` DSL call appends ZUI wherever it was invoked in
+            // the builder block (after ZSV) — per Vivid spec, ZUI must sit immediately
+            // after MSH. Move it here rather than reordering the DSL call, since ORC/
+            // PID/RXD must still precede ZSN/ZSV per the RDS^O13 structure.
+            encoded = self.moveZuiAfterMSH(in: encoded)
+        }
+
+        let finalMessage: String
         switch config.format {
         case .eyecon:
             let verifiedByName = String((user?.fname ?? "").prefix(10))
@@ -237,10 +247,31 @@ final class HL7CompletionBuilder {
             zuiFields[20] = ndcNoDash                 // ZUI-21: Stock Bottle Barcode NDC
             let zuiSegment = "ZUI|" + zuiFields.joined(separator: "|")
 
-            return insertSegment(zuiSegment, afterMSHIn: encoded)
+            finalMessage = insertSegment(zuiSegment, afterMSHIn: encoded)
         default:
+            finalMessage = encoded
+        }
+
+        guard self.validateHl7Message(finalMessage) else {
+            Log("HL7: buildCompletionMessage validation failed — refusing to send")
+            return ""
+        }
+
+        return finalMessage
+    }
+
+    /// Relocates the ZUI segment (wherever the DSL placed it) to immediately after
+    /// MSH, per Vivid spec. No-op if no ZUI segment is present.
+    private func moveZuiAfterMSH(in encoded: String) -> String {
+        var segments = encoded.components(separatedBy: "\r")
+        guard let zuiIndex = segments.firstIndex(where: { $0.hasPrefix("ZUI") }),
+              let mshIndex = segments.firstIndex(where: { $0.hasPrefix("MSH") }) else {
             return encoded
         }
+        let zuiSegment = segments.remove(at: zuiIndex)
+        let insertAt = zuiIndex < mshIndex ? mshIndex : mshIndex + 1
+        segments.insert(zuiSegment, at: insertAt)
+        return segments.joined(separator: "\r")
     }
 
     /// Inserts `segment` immediately after the MSH segment in an already-encoded
@@ -253,6 +284,103 @@ final class HL7CompletionBuilder {
         }
         segments.insert(segment, at: mshIndex + 1)
         return segments.joined(separator: "\r")
+    }
+
+    /// Inserts `segments` after the last segment whose tag starts with `prefix`
+    /// (falls back to end of message if none found). Used to raw-append the
+    /// Controlled/Hazardous OBX rows: the Hl7Core `OBXBuilder` writes
+    /// `observationId`/`observationValue` into a single unescaped subcomponent,
+    /// so any `^` passed through it comes back HL7-escaped as `\S\` instead of
+    /// staying a literal component separator. Building these two rows as raw
+    /// pipe-delimited text sidesteps that until the builder gains component-level
+    /// setters for OBX-3.2/3.3 and OBX-5.2/5.3.
+    private func insertSegments(_ newSegments: [String], afterLastPrefixIn encoded: String, prefix: String) -> String {
+        var segments = encoded.components(separatedBy: "\r")
+        let insertAt = segments.lastIndex(where: { $0.hasPrefix(prefix) }).map { $0 + 1 } ?? segments.count
+        segments.insert(contentsOf: newSegments, at: insertAt)
+        return segments.joined(separator: "\r")
+    }
+
+    /// Builds ZUI-8 (drugImage): one `^`-separated repetition per tray photo,
+    /// each repetition `<batch>&<count>&<base64>` where batch/count are
+    /// 1-based labels of the form `1B{batch}` / `1C{count}` per the Vivid spec.
+    /// This app's `PillCountTransactionDetailsEntity` has no batch/count number
+    /// of its own (batching is a separate INR flow), so every image is reported
+    /// as batch 1, with the count number set to its 1-based position among the
+    /// non-deleted details.
+    private func buildZuiDrugImageField(details: [PillCountTransactionDetailsEntity]) -> String {
+        let repetitions: [String] = details.enumerated().compactMap { index, detail in
+            // `image_path` stores only the filename of an AES-GCM encrypted file under
+            // Documents/ (see PhotoFileManager.saveImage) — decrypt before base64
+            // encoding, or the PMS receives ciphertext instead of a JPEG.
+            guard let fileName = detail.image_path,
+                  let data = PhotoFileManager.shared.loadDecryptedData(from: fileName) else { return nil }
+            return "1B1&1C\(index + 1)&\(data.base64EncodedString())"
+        }
+        return repetitions.joined(separator: "^")
+    }
+
+    /// Sets ZUI field 8 (drugImage) to raw, unescaped `value` in an already-encoded
+    /// message. The Hl7Core `ZUIDispenseBuilder` writes field 8 through a single
+    /// escaped subcomponent, so the `^`/`&` structure required by the multi-image
+    /// packing above would come back HL7-escaped if set via the DSL — same class
+    /// of issue as the Controlled/Hazardous OBX rows (see `rawObxSegment`).
+    private func setZuiField8(_ value: String, in encoded: String) -> String {
+        var segments = encoded.components(separatedBy: "\r")
+        guard let zuiIndex = segments.firstIndex(where: { $0.hasPrefix("ZUI") }) else {
+            return encoded
+        }
+        var fields = segments[zuiIndex].components(separatedBy: "|")
+        while fields.count <= 8 { fields.append("") }
+        fields[8] = value
+        segments[zuiIndex] = fields.joined(separator: "|")
+        return segments.joined(separator: "\r")
+    }
+
+    /// Guards against sending a malformed message: MSH-12 (version id) and the
+    /// other MSH required fields must be non-empty. An HL7 message with a blank
+    /// version or missing required MSH fields must never reach the PMS.
+    private func validateHl7Message(_ encoded: String) -> Bool {
+        let segments = encoded.components(separatedBy: "\r")
+        guard let msh = segments.first(where: { $0.hasPrefix("MSH") }) else {
+            Log("HL7 validation: no MSH segment")
+            return false
+        }
+
+        let fields = msh.components(separatedBy: "|")
+        // fields[0] == "MSH", fields[1] = encoding characters (MSH-2).
+        // fields[6] = MSH-7 dateTimeOfMessage, [8] = MSH-9 messageType,
+        // [9] = MSH-10 messageControlId, [10] = MSH-11 processingId,
+        // [11] = MSH-12 versionId. Sending/receiving app+facility (MSH-3..6)
+        // are legitimately blank under static-IP PMS connection mode (no
+        // terminal name / PMS host name configured), so not required here.
+        let requiredMshFieldIndexes = [6, 8, 9, 10, 11]
+        for index in requiredMshFieldIndexes {
+            guard index < fields.count, !fields[index].trimmingCharacters(in: .whitespaces).isEmpty else {
+                Log("HL7 validation: MSH field \(index) is empty")
+                return false
+            }
+        }
+
+        guard !self.versionId.trimmingCharacters(in: .whitespaces).isEmpty else {
+            Log("HL7 validation: version id is empty")
+            return false
+        }
+
+        return true
+    }
+
+    /// Raw OBX-8 field layout matching the PMS spec exactly:
+    /// `OBX|set|CE|ID^Text^L||Value^ValueText^HL70136||||||F`
+    private func rawObxSegment(_ obx: ObxRow) -> String {
+        let observationId = obx.observationId // e.g. "CONTROLLED_SUBSTANCE^Controlled Substance^L"
+        var fields = Array(repeating: "", count: 11)
+        fields[0] = obx.setId
+        fields[1] = obx.valueType
+        fields[2] = observationId
+        fields[4] = obx.observationValue
+        fields[10] = obx.resultStatus
+        return "OBX|" + fields.joined(separator: "|")
     }
 
     // MARK: - Inventory Response (INR U06, INV + ZAD)
@@ -307,7 +435,8 @@ final class HL7CompletionBuilder {
             }
 
             let grandTotal = grouped.values.reduce(Int32(0)) { $0 + $1.opened + $1.sealed }
-            for note in self.buildCommonNotes(batch: batch, totalCount: grandTotal) {
+            let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
+            for note in self.buildCommonNotes(batch: batch, totalCount: ndcCount) {
                 scope.nte { nte in
                     nte.setId = note.setId
                     nte.sourceOfComment = note.sourceOfComment
@@ -316,12 +445,11 @@ final class HL7CompletionBuilder {
                 }
             }
 
-            var index: Int32 = 1
+            var zinSetId: Int32 = 1
             for (key, value) in grouped {
                 let total = value.opened + value.sealed
 
                 scope.inv { inv in
-//                    inv.setId = "\(index)"
                     // INV-2.1 (substance code / NDC) has no dedicated property on the
                     // current INVBuilder — reusing inventoryLocationIdentifier as a
                     // stopgap until the library exposes a proper substanceCode field.
@@ -333,16 +461,38 @@ final class HL7CompletionBuilder {
                     inv.expirationDate = key.expiry.isEmpty ? nil : key.expiry
                 }
 
-                scope.zad { zad in
-                    zad.setId = "\(index)"
-                    zad.adjustmentType = "CYCLE_COUNT"
-                    zad.adjustmentQuantity = "\(total)"
-                    zad.adjustmentReason = ZadReasonCode.shared.CYCLE_COUNT
-                    zad.adjustmentDateTime = now
-                    zad.approvedBy = user?.fname ?? "Unknown"
+                // ZIN — per-NDC/lot opened vs sealed bottle breakdown (custom segment,
+                // see HL7Message+Segments.swift). One row per non-zero bucket.
+                if value.opened > 0 {
+                    scope.zin { zin in
+                        zin.setId = "\(zinSetId)"
+                        zin.dispenseType = "OPENED"
+                        zin.quantity = "\(value.opened)"
+                        zin.lotNumber = key.lot.isEmpty ? nil : key.lot
+                        zin.expiry = key.expiry.isEmpty ? nil : key.expiry
+                    }
+                    zinSetId += 1
                 }
+                if value.sealed > 0 {
+                    scope.zin { zin in
+                        zin.setId = "\(zinSetId)"
+                        zin.dispenseType = "SEALED"
+                        zin.quantity = "\(value.sealed)"
+                        zin.lotNumber = key.lot.isEmpty ? nil : key.lot
+                        zin.expiry = key.expiry.isEmpty ? nil : key.expiry
+                    }
+                    zinSetId += 1
+                }
+            }
 
-                index += 1
+            // One ZAD per message (batch-level adjustment record), not per INV line.
+            scope.zad { zad in
+                zad.setId = "1"
+                zad.adjustmentType = "CYCLE_COUNT"
+                zad.adjustmentQuantity = "\(grandTotal)"
+                zad.adjustmentReason = ZadReasonCode.shared.CYCLE_COUNT
+                zad.adjustmentDateTime = now
+                zad.approvedBy = user?.fname ?? "Unknown"
             }
         }
 
@@ -396,7 +546,8 @@ private extension HL7CompletionBuilder {
             }
 
             // let observationValue = "count=\(count)|type=\(type)|image=\(fileName)"
-            let observationValue = detail.image_path.map { "/images/\($0)" } ?? ""
+             let observationValue = detail.image_path.map { "/images/\($0)" } ?? ""
+//            let observationValue = fileName
 
             obxList.append(
                 ObxRow(
@@ -432,7 +583,8 @@ private extension HL7CompletionBuilder {
                     observationId: nextImgId(),
                     observationText: "Barcode Image",
                     // observationValue: "count=0|type=\(ControlledStep.scan.imageLabel)|image=\(fileName)",
-                    observationValue: "/images/\(barcodePath)",
+                    // observationValue: "/images/\(barcodePath)",
+                    observationValue: fileName,
                     resultStatus: "F",
                     units: nil
                 )
@@ -638,5 +790,23 @@ private extension HL7CompletionBuilder {
     ) -> [PillCountTransactionDetailsEntity] {
         return (txn.pillCountTransactionDetails as? Set<PillCountTransactionDetailsEntity>)
             .map { Array($0) } ?? []
+    }
+
+    /// Actual dispensed amount for the completion message. The controlled
+    /// workflow (`.containerInitiate`, `.vial`, `.containerPending`, ...)
+    /// writes a detail row per step, so summing every row in `details`
+    /// double/triple-counts the same pills across steps. `.targetVerification`
+    /// is the step whose count represents what was actually dispensed — use
+    /// it when present, falling back to the full sum for the simple flows
+    /// that only ever write one step's rows.
+    private func dispensedCount(
+        txn: PillCountTransactionEntity,
+        details: [PillCountTransactionDetailsEntity]
+    ) -> Int {
+        let verificationRows = details.filter { $0.type == ControlledStep.targetVerification.rawValue }
+        guard !verificationRows.isEmpty else {
+            return details.map { Int($0.pill_count) }.reduce(0, +)
+        }
+        return verificationRows.map { Int($0.pill_count) }.reduce(0, +)
     }
 }

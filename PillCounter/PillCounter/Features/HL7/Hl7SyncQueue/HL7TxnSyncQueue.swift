@@ -29,7 +29,19 @@ final class HL7TxnSyncQueue {
     private var queue: [TxnSyncQueueItem] = []
     private var isSending = false
     private var pendingRequestId: String?
+    /// MSH-10 (messageControlId) of the in-flight HL7 message — this is what the PMS
+    /// echoes back in MSA-2, NOT `pendingRequestId` (an internal `"TXN_<id>"` dedup
+    /// key). ACKs must be matched against this, or every real ACK is misread as
+    /// "not mine" and every send times out even when the PMS answered correctly.
+    private var pendingAckMessageId: String?
     private var ackTimeoutWork: DispatchWorkItem?
+
+    /// requestIds that failed (NACK or ACK timeout) in the current connection session.
+    /// Parked items are skipped by `loadAndEnqueuePending` until `resetParkedState()`
+    /// runs — one retry attempt per connection, no continuous resend hammering the
+    /// PMS. Cleared on reconnect (`Hl7ServiceController.onClientConnected`) or an
+    /// explicit user-initiated retry.
+    private var parkedRequestIds: Set<String> = []
 
     private let ackTimeoutSeconds: TimeInterval = 10
     private let processingQueue = DispatchQueue(label: "hl7.txn.sync.queue", qos: .utility)
@@ -51,9 +63,17 @@ final class HL7TxnSyncQueue {
         }
     }
 
+    /// Clears parked (failed-attempt) state so previously-failed txns are eligible
+    /// for one more send attempt. Call on reconnect and on user-initiated manual retry.
+    func resetParkedState() {
+        processingQueue.async { [weak self] in
+            self?.parkedRequestIds.removeAll()
+        }
+    }
+
     func handleAck(messageId: String?, hl7 ackMessage: String) {
         processingQueue.async { [weak self] in
-            guard let self, self.pendingRequestId != nil, messageId == self.pendingRequestId else { return }
+            guard let self, self.pendingAckMessageId != nil, messageId == self.pendingAckMessageId else { return }
             self.processAck(ackMessage)
         }
     }
@@ -72,6 +92,11 @@ final class HL7TxnSyncQueue {
             
             let txnId = txn.txn_id
             let requestId = resolvedRequestId(for: txn)
+
+            guard !parkedRequestIds.contains(requestId) else {
+                print("⏸️ [TxnQueue] Skipping parked (already failed this session):", requestId)
+                continue
+            }
 
             guard !queue.contains(where: { $0.requestId == requestId }) else {
                 print("⚠️ [TxnQueue] Duplicate requestId:", requestId)
@@ -113,8 +138,16 @@ final class HL7TxnSyncQueue {
             return
         }
 
+        guard let ackMessageId = Self.extractMessageControlId(from: hl7) else {
+            print("❌ [TxnQueue] Could not read MSH-10 from built message — cannot correlate ACK, skipping send")
+            queue.removeFirst()
+            processNext()
+            return
+        }
+
         isSending = true
         pendingRequestId = item.requestId
+        pendingAckMessageId = ackMessageId
 
         DispatchQueue.main.async {
             manager.sendHL7ToPMS(hl7, orderId: item.requestId)
@@ -133,7 +166,8 @@ final class HL7TxnSyncQueue {
         if isPositiveAck(message) {
             markCurrentTxnSynced()
         } else {
-            print("❌ [TxnQueue] Negative/invalid ACK — leaving txn unsynced:", requestId)
+            print("❌ [TxnQueue] Negative/invalid ACK — parking txn until next connect/retry:", requestId)
+            parkedRequestIds.insert(requestId)
         }
         advanceQueue()
     }
@@ -153,6 +187,7 @@ final class HL7TxnSyncQueue {
     private func advanceQueue() {
         isSending = false
         pendingRequestId = nil
+        pendingAckMessageId = nil
         queue.removeFirst()
         processNext()
     }
@@ -163,7 +198,8 @@ final class HL7TxnSyncQueue {
         let work = DispatchWorkItem { [weak self] in
             self?.processingQueue.async {
                 guard let self, self.pendingRequestId == requestId else { return }
-                print("⏰ [TxnQueue] ACK timeout — leaving txn unsynced:", requestId)
+                print("⏰ [TxnQueue] ACK timeout — parking txn until next connect/retry:", requestId)
+                self.parkedRequestIds.insert(requestId)
                 self.advanceQueue()
             }
         }
@@ -183,5 +219,19 @@ final class HL7TxnSyncQueue {
 
     private func resolvedRequestId(for txn: PillCountTransactionEntity) -> String {
         return "TXN_\(txn.txn_id)"
+    }
+
+    /// Reads MSH-10 (messageControlId) from an already-encoded HL7 message —
+    /// the value the PMS echoes back in MSA-2 of its ACK. fields[9] per the same
+    /// MSH layout documented in HL7MessageBuilder.validateHl7Message.
+    static func extractMessageControlId(from encoded: String) -> String? {
+        guard let msh = encoded.components(separatedBy: "\r").first(where: { $0.hasPrefix("MSH") }) else {
+            return nil
+        }
+        let fields = msh.components(separatedBy: "|")
+        guard fields.count > 9, !fields[9].trimmingCharacters(in: .whitespaces).isEmpty else {
+            return nil
+        }
+        return fields[9]
     }
 }

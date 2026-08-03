@@ -204,7 +204,8 @@ class UserViewModel: ObservableObject {
                 }
 
                 if let hl7Version = result.data?.settings?.hl7Version
-                    ?? result.data?.user?.settings?.hl7Version {
+                    ?? result.data?.user?.settings?.hl7Version,
+                   !hl7Version.trimmingCharacters(in: .whitespaces).isEmpty {
                     AppStorageManager.shared.hl7Version = hl7Version
                 }
 

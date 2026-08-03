@@ -144,6 +144,8 @@ final class Hl7ServiceController: ObservableObject {
 
     func onClientConnected() {
         Log("📡 [HL7] onClientConnected — starting batch + txn queues")
+        batchSyncQueue?.resetParkedState()
+        txnSyncQueue?.resetParkedState()
         batchSyncQueue?.enqueueUnsynced()
         txnSyncQueue?.enqueueUnsynced()
     }

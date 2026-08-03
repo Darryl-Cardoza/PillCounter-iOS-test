@@ -37,8 +37,19 @@ final class HL7BatchSyncQueue {
     // MARK: State
     private var queue: [SyncQueueItem] = []
     private var isSending = false
-    private var pendingRequestId: String?              // ACK correlation
+    private var pendingRequestId: String?              // internal dedup/park key
+    /// MSH-10 (messageControlId) of the in-flight HL7 message — the PMS echoes this
+    /// back in MSA-2, NOT `pendingRequestId` (an internal dedup key). Must match
+    /// against this, or every real ACK reads as "not mine" and every send times out.
+    private var pendingAckMessageId: String?
     private var ackTimeoutWork: DispatchWorkItem?
+
+    /// requestIds that failed (NACK or ACK timeout) in the current connection session.
+    /// Parked items are skipped by `loadAndEnqueuePending` until `resetParkedState()`
+    /// runs — one retry attempt per connection, no continuous resend hammering the
+    /// PMS. Cleared on reconnect (`Hl7ServiceController.onClientConnected`) or an
+    /// explicit user-initiated retry.
+    private var parkedRequestIds: Set<String> = []
 
     // MARK: Config
     private let ackTimeoutSeconds: TimeInterval = 10
@@ -64,12 +75,20 @@ final class HL7BatchSyncQueue {
         }
     }
 
+    /// Clears parked (failed-attempt) state so previously-failed batches are eligible
+    /// for one more send attempt. Call on reconnect and on user-initiated manual retry.
+    func resetParkedState() {
+        processingQueue.async { [weak self] in
+            self?.parkedRequestIds.removeAll()
+        }
+    }
+
     /// Call with the raw ACK string received from the PMS socket. `messageId` (MSA-2)
     /// must match this queue's own in-flight `pendingRequestId` — otherwise the ACK
     /// belongs to the other sync queue (txn vs batch) and is ignored here.
     func handleAck(messageId: String?, hl7 ackMessage: String) {
         processingQueue.async { [weak self] in
-            guard let self, self.pendingRequestId != nil, messageId == self.pendingRequestId else { return }
+            guard let self, self.pendingAckMessageId != nil, messageId == self.pendingAckMessageId else { return }
             self.processAck(ackMessage)
         }
     }
@@ -86,6 +105,11 @@ final class HL7BatchSyncQueue {
             print("🔍 [Queue] Checking batch:", batch.batch_id,
                   "| reqId:", requestId,
                   "| is_synced:", batch.is_synced)
+
+            guard !parkedRequestIds.contains(requestId) else {
+                print("⏸️ [Queue] Skipping parked (already failed this session):", requestId)
+                continue
+            }
 
             // Deduplicate — never add same requestId twice
             guard !queue.contains(where: { $0.requestId == requestId }) else {
@@ -143,8 +167,16 @@ final class HL7BatchSyncQueue {
         print("📡 [HL7] Sending batch:", item.batchId,
               "| requestId:", item.requestId)
 
-        isSending        = true
-        pendingRequestId = item.requestId
+        guard let ackMessageId = HL7TxnSyncQueue.extractMessageControlId(from: hl7) else {
+            print("❌ [Queue] Could not read MSH-10 from built message — cannot correlate ACK, skipping send")
+            queue.removeFirst()
+            processNext()
+            return
+        }
+
+        isSending            = true
+        pendingRequestId     = item.requestId
+        pendingAckMessageId  = ackMessageId
 
         DispatchQueue.main.async { [weak self] in
             self?.hl7Manager?.sendHL7ToPMS(hl7, orderId: item.batchId.description)
@@ -168,7 +200,8 @@ final class HL7BatchSyncQueue {
         if isPositiveAck(message) {
             markCurrentBatchSynced()
         } else {
-            print("❌ [Queue] Negative/invalid ACK — leaving batch unsynced:", requestId)
+            print("❌ [Queue] Negative/invalid ACK — parking batch until next connect/retry:", requestId)
+            parkedRequestIds.insert(requestId)
         }
         advanceQueue()
     }
@@ -185,8 +218,9 @@ final class HL7BatchSyncQueue {
     }
 
     private func advanceQueue() {
-        isSending        = false
-        pendingRequestId = nil
+        isSending           = false
+        pendingRequestId    = nil
+        pendingAckMessageId = nil
         if !queue.isEmpty { queue.removeFirst() }
         processNext()
     }
@@ -197,7 +231,8 @@ final class HL7BatchSyncQueue {
         let work = DispatchWorkItem { [weak self] in
             self?.processingQueue.async {
                 guard let self, self.pendingRequestId == requestId else { return }
-                print("⏰ [Queue] ACK timeout — leaving batch unsynced:", requestId)
+                print("⏰ [Queue] ACK timeout — parking batch until next connect/retry:", requestId)
+                self.parkedRequestIds.insert(requestId)
                 self.advanceQueue()
             }
         }

@@ -361,13 +361,14 @@ enum MLLP {
                 continue
             }
 
-            guard
-                endIndex + 1 < buffer.count,
-                buffer[endIndex + 1] == end2
-            else { return messages }
+            // Trailing CR (end2) after the FS (end1) is standard MLLP but some
+            // senders (e.g. MicroMerchant/VividProcessor) omit it — don't block
+            // forever waiting for a byte that may never come.
+            let hasTrailingCR = endIndex + 1 < buffer.count && buffer[endIndex + 1] == end2
+            let consumeThrough = hasTrailingCR ? endIndex + 1 : endIndex
 
             let payload = buffer[(startIndex + 1)..<endIndex]
-            buffer.removeSubrange(0...(endIndex + 1))
+            buffer.removeSubrange(0...consumeThrough)
 
             if let hl7 = String(data: payload, encoding: .utf8) {
                 messages.append(hl7)

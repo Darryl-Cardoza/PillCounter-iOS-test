@@ -195,7 +195,10 @@ final class AppStorageManager {
     /// (`auth/me` → `settings.hl7_version`, e.g. "2.3.1"). Falls back to "2.3"
     /// when never set (fresh install / no PMS integration yet).
     var hl7Version: String {
-        get { Keychain.getPassword(for: AppStorageKeys.hl7Version) ?? "2.3" }
+        get {
+            let stored = Keychain.getPassword(for: AppStorageKeys.hl7Version)
+            return (stored?.trimmingCharacters(in: .whitespaces).isEmpty ?? true) ? "2.3" : stored!
+        }
         set { Keychain.savePassword(newValue, for: AppStorageKeys.hl7Version) }
     }
 
@@ -221,6 +224,13 @@ final class AppStorageManager {
         get { Keychain.getPassword(for: AppStorageKeys.pmsHostName) ?? "" }
         set { Keychain.savePassword(newValue, for: AppStorageKeys.pmsHostName) }
     }
+
+    /// Live Bonjour/static-connect service name resolved when the HL7 client
+    /// connects (`Hl7ServiceManager.currentServiceName`). Runtime-only — not
+    /// persisted — since it reflects the currently connected PMS instance,
+    /// not a user-configured setting. Used as MSH-4 (receiving facility) so
+    /// outgoing messages identify the actual connected receiver.
+    var resolvedPMSServiceName: String?
 
     var pillCounterHostName: String {
         get { Keychain.getPassword(for: AppStorageKeys.pillCounterHostName) ?? "" }

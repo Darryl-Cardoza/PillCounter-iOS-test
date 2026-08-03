@@ -68,6 +68,10 @@ final class Hl7ServiceManager {
     private var currentInterface: NWInterface?
     private var currentServiceName: String?
 
+    /// HL7 payload queued by `sendHL7ToPMS` while a reconnect is in flight — flushed
+    /// once the client connection reaches `.ready` (see `handleClientStateChange`).
+    private var pendingOutboundHL7: String?
+
     // MARK: - Events
     weak var listener: Hl7EventListener?
 
@@ -350,10 +354,20 @@ final class Hl7ServiceManager {
         switch state {
         case .ready:
             isClientConnected = true
+            AppStorageManager.shared.resolvedPMSServiceName = currentServiceName
+            if let path = clientConnection?.currentPath,
+               let endpoint = path.remoteEndpoint,
+               case let .hostPort(host, port) = endpoint {
+                print("[HL7][CLIENT] Resolved endpoint → host: \(host), port: \(port)")
+            } else {
+                print("[HL7][CLIENT] Resolved endpoint → unavailable (remoteEndpoint nil)")
+            }
             listener?.onClientConnected(serviceName: currentServiceName ?? "")
-            startHeartbeat()
+            // Heartbeat disabled — bare MSH\r keepalive was confusing PMS-side parsers.
+            // startHeartbeat()
             startReceiving()
             startServerIfNeeded()
+            flushPendingOutboundHL7()
 
         case .failed(let error):
             print("[HL7][CLIENT] Failed: \(error)")
@@ -446,7 +460,45 @@ final class Hl7ServiceManager {
     /// `startReceiving`/`processReceiveBuffer`/`handleIncomingHL7` pipeline into
     /// `listener?.onAckReceived`, so batch/txn sync-queue retry and ack-tracking apply
     /// identically regardless of connection mode.
+    ///
+    /// If already connected, sends immediately on the live connection. If not,
+    /// queues `hl7` and kicks off a (re)connect via `startPMSConnection()` —
+    /// respecting the same static-IP vs Bonjour flag used at launch — then
+    /// flushes the queued payload once the connection reaches `.ready`.
     func sendHL7ToPMS(_ hl7: String, orderId: String? = nil) {
+        guard isClientConnected, clientConnection != nil else {
+            print("[HL7][CLIENT] Not connected — queuing HL7 and reconnecting")
+            pendingOutboundHL7 = hl7
+            reconnectIfNeeded()
+            return
+        }
+        sendClientHL7(hl7)
+    }
+
+    /// Kicks off a (re)connect using the same mode selection as `startPMSConnection()`,
+    /// unless one is already in progress. Does NOT re-run `startMonitoringNetwork()`/
+    /// re-`start()` the `NWPathMonitor` (already running since init and not safe to
+    /// start twice) — instead re-triggers the connect step directly for each mode:
+    /// static dials the PMS again, Bonjour re-browses so `connectToResult` fires once
+    /// the service reappears.
+    private func reconnectIfNeeded() {
+        guard !isConnectingOrConnected else {
+            print("[HL7][CLIENT] Reconnect already in progress")
+            return
+        }
+
+        if AppStorageManager.shared.useStaticPMSConnection {
+            startServerIfNeeded()
+            connectDirectToPMS()
+        } else {
+            startBrowsing()
+        }
+    }
+
+    private func flushPendingOutboundHL7() {
+        guard let hl7 = pendingOutboundHL7 else { return }
+        pendingOutboundHL7 = nil
+        print("[HL7][CLIENT] Flushing queued HL7 after reconnect")
         sendClientHL7(hl7)
     }
 

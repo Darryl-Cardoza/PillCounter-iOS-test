@@ -12,6 +12,7 @@
 		791DCB082FD2D6BB00DBB7AE /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 791DCB072FD2D6BB00DBB7AE /* FirebaseMessaging */; };
 		793AFA5C30065D89006598D4 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 793AFA5B30065D89006598D4 /* Hl7Core */; };
 		793AFCCA300661DF006598D4 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 793AFCC9300661DF006598D4 /* Hl7Core */; };
+		797DB21F3018A308003C57D4 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 797DB21E3018A308003C57D4 /* Hl7Core */; };
 		7984080930176333001DECB3 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 7984080830176333001DECB3 /* Hl7Core */; };
 		7984080C30176606001DECB3 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 7984080B30176606001DECB3 /* Hl7Core */; };
 		7984080F301767D0001DECB3 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 7984080E301767D0001DECB3 /* Hl7Core */; };
@@ -109,6 +110,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				797DB21F3018A308003C57D4 /* Hl7Core in Frameworks */,
 				791DCB082FD2D6BB00DBB7AE /* FirebaseMessaging in Frameworks */,
 				88E39FAB2FB31FA500D6DEA2 /* CoreAudio.framework in Frameworks */,
 				79C738492FF6730400E82B4E /* Hl7Core in Frameworks */,
@@ -236,6 +238,7 @@
 				7984080830176333001DECB3 /* Hl7Core */,
 				7984080B30176606001DECB3 /* Hl7Core */,
 				7984080E301767D0001DECB3 /* Hl7Core */,
+				797DB21E3018A308003C57D4 /* Hl7Core */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -325,7 +328,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				7984080D301767D0001DECB3 /* XCLocalSwiftPackageReference "../../swiftpackage" */,
+				797DB21D3018A308003C57D4 /* XCLocalSwiftPackageReference "../../DISPENSESURE/swiftpackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -873,9 +876,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		7984080D301767D0001DECB3 /* XCLocalSwiftPackageReference "../../swiftpackage" */ = {
+		797DB21D3018A308003C57D4 /* XCLocalSwiftPackageReference "../../DISPENSESURE/swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../swiftpackage;
+			relativePath = ../../DISPENSESURE/swiftpackage;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -906,6 +909,10 @@
 			productName = Hl7Core;
 		};
 		793AFCC9300661DF006598D4 /* Hl7Core */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Hl7Core;
+		};
+		797DB21E3018A308003C57D4 /* Hl7Core */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Hl7Core;
 		};

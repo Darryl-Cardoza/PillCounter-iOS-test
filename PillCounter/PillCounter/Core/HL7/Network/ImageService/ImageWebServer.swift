@@ -288,8 +288,9 @@ final class ImageWebServer {
         }
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
 
+        let crc = ZipArchiveWriter.crc32(ofWholeFile: decrypted)
         let base64 = decrypted.base64EncodedString(options: [])
-        let json = #"{"success":true,"file":"\#(fileName)","base64":"\#(base64)"}"#
+        let json = #"{"success":true,"file":"\#(fileName)","crc":\#(crc),"base64":"\#(base64)"}"#
         return (httpResponse(json), [fileName])
     }
 

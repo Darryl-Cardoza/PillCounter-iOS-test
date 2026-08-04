@@ -266,18 +266,24 @@ final class Hl7ServiceManager {
         isConnectingOrConnected = true
         print("[HL7][CLIENT] Connecting to PMS service: \(name)")
 
-        let tlsOptions = NWProtocolTLS.Options()
-        sec_protocol_options_set_min_tls_protocol_version(
-            tlsOptions.securityProtocolOptions, .TLSv12
-        )
-        // DEV: accept self-signed cert from PMS
-        sec_protocol_options_set_verify_block(
-            tlsOptions.securityProtocolOptions,
-            { _, _, completion in completion(true) },
-            DispatchQueue.global()
-        )
-
-        let parameters = NWParameters(tls: tlsOptions)
+        // Server-driven (`auth/me` -> `settings.bypass_ssl`, default true): when
+        // enabled, skip TLS entirely and connect over plain TCP. When disabled,
+        // negotiate TLS (self-signed PMS cert accepted, as before).
+        let parameters: NWParameters
+        if AppStorageManager.shared.bypassSSL {
+            parameters = NWParameters.tcp
+        } else {
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(
+                tlsOptions.securityProtocolOptions, .TLSv12
+            )
+            sec_protocol_options_set_verify_block(
+                tlsOptions.securityProtocolOptions,
+                { _, _, completion in completion(true) },
+                DispatchQueue.global()
+            )
+            parameters = NWParameters(tls: tlsOptions)
+        }
         parameters.includePeerToPeer = true
 
         let connection = NWConnection(to: result.endpoint, using: parameters)
@@ -440,9 +446,18 @@ final class Hl7ServiceManager {
         let end2:  UInt8 = 0x0D
 
         while true {
+            guard let startIndex = receiveBuffer.firstIndex(of: start) else { return }
+
+            guard let endIndex = receiveBuffer.firstIndex(where: { $0 == end1 }) else { return }
+
+            guard startIndex < endIndex else {
+                // Stray end-block byte before the next start-block — drop the
+                // garbage prefix (e.g. TLS/plaintext mismatch) and resync.
+                receiveBuffer.removeSubrange(0...endIndex)
+                continue
+            }
+
             guard
-                let startIndex = receiveBuffer.firstIndex(of: start),
-                let endIndex   = receiveBuffer.firstIndex(where: { $0 == end1 }),
                 endIndex + 1 < receiveBuffer.count,
                 receiveBuffer[endIndex + 1] == end2
             else { return }

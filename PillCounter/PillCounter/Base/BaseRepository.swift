@@ -106,6 +106,9 @@ extension BaseRepositoryProtocol {
                     throw APIError.forbidden
                 case 404:
                     throw APIError.notFound
+                case 429:
+                    // Rate-limited — never retry immediately, that only makes it worse.
+                    throw APIError.tooManyRequests
                 case 500 where attempt < maxRetries:
                     attempt += 1
                     continue
@@ -115,6 +118,11 @@ extension BaseRepositoryProtocol {
                     throw APIError.serverError(statusCode: httpResponse.statusCode)
                 }
 
+            } catch let error as APIError {
+                // A definite HTTP-status error (thrown above) is not transient —
+                // retrying it just repeats the same rejected request. Only the
+                // network-level catch below (URLSession failure) should retry.
+                throw error
             } catch {
                 if attempt < maxRetries {
                     attempt += 1

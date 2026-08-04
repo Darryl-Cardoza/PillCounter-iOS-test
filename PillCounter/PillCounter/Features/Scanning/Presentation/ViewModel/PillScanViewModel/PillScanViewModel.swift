@@ -27,6 +27,13 @@ class PillScanViewModel: ObservableObject {
 
     @Published var isDrugFound: Bool?
 
+    /// Filename of the barcode image saved for the scan currently being confirmed
+    /// (set by `updateSubstitutedDrug`/`createTransaction`/`updaetTransaction` right
+    /// after saving to disk). Consumed once by `stageFirstBottleIfNeeded` after NDC
+    /// verification lands, so the first `BottleInfo` gets the same image without
+    /// saving it to disk a second time.
+    var pendingBarcodeImagePath: String?
+
     // set the target count for fixed or dispense count
     @Published var targetCount: [String] = Array(repeating: "", count: 4)
 
@@ -135,7 +142,17 @@ class PillScanViewModel: ObservableObject {
     @Published var ndcMismatchRestartFlow = false
     @Published var shouldAutoProceedToCount = false
     @Published var isNdcAdded: Bool = false
-    
+
+    // MARK: Multi-bottle tracking (dispense-only)
+    @Published var showAddBottlePopup: Bool = false
+    @Published var showReplaceBottlePopup: Bool = false
+    var pendingBottleRescan: BottleInfo?
+    var isProcessingBottleRescan: Bool = false
+    /// Snapshot captured at the moment the barcode was detected — used for the
+    /// confirmation popup instead of re-capturing at confirm-tap time, so a camera
+    /// move while the popup is up can't swap in the wrong frame.
+    var pendingBottleRescanImage: UIImage?
+
     // MARK: Stock Count State
     @Published var addCurrentOpenPillCount: Int = 0
 
@@ -233,29 +250,19 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        // Save Image using Helper if it exists
-        var savedPath = ""
-
+        // Save Image using Helper if it exists; stashed for stageFirstBottleIfNeeded
+        // to attach to the transaction's first BottleInfo once NDC-verified.
         if let img = barcodeImage {
-            if let path = PhotoFileManager.shared.saveImage(img) {
-                savedPath = path
-            } else {
-                print("Failed to save image")
-            }
-
-        } else {
-            print("barcodeImage is nil")
+            pendingBarcodeImagePath = PhotoFileManager.shared.saveImage(img)
         }
 
-
-        // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
+        // step 2: we have got all, user id, drugId, count type.
         // we now call the db function to create the transaction.
         transactionDAO.create(
             for: user,
             drugId: drugId,
             isDispense: isDispense,
             batchId: batchId ?? 0,
-            barcodeImagePath: savedPath,
             isFromPms: isComingFromPms,
             drugName: drugName,
             targetCount: targetCount ?? 0,
@@ -291,29 +298,19 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        // Save Image using Helper if it exists
-        var savedPath = ""
+        // Save Image using Helper if it exists; stashed for stageFirstBottleIfNeeded
+        // to attach to the transaction's first BottleInfo once NDC-verified.
         if let img = barcodeImage {
-
-
-            if let path = PhotoFileManager.shared.saveImage(img) {
-                savedPath = path
-            } else {
-            }
-
-        } else {
-            print("barcodeImage is nil")
+            pendingBarcodeImagePath = PhotoFileManager.shared.saveImage(img)
         }
 
-
-        // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
-        // we now call the db function to create the transaction.
+        // step 2: we have got all, user id, drugId, count type.
+        // we now call the db function to update the transaction.
         transactionDAO.update(
             txnId: txnId,
             drugId: drugId,
             isDispense: isDispense,
-            targetCount: targetCount,
-            barcodeImagePath: savedPath
+            targetCount: targetCount
         )
 
         // step 3: set the latest transaction as current transaction.
@@ -355,13 +352,21 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        transactionDetailDAO.add(
+        let detail = transactionDetailDAO.add(
             txnId: txnId,
             pillCount: pillCount,
             imagePath: imagePath,
             type: type,
             isManual: isManual
         )
+
+        if currentTransaction?.is_dispense == true, let detailId = detail?.txn_details_id {
+            var bottles = transactionDAO.getBottleList(txnId: txnId)
+            if !bottles.isEmpty {
+                bottles[bottles.count - 1].txnDetailsIds.append(detailId)
+                transactionDAO.setBottleList(txnId: txnId, bottles)
+            }
+        }
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }

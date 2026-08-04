@@ -76,13 +76,14 @@ struct UserProfile: Codable {
     
     let isProfileCompleted: Bool?
     let pharmacyName: String?
+    let pharmacyType: String?
     let npiID: String?
-    
+
     let isVerified: Bool?
     let isPmsIntegrated: Bool?
-    
+
     let bucket: [String]?
-    
+
     let role: UserRole?
     let userId: String?
 
@@ -90,20 +91,21 @@ struct UserProfile: Codable {
         case fname
         case lname
         case email
-        
+
         case phoneNumber = "phone_number"
         case avatarURL = "avatar_url"
-        
+
         case isProfileCompleted = "is_profile_completed"
         case pharmacyName = "pharmacy_name"
+        case pharmacyType = "pharmacy_type"
         case npiID = "npi_id"
-        
+
         case isVerified = "is_verified"
         case isPmsIntegrated = "is_hl7_enabled"
-        
+
         case bucket
         case role
-        
+
         case userId = "user_id"
     }
 }
@@ -120,6 +122,8 @@ struct UserSettings: Codable {
     let bucket: [String]?
     let isPmsIntegrated: Bool?
     let allowLocalStorage: Bool?
+    let bypassSSL: Bool?
+    let hl7MessageSpec: String?
 
     enum CodingKeys: String, CodingKey {
         case notificationsEnabled = "notifications_enabled"
@@ -132,6 +136,8 @@ struct UserSettings: Codable {
         case bucket
         case isPmsIntegrated = "is_pms_integrated"
         case allowLocalStorage = "allow_local_storage"
+        case bypassSSL = "bypass_ssl"
+        case hl7MessageSpec = "hl7_message_spec"
     }
 }
 

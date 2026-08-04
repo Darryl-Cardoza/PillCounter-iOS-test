@@ -175,6 +175,7 @@
 "history.dispensedDrugDetails" = "DÉTAILS DU MÉDICAMENT DISTRIBUÉ";
 "history.pillRecount" = "RECOMPTAGE DES COMPRIMÉS";
 "history.dispensedVial" = "FLACON DISTRIBUÉ";
+"history.containerQrCode" = "CODE QR DU CONTENANT";
 "history.remainingContainerCount" = "COMPRIMÉS RESTANTS DANS LE FLACON DE STOCK";
 "history.totalCount" = "COMPTAGE TOTAL";
 "history.substitutedDrug" = "Médicament substitué";
@@ -278,14 +279,14 @@
 
 
 // MARK: - HL7 Notifications
-"hl7Notification.newRxTitle" = "New Rx Received";
-"hl7Notification.rxUpdatedTitle" = "Rx Updated";
-"hl7Notification.rxOnHoldTitle" = "Rx On Hold";
-"hl7Notification.rxCancelledTitle" = "Rx Cancelled";
-"hl7Notification.rxCompletedTitle" = "Rx Completed";
-"hl7Notification.qtyLabel" = "Qty";
-"hl7Notification.inventoryRequestTitle" = "Inventory Request";
-"hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
-"hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
+"hl7Notification.newRxTitle" = "Nouvelle Rx reçue";
+"hl7Notification.rxUpdatedTitle" = "Rx mise à jour";
+"hl7Notification.rxOnHoldTitle" = "Rx en attente";
+"hl7Notification.rxCancelledTitle" = "Rx annulée";
+"hl7Notification.rxCompletedTitle" = "Rx complétée";
+"hl7Notification.qtyLabel" = "Qté";
+"hl7Notification.inventoryRequestTitle" = "Demande d'inventaire";
+"hl7Notification.inventoryRequestBodySingle" = "1 article nécessite un comptage de stock";
+"hl7Notification.inventoryRequestBodyMultiple" = "%d articles nécessitent un comptage de stock";
 "barcodeScan.hazardousNdcDetected" = "NDC dangereux détecté.";
 "barcodeScan.wearGlovesAndProceedWithCaution" = "Portez des gants et procédez avec prudence.";

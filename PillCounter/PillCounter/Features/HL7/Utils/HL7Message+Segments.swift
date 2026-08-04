@@ -36,4 +36,14 @@ extension HL7Message {
     var priority: ZPRSegment? {
         segmentNamed(name: "ZPR") as? ZPRSegment
     }
+
+    /// ZUI — Vivid order-data-packet segment (RDE^O11, PMSS → Vivid). One per message.
+    var zuiOrder: ZUISegment? {
+        segmentNamed(name: "ZUI") as? ZUISegment
+    }
+
+    /// ZNI — Eyecon-to-Computer dispense result segment. One per message.
+    var zniSegment: ZNISegment? {
+        segmentNamed(name: "ZNI") as? ZNISegment
+    }
 }

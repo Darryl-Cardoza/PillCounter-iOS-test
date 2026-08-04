@@ -63,8 +63,14 @@ class BarcodeAndQRDecoder: ObservableObject {
      - Returns: A GS1BarcodeData object with all extracted fields.
      */
     func decode(_ raw: String) -> GS1BarcodeData {
+        // A plain digit-only scan (UPC-A/EAN-13/NDC linear barcode, no GS1 envelope)
+        // is NOT itself a valid GTIN unless it is already exactly 14 digits — a
+        // 13-digit EAN-13/UPC value must be left-padded with a single "0" to form
+        // a real GTIN-14, or it will never match the 14-digit GTIN a GS1
+        // DataMatrix/QR decode produces for the same physical product on rescan.
         if raw.range(of: #"^\d{8,14}$"#, options: .regularExpression) != nil {
-            return GS1BarcodeData(gtin: raw)
+            let gtin14 = raw.count < 14 ? String(repeating: "0", count: 14 - raw.count) + raw : raw
+            return GS1BarcodeData(gtin: gtin14)
         }
 
         // Remove symbology prefix only

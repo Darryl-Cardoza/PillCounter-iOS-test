@@ -57,15 +57,21 @@ protocol TransactionDataSource: AnyObject {
     func updateHazardousTrayDetected(txnId: Int64, detected: Bool)
     func updateNdcVerified(txnId: Int64, verified: Bool)
     func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?)
+    func getBottleList(txnId: Int64) -> [BottleInfo]
+    func setBottleList(txnId: Int64, _ bottles: [BottleInfo])
+    @discardableResult
+    func appendBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo]
+    @discardableResult
+    func replaceLastBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo]
     func create(
         for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64,
-        barcodeImagePath: String, isFromPms: Bool, drugName: String?, targetCount: Int32,
+        isFromPms: Bool, drugName: String?, targetCount: Int32,
         isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
         workFlowStep: String?
     ) -> PillCountTransactionEntity
     func update(
         txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
-        barcodeImagePath: String?, substituedDrugId: Int64?, isSubstitue: Bool
+        substituedDrugId: Int64?, isSubstitue: Bool
     )
     func softDelete(txnId: Int64)
 }
@@ -106,12 +112,14 @@ protocol BottleInfoDataSource: AnyObject {
 protocol TransactionDetailDataSource: AnyObject {
     func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32
     func totalCount(txnId: Int64) -> Int
-    func add(txnId: Int64, pillCount: Int32, imagePath: String?, type: String?, isManual: Bool)
+    @discardableResult
+    func add(txnId: Int64, pillCount: Int32, imagePath: String?, type: String?, isManual: Bool) -> PillCountTransactionDetailsEntity?
     func addOrReplaceVial(txnId: Int64, imagePath: String?)
     func fetchForStep(txnId: Int64, step: ControlledStep) -> [PillCountTransactionDetailsEntity]
     func lastCompletedStep(txnId: Int64) -> ControlledStep?
     func softDeleteForStep(txnId: Int64, step: ControlledStep)
     func update(detailId: Int64, block: (PillCountTransactionDetailsEntity) -> Void)
+    func sumPillCount(detailIds: [Int64]) -> Int
 }
 
 // MARK: - Drug-catalog store seam
@@ -170,13 +178,13 @@ extension TransactionDataSource {
     /// their short forms when working against the protocol type.
     func create(
         for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64 = 0,
-        barcodeImagePath: String = "", isFromPms: Bool = false, drugName: String? = nil,
+        isFromPms: Bool = false, drugName: String? = nil,
         targetCount: Int32 = 0, isControlled: Bool? = nil, rxNo: String? = nil,
         bucketId: String? = nil, priority: String? = nil, workFlowStep: String? = nil
     ) -> PillCountTransactionEntity {
         create(
             for: user, drugId: drugId, isDispense: isDispense, batchId: batchId,
-            barcodeImagePath: barcodeImagePath, isFromPms: isFromPms, drugName: drugName,
+            isFromPms: isFromPms, drugName: drugName,
             targetCount: targetCount, isControlled: isControlled, rxNo: rxNo,
             bucketId: bucketId, priority: priority, workFlowStep: workFlowStep
         )
@@ -184,11 +192,11 @@ extension TransactionDataSource {
 
     func update(
         txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
-        barcodeImagePath: String?, substituedDrugId: Int64? = nil, isSubstitue: Bool = false
+        substituedDrugId: Int64? = nil, isSubstitue: Bool = false
     ) {
         update(
             txnId: txnId, drugId: drugId, isDispense: isDispense, targetCount: targetCount,
-            barcodeImagePath: barcodeImagePath, substituedDrugId: substituedDrugId,
+            substituedDrugId: substituedDrugId,
             isSubstitue: isSubstitue
         )
     }

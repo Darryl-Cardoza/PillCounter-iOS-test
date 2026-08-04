@@ -277,17 +277,13 @@ class StockCountViewModel: ObservableObject {
         let lotNumber = decoded.lotNumber ?? ""
         let expiryString = formatExpiry(decoded.expirationDate) ?? ""
 
-        let rawDigitsOnly = rawValue.components(separatedBy: .decimalDigits.inverted).joined()
-        let gtin: String
-        if let decoded = decoded.gtin, !decoded.isEmpty {
-            gtin = decoded
-        } else if rawDigitsOnly.count >= 8 && rawDigitsOnly.count <= 14 {
-            gtin = rawDigitsOnly
-        } else {
-            gtin = ""
-        }
+        // Only a real GS1 AI(01) decode is a valid GTIN — a bare NDC/UPC digit
+        // string is NOT a GTIN (no packaging-indicator digit, no check digit) and
+        // must never be written to DrugMasterEntity.gtin, or later rescans that
+        // decode the real GS1 GTIN will never match what's stored.
+        let gtin = decoded.gtin ?? ""
 
-        print("🔵 [BT-Scan] rawValue='\(rawValue)' utf8bytes=\(Array(rawValue.utf8)) rawDigitsOnly='\(rawDigitsOnly)' resolvedGtin='\(gtin)'")
+        print("🔵 [BT-Scan] rawValue='\(rawValue)' resolvedGtin='\(gtin)'")
 
         await fetchDrugDataOnly(rawValue: rawValue, gtin: gtin, lotNumber: lotNumber, expiry: expiryString)
     }

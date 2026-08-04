@@ -42,23 +42,4 @@ struct Formatter {
         formatter.dateFormat = "hh:mm a"
         return formatter.string(from: date)
     }
-    
-    /// Splits a full name into first and last name
-    /// - Parameter fullName: The full name string
-    /// - Returns: Tuple containing firstName and lastName
-    static func segregateName(from fullName: String) -> (firstName: String, lastName: String) {
-
-        let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmed.isEmpty else {
-            return ("", "")
-        }
-
-        let components = trimmed.split(separator: " ", maxSplits: 1)
-
-        let firstName = String(components.first ?? "")
-        let lastName = components.count > 1 ? String(components[1]) : ""
-
-        return (firstName, lastName)
-    }
 }

@@ -10,6 +10,8 @@
 		5A67A8700F61F720CE951A3D /* Pods_PillCounterTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D047713FC8C3E6CB93B74F57 /* Pods_PillCounterTests.framework */; };
 		791DC6A72FD0134100DBB7AE /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 791DC6A62FD0134100DBB7AE /* FirebaseCore */; };
 		791DCB082FD2D6BB00DBB7AE /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 791DCB072FD2D6BB00DBB7AE /* FirebaseMessaging */; };
+		793AFA5C30065D89006598D4 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 793AFA5B30065D89006598D4 /* Hl7Core */; };
+		793AFCCA300661DF006598D4 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 793AFCC9300661DF006598D4 /* Hl7Core */; };
 		79854EF62FFBD92800CA40F5 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 79854EF52FFBD92800CA40F5 /* Hl7Core */; };
 		79C738492FF6730400E82B4E /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 79C738482FF6730400E82B4E /* Hl7Core */; };
 		79C7384C2FF6731E00E82B4E /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 79C7384B2FF6731E00E82B4E /* Hl7Core */; };
@@ -109,12 +111,14 @@
 				79C738492FF6730400E82B4E /* Hl7Core in Frameworks */,
 				88E39FA92FB31DFA00D6DEA2 /* CoreVideo.framework in Frameworks */,
 				791DC6A72FD0134100DBB7AE /* FirebaseCore in Frameworks */,
+				793AFCCA300661DF006598D4 /* Hl7Core in Frameworks */,
 				88E39FA72FB31DF200D6DEA2 /* CoreMedia.framework in Frameworks */,
 				88E39FA52FB31DDA00D6DEA2 /* AVFoundation.framework in Frameworks */,
 				79C7384C2FF6731E00E82B4E /* Hl7Core in Frameworks */,
 				88E39FA32FB31DD400D6DEA2 /* MetalKit.framework in Frameworks */,
 				88E39FA12FB31DC500D6DEA2 /* Metal.framework in Frameworks */,
 				88E39F9F2FB31DBA00D6DEA2 /* SwiftUI.framework in Frameworks */,
+				793AFA5C30065D89006598D4 /* Hl7Core in Frameworks */,
 				88E39F9D2FB31DAA00D6DEA2 /* UIKit.framework in Frameworks */,
 				79854EF62FFBD92800CA40F5 /* Hl7Core in Frameworks */,
 				88D04D902FD02CEB0079ED80 /* (null) in Frameworks */,
@@ -221,6 +225,8 @@
 				79C738482FF6730400E82B4E /* Hl7Core */,
 				79C7384B2FF6731E00E82B4E /* Hl7Core */,
 				79854EF52FFBD92800CA40F5 /* Hl7Core */,
+				793AFA5B30065D89006598D4 /* Hl7Core */,
+				793AFCC9300661DF006598D4 /* Hl7Core */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -310,7 +316,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				79854EF42FFBD92800CA40F5 /* XCLocalSwiftPackageReference "../../swiftpackage" */,
+				793AFCC8300661DF006598D4 /* XCLocalSwiftPackageReference "../../swiftpackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 473A48F62EB4F11200EEA905 /* Products */;
@@ -585,15 +591,13 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Debug.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEPLOYMENT_POSTPROCESSING = NO;
 				DEVELOPMENT_ASSET_PATHS = "\"PillCounter/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 8H4QNV2FVL;
+				DEVELOPMENT_TEAM = 8H4QNV2FVL;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
@@ -639,7 +643,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounting;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = PillCounterDevProfile;
 				SDKROOT = auto;
 				STRIP_INSTALLED_PRODUCT = NO;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -734,7 +737,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounterTests;
@@ -758,7 +761,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ritetechnologies.PillCounterTests;
@@ -861,7 +864,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		79854EF42FFBD92800CA40F5 /* XCLocalSwiftPackageReference "../../swiftpackage" */ = {
+		793AFCC8300661DF006598D4 /* XCLocalSwiftPackageReference "../../swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../swiftpackage;
 		};
@@ -888,6 +891,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 791DC6932FD0134100DBB7AE /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		793AFA5B30065D89006598D4 /* Hl7Core */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Hl7Core;
+		};
+		793AFCC9300661DF006598D4 /* Hl7Core */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Hl7Core;
 		};
 		79854EF52FFBD92800CA40F5 /* Hl7Core */ = {
 			isa = XCSwiftPackageProductDependency;

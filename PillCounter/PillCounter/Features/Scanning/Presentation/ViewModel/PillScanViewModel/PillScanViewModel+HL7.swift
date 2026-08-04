@@ -48,6 +48,16 @@ extension PillScanViewModel {
                     message: message,
                     callback: callback
                 )
+            case .zuiOrderPacket:
+                await handleZuiOrderPacketDispenseRequest(
+                    message: message,
+                    callback: callback
+                )
+            case .zniDispenseResult:
+                await handleZniDispenseResult(
+                    message: message,
+                    callback: callback
+                )
             }
         }
     }
@@ -76,6 +86,22 @@ extension PillScanViewModel {
            message.triggerEvent == "O11",
            !message.medications.isEmpty {
             return .dispenseOrder
+        }
+
+        // Vivid ZUI order-data-packet — RDE^O01 or O11, PMSS -> Vivid, no RXE/ORC present.
+        if message.messageType == "RDE",
+           message.order == nil,
+           message.medications.isEmpty,
+           message.zuiOrder != nil {
+            return .zuiOrderPacket
+        }
+
+        // Eyecon ZNI dispense-result packet — RDE^O01 (or O11), no RXE/ORC present.
+        if message.messageType == "RDE",
+           message.order == nil,
+           message.medications.isEmpty,
+           message.zniSegment != nil {
+            return .zniDispenseResult
         }
 
         // Inventory Request
@@ -153,7 +179,8 @@ extension PillScanViewModel {
                 targetCount: targetCount,
                 rxNo: orderId,
                 priority: priority,
-                inventoryCount: inventoryCount
+                inventoryCount: inventoryCount,
+                messageControlId: message.messageControlId
             )
         }
 
@@ -375,7 +402,9 @@ extension PillScanViewModel {
         targetCount: Int32? = nil,
         rxNo: String? = nil,
         priority: String? = nil,
-        inventoryCount: Int32? = nil
+        inventoryCount: Int32? = nil,
+        messageControlId: String? = nil,
+        transactionOrderId: String? = nil
     ) async {
 
         var drugType: String? = nil
@@ -464,6 +493,11 @@ extension PillScanViewModel {
                 targetCount: targetCount ?? existing.target_count,
                 priority: priority ?? existing.txn_priority
             )
+            TransactionStore.shared.setHl7Identifiers(
+                txnId: existing.txn_id,
+                messageControlId: messageControlId,
+                transactionOrderId: transactionOrderId
+            )
             self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
             Log("HL7: Rx \(rxNo) already exists (txnId=\(existing.txn_id)) — updated in place, no new txn created")
         } else {
@@ -478,6 +512,14 @@ extension PillScanViewModel {
                 priority: priority,
                 workFlowStep: initialWorkFlowStep
             )
+
+            if let txnId = currentTransaction?.txn_id {
+                TransactionStore.shared.setHl7Identifiers(
+                    txnId: txnId,
+                    messageControlId: messageControlId,
+                    transactionOrderId: transactionOrderId
+                )
+            }
 
             if isControlled, hasInventory, let invCount = inventoryCount,
                let txnId = currentTransaction?.txn_id {
@@ -522,6 +564,78 @@ extension PillScanViewModel {
     }
     
     
+    /// Vivid order-data-packet dispense request: RDE^O11 carrying only a ZUI
+    /// segment (no RXE/ORC) — parse the drug/quantity/Rx info directly from ZUI.
+    /// Warn and ignore if the NDC is missing.
+    @MainActor
+    private func handleZuiOrderPacketDispenseRequest(
+        message: HL7Message,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+        guard let zui = message.zuiOrder else {
+            callback?(false)
+            return
+        }
+
+        let ndc = zui.ndc.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !ndc.isEmpty else {
+            Log("HL7 ZUI order packet: missing NDC — ignoring")
+            callback?(false)
+            return
+        }
+
+        let targetCount = Int32(zui.orderDispenseQuantity) ?? 0
+        let rxNo = zui.orderRxNumber.isEmpty ? nil : zui.orderRxNumber
+
+        await processHl7DrugAndCreateTransaction(
+            ndc: ndc,
+            drugName: zui.orderDrugName,
+            isDispense: true,
+            targetCount: targetCount,
+            rxNo: rxNo,
+            messageControlId: message.messageControlId,
+            transactionOrderId: zui.orderTransactionOrderId.isEmpty ? nil : zui.orderTransactionOrderId
+        )
+
+        callback?(true)
+    }
+
+    /// Eyecon dispense-result packet: RDE^O01 (or O11) carrying only a ZNI
+    /// segment (no RXE/ORC) — parse the drug/quantity/Rx info directly from ZNI.
+    /// Warn and ignore if the NDC is missing.
+    @MainActor
+    private func handleZniDispenseResult(
+        message: HL7Message,
+        callback: HL7SimpleCallback? = nil
+    ) async {
+        guard let zni = message.zniSegment else {
+            callback?(false)
+            return
+        }
+
+        let ndc = zni.ndc.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !ndc.isEmpty else {
+            Log("HL7 ZNI dispense result: missing NDC — ignoring")
+            callback?(false)
+            return
+        }
+
+        let targetCount = Int32(zni.dispenseAmount) ?? 0
+        let rxNo = zni.prescriptionNumber.isEmpty ? nil : zni.prescriptionNumber
+
+        await processHl7DrugAndCreateTransaction(
+            ndc: ndc,
+            drugName: zni.drugName,
+            isDispense: true,
+            targetCount: targetCount,
+            rxNo: rxNo,
+            messageControlId: message.messageControlId,
+            transactionOrderId: zni.fillerOrderNumber.isEmpty ? nil : zni.fillerOrderNumber
+        )
+
+        callback?(true)
+    }
+
     @MainActor
     private func cancelOrderTransactions(
         message: HL7Message,
@@ -623,6 +737,8 @@ enum MessageType {
     case editDispenseOrder
     case inventoryRequest
     case cancelOrder
+    case zuiOrderPacket
+    case zniDispenseResult
 }
 
 extension String {

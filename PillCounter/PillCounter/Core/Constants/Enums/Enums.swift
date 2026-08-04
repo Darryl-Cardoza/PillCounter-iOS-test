@@ -232,6 +232,32 @@ extension ControlledStep {
 
         return orderedSteps[index + 1]
     }
+
+    /// Business-meaning label sent over HL7 (OBX observationValue) and used as
+    /// the zip entry name prefix for image delivery — mirrors Android's
+    /// `imageLabel()` mapping (`StepState.kt`).
+    var imageLabel: String {
+        switch self {
+        case .scan:                 return "dispense_bottle"
+        case .containerInitiate:    return "before_dispense_stock_bottle_count"
+        case .targetVerification:   return "dispense_count"
+        case .targetReverification: return "dispense_recount"
+        case .vial:                 return "dispense_vial"
+        case .containerPending:     return "after_dispense_stock_bottle_count"
+        }
+    }
+}
+
+extension String {
+    /// Maps a raw detail/image type string to its HL7/zip-naming label. If the
+    /// raw value matches a `ControlledStep` case, uses that step's `imageLabel`;
+    /// otherwise lowercases the raw string as-is (mirrors Android's `toImageLabel()`).
+    var toImageLabel: String {
+        if let step = ControlledStep(rawValue: self) {
+            return step.imageLabel
+        }
+        return self.lowercased()
+    }
 }
 
 
@@ -299,7 +325,7 @@ enum MLLP {
     /// Wraps HL7 message with MLLP framing.
     static func frame(_ message: String) -> Data {
         var data = Data([start])
-        data.append(message.data(using: .utf8)!) // HL7 payload
+        data.append(message.data(using: .utf8) ?? Data())
         data.append(contentsOf: [end1, end2])    // End markers
         return data
     }
@@ -308,7 +334,8 @@ enum MLLP {
     static func unwrap(_ data: Data) -> String? {
         guard
             let startIndex = data.firstIndex(of: start),
-            let endIndex = data.firstIndex(of: end1)
+            let endIndex = data.firstIndex(of: end1),
+            startIndex < endIndex
         else { return nil }
 
         let payload = data[(startIndex + 1)..<endIndex]
@@ -336,34 +363,8 @@ enum SettingsSubScreen {
 
 
 
-// MARK: - Pharmacy Type
-public enum PharmacyType: String, CaseIterable, Identifiable, Codable {
-    case chainPharmacy = "Chain Pharmacy"
-    case supermarketPharmacy = "Supermarket/ Big Box Pharmacy"
-    case independentPharmacy = "Independent Pharmacy"
-    case mailOrderPharmacy = "Mail Order/ Online Pharmacy"
-    case hospitalPharmacy = "Hospital Pharmacy"
-    case clinicPharmacy = "Clinic Pharmacy"
-    case longTermCarePharmacy = "Long Term Care Pharmacy"
-    case compoundingPharmacy = "Compounding Pharmacy"
-    case specialityPharmacy = "Speciality Pharmacy"
-
-    public var id: String { rawValue }
-
-    var displayText: String {
-        switch self {
-        case .chainPharmacy: return L10n.PharmacyType.chainPharmacy
-        case .supermarketPharmacy: return L10n.PharmacyType.supermarketPharmacy
-        case .independentPharmacy: return L10n.PharmacyType.independentPharmacy
-        case .mailOrderPharmacy: return L10n.PharmacyType.mailOrderPharmacy
-        case .hospitalPharmacy: return L10n.PharmacyType.hospitalPharmacy
-        case .clinicPharmacy: return L10n.PharmacyType.clinicPharmacy
-        case .longTermCarePharmacy: return L10n.PharmacyType.longTermCarePharmacy
-        case .compoundingPharmacy: return L10n.PharmacyType.compoundingPharmacy
-        case .specialityPharmacy: return L10n.PharmacyType.specialityPharmacy
-        }
-    }
-}
+// Pharmacy type list is now server-driven — see PharmacyTypeOption /
+// GET /users/pharmacy-types, cached via AppStorageManager.pharmacyTypeOptions.
 
 // MARK: History
 public enum HistoryFilterType: String, Codable, Hashable {

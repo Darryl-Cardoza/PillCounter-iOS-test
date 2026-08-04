@@ -88,9 +88,9 @@ struct HL7Validator {
 
     static func validate(_ message: String) -> ValidationResult {
 
-        // Split segments safely
+        // Split segments safely — real devices (Vivid) send \n instead of \r
         let segments = message
-            .components(separatedBy: "\r")
+            .components(separatedBy: CharacterSet(charactersIn: "\r\n"))
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
 
         // MARK: - 1. MSH validation
@@ -123,34 +123,43 @@ struct HL7Validator {
         switch (messageType, trigger) {
 
         // =========================
-        // DISPENSE → RDE^O11
+        // DISPENSE → RDE^O11 (Vivid) / RDE^O01 (Eyecon)
         // =========================
-        case ("RDE", "O11"):
+        case ("RDE", "O11"), ("RDE", "O01"):
 
-            // Must have ORC
+            let hasZUI = segments.contains { $0.hasPrefix("ZUI|") }
+            let hasZNI = segments.contains { $0.hasPrefix("ZNI|") }
+
+            // Vivid → ZUI present, other segments optional
+            if hasZUI {
+                return .valid
+            }
+
+            // Eyecon → ZNI present, other segments optional
+            if hasZNI {
+                return .valid
+            }
+
+            // Neither ZUI nor ZNI present → fall back to ORC/RXE mandatory check
             let hasORC = segments.contains { $0.hasPrefix("ORC|") }
             if !hasORC {
                 return .invalid("Missing ORC segment")
             }
 
-            // Must have RXE
             let rxeSegments = segments.filter { $0.hasPrefix("RXE|") }
             if rxeSegments.isEmpty {
                 return .invalid("Missing RXE segment")
             }
 
-            // Validate each RXE (basic only)
             for (index, rxe) in rxeSegments.enumerated() {
 
                 let fields = rxe.components(separatedBy: "|")
 
-                // RXE-2 → NDC
                 let ndc = fields[safe: 2]?.trimmingCharacters(in: .whitespaces) ?? ""
                 if ndc.isEmpty {
                     return .invalid("Missing NDC in RXE \(index + 1)")
                 }
 
-                // RXE-3 → Qty
                 let qty = fields[safe: 3]?.trimmingCharacters(in: .whitespaces) ?? ""
                 if qty.isEmpty {
                     return .invalid("Missing quantity in RXE \(index + 1)")

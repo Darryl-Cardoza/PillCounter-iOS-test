@@ -21,6 +21,8 @@ protocol UserRepositoryProtocol {
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse
 
     func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, accessToken: String) async throws -> UpdateTerminalResponse
+
+    func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse
 }
 
 
@@ -94,6 +96,15 @@ final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
             accessToken: accessToken,
             body: body,
             responseType: UpdateTerminalResponse.self
+        )
+    }
+
+    func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
+        return try await Self.performRequest(
+            url: APIConstants.pharmacyTypes,
+            method: .get,
+            accessToken: accessToken,
+            responseType: PharmacyTypeResponse.self
         )
     }
 

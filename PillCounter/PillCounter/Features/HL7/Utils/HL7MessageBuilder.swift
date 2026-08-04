@@ -13,17 +13,22 @@ struct HL7Config {
     let receivingApplication: String
     let receivingFacility: String
     let versionId: String
+    let format: Hl7Format
 
     /// Sourced from `AppStorageManager`: the terminal name identifies this
     /// station as the sending facility, and the configured PMS host name is
     /// used as the receiving facility since the PMS routes by that identity.
+    /// `format` (server-driven, `auth/me` → `settings.hl7_message_spec`) sets
+    /// MSH-3 sending application and which custom Z-segment gets emitted.
     static var current: HL7Config {
-        HL7Config(
-            sendingApplication: "DISPENSESURE",
+        let format = AppStorageManager.shared.hl7MessageSpec
+        return HL7Config(
+            sendingApplication: format.rawValue,
             sendingFacility: AppStorageManager.shared.selectedTerminalName,
             receivingApplication: "PMS",
             receivingFacility: AppStorageManager.shared.pmsHostName,
-            versionId: AppStorageManager.shared.hl7Version
+            versionId: AppStorageManager.shared.hl7Version,
+            format: format
         )
     }
 }
@@ -136,6 +141,9 @@ final class HL7CompletionBuilder {
                     builder.captureSource = zsn.captureSource
                     builder.captureTimestamp = zsn.captureTimestamp
                     builder.transactionType = zsn.transactionType
+                    builder.lotNumber = zsn.lotNumber
+                    builder.expirationDate = zsn.expirationDate
+                    builder.packageSerialNumber = zsn.packageSerialNumber
                 }
             }
 
@@ -149,6 +157,41 @@ final class HL7CompletionBuilder {
                 builder.validator = zsv.validator
                 builder.validationTimestamp = zsv.validationTimestamp
                 builder.scanSource = zsv.scanSource
+            }
+
+            // Custom Z-segment per HL7 spec dialect (server-driven via config.format).
+            switch self.config.format {
+            case .vivid:
+                let drugImagePath = details.last?.image_path.map { ($0 as NSString).lastPathComponent } ?? ""
+                // No "Anonymous Mode" preference exists on iOS today — falls back
+                // to "Anonymous" only when no user name is available.
+                let vividUserName = user?.fname ?? "Anonymous"
+                scope.zui { zui in
+                    zui.ndc = drug.ndc ?? ""
+                    zui.vividUserName = vividUserName
+                    zui.transactionOrderId = orderId
+                    zui.rxNumber = orderId
+                    zui.fillNumber = "1"
+                    zui.dispensedQuantity = "\(totalCount)"
+                    zui.transactionStatus = "CM"
+                    zui.drugImage = drugImagePath
+                    zui.drugLotNumber = details.last?.type
+                    zui.drugSerialNumber = nil
+                    zui.drugExpirationDate = nil
+                }
+            case .eyecon:
+                scope.zni { zni in
+                    zni.ndc = drug.ndc ?? ""
+                    zni.drugName = drug.drug_name ?? ""
+                    zni.userName = user?.fname ?? ""
+                    zni.fillerOrderNumber = orderId
+                    zni.dispenseAmount = "\(totalCount)"
+                    zni.prescriptionNumber = orderId
+                    zni.resultStatus = "F"
+                    zni.stockBottleVerification = txn.is_ndc_verfied ? "A" : "N"
+                }
+            case .dispensesure:
+                break
             }
         }
 
@@ -221,7 +264,7 @@ final class HL7CompletionBuilder {
                 let total = value.opened + value.sealed
 
                 scope.inv { inv in
-                    inv.setId = "\(index)"
+//                    inv.setId = "\(index)"
                     // INV-2.1 (substance code / NDC) has no dedicated property on the
                     // current INVBuilder — reusing inventoryLocationIdentifier as a
                     // stopgap until the library exposes a proper substanceCode field.
@@ -281,7 +324,7 @@ private extension HL7CompletionBuilder {
         for (index, detail) in details.enumerated() {
 
             let count = detail.pill_count
-            let type = detail.type ?? "UNKNOWN"
+            let type = (detail.type ?? "UNKNOWN").toImageLabel
 
             let fileName: String
             if let path = detail.image_path {
@@ -305,10 +348,12 @@ private extension HL7CompletionBuilder {
             )
         }
 
-        // Barcode Image (same as Android)
-        if let barcodePath = txn.barcode_image,
-           !barcodePath.isEmpty {
+        // Barcode Image — one row per scanned bottle that has a captured image.
+        let bottleBarcodePaths = [BottleInfo].decode(from: txn.bottle_info_list_json)
+            .compactMap { $0.barcodeImagePath }
+            .filter { !$0.isEmpty }
 
+        for barcodePath in bottleBarcodePaths {
             let fileName = (barcodePath as NSString).lastPathComponent
 
             obxList.append(
@@ -317,7 +362,7 @@ private extension HL7CompletionBuilder {
                     valueType: "ST",
                     observationId: observationId,
                     observationText: "Barcode Image",
-                    observationValue: "count=0|type=SCAN|image=\(fileName)",
+                    observationValue: "count=0|type=\(ControlledStep.scan.imageLabel)|image=\(fileName)",
                     resultStatus: "F",
                     units: nil
                 )
@@ -336,22 +381,55 @@ private extension HL7CompletionBuilder {
         let captureSource: String
         let captureTimestamp: String
         let transactionType: String
+        let lotNumber: String?
+        let expirationDate: String?
+        let packageSerialNumber: String?
     }
 
+    /// One ZSN row per physical bottle scanned during the transaction, each with its
+    /// own live-computed pill count (never cached — see `BottleInfo`). Falls back to
+    /// the legacy one-row-per-detail behavior for transactions with no bottle list
+    /// (predates multi-bottle tracking, or a scan path that never populated one).
     func buildZSN(
         txn: PillCountTransactionEntity,
         details: [PillCountTransactionDetailsEntity],
         drug: DrugMasterEntity,
         now: String
     ) -> [ZsnRow] {
-        return details.enumerated().map { index, detail in
-            ZsnRow(
+        let bottles = TransactionStore.shared.getBottleList(txnId: txn.txn_id)
+
+        guard !bottles.isEmpty else {
+            return details.enumerated().map { index, detail in
+                ZsnRow(
+                    setId: "\(index + 1)",
+                    nationalDrugCode: drug.ndc,
+                    quantityFromThisStockItem: "\(detail.pill_count)",
+                    captureSource: detail.is_manual ? ScanSource.shared.MANUAL : ScanSource.shared.UNKNOWN,
+                    captureTimestamp: now,
+                    transactionType: ZsnTransactionType.shared.DISPENSE,
+                    lotNumber: nil,
+                    expirationDate: nil,
+                    packageSerialNumber: nil
+                )
+            }
+        }
+
+        let detailIdSet = Set(details.map { $0.txn_details_id })
+        let anyManual = details.contains { $0.is_manual }
+
+        return bottles.enumerated().map { index, bottle in
+            let ownedIds = bottle.txnDetailsIds.filter { detailIdSet.contains($0) }
+            let quantity = TransactionDetailStore.shared.sumPillCount(detailIds: ownedIds)
+            return ZsnRow(
                 setId: "\(index + 1)",
                 nationalDrugCode: drug.ndc,
-                quantityFromThisStockItem: "\(detail.pill_count)",
-                captureSource: detail.is_manual ? ScanSource.shared.MANUAL : ScanSource.shared.UNKNOWN,
+                quantityFromThisStockItem: "\(quantity)",
+                captureSource: anyManual ? ScanSource.shared.MANUAL : ScanSource.shared.UNKNOWN,
                 captureTimestamp: now,
-                transactionType: ZsnTransactionType.shared.DISPENSE
+                transactionType: ZsnTransactionType.shared.DISPENSE,
+                lotNumber: bottle.lotNumber,
+                expirationDate: bottle.expirationDate,
+                packageSerialNumber: bottle.serialNumber
             )
         }
     }

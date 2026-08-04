@@ -23,6 +23,12 @@ final class SessionManager: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    // Collapses concurrent refresh triggers (foreground check, dashboard
+    // onAppear, and every in-flight request's 401 handler can all call this
+    // around the same time) into a single in-flight `/auth/refresh` call —
+    // this is what was flooding the endpoint with parallel requests.
+    private var inFlightRefresh: Task<Void, Never>?
+
     private init() {
         NotificationCenter.default
             .publisher(for: .unauthorizedResponseReceived)
@@ -41,16 +47,22 @@ final class SessionManager: ObservableObject {
     /// Refreshes a token that is close to expiry; forces logout if refresh fails.
     func checkTokenOnForeground() async {
         guard AppStorageManager.shared.isLoggedIn else { return }
+        _ = await refreshIfNeeded()
+    }
 
+    /// Refreshes the access token if it's missing or within 5 minutes of expiry.
+    /// Shares the same in-flight guard as every other refresh trigger (foreground
+    /// check, 401 handler) — concurrent callers all await one `/auth/refresh` call.
+    /// Returns `true` when a refresh was actually attempted (regardless of outcome),
+    /// so callers can decide whether to re-fetch remote data off the back of it.
+    @discardableResult
+    func refreshIfNeeded() async -> Bool {
         let storedExpiry = AppStorageManager.shared.tokenExpiryTimestamp ?? 0.0
-
-        // Not expired yet (more than 5-minute buffer remaining)
-        if storedExpiry > 0,
-           Date().timeIntervalSince1970 < storedExpiry - 300 {
-            return
+        guard storedExpiry == 0.0 || Date().timeIntervalSince1970 > storedExpiry - 300 else {
+            return false
         }
-
         await attemptRefresh()
+        return true
     }
 
     // MARK: - Private
@@ -61,6 +73,20 @@ final class SessionManager: ObservableObject {
     }
 
     private func attemptRefresh() async {
+        // Another caller's refresh is already in flight — wait for it instead
+        // of firing a second concurrent /auth/refresh request.
+        if let existing = inFlightRefresh {
+            await existing.value
+            return
+        }
+
+        let task = Task { await performRefresh() }
+        inFlightRefresh = task
+        await task.value
+        inFlightRefresh = nil
+    }
+
+    private func performRefresh() async {
         guard let refreshToken = AppStorageManager.shared.refreshToken,
               !refreshToken.isEmpty else {
             markExpired()

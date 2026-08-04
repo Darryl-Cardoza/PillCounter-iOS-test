@@ -24,7 +24,6 @@ final class TransactionStore {
         drugId: Int64?,
         isDispense: Bool,
         batchId: Int64 = 0,
-        barcodeImagePath: String = "",
         isFromPms: Bool = false,
         drugName: String? = nil,
         targetCount: Int32 = 0,
@@ -44,7 +43,6 @@ final class TransactionStore {
         entity.is_dispense = isDispense
         entity.status = CountStatus.PARTIAL.rawValue
         entity.is_deleted = false
-        entity.barcode_image = barcodeImagePath
         entity.is_from_pms = isFromPms
         entity.is_synced = false
         entity.target_count = targetCount
@@ -153,16 +151,76 @@ final class TransactionStore {
         return fetchByRxNo(rxNo, for: user)
     }
 
+    /// HL7 identifier lookups used by the image web server's `getby*` endpoints.
+    /// Fields are encrypted at rest for some entities elsewhere in this store, but
+    /// these HL7 id columns are not, so they can be matched directly via NSPredicate.
+
+    func getByMessageControlId(_ messageControlId: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "hl7_message_control_id == %@ AND is_deleted == false", messageControlId)
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        request.fetchLimit = 1
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
+    }
+
+    func getBySequenceNumber(_ sequenceNumber: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "hl7_sequence_number == %@ AND is_deleted == false", sequenceNumber)
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        request.fetchLimit = 1
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
+    }
+
+    func getByTransactionOrderId(_ transactionOrderId: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "transaction_order_id == %@ AND is_deleted == false", transactionOrderId)
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        request.fetchLimit = 1
+        guard let result = try? context.fetch(request).first else { return nil }
+        refreshDecrypted(result)
+        return result
+    }
+
+    /// `rx_no` is field-level encrypted, so filter in-memory after decrypting rather
+    /// than via NSPredicate (which would compare against ciphertext).
+    func getByRxNoAndFillNo(_ rxNo: String, fillNo: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "is_deleted == false")
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
+            .filter { $0.rx_no == rxNo && $0.refill_no == fillNo }
+            .sorted { $0.created_at > $1.created_at }
+            .first
+    }
+
+    func getMostRecentByRxNo(_ rxNo: String) -> PillCountTransactionEntity? {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "is_deleted == false")
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
+            .filter { $0.rx_no == rxNo }
+            .sorted { $0.created_at > $1.created_at }
+            .first
+    }
+
     /// Reverse lookup used by the image web server to resolve a delivered
-    /// barcode-image filename back to the owning transaction. `barcode_image`
-    /// is field-level encrypted at rest, so it cannot be matched via an
-    /// NSPredicate against the SQLite row (that would compare against
-    /// ciphertext) — fetch and compare the decrypted in-memory value instead.
+    /// bottle barcode-image filename back to the owning transaction. Bottle
+    /// image paths live inside `bottle_info_list_json`, which is not itself
+    /// field-level encrypted, but the parent row is fetched and decrypted
+    /// like other lookups here for consistency.
     func txnId(forBarcodeImage filename: String) -> Int64? {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         guard let results = try? context.fetch(request) else { return nil }
         results.forEach { refreshDecrypted($0) }
-        return results.first { $0.barcode_image == filename }?.txn_id
+        return results.first { txn in
+            [BottleInfo].decode(from: txn.bottle_info_list_json).contains { $0.barcodeImagePath == filename }
+        }?.txn_id
     }
 
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
@@ -184,6 +242,21 @@ final class TransactionStore {
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] RESTORED deleted — txnId: \(txnId)")
         transactionsDidChange.send()
+    }
+
+    /// Stores the HL7 identifiers captured from an inbound order message, used as
+    /// lookup keys by the on-device image server's `getby*` endpoints.
+    func setHl7Identifiers(
+        txnId: Int64,
+        messageControlId: String? = nil,
+        sequenceNumber: String? = nil,
+        transactionOrderId: String? = nil
+    ) {
+        guard let txn = fetchById(txnId) else { return }
+        if let messageControlId { txn.hl7_message_control_id = messageControlId }
+        if let sequenceNumber { txn.hl7_sequence_number = sequenceNumber }
+        if let transactionOrderId { txn.transaction_order_id = transactionOrderId }
+        CoreDataManager.shared.save(context: context)
     }
 
     func updatePriority(txnId: Int64, priority: String?) {
@@ -263,7 +336,7 @@ final class TransactionStore {
         results.forEach { refreshDecrypted($0) }
         StoreLogger.log(
             dao: "TransactionDAO", op: "fetchAll",
-            columns: ["txn_id", "rx_no", "drug_name", "is_dispense", "status", "batch_id", "target_count"],
+            columns: ["txn_id", "rx_no", "drug_name", "is_dispense", "status", "batch_id", "target_count", "refill_no" , "bottle_info_list_json" ],
             rows: results.map { [
                 "\($0.txn_id)",
                 $0.rx_no ?? "-",
@@ -272,6 +345,8 @@ final class TransactionStore {
                 $0.status ?? "-",
                 "\($0.batch_id)",
                 "\($0.target_count)",
+                "\($0.refill_no ?? "-")",
+                "\($0.bottle_info_list_json)"
             ]}
         )
         return results
@@ -373,6 +448,38 @@ final class TransactionStore {
         print("📋 [TransactionDAO] UPDATED ndcVerified — txnId: \(txnId), verified: \(verified)")
     }
 
+    // MARK: - Bottle tracking
+
+    func getBottleList(txnId: Int64) -> [BottleInfo] {
+        guard let txn = fetchById(txnId) else { return [] }
+        return [BottleInfo].decode(from: txn.bottle_info_list_json)
+    }
+
+    func setBottleList(txnId: Int64, _ bottles: [BottleInfo]) {
+        guard let txn = fetchById(txnId) else { return }
+        txn.bottle_info_list_json = bottles.encodedJson()
+        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+        CoreDataManager.shared.save(context: context)
+        print("📋 [TransactionDAO] UPDATED bottleList — txnId: \(txnId), bottleCount: \(bottles.count), json: \(txn.bottle_info_list_json ?? "nil")")
+    }
+
+    @discardableResult
+    func appendBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo] {
+        var bottles = getBottleList(txnId: txnId)
+        bottles.append(bottle)
+        setBottleList(txnId: txnId, bottles)
+        return bottles
+    }
+
+    @discardableResult
+    func replaceLastBottle(txnId: Int64, _ bottle: BottleInfo) -> [BottleInfo] {
+        var bottles = getBottleList(txnId: txnId)
+        guard !bottles.isEmpty else { return bottles }
+        bottles[bottles.count - 1] = bottle
+        setBottleList(txnId: txnId, bottles)
+        return bottles
+    }
+
     func updateSynced(txnId: Int64) {
         guard let txn = fetchById(txnId) else { return }
         txn.is_synced = true
@@ -391,9 +498,9 @@ final class TransactionStore {
     func expectedImageFilenames(txnId: Int64) -> [String] {
         guard let txn = fetchById(txnId) else { return [] }
         var filenames: [String] = []
-        if let barcodeImage = txn.barcode_image, !barcodeImage.isEmpty {
-            filenames.append(barcodeImage)
-        }
+        filenames += [BottleInfo].decode(from: txn.bottle_info_list_json)
+            .compactMap { $0.barcodeImagePath }
+            .filter { !$0.isEmpty }
         filenames += TransactionDetailStore.shared.fetchAll(txnId: txnId)
             .compactMap { $0.image_path }
             .filter { !$0.isEmpty }
@@ -430,7 +537,6 @@ final class TransactionStore {
         drugId: Int64?,
         isDispense: Bool,
         targetCount: Int32?,
-        barcodeImagePath: String?,
         substituedDrugId: Int64? = nil,
         isSubstitue: Bool = false
     ) {
@@ -451,7 +557,6 @@ final class TransactionStore {
         txn.is_dispense = isDispense
         txn.is_synced = false
         if let targetCount { txn.target_count = targetCount }
-        if let barcodeImagePath, !barcodeImagePath.isEmpty { txn.barcode_image = barcodeImagePath }
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
         print("📋 [TransactionDAO] UPDATED — txnId: \(txnId), drugId: \(drugId ?? 0), isDispense: \(isDispense), targetCount: \(targetCount ?? 0)")
@@ -518,7 +623,7 @@ final class TransactionStore {
     // MARK: - Private
 
     /// Deterministically decrypts the object's encrypted fields in place
-    /// (e.g. rx_no, barcode_image, note). Replaces the old
+    /// (e.g. rx_no, note). Replaces the old
     /// context.refresh(_, mergeChanges: false) refault, which did NOT reliably
     /// re-run awakeFromFetch and could surface ciphertext written by willSave
     /// in the same session.

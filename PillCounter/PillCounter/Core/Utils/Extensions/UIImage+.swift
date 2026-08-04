@@ -51,7 +51,10 @@ extension UIImage {
         userInitials:  String,
         geolocation:   String,   // "37.33° N, 122.03° W — 94025"
         rx:            String,
-        fileSizeKB:    Double
+        fileSizeKB:    Double,
+        lotNumber:     String? = nil,
+        expirationDate: String? = nil,
+        serialNumber:  String? = nil
     ) -> UIImage {
 
         // ── Timestamp ───────────────────────────────────────────────────
@@ -84,6 +87,9 @@ extension UIImage {
         add("Loc",    geolocation)
         add("Date",   dateString)
         add("Size",   String(format: "%.1f KB", fileSizeKB))
+        add("Lot",    lotNumber ?? "")
+        add("Exp",    expirationDate ?? "")
+        add("Serial", serialNumber ?? "")
 
         // ── Typography ───────────────────────────────────────────────────
         // ~1.8% of image width, floor at 10 pt so it stays readable on small images

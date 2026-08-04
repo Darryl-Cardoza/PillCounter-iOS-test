@@ -16,14 +16,15 @@ final class TransactionDetailStore {
 
     // MARK: - Create
 
+    @discardableResult
     func add(
         txnId: Int64,
         pillCount: Int32,
         imagePath: String? = nil,
         type: String? = nil,
         isManual: Bool = false
-    ) {
-        guard let parent = TransactionStore.shared.fetchById(txnId) else { return }
+    ) -> PillCountTransactionDetailsEntity? {
+        guard let parent = TransactionStore.shared.fetchById(txnId) else { return nil }
 
         let detail = PillCountTransactionDetailsEntity(context: context)
         detail.txn_details_id = generateUniqueId()
@@ -43,6 +44,7 @@ final class TransactionDetailStore {
 
         CoreDataManager.shared.save(context: context)
         print("🔍 [TransactionDetailDAO] CREATED — detailId: \(detail.txn_details_id), txnId: \(txnId), pillCount: \(pillCount), type: \(type ?? "-"), isManual: \(isManual)")
+        return detail
     }
 
     func addOrReplaceVial(txnId: Int64, imagePath: String?) {
@@ -109,6 +111,20 @@ final class TransactionDetailStore {
 
     func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32 {
         fetchForStep(txnId: txnId, step: step).reduce(Int32(0)) { $0 + $1.pill_count }
+    }
+
+    /// Sums pill_count for a set of detail-row ids, excluding soft-deleted rows.
+    /// Used to compute a bottle's live pill count from `BottleInfo.txnDetailsIds` —
+    /// never cached, so a later delete/redo of a detail row is automatically reflected.
+    func sumPillCount(detailIds: [Int64]) -> Int {
+        guard !detailIds.isEmpty else { return 0 }
+        let request: NSFetchRequest<PillCountTransactionDetailsEntity> = PillCountTransactionDetailsEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "txn_details_id IN %@ AND is_deleted == false",
+            detailIds
+        )
+        let results = (try? context.fetch(request)) ?? []
+        return results.reduce(0) { $0 + Int($1.pill_count) }
     }
 
     func lastCompletedStep(txnId: Int64) -> ControlledStep? {

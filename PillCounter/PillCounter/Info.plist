@@ -5,12 +5,7 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSExceptionDomains</key>
-		<dict>
-			<key>pill.ccrlindia.com</key>
-			<dict/>
-			<key>www.pill.ccrlindia.com</key>
-			<dict/>
-		</dict>
+		<dict/>
 	</dict>
 	<key>NSBonjourServices</key>
 	<array>

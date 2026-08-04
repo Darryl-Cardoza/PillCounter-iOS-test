@@ -50,6 +50,7 @@ class UserViewModel: ObservableObject {
     @Published var phoneNumber: String = ""
     @Published var pharmacyName: String = ""
     @Published var npiID: String = ""
+    @Published var pharmacyTypeOptions: [PharmacyTypeOption] = []
 
     // terminals
     @Published var terminals: [UserTerminal] = []
@@ -149,13 +150,15 @@ class UserViewModel: ObservableObject {
         let localUser = userID.isEmpty ? nil : userLocalDB.fetchByUserId(userID)
 
         if let localUser {
-            let name = Formatter.segregateName(from: localUser.fname ?? "")
-            firstName    = name.firstName
-            lastName     = name.lastName
+            firstName    = localUser.fname ?? ""
+            lastName     = localUser.lname ?? ""
             // Also set fullName here. Only the remote path (populateEditableFields)
             // was setting it, so on the common cache-served dashboard visit fullName
             // stayed "" and the header's "terminal | name" line showed a blank name.
-            fullName     = localUser.fname ?? ""
+            fullName     = [localUser.fname, localUser.lname]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
             email        = localUser.email ?? ""
             pharmacyName = localUser.pharmacy_name ?? ""
             npiID        = localUser.npi_id ?? ""
@@ -193,6 +196,12 @@ class UserViewModel: ObservableObject {
                     populateEditableFields(from: user)
                 }
 
+                if let bucket = result.data?.profile?.bucket
+                    ?? result.data?.settings?.bucket
+                    ?? result.data?.user?.settings?.bucket {
+                    self.bucket = bucket
+                }
+
                 if let hl7Version = result.data?.settings?.hl7Version
                     ?? result.data?.user?.settings?.hl7Version {
                     AppStorageManager.shared.hl7Version = hl7Version
@@ -206,6 +215,16 @@ class UserViewModel: ObservableObject {
                 if let allowLocalStorage = result.data?.settings?.allowLocalStorage
                     ?? result.data?.user?.settings?.allowLocalStorage {
                     AppStorageManager.shared.allowLocalStorage = allowLocalStorage
+                }
+
+                if let bypassSSL = result.data?.settings?.bypassSSL
+                    ?? result.data?.user?.settings?.bypassSSL {
+                    AppStorageManager.shared.bypassSSL = bypassSSL
+                }
+
+                if let hl7MessageSpec = result.data?.settings?.hl7MessageSpec
+                    ?? result.data?.user?.settings?.hl7MessageSpec {
+                    AppStorageManager.shared.hl7MessageSpec = Hl7Format.fromSendingApplication(hl7MessageSpec)
                 }
 
                 let fetchedTerminals = result.data?.user?.terminals
@@ -266,36 +285,58 @@ class UserViewModel: ObservableObject {
     }
 
     private func populateEditableFields(from user: UserProfile) {
-        let fullName = user.fname ?? ""
-        let name     = Formatter.segregateName(from: fullName)
-        firstName    = name.firstName
-        lastName     = name.lastName
+        firstName    = user.fname ?? ""
+        lastName     = user.lname ?? ""
         email        = user.email ?? ""
         phoneNumber  = user.phoneNumber ?? ""
         pharmacyName = user.pharmacyName ?? ""
         npiID = user.npiID ?? ""
         self.bucket = user.bucket ?? ["NORMAL"]
-        self.fullName = fullName
+        if let pharmacyType = user.pharmacyType {
+            AppStorageManager.shared.selectedPharmacyTypeCode = pharmacyType
+        }
+        self.fullName = [user.fname, user.lname]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    // MARK: - Pharmacy Types
+
+    /// Fetches the server-driven pharmacy type list and caches it so the
+    /// dropdown still has options offline / before the next fetch completes.
+    func fetchPharmacyTypes() async {
+        let cached = AppStorageManager.shared.pharmacyTypeOptions
+        if !cached.isEmpty {
+            pharmacyTypeOptions = cached
+        }
+
+        do {
+            let result = try await userRepo.getPharmacyTypes(accessToken: accessToken)
+            if result.isSuccess ?? false, let types = result.data?.pharmacyTypes {
+                pharmacyTypeOptions = types
+                AppStorageManager.shared.pharmacyTypeOptions = types
+            }
+        } catch {
+            Log("❌ Failed to fetch pharmacy types: \(error)")
+        }
     }
 
     // MARK: - Update User Profile
 
-    func updateUserProfile() async {
-        guard hasUserProfileChanged() else { return }
+    func updateUserProfile(pharmacyTypeCode: String?) async {
+        guard hasUserProfileChanged(pharmacyTypeCode: pharmacyTypeCode) else { return }
 
         isLoading = true
         defer { isLoading = false }
 
         do {
-            
-            let combinedName = [firstName, lastName]
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-                .joined(separator: " ")
+            let trimmedFirstName = firstName.trimmingCharacters(in: .whitespaces)
+            let trimmedLastName  = lastName.trimmingCharacters(in: .whitespaces)
 
             let request = UpdateUserProfileRequest(
-                fname: combinedName,
-                lname: nil,
+                fname: trimmedFirstName,
+                lname: trimmedLastName,
                 pharmacyName: pharmacyName,
                 phoneNumber: phoneNumber,
                 npiID: npiID,
@@ -304,7 +345,7 @@ class UserViewModel: ObservableObject {
                 notificationsEnabled: false,
                 language: "",
                 timezone: "",
-                pharmacyType: AppStorageManager.shared.selectedPharmacyType?.rawValue
+                pharmacyType: pharmacyTypeCode
             )
 
             // FIX: updateProfile returns UserResponse but the server may return
@@ -327,35 +368,35 @@ class UserViewModel: ObservableObject {
                     ?? previousUserProfileDetails
                 
                 if !userID.isEmpty {
-                    userLocalDB.update(userId: userID, field: .fname, value: combinedName)
+                    userLocalDB.update(userId: userID, field: .fname, value: trimmedFirstName)
+                    userLocalDB.update(userId: userID, field: .lname, value: trimmedLastName)
                     userLocalDB.update(userId: userID, field: .email, value: email)
                     userLocalDB.update(userId: userID, field: .pharmacyName, value: pharmacyName)
                     userLocalDB.update(userId: userID, field: .phoneNumber, value: phoneNumber)
                     userLocalDB.update(userId: userID, field: .npiId, value: npiID)
                 }
+
+                AppStorageManager.shared.selectedPharmacyTypeCode = pharmacyTypeCode
             }
         } catch {
             Log("updateUserProfile error: \(error)")
         }
     }
     // func to check if any updates were there in the profile.
-    func hasProfileChanged() -> Bool {
-        return hasUserProfileChanged()
+    func hasProfileChanged(pharmacyTypeCode: String?) -> Bool {
+        return hasUserProfileChanged(pharmacyTypeCode: pharmacyTypeCode)
     }
 
-    private func hasUserProfileChanged() -> Bool {
+    private func hasUserProfileChanged(pharmacyTypeCode: String?) -> Bool {
         guard let original = userProfileDetails else { return true }  // if no original data, treat as changed
 
-        let originalName = original.fname ?? ""
-        let currentName = [firstName, lastName]
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-        let fullNameChanged = currentName != originalName
-        let pharmacyChanged = pharmacyName != (original.pharmacyName ?? "")
-        let phoneChanged    = phoneNumber  != (original.phoneNumber ?? "")
-        let npiChanged      = npiID        != (original.npiID ?? "")
-        return fullNameChanged || pharmacyChanged || phoneChanged || npiChanged
+        let firstNameChanged   = firstName.trimmingCharacters(in: .whitespaces) != (original.fname ?? "")
+        let lastNameChanged    = lastName.trimmingCharacters(in: .whitespaces)  != (original.lname ?? "")
+        let pharmacyChanged    = pharmacyName != (original.pharmacyName ?? "")
+        let phoneChanged       = phoneNumber  != (original.phoneNumber ?? "")
+        let npiChanged         = npiID        != (original.npiID ?? "")
+        let pharmacyTypeChanged = (pharmacyTypeCode ?? "") != (original.pharmacyType ?? "")
+        return firstNameChanged || lastNameChanged || pharmacyChanged || phoneChanged || npiChanged || pharmacyTypeChanged
     }
 
     // MARK: - Transactions
@@ -547,41 +588,16 @@ class UserViewModel: ObservableObject {
 
     // MARK: REFRESH TOKEN
 
-    /// Returns `true` if the token was refreshed successfully.
-    @discardableResult
-    func refreshToken() async -> Bool {
-        do {
-            let result = try await userRepo.refreshToken(
-                refreshToken: AppStorageManager.shared.refreshToken ?? ""
-            )
-            if result.isSuccess ?? false {
-                AppStorageManager.shared.accessToken  = result.data?.accessToken ?? ""
-                AppStorageManager.shared.refreshToken = result.data?.refreshToken ?? ""
-                let expiresIn = TimeInterval(result.data?.expiresIn ?? 86400)
-                AppStorageManager.shared.tokenExpiryTimestamp =
-                    Date().addingTimeInterval(expiresIn).timeIntervalSince1970
-                return true
-            } else {
-                await SessionManager.shared.triggerExpiry()
-                return false
-            }
-        } catch {
-            Log("❌ Token refresh error: \(error)")
-            await SessionManager.shared.triggerExpiry()
-            return false
-        }
-    }
-
     /// Refreshes the access token if it's missing or within 5 minutes of expiry.
-    /// Returns `true` when a refresh was actually performed, so callers can decide
-    /// whether to re-fetch remote user data (`auth/me`) off the back of it.
+    /// Delegates to `SessionManager`, which shares one in-flight guard across
+    /// every refresh trigger (foreground check, dashboard appear, 401 handler)
+    /// so concurrent callers collapse into a single `/auth/refresh` request —
+    /// this call used to fire its own independent, uncoordinated refresh.
+    /// Returns `true` when a refresh was actually attempted, so callers can
+    /// decide whether to re-fetch remote user data (`auth/me`) off the back of it.
     @discardableResult
     func checkAndRefreshTokenIfNeeded() async -> Bool {
-        let storedExpiry = AppStorageManager.shared.tokenExpiryTimestamp ?? 0.0
-        if storedExpiry == 0.0 { return await refreshToken() }
-        let expiryDate = Date(timeIntervalSince1970: storedExpiry)
-        if Date() > expiryDate.addingTimeInterval(-300) { return await refreshToken() }
-        return false
+        await SessionManager.shared.refreshIfNeeded()
     }
 
     // MARK: - BATCH ACTIONS
@@ -779,7 +795,7 @@ class UserViewModel: ObservableObject {
         TransactionRowData(
             id: String(txn.txn_id), ndc: txn.drug?.ndc ?? "",
             drugName: txn.drug?.drug_name ?? "Unknown Pill",
-            createdAt: txn.created_at, barcodeImagePath: txn.barcode_image,
+            createdAt: txn.created_at, barcodeImagePath: [BottleInfo].decode(from: txn.bottle_info_list_json).first?.barcodeImagePath,
             drugImagePath: txn.drug?.drug_image,
             pillCount: pillCount, targetCount: Int(txn.target_count),
             countType: txn.is_dispense ? "FIXED" : "REGULAR", status: txn.status ?? "",

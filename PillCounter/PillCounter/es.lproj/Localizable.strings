@@ -78,13 +78,13 @@
 
 
 // MARK: - HL7 Notifications
-"hl7Notification.newRxTitle" = "New Rx Received";
-"hl7Notification.rxUpdatedTitle" = "Rx Updated";
-"hl7Notification.rxOnHoldTitle" = "Rx On Hold";
-"hl7Notification.rxCancelledTitle" = "Rx Cancelled";
-"hl7Notification.rxCompletedTitle" = "Rx Completed";
-"hl7Notification.qtyLabel" = "Qty";
-"hl7Notification.inventoryRequestTitle" = "Inventory Request";
+"hl7Notification.newRxTitle" = "Nueva Rx recibida";
+"hl7Notification.rxUpdatedTitle" = "Rx actualizada";
+"hl7Notification.rxOnHoldTitle" = "Rx en espera";
+"hl7Notification.rxCancelledTitle" = "Rx cancelada";
+"hl7Notification.rxCompletedTitle" = "Rx completada";
+"hl7Notification.qtyLabel" = "Cant.";
+"hl7Notification.inventoryRequestTitle" = "Solicitud de inventario";
 "hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
 "hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
 "barcodeScan.hazardousNdcDetected" = "NDC peligroso detectado.";

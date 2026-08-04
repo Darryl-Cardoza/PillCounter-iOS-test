@@ -14,6 +14,8 @@ final class DBDebugLogger {
         printBatches()
         printTransactions()
         printTransactionDetails()
+        printStockTxns()
+        printBottleInfos()
     }
 
     // MARK: - Users
@@ -37,7 +39,7 @@ final class DBDebugLogger {
 
     static func printDrugMaster() {
         let rows = DrugCatalogStore.shared.fetchAll()
-        let header = "| drug_id | ndc | gtin | drug_name | drug_type | package_qty | created_at |"
+        let header = "| drug_id | ndc | gtin | drug_name | drug_type | package_qty | drug_image | created_at |"
         let sep    = String(repeating: "-", count: header.count)
         print("\n💊 DRUG MASTER (\(rows.count) rows)")
         print(sep)
@@ -45,7 +47,7 @@ final class DBDebugLogger {
         print(sep)
         for r in rows {
             let ts = r.created_at > 0 ? formatTs(r.created_at) : "-"
-            print("| \(r.drug_id) | \(r.ndc ?? "") | \(r.gtin ?? "") | \(r.drug_name ?? "") | \(r.drug_type ?? "") | \(r.package_qty) | \(ts) |")
+            print("| \(r.drug_id) | \(r.ndc ?? "") | \(r.gtin ?? "") | \(r.drug_name ?? "") | \(r.drug_type ?? "") | \(r.package_qty) | \(r.drug_image ?? "") | \(ts) |")
         }
         print(sep)
     }
@@ -76,14 +78,14 @@ final class DBDebugLogger {
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
         let rows = (try? context.fetch(request)) ?? []
 
-        let header = "| txn_id | drug_id | drug_name | batch_id | count_type | status | target | bottle_qty | loose_qty | is_from_pms | is_ndc_verified | is_deleted | is_synced | rx_no | lot_no | expiry | bucket_id | note | created_at | updated_at |"
+        let header = "| txn_id | drug_id | drug_name | batch_id | is_dispense | status | target | is_from_pms | is_ndc_verified | is_deleted | is_synced | rx_no | bucket_id | note | created_at | updated_at |"
         let sep    = String(repeating: "-", count: header.count)
         print("\n📋 TRANSACTIONS (\(rows.count) rows)")
         print(sep)
         print(header)
         print(sep)
         for r in rows {
-            print("| \(r.txn_id) | \(r.drug_id) | \(r.drug?.drug_name ?? "") | \(r.batch_id) | \(r.count_type ?? "") | \(r.status ?? "") | \(r.target_count) | \(r.bottle_qty) | \(r.loose_qty) | \(r.is_from_pms) | \(r.is_ndc_verfied) | \(r.is_deleted) | \(r.is_synced) | \(r.rx_no ?? "") | \(r.lot_no ?? "") | \(r.expiry ?? "") | \(r.bucket_id ?? "") | \(r.note ?? "") | \(formatTs(r.created_at)) | \(formatTs(r.updated_at)) |")
+            print("| \(r.txn_id) | \(r.drug_id) | \(r.drug?.drug_name ?? "") | \(r.batch_id) | \(r.is_dispense) | \(r.status ?? "") | \(r.target_count) | \(r.is_from_pms) | \(r.is_ndc_verfied) | \(r.is_deleted) | \(r.is_synced) | \(r.rx_no ?? "") | \(r.bucket_id ?? "") | \(r.note ?? "") | \(formatTs(r.created_at)) | \(formatTs(r.updated_at)) |")
         }
         print(sep)
     }
@@ -104,6 +106,46 @@ final class DBDebugLogger {
         print(sep)
         for r in rows {
             print("| \(r.txn_details_id) | \(r.txn_id) | \(r.pill_count) | \(r.type ?? "") | \(r.is_manual) | \(r.is_deleted) | \(r.image_path ?? "") | \(formatTs(r.created_at)) | \(formatTs(r.updated_at)) |")
+        }
+        print(sep)
+    }
+
+    // MARK: - StockTxns
+
+    static func printStockTxns() {
+        let context = CoreDataManager.shared.context
+        let request: NSFetchRequest<StockTxnEntity> = StockTxnEntity.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        let rows = (try? context.fetch(request)) ?? []
+
+        let header = "| stock_txn_id | batch_id | bucket_id | drug_id | ndc | drug_name | status | is_deleted | created_at | updated_at |"
+        let sep    = String(repeating: "-", count: header.count)
+        print("\n🧾 STOCK TXNS (\(rows.count) rows)")
+        print(sep)
+        print(header)
+        print(sep)
+        for r in rows {
+            print("| \(r.stock_txn_id) | \(r.batch_id) | \(r.bucket_id ?? "") | \(r.drug_id) | \(r.drug?.ndc ?? "") | \(r.drug?.drug_name ?? "") | \(r.status ?? "") | \(r.is_deleted) | \(r.created_at ?? "-") | \(r.updated_at ?? "-") |")
+        }
+        print(sep)
+    }
+
+    // MARK: - BottleInfos
+
+    static func printBottleInfos() {
+        let context = CoreDataManager.shared.context
+        let request: NSFetchRequest<BottleInfoEntity> = BottleInfoEntity.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        let rows = (try? context.fetch(request)) ?? []
+
+        let header = "| bottle_id | stock_txn_id | batch_id | bottle_qty | loose_qty | lot_no | exp_no | serial_no | created_at | updated_at |"
+        let sep    = String(repeating: "-", count: header.count)
+        print("\n🧴 BOTTLE INFOS (\(rows.count) rows)")
+        print(sep)
+        print(header)
+        print(sep)
+        for r in rows {
+            print("| \(r.bottle_id) | \(r.stock_txn_id) | \(r.batch_id) | \(r.bottle_qty) | \(r.loose_qty) | \(r.lot_no ?? "") | \(r.exp_no ?? "") | \(r.serial_no ?? "") | \(formatTs(r.created_at)) | \(formatTs(r.updated_at)) |")
         }
         print(sep)
     }

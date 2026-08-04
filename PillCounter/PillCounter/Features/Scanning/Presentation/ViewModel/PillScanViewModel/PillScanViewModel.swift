@@ -19,6 +19,8 @@ class PillScanViewModel: ObservableObject {
     let transactionDAO: TransactionDataSource
     let transactionDetailDAO: TransactionDetailDataSource
     let batchDAO: BatchDataSource
+    let stockTxnDAO: StockTxnDataSource
+    let bottleInfoDAO: BottleInfoDataSource
     let userDataLocalStorage: UserDataSource
     let decoder: BarcodeAndQRDecoder
     let userRepo: UserRepositoryProtocol
@@ -29,7 +31,36 @@ class PillScanViewModel: ObservableObject {
     @Published var targetCount: [String] = Array(repeating: "", count: 4)
 
     // this will hold the current scanning transaction that user is performing or working with.
+    // Only used by the regular (non-StockCount) FIXED/REGULAR dispense-counting flow.
     @Published var currentTransaction: PillCountTransactionEntity?
+
+    // Stock-count equivalents of currentTransaction — one NDC row (currentStockTxn) plus the
+    // specific BottleInfoEntity row (currentBottleInfo) written by the most recent scan.
+    @Published var currentStockTxn: StockTxnEntity?
+    @Published var currentBottleInfo: BottleInfoEntity?
+
+    /// Lot/expiry/serial from the barcode scanned to start an open-pill count.
+    /// No BottleInfoEntity row is written until the count is confirmed (Proceed) —
+    /// see `createOpenedBottleFromPendingScan`.
+    var pendingOpenBottleLot: String?
+    var pendingOpenBottleExpiry: String?
+    var pendingOpenBottleSerial: String?
+
+    /// Resolved NDC/drug/batch identity for an open-pill scan, held in memory only.
+    /// No BatchCountEntity or StockTxnEntity is created until the count is confirmed
+    /// (Proceed) — see `createOpenedBottleFromPendingScan`. This lets the header/UI
+    /// show the scanned drug immediately without persisting anything for a count the
+    /// user might abandon (back out / kill the app before finishing).
+    @Published var pendingOpenBottleDrug: DrugMasterEntity?
+    var pendingOpenBottleDrugId: Int64?
+    var pendingOpenBottleBucketId: String?
+
+    /// Drug for whichever flow is active — FIXED/REGULAR dispense (currentTransaction),
+    /// stock-count open-pill counting with a persisted StockTxn (currentStockTxn), or an
+    /// open-pill scan still pending confirmation (pendingOpenBottleDrug).
+    var currentDrug: DrugMasterEntity? {
+        currentTransaction?.drug ?? currentStockTxn?.drug ?? pendingOpenBottleDrug
+    }
 
     // this will store the transaction details array for the current transaction.
     @Published var currentTransactionTransactionDetails:
@@ -54,6 +85,8 @@ class PillScanViewModel: ObservableObject {
         transactionDAO: TransactionDataSource = TransactionStore.shared,
         transactionDetailDAO: TransactionDetailDataSource = TransactionDetailStore.shared,
         batchDAO: BatchDataSource = BatchStore.shared,
+        stockTxnDAO: StockTxnDataSource = StockTxnStore.shared,
+        bottleInfoDAO: BottleInfoDataSource = BottleInfoStore.shared,
         userDataLocalStorage: UserDataSource = UserStore.shared,
         decoder: BarcodeAndQRDecoder = BarcodeAndQRDecoder(),
         userRepo: UserRepositoryProtocol = UserRepository.shared,
@@ -63,6 +96,8 @@ class PillScanViewModel: ObservableObject {
         self.transactionDAO = transactionDAO
         self.transactionDetailDAO = transactionDetailDAO
         self.batchDAO = batchDAO
+        self.stockTxnDAO = stockTxnDAO
+        self.bottleInfoDAO = bottleInfoDAO
         self.userDataLocalStorage = userDataLocalStorage
         self.decoder = decoder
         self.userRepo = userRepo
@@ -140,23 +175,21 @@ class PillScanViewModel: ObservableObject {
     /// Returns the derived count type + scan type so the caller can route, or
     /// nil if the transaction no longer exists.
     @discardableResult
-    func startDispenseCount(txnId: Int64) -> (countType: CountType, scanType: ScanType)? {
+    func startDispenseCount(txnId: Int64) -> (isDispense: Bool, scanType: ScanType)? {
         guard let txn = transactionDAO.fetchById(txnId) else { return nil }
 
         selectedTransaction = txn
 
-        let countType: CountType =
-            txn.count_type?.uppercased() == CountType.REGULAR.rawValue
-            ? .REGULAR : .FIXED
+        let isDispense = txn.is_dispense
         let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
 
-        return (countType, scanType)
+        return (isDispense, scanType)
     }
 
-    private func postTransactionUIUpdate(countType: CountType) {
+    private func postTransactionUIUpdate(isDispense: Bool) {
         getAllTransactionDetailsOfTheCurrentTransaction()
 
-        if countType == .FIXED {
+        if isDispense {
             updateTargetCountForCurrentTransaction()
         }
 
@@ -179,16 +212,13 @@ class PillScanViewModel: ObservableObject {
     
     // create transaction for every new transaction that user scans the barcode or enters the ndc or the gtin number manually.
     func createTransaction(
-        drugId: Int64, countType: CountType,
+        drugId: Int64, isDispense: Bool,
         barcodeImage: UIImage? = nil,
         isComingFromPms:Bool = false,
         isControlled:Bool? = nil,
         targetCount: Int32? = nil,
         drugName: String? = nil,
         batchId: Int64? = nil,
-        expirationDate: String? = nil,
-        lotNumber: String? = nil,
-        serialNumber: String? = nil,
         rxNo:String? = nil,
         bucketId: String? = nil,
         priority: String? = nil,
@@ -223,16 +253,13 @@ class PillScanViewModel: ObservableObject {
         transactionDAO.create(
             for: user,
             drugId: drugId,
-            countType: countType,
+            isDispense: isDispense,
             batchId: batchId ?? 0,
             barcodeImagePath: savedPath,
             isFromPms: isComingFromPms,
             drugName: drugName,
             targetCount: targetCount ?? 0,
             isControlled: isControlled,
-            expirationDate: expirationDate,
-            lotNumber: lotNumber,
-            serialNumber: serialNumber,
             rxNo: rxNo,
             bucketId: bucketId,
             priority: priority,
@@ -248,7 +275,7 @@ class PillScanViewModel: ObservableObject {
     
     func updaetTransaction(
         drugId: Int64,
-        countType: CountType,
+        isDispense: Bool,
         txnId:Int64,
         barcodeImage: UIImage? = nil,
         isComingFromPms:Bool = false,
@@ -284,7 +311,7 @@ class PillScanViewModel: ObservableObject {
         transactionDAO.update(
             txnId: txnId,
             drugId: drugId,
-            countType: countType,
+            isDispense: isDispense,
             targetCount: targetCount,
             barcodeImagePath: savedPath
         )

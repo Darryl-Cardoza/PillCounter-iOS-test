@@ -22,16 +22,13 @@ final class TransactionStore {
     func create(
         for user: UserEntity,
         drugId: Int64?,
-        countType: CountType,
+        isDispense: Bool,
         batchId: Int64 = 0,
         barcodeImagePath: String = "",
         isFromPms: Bool = false,
         drugName: String? = nil,
         targetCount: Int32 = 0,
         isControlled: Bool? = nil,
-        expirationDate: String? = nil,
-        lotNumber: String? = nil,
-        serialNumber: String? = nil,
         rxNo: String? = nil,
         bucketId: String? = nil,
         priority: String? = nil,
@@ -44,7 +41,7 @@ final class TransactionStore {
         entity.batch_id = batchId
         entity.rx_no = rxNo
         entity.txn_priority = priority
-        entity.count_type = countType.rawValue
+        entity.is_dispense = isDispense
         entity.status = CountStatus.PARTIAL.rawValue
         entity.is_deleted = false
         entity.barcode_image = barcodeImagePath
@@ -52,9 +49,6 @@ final class TransactionStore {
         entity.is_synced = false
         entity.target_count = targetCount
         entity.is_ndc_verfied = false
-        entity.expiry = expirationDate
-        entity.lot_no = lotNumber
-        entity.serial_no = serialNumber
         entity.bucket_id = bucketId
         entity.workflow_step = workFlowStep
         entity.user = user
@@ -69,7 +63,7 @@ final class TransactionStore {
         }
 
         CoreDataManager.shared.save(context: context)
-        print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), countType: \(countType.rawValue), batchId: \(batchId), isFromPms: \(isFromPms), lotNo: \(lotNumber ?? "-"), serialNo: \(serialNumber ?? "-"), expiry: \(expirationDate ?? "-")")
+        print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), isDispense: \(isDispense), batchId: \(batchId), isFromPms: \(isFromPms)")
         transactionsDidChange.send()
         return entity
     }
@@ -97,13 +91,13 @@ final class TransactionStore {
 
     func fetchPartial(
         for user: UserEntity,
-        countType: CountType
+        isDispense: Bool
     ) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         let completedStatuses = [CountStatus.COMPLETED.rawValue]
         request.predicate = NSPredicate(
-            format: "user == %@ AND is_deleted == false AND batch_id == 0 AND count_type == %@ AND NOT (status IN %@)",
-            user, countType.rawValue, completedStatuses
+            format: "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == %@ AND NOT (status IN %@)",
+            user, NSNumber(value: isDispense), completedStatuses
         )
         request.sortDescriptors = [
             NSSortDescriptor(key: "is_from_pms", ascending: false),
@@ -227,11 +221,11 @@ final class TransactionStore {
         return results
     }
 
-    func fetchPartialFromPms(for user: UserEntity, countType: CountType) -> [PillCountTransactionEntity] {
+    func fetchPartialFromPms(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "user == %@ AND is_deleted == false AND count_type == %@ AND status == %@ AND is_from_pms == true",
-            user, countType.rawValue, CountStatus.PARTIAL.rawValue
+            format: "user == %@ AND is_deleted == false AND is_dispense == %@ AND status == %@ AND is_from_pms == true",
+            user, NSNumber(value: isDispense), CountStatus.PARTIAL.rawValue
         )
         request.sortDescriptors = [
             NSSortDescriptor(key: "is_from_pms", ascending: false),
@@ -245,8 +239,8 @@ final class TransactionStore {
     func fetchCompletedUnsynced(for user: UserEntity) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND count_type == %@",
-            user, CountStatus.COMPLETED.rawValue, CountType.FIXED.rawValue
+            format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND is_dispense == %@",
+            user, CountStatus.COMPLETED.rawValue, NSNumber(value: true)
         )
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
         let results = (try? context.fetch(request)) ?? []
@@ -269,20 +263,15 @@ final class TransactionStore {
         results.forEach { refreshDecrypted($0) }
         StoreLogger.log(
             dao: "TransactionDAO", op: "fetchAll",
-            columns: ["txn_id", "rx_no", "drug_name", "count_type", "status", "batch_id", "target_count", "lot_no", "serial_no"],
+            columns: ["txn_id", "rx_no", "drug_name", "is_dispense", "status", "batch_id", "target_count"],
             rows: results.map { [
                 "\($0.txn_id)",
                 $0.rx_no ?? "-",
                 $0.drug?.drug_name ?? "-",
-                $0.count_type ?? "-",
+                "\($0.is_dispense)",
                 $0.status ?? "-",
                 "\($0.batch_id)",
                 "\($0.target_count)",
-//                "\($0.is_from_pms)",
-//                "\($0.is_synced)",
-                "\($0.lot_no)",
-//                "\($0.expiry_date)",
-                $0.serial_no ?? "",
             ]}
         )
         return results
@@ -312,36 +301,12 @@ final class TransactionStore {
         return max(containerCount - txn.target_count, 0)
     }
 
-    /// Increments the given count fields by the provided amounts (additive).
-    func updateCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
-        guard let txn = fetchById(txnId) else { return }
-        if let bottleQty { txn.bottle_qty += bottleQty }
-        if let looseQty { txn.loose_qty += looseQty }
-        if let openBottleQty { txn.open_bottle_qty += openBottleQty }
-        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-        CoreDataManager.shared.save(context: context)
-        transactionsDidChange.send()
-        print("📋 [TransactionDAO] UPDATED counts — txnId: \(txnId), bottleQty: \(bottleQty.map { "+\($0)" } ?? "-"), looseQty: \(looseQty.map { "+\($0)" } ?? "-"), openBottleQty: \(openBottleQty.map { "+\($0)" } ?? "-")")
-    }
-
-    /// Sets the given count fields to absolute values (non-additive). Use for open pill count finalization.
-    func setAbsoluteCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
-        guard let txn = fetchById(txnId) else { return }
-        if let bottleQty { txn.bottle_qty = bottleQty }
-        if let looseQty { txn.loose_qty = looseQty }
-        if let openBottleQty { txn.open_bottle_qty = openBottleQty }
-        txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
-        CoreDataManager.shared.save(context: context)
-        transactionsDidChange.send()
-        print("📋 [TransactionDAO] SET absolute counts — txnId: \(txnId), bottleQty: \(String(describing: bottleQty)), looseQty: \(String(describing: looseQty)), openBottleQty: \(String(describing: openBottleQty))")
-    }
-
-    func countTransactions(for user: UserEntity, countType: CountType, status: CountStatus) -> Int {
+    func countTransactions(for user: UserEntity, isDispense: Bool, status: CountStatus) -> Int {
         let request: NSFetchRequest<NSNumber> = NSFetchRequest(entityName: "PillCountTransactionEntity")
         request.resultType = .countResultType
         request.predicate = NSPredicate(
-            format: "user == %@ AND count_type == %@ AND status == %@ AND is_deleted == false",
-            user, countType.rawValue, status.rawValue
+            format: "user == %@ AND is_dispense == %@ AND status == %@ AND is_deleted == false",
+            user, NSNumber(value: isDispense), status.rawValue
         )
         return (try? context.count(for: request)) ?? 0
     }
@@ -446,7 +411,7 @@ final class TransactionStore {
     func attemptHardDeleteIfEligible(txnId: Int64) -> Bool {
         guard let txn = fetchById(txnId) else { return false }
         guard !AppStorageManager.shared.allowLocalStorage,
-              txn.count_type == CountType.FIXED.rawValue,
+              txn.is_dispense,
               txn.status == CountStatus.COMPLETED.rawValue
                 || txn.status == CountStatus.FORCE_COMPLETED.rawValue,
               txn.is_synced
@@ -463,7 +428,7 @@ final class TransactionStore {
     func update(
         txnId: Int64,
         drugId: Int64?,
-        countType: CountType,
+        isDispense: Bool,
         targetCount: Int32?,
         barcodeImagePath: String?,
         substituedDrugId: Int64? = nil,
@@ -483,13 +448,13 @@ final class TransactionStore {
             txn.substitueDrug = substituteDrugEntity
         }
 
-        txn.count_type = countType.rawValue
+        txn.is_dispense = isDispense
         txn.is_synced = false
         if let targetCount { txn.target_count = targetCount }
         if let barcodeImagePath, !barcodeImagePath.isEmpty { txn.barcode_image = barcodeImagePath }
         txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
         CoreDataManager.shared.save(context: context)
-        print("📋 [TransactionDAO] UPDATED — txnId: \(txnId), drugId: \(drugId ?? 0), countType: \(countType.rawValue), targetCount: \(targetCount ?? 0)")
+        print("📋 [TransactionDAO] UPDATED — txnId: \(txnId), drugId: \(drugId ?? 0), isDispense: \(isDispense), targetCount: \(targetCount ?? 0)")
     }
 
     // MARK: - Delete
@@ -527,8 +492,8 @@ final class TransactionStore {
         let cutoff = Int64(Date().timeIntervalSince1970 * 1000) - Int64(maxAge * 1000)
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(
-            format: "is_deleted == false AND is_synced == true AND count_type == %@ AND (status == %@ OR status == %@) AND updated_at <= %lld",
-            CountType.FIXED.rawValue, CountStatus.COMPLETED.rawValue, CountStatus.FORCE_COMPLETED.rawValue, cutoff
+            format: "is_deleted == false AND is_synced == true AND is_dispense == %@ AND (status == %@ OR status == %@) AND updated_at <= %lld",
+            NSNumber(value: true), CountStatus.COMPLETED.rawValue, CountStatus.FORCE_COMPLETED.rawValue, cutoff
         )
         guard let stale = try? context.fetch(request), !stale.isEmpty else { return }
 
@@ -553,7 +518,7 @@ final class TransactionStore {
     // MARK: - Private
 
     /// Deterministically decrypts the object's encrypted fields in place
-    /// (e.g. rx_no, barcode_image, lot_no, note). Replaces the old
+    /// (e.g. rx_no, barcode_image, note). Replaces the old
     /// context.refresh(_, mergeChanges: false) refault, which did NOT reliably
     /// re-run awakeFromFetch and could surface ciphertext written by willSave
     /// in the same session.

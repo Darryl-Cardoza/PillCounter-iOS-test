@@ -20,7 +20,7 @@ struct DispenseItemRowView: View {
     }
 
     private var isFixedCount: Bool {
-        data.countType.uppercased() == CountType.FIXED.rawValue
+        data.countType.uppercased() == "FIXED"
     }
 
 
@@ -41,6 +41,7 @@ struct DispenseItemRowView: View {
 
             ThumbnailImageView(
                 imagePath: data.barcodeImagePath,
+                drugImagePath: data.drugImagePath,
                 width: 80,
                 height: 64,
                 cornerRadius: 8,
@@ -50,7 +51,8 @@ struct DispenseItemRowView: View {
                 placeholderSize: CGSize(width: 28, height: 28),
                 showImageBackground: appColors.primaryBackground,
                 dosageForm: isFixedCount ? data.dosageForm : nil,
-                strength: isFixedCount ? data.strength : nil
+                strength: isFixedCount ? data.strength : nil,
+                fillDrugImage: true
             )
 
             // Center info

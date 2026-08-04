@@ -549,7 +549,7 @@ struct DashboardView: View {
     // MARK: - Navigation helpers
 
     private func navigateToDispense() {
-        router.selectedPillScanningType = .FIXED
+        router.selectedPillScanningIsDispense = true
         router.navigate(
             to: .authentication(
                 .login(.dashboard(.pillCount(.scan(.rx_label))))

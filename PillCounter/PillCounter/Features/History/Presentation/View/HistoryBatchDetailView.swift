@@ -266,6 +266,9 @@ struct HistoryBatchDetailView: View {
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(appColors.text)
                             Spacer()
+                            Text("\(txn.openedBottleCount)")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(appColors.text)
                         }
                         .padding(.top, 16)
                         .padding(.vertical, 14)

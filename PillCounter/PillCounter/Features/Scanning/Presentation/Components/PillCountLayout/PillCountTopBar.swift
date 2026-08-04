@@ -3,7 +3,7 @@
 //  PillCounter
 //
 //  Top bar of the full-screen pill-count UI. Full-width, transparent dark bg:
-//   back | NDC/drug name | glove | Form/Strength/Bucket
+//   back | NDC/drug name | glove | Strength/Bucket
 //
 
 import SwiftUI
@@ -14,6 +14,7 @@ struct PillCountTopBar: View {
 
     let ndc: String
     let drugName: String
+    let drugImagePath: String?
     let form: String
     let strength: String
     let bucket: String
@@ -56,6 +57,7 @@ struct PillCountTopBar: View {
     private var singleRowContent: some View {
         HStack(alignment: .center, spacing: isIpad ? 16 : 10) {
             backButton
+            drugThumbnail
             ndcDrugColumn
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -100,6 +102,19 @@ struct PillCountTopBar: View {
         }
     }
 
+    private var drugThumbnail: some View {
+        ThumbnailImageView(
+            imagePath: nil,
+            drugImagePath: drugImagePath,
+            width: isIpad ? 70 : 50,
+            height: isIpad ? 48 : 40,
+            cornerRadius: 6,
+            placeholderImageName: "dispense_placeholder",
+            placeholderSize: CGSize(width: isIpad ? 20 : 16, height: isIpad ? 20 : 16),
+            fillDrugImage: true
+        )
+    }
+
     private var ndcDrugColumn: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("NDC \(ndc)")
@@ -117,29 +132,10 @@ struct PillCountTopBar: View {
     @ViewBuilder
     private func formStrengthBucketRow(equalWidth: Bool = false) -> some View {
         HStack(alignment: .top, spacing: equalWidth ? 0 : (isIpad ? 40 : 22)) {
-            formIconColumn(title: L10n.BarcodeScan.form, dosageForm: form)
-                .frame(maxWidth: equalWidth ? .infinity : nil)
             infoColumn(title: L10n.BarcodeScan.strength, value: strength)
                 .frame(maxWidth: equalWidth ? .infinity : nil)
             infoColumn(title: L10n.BarcodeScan.bucket, value: bucket)
                 .frame(maxWidth: equalWidth ? .infinity : nil)
-        }
-    }
-
-    /// Form column — shows the dosage-form icon (same utility as the thumbnail)
-    /// instead of the raw form text.
-    @ViewBuilder
-    private func formIconColumn(title: String, dosageForm: String) -> some View {
-        VStack(alignment: .center, spacing: 8) {
-            Text(title)
-                .font(.system(size: isIpad ? 14 : 11, weight: .regular))
-                .foregroundStyle(appColors.text)
-            Image(DosageFormIcon.iconName(for: dosageForm))
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: isIpad ? 28 : 24, height: isIpad ? 28 : 16)
-                .foregroundStyle(appColors.text)
         }
     }
 

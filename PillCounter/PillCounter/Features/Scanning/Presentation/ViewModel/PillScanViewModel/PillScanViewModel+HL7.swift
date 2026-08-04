@@ -19,9 +19,6 @@ extension PillScanViewModel {
             return
         }
 
-        let countType: CountType =
-            (msgType == .dispenseOrder || msgType == .editDispenseOrder) ? .FIXED : .REGULAR
-
         print("MSG Type \(msgType)")
 
         Task(priority: .background) {
@@ -30,20 +27,20 @@ extension PillScanViewModel {
                 await createFixedHl7Transaction(
                     message: message,
                     rawHl7: rawHl7,
-                    inboundType: .FIXED,
+                    inboundType: true,
                     callback: callback
                 )
             case .editDispenseOrder:
                 await editFixedHl7Transaction(
                     message: message,
                     rawHl7: rawHl7,
-                    inboundType: .FIXED,
+                    inboundType: true,
                     callback: callback
                 )
             case .inventoryRequest:
                 await createRegularHl7Transaction(
                     message: message,
-                    inboundType: .REGULAR,
+                    inboundType: false,
                     callback: callback
                 )
             case .cancelOrder:
@@ -97,7 +94,7 @@ extension PillScanViewModel {
     private func createFixedHl7Transaction(
         message: HL7Message,
         rawHl7: String = "",
-        inboundType: CountType,
+        inboundType: Bool,
         callback: HL7SimpleCallback? = nil
     ) async {
         var hasError = false
@@ -152,7 +149,7 @@ extension PillScanViewModel {
             await processHl7DrugAndCreateTransaction(
                 ndc: ndc,
                 drugName: drugName,
-                countType: inboundType,
+                isDispense: inboundType,
                 targetCount: targetCount,
                 rxNo: orderId,
                 priority: priority,
@@ -167,7 +164,7 @@ extension PillScanViewModel {
     @MainActor
     private func createRegularHl7Transaction(
         message: HL7Message,
-        inboundType: CountType,
+        inboundType: Bool,
         callback: HL7SimpleCallback? = nil
     ) async {
         await createBatchAndTxnsFromHL7Request(
@@ -191,7 +188,7 @@ extension PillScanViewModel {
     private func editFixedHl7Transaction(
         message: HL7Message,
         rawHl7: String = "",
-        inboundType: CountType,
+        inboundType: Bool,
         callback: HL7SimpleCallback? = nil
     ) async {
         guard let rxNo = message.order?.placerOrderNumber, !rxNo.isEmpty else {
@@ -374,7 +371,7 @@ extension PillScanViewModel {
     func processHl7DrugAndCreateTransaction(
         ndc: String,
         drugName: String,
-        countType: CountType,
+        isDispense: Bool,
         targetCount: Int32? = nil,
         rxNo: String? = nil,
         priority: String? = nil,
@@ -472,7 +469,7 @@ extension PillScanViewModel {
         } else {
             await createTransaction(
                 drugId: drugIdToUse,
-                countType: countType,
+                isDispense: isDispense,
                 isComingFromPms: true,
                 isControlled: true,
                 targetCount: targetCount,
@@ -501,7 +498,7 @@ extension PillScanViewModel {
         // MARK: 4 Refresh UI / State
         getAllTransactionDetailsOfTheCurrentTransaction()
 
-        if countType == .FIXED {
+        if isDispense {
             updateTargetCountForCurrentTransaction()
         }
 

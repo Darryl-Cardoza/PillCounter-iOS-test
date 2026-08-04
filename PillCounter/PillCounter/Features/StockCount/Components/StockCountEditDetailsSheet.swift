@@ -15,8 +15,7 @@ enum LotField {
 
 struct EditableLotRow: Identifiable {
     let id = UUID()
-    let txnId: Int64
-    let txnIds: [Int64]           // all transactions in this lot group
+    let bottleIds: [Int64]        // all BottleInfoEntity rows in this lot group (sealed row is alone; opened rows share a lot)
     var lot: String
     var expiry: String
     var sealedBottles: Int        // editable
@@ -401,26 +400,37 @@ struct StockCountEditDetailsSheet: View {
         guard !isInitialized else { return }
         isInitialized = true
 
-        guard let batchId = stockCountViewModel.currentBatch?.batch_id else { return }
+        guard let batchId = stockCountViewModel.currentBatch?.batch_id,
+              let stockTxn = stockCountViewModel.stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: txn.ndc) else { return }
 
-        let allTxns = stockCountViewModel.transactionDAO.fetchByBatch(batchId: batchId)
-        let ndcTxns = allTxns.filter { $0.drug?.ndc == txn.ndc }
-
-        // Group by lot|expiry key — same logic as the mapper
-        let grouped = Dictionary(grouping: ndcTxns) { "\($0.lot_no ?? "")|\($0.expiry ?? "")" }
+        let bottles = stockCountViewModel.bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+        let pkgQty = stockTxn.drug?.package_qty ?? 0
 
         var rows: [EditableLotRow] = []
-        for (_, lotTxns) in grouped {
-            guard let first = lotTxns.first else { continue }
-            let pkgQty = first.drug?.package_qty ?? 0
-            let sealedBottles = lotTxns.reduce(0) { $0 + Int($1.bottle_qty) }
-            let openPills = lotTxns.reduce(0) { $0 + Int($1.loose_qty) }
+
+        // Sealed row stands alone — one BottleInfoEntity row per StockTxnEntity.
+        if let sealed = bottles.first(where: { $0.bottle_qty > 0 && $0.loose_qty == 0 }) {
             rows.append(EditableLotRow(
-                txnId: first.txn_id,
-                txnIds: lotTxns.map { $0.txn_id },
+                bottleIds: [sealed.bottle_id],
+                lot: sealed.lot_no ?? "",
+                expiry: sealed.exp_no ?? "",
+                sealedBottles: Int(sealed.bottle_qty),
+                openPills: 0,
+                packageQty: pkgQty
+            ))
+        }
+
+        // Opened rows group by lot|expiry — same logic as the mapper.
+        let openedRows = bottles.filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
+        let grouped = Dictionary(grouping: openedRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
+        for (_, lotBottles) in grouped {
+            guard let first = lotBottles.first else { continue }
+            let openPills = lotBottles.reduce(0) { $0 + Int($1.loose_qty) }
+            rows.append(EditableLotRow(
+                bottleIds: lotBottles.map { $0.bottle_id },
                 lot: first.lot_no ?? "",
-                expiry: first.expiry ?? "",
-                sealedBottles: sealedBottles,
+                expiry: first.exp_no ?? "",
+                sealedBottles: 0,
                 openPills: openPills,
                 packageQty: pkgQty
             ))
@@ -433,11 +443,11 @@ struct StockCountEditDetailsSheet: View {
     private func deleteRow(_ rowId: UUID, field: LotField) {
         guard let idx = lotRows.firstIndex(where: { $0.id == rowId }) else { return }
         let row = lotRows[idx]
-        // Don't delete the transactions — just zero out the tapped section's count.
+        // Don't delete the rows — just zero out the tapped section's count.
         // Sealed trash zeroes only bottle_qty; open-pills trash zeroes only loose_qty.
-        for txnId in row.txnIds {
-            stockCountViewModel.transactionDAO.setAbsoluteCounts(
-                txnId: txnId,
+        for bottleId in row.bottleIds {
+            stockCountViewModel.bottleInfoDAO.setAbsolute(
+                bottleId: bottleId,
                 bottleQty: field == .sealed ? 0 : nil,
                 looseQty:  field == .open   ? 0 : nil
             )
@@ -452,18 +462,18 @@ struct StockCountEditDetailsSheet: View {
 
     private func saveChanges() {
         for row in lotRows {
-            // A lot row aggregates the counts of every transaction in the group
-            // (see buildRows — sealedBottles/openPills are sums over row.txnIds).
-            // Writing that summed value onto only the first txn while leaving the
-            // siblings at their original counts would inflate the NDC-wide total
-            // on the next reload (e.g. 50 shown becomes 53 saved). Collapse the
-            // group: put the edited totals on the primary txn and zero the rest,
-            // so the saved group total equals exactly what the user sees.
-            let primaryTxnId = row.txnIds.contains(row.txnId) ? row.txnId : row.txnIds.first
-            for txnId in row.txnIds {
-                let isPrimary = txnId == primaryTxnId
-                stockCountViewModel.transactionDAO.setAbsoluteCounts(
-                    txnId: txnId,
+            // A lot row aggregates the counts of every bottle row in the group
+            // (see buildRows — openPills is a sum over row.bottleIds for opened rows;
+            // sealed rows are always a single bottleId). Writing that summed value onto
+            // only the first row while leaving siblings at their original counts would
+            // inflate the NDC-wide total on the next reload. Collapse the group: put the
+            // edited totals on the primary row and zero the rest, so the saved group
+            // total equals exactly what the user sees.
+            let primaryBottleId = row.bottleIds.first
+            for bottleId in row.bottleIds {
+                let isPrimary = bottleId == primaryBottleId
+                stockCountViewModel.bottleInfoDAO.setAbsolute(
+                    bottleId: bottleId,
                     bottleQty: isPrimary ? Int32(row.sealedBottles) : 0,
                     looseQty:  isPrimary ? Int32(row.openPills)     : 0
                 )

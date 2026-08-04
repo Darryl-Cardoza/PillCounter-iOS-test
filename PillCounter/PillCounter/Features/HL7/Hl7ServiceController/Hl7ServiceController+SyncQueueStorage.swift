@@ -54,11 +54,12 @@ extension Hl7ServiceController {
             batch.req_id_from_pms != nil
         else { return }
 
-        let txns = transactionDAO.fetchByBatch(batchId: batchId)
+        let stockTxns = StockTxnStore.shared.fetchByBatch(batchId: batchId)
 
         guard
-            !txns.isEmpty,
-            let user = txns.first?.user
+            !stockTxns.isEmpty,
+            let userId = batch.user_id,
+            let user = UserStore.shared.fetchByUserId(userId)
         else { return }
 
         let hl7 = HL7CompletionBuilder().buildInventoryMessage(batch: batch, user: user)

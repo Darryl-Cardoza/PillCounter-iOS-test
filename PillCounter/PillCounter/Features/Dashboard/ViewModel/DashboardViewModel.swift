@@ -104,7 +104,7 @@ final class DashboardViewModel: ObservableObject {
     /// under any stat-card filter. Excluded at the merge source so both the lists and
     /// the filtered views drop them.
     private func isRegular(_ txn: PillCountTransactionEntity) -> Bool {
-        txn.count_type?.uppercased() == CountType.REGULAR.rawValue
+        !txn.is_dispense
     }
 
     // MARK: - Merged queues
@@ -318,8 +318,8 @@ final class DashboardViewModel: ObservableObject {
         guard let user = userStore.fetchByUserId(userId) else { return }
 
         // Partial (Today's Queue)
-        let fixed = transactionStore.fetchPartial(for: user, countType: .FIXED)
-        let regular = transactionStore.fetchPartial(for: user, countType: .REGULAR)
+        let fixed = transactionStore.fetchPartial(for: user, isDispense: true)
+        let regular = transactionStore.fetchPartial(for: user, isDispense: false)
         dispensePartial = (fixed + regular).filter {
             $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue
         }
@@ -367,7 +367,7 @@ final class DashboardViewModel: ObservableObject {
         print("📋 TODAY'S QUEUE — \(transactions.count) transaction(s)")
         for (i, t) in transactions.enumerated() {
             print("  [\(i + 1)] txn=\(t.txn_id) drug=\(t.drug?.drug_name ?? "-") "
-                + "type=\(t.count_type ?? "-") status=\(t.status ?? "-") "
+                + "isDispense=\(t.is_dispense) status=\(t.status ?? "-") "
                 + "priority=\(t.txn_priority ?? "-") batch=\(t.batch_id) "
                 + "ndcVerified=\(t.is_ndc_verfied)")
         }

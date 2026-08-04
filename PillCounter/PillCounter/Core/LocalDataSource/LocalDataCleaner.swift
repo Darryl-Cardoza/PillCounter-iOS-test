@@ -22,6 +22,8 @@ final class LocalDataCleaner {
 
             TransactionDetailStore.shared.deleteAll()
             TransactionStore.shared.deleteAll()
+            BottleInfoStore.shared.deleteAll()
+            StockTxnStore.shared.deleteAll()
             BatchStore.shared.deleteAll()
             // NOTE: the drug master (DrugCatalogStore) is intentionally NOT cleared
             // here. It is built up on-device via saveManual(...) as drugs are scanned
@@ -41,6 +43,8 @@ final class LocalDataCleaner {
             // Reset counters
             UserDefaults.standard.removeObject(forKey: "txnTransactionIdCounter")
             UserDefaults.standard.removeObject(forKey: "txnDetailIdCounter")
+            UserDefaults.standard.removeObject(forKey: "stockTxnIdCounter")
+            UserDefaults.standard.removeObject(forKey: "bottleInfoIdCounter")
 
             print("All local data cleared successfully.")
 

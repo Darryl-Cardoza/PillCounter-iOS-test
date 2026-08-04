@@ -114,10 +114,12 @@ extension UnifiedCameraView {
                     cornerRadius: 30, horizontalPadding: 32, verticalPadding: 20, iconSize: 0,
                     action: {
                         stockCountViewModel.showStockCountScannedDetails = false
-                        if pillScanViewModel.selectedTransaction?.is_from_pms == true,
-                           let txn = pillScanViewModel.selectedTransaction {
+                        if stockCountViewModel.currentBatch?.req_id_from_pms != nil,
+                           let batchId = stockCountViewModel.currentBatch?.batch_id,
+                           let ndc = stockCountViewModel.scannedDrugData?.ndc,
+                           let stockTxn = stockCountViewModel.stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) {
                             pillScanViewModel.updatePmsTxnCount(
-                                txn: txn,
+                                stockTxn: stockTxn,
                                 containerStatus: scannedBottleContainerStatus,
                                 scannedQty: Int(stockCountViewModel.scannedDrugData?.quantity ?? 0)
                             )

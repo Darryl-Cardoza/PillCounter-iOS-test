@@ -20,7 +20,7 @@ struct PillCountingStepResolver {
         let drugSchedule = DrugSchedule(rawValue: drugType ?? "")
         
         // ------ REGULAR COUNT FLOW -------
-        if txn?.count_type == CountType.REGULAR.rawValue {
+        if txn?.is_dispense == false {
             return [
                 .scan,
                 .targetVerification
@@ -28,7 +28,7 @@ struct PillCountingStepResolver {
         }
 
         // -------- NON CONTROLLED FLOW --------
-        if (txn?.count_type == CountType.FIXED.rawValue) && drugSchedule == nil  {
+        if (txn?.is_dispense == true) && drugSchedule == nil  {
             return [
                 .scan,
                 .targetVerification,

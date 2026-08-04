@@ -38,20 +38,18 @@ protocol TransactionDataSource: AnyObject {
     func fetchById(_ txnId: Int64) -> PillCountTransactionEntity?
     func fetchByBatch(batchId: Int64) -> [PillCountTransactionEntity]
     func fetchByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64) -> [PillCountTransactionEntity]
-    func fetchPartial(for user: UserEntity, countType: CountType) -> [PillCountTransactionEntity]
-    func fetchPartialFromPms(for user: UserEntity, countType: CountType) -> [PillCountTransactionEntity]
+    func fetchPartial(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity]
+    func fetchPartialFromPms(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity]
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity]
     func fetchCompletedUnsynced() -> [PillCountTransactionEntity]
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity?
     func fetchAllRxNos(for user: UserEntity) -> [String]
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity]
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity?
-    func countTransactions(for user: UserEntity, countType: CountType, status: CountStatus) -> Int
+    func countTransactions(for user: UserEntity, isDispense: Bool, status: CountStatus) -> Int
     func getWorkflowStep(txn: PillCountTransactionEntity) -> ControlledStep?
     func restoreDeleted(txnId: Int64)
     func updateStatus(txnId: Int64, status: CountStatus)
-    func updateCounts(txnId: Int64, bottleQty: Int32?, looseQty: Int32?, openBottleQty: Int32?)
-    func setAbsoluteCounts(txnId: Int64, bottleQty: Int32?, looseQty: Int32?, openBottleQty: Int32?)
     func updateNote(txnId: Int64, note: String)
     func updateTargetCount(txnId: Int64, targetCount: Int32)
     func updateWorkflowStep(txnId: Int64, step: ControlledStep)
@@ -60,16 +58,47 @@ protocol TransactionDataSource: AnyObject {
     func updateNdcVerified(txnId: Int64, verified: Bool)
     func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?)
     func create(
-        for user: UserEntity, drugId: Int64?, countType: CountType, batchId: Int64,
+        for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64,
         barcodeImagePath: String, isFromPms: Bool, drugName: String?, targetCount: Int32,
-        isControlled: Bool?, expirationDate: String?, lotNumber: String?, serialNumber: String?,
-        rxNo: String?, bucketId: String?, priority: String?, workFlowStep: String?
+        isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
+        workFlowStep: String?
     ) -> PillCountTransactionEntity
     func update(
-        txnId: Int64, drugId: Int64?, countType: CountType, targetCount: Int32?,
+        txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
         barcodeImagePath: String?, substituedDrugId: Int64?, isSubstitue: Bool
     )
     func softDelete(txnId: Int64)
+}
+
+// MARK: - StockTxn store seam
+
+protocol StockTxnDataSource: AnyObject {
+    var stockTxnsDidChange: PassthroughSubject<Void, Never> { get }
+
+    @discardableResult
+    func fetchOrCreate(batch: BatchCountEntity, drugId: Int64, bucketId: String?) -> StockTxnEntity
+    func fetchById(_ stockTxnId: Int64) -> StockTxnEntity?
+    func fetchByBatch(batchId: Int64) -> [StockTxnEntity]
+    func fetchByBatchAndNdc(batchId: Int64, ndc: String) -> StockTxnEntity?
+    func updateStatus(stockTxnId: Int64, status: CountStatus)
+    func softDelete(stockTxnId: Int64)
+}
+
+// MARK: - BottleInfo store seam
+
+protocol BottleInfoDataSource: AnyObject {
+    var bottleInfosDidChange: PassthroughSubject<Void, Never> { get }
+
+    @discardableResult
+    func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity?
+    @discardableResult
+    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?) -> BottleInfoEntity?
+    func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32)
+    func fetchById(_ bottleId: Int64) -> BottleInfoEntity?
+    func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity]
+    func fetchByBatch(batchId: Int64) -> [BottleInfoEntity]
+    func setAbsolute(bottleId: Int64, bottleQty: Int32?, looseQty: Int32?)
+    func softDelete(bottleId: Int64)
 }
 
 // MARK: - Transaction-detail store seam
@@ -137,37 +166,28 @@ extension BatchDataSource {
 }
 
 extension TransactionDataSource {
-    func updateCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
-        updateCounts(txnId: txnId, bottleQty: bottleQty, looseQty: looseQty, openBottleQty: openBottleQty)
-    }
-    func setAbsoluteCounts(txnId: Int64, bottleQty: Int32? = nil, looseQty: Int32? = nil, openBottleQty: Int32? = nil) {
-        setAbsoluteCounts(txnId: txnId, bottleQty: bottleQty, looseQty: looseQty, openBottleQty: openBottleQty)
-    }
-
     /// Convenience matching the store's defaulted `create` so call sites keep
     /// their short forms when working against the protocol type.
     func create(
-        for user: UserEntity, drugId: Int64?, countType: CountType, batchId: Int64 = 0,
+        for user: UserEntity, drugId: Int64?, isDispense: Bool, batchId: Int64 = 0,
         barcodeImagePath: String = "", isFromPms: Bool = false, drugName: String? = nil,
-        targetCount: Int32 = 0, isControlled: Bool? = nil, expirationDate: String? = nil,
-        lotNumber: String? = nil, serialNumber: String? = nil, rxNo: String? = nil,
+        targetCount: Int32 = 0, isControlled: Bool? = nil, rxNo: String? = nil,
         bucketId: String? = nil, priority: String? = nil, workFlowStep: String? = nil
     ) -> PillCountTransactionEntity {
         create(
-            for: user, drugId: drugId, countType: countType, batchId: batchId,
+            for: user, drugId: drugId, isDispense: isDispense, batchId: batchId,
             barcodeImagePath: barcodeImagePath, isFromPms: isFromPms, drugName: drugName,
-            targetCount: targetCount, isControlled: isControlled, expirationDate: expirationDate,
-            lotNumber: lotNumber, serialNumber: serialNumber, rxNo: rxNo, bucketId: bucketId,
-            priority: priority, workFlowStep: workFlowStep
+            targetCount: targetCount, isControlled: isControlled, rxNo: rxNo,
+            bucketId: bucketId, priority: priority, workFlowStep: workFlowStep
         )
     }
 
     func update(
-        txnId: Int64, drugId: Int64?, countType: CountType, targetCount: Int32?,
+        txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
         barcodeImagePath: String?, substituedDrugId: Int64? = nil, isSubstitue: Bool = false
     ) {
         update(
-            txnId: txnId, drugId: drugId, countType: countType, targetCount: targetCount,
+            txnId: txnId, drugId: drugId, isDispense: isDispense, targetCount: targetCount,
             barcodeImagePath: barcodeImagePath, substituedDrugId: substituedDrugId,
             isSubstitue: isSubstitue
         )
@@ -233,6 +253,8 @@ protocol UserIdProviding: AnyObject {
 // MARK: - Conformances (no behaviour change — methods already exist)
 
 extension BatchStore: BatchDataSource {}
+extension StockTxnStore: StockTxnDataSource {}
+extension BottleInfoStore: BottleInfoDataSource {}
 extension TransactionStore: TransactionDataSource {}
 extension TransactionDetailStore: TransactionDetailDataSource {}
 extension UserStore: UserDataSource {}

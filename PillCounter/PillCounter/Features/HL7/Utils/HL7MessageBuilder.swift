@@ -98,8 +98,6 @@ final class HL7CompletionBuilder {
                 rxd.actualDispenseAmount = "\(totalCount)"
                 rxd.actualDispenseUnits = "TAB"
                 rxd.prescriptionNumber = orderId
-                rxd.lotNumber = txn.lot_no
-                rxd.expirationDate = txn.expiry
                 rxd.dispensingProviderId = user?.user_id
                 rxd.dispenseSubIdCounter = "1"
             }
@@ -134,9 +132,6 @@ final class HL7CompletionBuilder {
                 scope.zsn { builder in
                     builder.setId = zsn.setId
                     builder.nationalDrugCode = zsn.nationalDrugCode
-                    builder.lotNumber = "zsn.lotNumber"
-                    builder.expirationDate = "zsn.expirationDate"
-                    builder.packageSerialNumber = zsn.packageSerialNumber
                     builder.quantityFromThisStockItem = zsn.quantityFromThisStockItem
                     builder.captureSource = zsn.captureSource
                     builder.captureTimestamp = zsn.captureTimestamp
@@ -171,7 +166,7 @@ final class HL7CompletionBuilder {
         let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
         let orderId = batch.bucket_id ?? ""
 
-        let txns = TransactionStore.shared.fetchByBatch(batchId: batch.batch_id)
+        let stockTxns = StockTxnStore.shared.fetchByBatch(batchId: batch.batch_id)
 
         // MARK: GROUPING
         struct Key: Hashable {
@@ -179,16 +174,19 @@ final class HL7CompletionBuilder {
         }
         var grouped: [Key: (opened: Int32, sealed: Int32)] = [:]
 
-        for txn in txns {
-            guard let drug = txn.drug else { continue }
-            let key = Key(
-                ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
-                lot: txn.lot_no ?? "", expiry: txn.expiry ?? ""
-            )
-            var e = grouped[key] ?? (0, 0)
-            e.opened += txn.loose_qty
-            e.sealed += txn.bottle_qty * drug.package_qty
-            grouped[key] = e
+        for stockTxn in stockTxns {
+            guard let drug = stockTxn.drug else { continue }
+            let bottles = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+            for bottle in bottles {
+                let key = Key(
+                    ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
+                    lot: bottle.lot_no ?? "", expiry: bottle.exp_no ?? ""
+                )
+                var e = grouped[key] ?? (0, 0)
+                e.opened += bottle.loose_qty
+                e.sealed += bottle.bottle_qty * drug.package_qty
+                grouped[key] = e
+            }
         }
 
         let message = builder.inrU06 { scope in
@@ -334,9 +332,6 @@ private extension HL7CompletionBuilder {
     struct ZsnRow {
         let setId: String
         let nationalDrugCode: String?
-        let lotNumber: String?
-        let expirationDate: String?
-        let packageSerialNumber: String?
         let quantityFromThisStockItem: String
         let captureSource: String
         let captureTimestamp: String
@@ -353,9 +348,6 @@ private extension HL7CompletionBuilder {
             ZsnRow(
                 setId: "\(index + 1)",
                 nationalDrugCode: drug.ndc,
-                lotNumber: txn.lot_no,
-                expirationDate: txn.expiry,
-                packageSerialNumber: txn.serial_no,
                 quantityFromThisStockItem: "\(detail.pill_count)",
                 captureSource: detail.is_manual ? ScanSource.shared.MANUAL : ScanSource.shared.UNKNOWN,
                 captureTimestamp: now,

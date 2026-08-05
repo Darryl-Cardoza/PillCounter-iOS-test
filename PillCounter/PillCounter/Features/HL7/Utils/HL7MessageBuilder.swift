@@ -214,7 +214,7 @@ final class HL7CompletionBuilder {
         )
 
         if config.format == .vivid {
-            let zuiImageField = self.buildZuiDrugImageField(details: details)
+            let zuiImageField = self.buildZuiDrugImageField(txn: txn, details: details)
             encoded = self.setZuiField8(zuiImageField, in: encoded)
             // Hl7Core's `scope.zui { }` DSL call appends ZUI wherever it was invoked in
             // the builder block (after ZSV) — per Vivid spec, ZUI must sit immediately
@@ -301,20 +301,30 @@ final class HL7CompletionBuilder {
         return segments.joined(separator: "\r")
     }
 
-    /// Builds ZUI-8 (drugImage): one `^`-separated repetition per tray photo,
-    /// each repetition `<batch>&<count>&<base64>` where batch/count are
-    /// 1-based labels of the form `1B{batch}` / `1C{count}` per the Vivid spec.
-    /// This app's `PillCountTransactionDetailsEntity` has no batch/count number
-    /// of its own (batching is a separate INR flow), so every image is reported
-    /// as batch 1, with the count number set to its 1-based position among the
-    /// non-deleted details.
-    private func buildZuiDrugImageField(details: [PillCountTransactionDetailsEntity]) -> String {
-        let repetitions: [String] = details.enumerated().compactMap { index, detail in
-            // `image_path` stores only the filename of an AES-GCM encrypted file under
-            // Documents/ (see PhotoFileManager.saveImage) — decrypt before base64
-            // encoding, or the PMS receives ciphertext instead of a JPEG.
-            guard let fileName = detail.image_path,
-                  let data = PhotoFileManager.shared.loadDecryptedData(from: fileName) else { return nil }
+    /// Builds ZUI-8 (drugImage): one `^`-separated repetition per image sent in
+    /// the completion message — every tray photo plus every scanned-bottle
+    /// barcode image, matching the full image set reported via OBX
+    /// (`buildImageOBX`) rather than tray photos alone. Each repetition is
+    /// `<batch>&<count>&<base64>` where batch/count are 1-based labels of the
+    /// form `1B{batch}` / `1C{count}` per the Vivid spec. This app's
+    /// `PillCountTransactionDetailsEntity` has no batch/count number of its own
+    /// (batching is a separate INR flow), so every image is reported as batch 1,
+    /// with the count number set to its 1-based position across the combined list.
+    private func buildZuiDrugImageField(
+        txn: PillCountTransactionEntity,
+        details: [PillCountTransactionDetailsEntity]
+    ) -> String {
+        // `image_path`/`barcodeImagePath` store only the filename of an AES-GCM
+        // encrypted file under Documents/ (see PhotoFileManager.saveImage) —
+        // decrypt before base64 encoding, or the PMS receives ciphertext instead
+        // of a JPEG.
+        let detailImages: [String] = details.compactMap { $0.image_path }
+        let barcodeImages: [String] = [BottleInfo].decode(from: txn.bottle_info_list_json)
+            .compactMap { $0.barcodeImagePath }
+            .filter { !$0.isEmpty }
+
+        let repetitions: [String] = (detailImages + barcodeImages).enumerated().compactMap { index, fileName in
+            guard let data = PhotoFileManager.shared.loadDecryptedData(from: fileName) else { return nil }
             return "1B1&1C\(index + 1)&\(data.base64EncodedString())"
         }
         return repetitions.joined(separator: "^")

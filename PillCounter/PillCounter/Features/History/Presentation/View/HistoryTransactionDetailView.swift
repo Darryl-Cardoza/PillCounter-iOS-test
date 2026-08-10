@@ -24,14 +24,48 @@ struct HistoryTransactionDetailView: View {
     @EnvironmentObject private var historyViewModel: HistoryViewModel
     @EnvironmentObject private var userViewModel: UserViewModel
 
+    // MARK: - Route payload
+    /// Passed in via the route. The screen resolves the entity from the store
+    /// by this id — it no longer relies on the caller pre-seeding
+    /// `historyViewModel.filteredTransactionsOfUserByDate`.
+    let txnId: Int64
+
     // MARK: - Local State
     @StateObject private var pdfService = PDFShareService.shared
     @State private var fullScreenImage: Image?
     @State private var showDeleteConfirmation: Bool = false
+    @State private var bottlePage: Int = 0
     
     /// Resolved once in .onAppear, kept locally so the view doesn't re-resolve on every render.
     @State private var transaction: PillCountTransactionEntity? = nil
-    
+
+    private var allBottleBarcodeImagePaths: [String] {
+        [BottleInfo].decode(from: transaction?.bottle_info_list_json).compactMap(\.barcodeImagePath)
+    }
+
+    private var allBottleInfos: [BottleInfo] {
+        [BottleInfo].decode(from: transaction?.bottle_info_list_json)
+    }
+
+    /// Controlled drugs (non-empty drug_type) have extra steps: two-column iPad layout applies.
+    /// Normal drugs (empty drug_type) only ever show the pill count section.
+    private var isControlledFlow: Bool {
+        guard let type = transaction?.drug?.drug_type else { return false }
+        return !type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Pill count / recount steps compare against the transaction's target count.
+    private func countText(step: ControlledStep) -> String {
+        let total = historyViewModel.getTotalCount(step: step)
+        return "\(total)/\(transaction?.target_count ?? 0)"
+    }
+
+    /// Container initial/pending steps have no target — just the counted total.
+    private func containerCountText(step: ControlledStep) -> String {
+        let total = transaction.map { historyViewModel.getTotalPillCount(for: $0, step: step) } ?? 0
+        return "\(total)"
+    }
+
     // MARK: - Body
     var body: some View {
         ZStack {
@@ -116,15 +150,8 @@ struct HistoryTransactionDetailView: View {
             }
         }
         .onAppear {
-            guard let id = historyViewModel.selectedTransactionId else { return }
-
-            // Resolve the entity and immediately prepare step details
-            if let txn = historyViewModel.filteredTransactionsOfUserByDate
-                .first(where: { $0.txn_id == id })
-            {
-                transaction = txn
-                historyViewModel.prepareDetails(for: txn)
-            }
+            // Resolve the entity from the store by id and prepare step details.
+            transaction = historyViewModel.prepareDetails(forTxnId: txnId)
         }
         .onDisappear {
             transaction = nil
@@ -152,29 +179,6 @@ struct HistoryTransactionDetailView: View {
                 .frame(maxWidth: .infinity)
                 .background(appColors.primaryBackground)
             }
-
-//            HStack {
-//                Spacer()
-//
-//                DeleteOkButtons(
-//                    appColors: appColors,
-//                    onDelete: {
-//                        Task {
-//                            await historyViewModel.softDeleteTransaction(
-//                                txnId: transaction?.txn_id ?? 0
-//                            )
-//                            router.navigateBack()
-//                        }
-//                    },
-//                    onOk: {
-//                        router.navigateBack()
-//                    }
-//                )
-//
-//                Spacer()
-//            }
-//            .padding(.vertical, 16)
-//            .background(appColors.primaryBackground)
         }
         .padding(.top, 64)
     }
@@ -196,14 +200,12 @@ struct HistoryTransactionDetailView: View {
                let input = DrugHistoryPDFInput(
                    drugName:          txn.drug?.drug_name ?? "",
                    ndc:               txn.drug?.ndc ?? "N/A",
-                   expiry:            txn.expiry ?? "",
-                   lotNo:             txn.lot_no ?? "",
                    date:              Formatter.getDateString(from: txn.created_at),
                    time:              Formatter.getTimeString(from: txn.created_at),
                    note:              txn.note,
                    userName:          userName.isEmpty ? nil : userName,
                    targetCount:       txn.target_count,
-                   countType:         txn.count_type,
+                   countType:         txn.is_dispense ? "FIXED" : "REGULAR",
                    substituteNdc:     txn.substitueDrug?.ndc,
                    substituteDrugName: txn.substitueDrug?.drug_name,
                    detailsByStep:     detailsByStep
@@ -234,322 +236,266 @@ struct HistoryTransactionDetailView: View {
 
 extension HistoryTransactionDetailView {
     
+    private var drugDetailsTitle: String {
+        transaction?.is_substitute == true
+            ? L10n.History.substitutedDrugDetails
+            : L10n.History.dispensedDrugDetails
+    }
+
     // MARK: - Collapsible Sections
     private var collapsibleSections: some View {
-        VStack(spacing: 10) {
-            var drugDetailsTitle: String {
-                if transaction?.is_substitute == true {
-                    return L10n.History.substitutedDrugDetails
-                } else {
-                    return L10n.History.dispensedDrugDetails
+        Group {
+            if isLandscape && isControlledFlow {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(spacing: 10) { leftColumnSections }
+                    VStack(spacing: 10) { rightColumnSections }
+                }
+            } else {
+                VStack(spacing: 10) {
+                    leftColumnSections
+                    rightColumnSections
                 }
             }
+        }
+    }
 
-            if let type = transaction?.drug?.drug_type, type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                CollapsibleBox(
-                    title: L10n.History.pillCount,
-                    allowCollapse: false,
-                    defaultExpanded: true,
-                    bgColor: appColors.secondaryBackground
-                ) {
-                    collapsableBoxContent(step: .targetVerification)
-                }
-            }
+    // MARK: - Left Column (requested / container / dispensed drug details)
+    @ViewBuilder
+    private var leftColumnSections: some View {
+        CollapsibleBox(
+            title: L10n.History.requestedDrugDetails,
+            bgColor: appColors.secondaryBackground
+        ) {
+            substituedInfoList
+        }
 
-            if let details = historyViewModel.detailsByStep[.containerInitiate],
-               !details.isEmpty
-            {
-                CollapsibleBox(
-                    title: L10n.History.initialContainerCount,
-                    allowCollapse: false,
-                    defaultExpanded: true,
-                    bgColor: appColors.secondaryBackground
-                ) {
-                    collapsableBoxContent(step: .containerInitiate, showTargetCount: false)
-                }
-            }
-            
-            if transaction?.is_substitute == true {
-                CollapsibleBox(
-                    title: L10n.History.requestedDrugDetails,
-                    bgColor: appColors.secondaryBackground
-                ) {
-                    substituedInfoList
-                }
-            }
-            
-            CollapsibleBox(title: drugDetailsTitle,   bgColor: appColors.secondaryBackground) {
-                detailsInfoList
-            }
+        HStack(alignment: .top, spacing: 10) {
+            containerQRCodeBox
+            vialBox
+        }
 
-            if let type = transaction?.drug?.drug_type, !type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                CollapsibleBox(
-                    title: L10n.History.pillCount,
-                    bgColor: appColors.secondaryBackground
-                ) {
-                    collapsableBoxContent(step: .targetVerification)
+        if let details = historyViewModel.detailsByStep[.containerInitiate],
+           !details.isEmpty
+        {
+            CollapsibleBox(
+                title: L10n.History.initialContainerCount,
+                allowCollapse: false,
+                defaultExpanded: true,
+                bgColor: appColors.secondaryBackground,
+                countText: containerCountText(step: .containerInitiate)
+            ) {
+                collapsableBoxContent(step: .containerInitiate)
+            }
+        }
+
+        CollapsibleBox(
+            title: drugDetailsTitle,
+            bgColor: appColors.secondaryBackground,
+            countText: allBottleInfos.count > 1 ? "\(bottlePage + 1) \(L10n.Common.of) \(allBottleInfos.count)" : nil
+        ) {
+            detailsInfoList
+        }
+    }
+
+    @ViewBuilder
+    private var containerQRCodeBox: some View {
+        CollapsibleBox(
+            title: L10n.History.containerQrCode,
+            allowCollapse: false,
+            defaultExpanded: true,
+            bgColor: appColors.secondaryBackground
+        ) {
+            thumbnailScrollRow(paths: allBottleBarcodeImagePaths)
+        }
+    }
+
+    @ViewBuilder
+    private var vialBox: some View {
+        if let details = historyViewModel.detailsByStep[.vial], !details.isEmpty {
+            CollapsibleBox(
+                title: L10n.History.dispensedVial,
+                allowCollapse: false,
+                defaultExpanded: true,
+                bgColor: appColors.secondaryBackground
+            ) {
+                thumbnailScrollRow(paths: details.compactMap(\.image_path))
+            }
+        }
+    }
+
+    // MARK: - Thumbnail Scroll Row (shared: container QR code, dispensed vial, step images) — same size everywhere, all orientations
+    private func thumbnailScrollRow(paths: [String], countBadge: Int? = nil) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(paths.isEmpty ? [nil] : paths.map { $0 as String? }, id: \.self) { path in
+                    ZStack {
+                        ThumbnailImageView(
+                            imagePath: path,
+                            width: 140,
+                            height: 100,
+                            cornerRadius: 12,
+                            placeholderImageName: "placeholder_history",
+                            placeholderSize: CGSize(width: 20, height: 20)
+                        )
+                        .onTapGesture {
+                            if let path, let loaded = PhotoFileManager.shared.loadImage(from: path) {
+                                fullScreenImage = loaded
+                            }
+                        }
+                        .environmentObject(appColors)
+
+                        if let countBadge {
+                            Text("\(countBadge)")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                                .background(appColors.secondary)
+                                .clipShape(Circle())
+                        }
+                    }
                 }
             }
+        }
+    }
 
-            if let details = historyViewModel.detailsByStep[.targetReverification],
-               !details.isEmpty
-            {
-                CollapsibleBox(
-                    title: L10n.History.pillRecount,
-                    bgColor: appColors.secondaryBackground
-                ) {
-                    collapsableBoxContent(step: .targetReverification)
-                }
+    // MARK: - Right Column (pill count / recount / vial / remaining stock / notes)
+    @ViewBuilder
+    private var rightColumnSections: some View {
+        if !isControlledFlow {
+            CollapsibleBox(
+                title: L10n.History.pillCount,
+                allowCollapse: false,
+                defaultExpanded: true,
+                bgColor: appColors.secondaryBackground,
+                countText: countText(step: .targetVerification)
+            ) {
+                collapsableBoxContent(step: .targetVerification)
             }
+        } else {
+            CollapsibleBox(
+                title: L10n.History.pillCount,
+                bgColor: appColors.secondaryBackground,
+                countText: countText(step: .targetVerification)
+            ) {
+                collapsableBoxContent(step: .targetVerification)
+            }
+        }
 
-            if let details = historyViewModel.detailsByStep[.vial],
-               !details.isEmpty
-            {
-                CollapsibleBox(
-                    title: L10n.History.dispensedVial,
-                    bgColor: appColors.secondaryBackground
-                ) {
-                    collapsableBoxContent(step: .vial, showVialInfo: true)
-                }
+        if let details = historyViewModel.detailsByStep[.targetReverification],
+           !details.isEmpty
+        {
+            CollapsibleBox(
+                title: L10n.History.pillRecount,
+                bgColor: appColors.secondaryBackground,
+                countText: countText(step: .targetReverification)
+            ) {
+                collapsableBoxContent(step: .targetReverification)
             }
+        }
 
-            if let details = historyViewModel.detailsByStep[.containerPending],
-               !details.isEmpty
-            {
-                CollapsibleBox(
-                    title: L10n.History.remainingContainerCount,
-                    bgColor: appColors.secondaryBackground
-                ) {
-                    collapsableBoxContent(step: .containerPending, showTargetCount: false)
-                }
+        if let details = historyViewModel.detailsByStep[.containerPending],
+           !details.isEmpty
+        {
+            CollapsibleBox(
+                title: L10n.History.remainingContainerCount,
+                bgColor: appColors.secondaryBackground,
+                countText: containerCountText(step: .containerPending)
+            ) {
+                collapsableBoxContent(step: .containerPending)
             }
+        }
 
-            CollapsibleBox(title: L10n.Common.note, bgColor: appColors.secondaryBackground) {
-                notesContent
-            }
+        CollapsibleBox(title: L10n.Common.note, bgColor: appColors.secondaryBackground) {
+            notesContent
         }
     }
 
     // MARK: - Collapsible Box Content
-    private func collapsableBoxContent(
-        step: ControlledStep,
-        showTargetCount: Bool = true,
-        showVialInfo: Bool = false
-    ) -> some View {
-        VStack(spacing: 20) {
-            if showVialInfo{
-                if let detail = historyViewModel.detailsByStep[step]?.first {
-                    batchItem(detail: detail, step: step)
-                }
-            } else {
-                HStack(spacing: 20) {
-                    ThumbnailImageView(
-                        imagePath: transaction?.barcode_image,
-                        width: 140,
-                        height: 100,
-                        cornerRadius: 12,
-                        placeholderImageName: "placeholder_history",
-                        placeholderSize: CGSize(width: 20, height: 20)
-                    )
-                    .onTapGesture {
-                        if let path = transaction?.barcode_image,
-                           let loaded = PhotoFileManager.shared.loadImage(from: path) {
-                            fullScreenImage = loaded
-                        }
-                    }
-                    .environmentObject(appColors)
-
-                    VStack(alignment: .center, spacing: 4) {
-                       Spacer()
-                        if showTargetCount {
-                            // Counted / Target
-//                            Text("\(historyViewModel.getTotalCount(step: step))")
-//                                .foregroundStyle(appColors.secondary)
-//                                .font(.system(size: 25, weight: .bold))
-//                                .padding(.bottom, -6)
-//
-//                            Rectangle()
-//                                .fill(appColors.secondary)
-//                                .frame(width: 50, height: 2)
-//
-//                            Text("\(transaction?.target_count ?? 0)")
-//                                .foregroundStyle(appColors.secondary)
-//                                .font(.system(size: 25, weight: .bold))
-//                                .padding(.top, -6)
-//                                .padding(.bottom, 3)
-                            
-                            let totalCount = historyViewModel.getTotalCount(step: step)
-                             if totalCount > 0 {
-                                 Text("\(totalCount)")
-                                     .foregroundStyle(appColors.secondary)
-                                     .font(.system(size: 25, weight: .bold))
-                                     .padding(.bottom, 3)
-                                     .minimumScaleFactor(0.6)
-                                     .lineLimit(1)
-                                     .padding(.bottom, -6)
-
-                                 Rectangle()
-                                     .fill(appColors.secondary)
-                                     .frame(width: 50, height: 2)
-
-                                 Text("\(transaction?.target_count ?? 0)")
-                                     .foregroundStyle(appColors.secondary)
-                                     .font(.system(size: 25, weight: .bold))
-                                     .minimumScaleFactor(0.6)
-                                     .lineLimit(1)
-                                     .padding(.top, -6)
-
-//                                 Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
-//                                     .foregroundStyle(appColors.text)
-//                                     .font(.system(size: 14))
-//                                     .fontWeight(.semibold)
-//                                     .multilineTextAlignment(.center)
-//                                     .lineLimit(2)
-                             }
-                        }  else {
-                            if let txn = transaction {
-                                let pillCount = historyViewModel.getTotalPillCount(for: txn, step: step)
-                                if pillCount > 0 {
-                                    Text("\(pillCount)")
-                                        .foregroundStyle(appColors.secondary)
-                                        .font(.system(size: 25, weight: .bold))
-                                        .minimumScaleFactor(0.6)
-                                        .lineLimit(1)
-                                    
-//                                    Text(NSLocalizedString("TOTAL_COUNT", comment: ""))
-//                                        .foregroundStyle(appColors.text)
-//                                        .font(.system(size: 14))
-//                                        .fontWeight(.semibold)
-//                                        .multilineTextAlignment(.center)
-//                                        .lineLimit(2)
-                                }
+    // Shows only this step's own images (from historyViewModel.detailsByStep) via the shared thumbnailScrollRow.
+    private func collapsableBoxContent(step: ControlledStep) -> some View {
+        let details = historyViewModel.detailsByStep[step] ?? []
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(details, id: \.txn_details_id) { detail in
+                    ZStack {
+                        ThumbnailImageView(
+                            imagePath: detail.image_path,
+                            width: 140,
+                            height: 100,
+                            cornerRadius: 12,
+                            placeholderImageName: "placeholder_history",
+                            placeholderSize: CGSize(width: 20, height: 20)
+                        )
+                        .onTapGesture {
+                            if let path = detail.image_path,
+                               let loaded = PhotoFileManager.shared.loadImage(from: path) {
+                                fullScreenImage = loaded
                             }
                         }
+                        .environmentObject(appColors)
 
-                        Spacer()
+                        Text("\(detail.pill_count)")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(appColors.secondary)
+                            .clipShape(Circle())
                     }
-                    .frame(width: 120, height: 100)
-
-                    Spacer()
-                }
-            }
-
-            // Images grid — reads from historyViewModel.detailsByStep.
-            // Vial shows a single image above, so skip the grid for it.
-            if !showVialInfo {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    batchesGrid(step: step)
                 }
             }
         }
-    }
-
-    // MARK: - Batches Grid
-    // Source of truth: historyViewModel.detailsByStep
-    private func batchesGrid(step: ControlledStep) -> some View {
-        let details = historyViewModel.detailsByStep[step] ?? []
-
-        return LazyHGrid(rows: [GridItem(.flexible())], spacing: 10) {
-            ForEach(details, id: \.txn_details_id) { detail in
-                batchItem(detail: detail, step: step)
-            }
-        }
-    }
-
-    // MARK: - Batch Item (single image card)
-    private func batchItem(
-        detail: PillCountTransactionDetailsEntity,
-        step: ControlledStep
-    ) -> some View {
-        ZStack {
-            Group {
-                if let path = detail.image_path,
-                   let image = PhotoFileManager.shared.loadImage(from: path)
-                {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 120, height: 80)
-                        .clipped()
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: 120, height: 80)
-                        .overlay(
-                            Image(systemName: "photo")
-                                .foregroundStyle(Color.gray)
-                        )
-                }
-            }
-            .onTapGesture {
-                if let path = detail.image_path,
-                   let loaded = PhotoFileManager.shared.loadImage(from: path) {
-                    fullScreenImage = loaded
-                }
-            }
-            if step != .vial {
-                Text("\(detail.pill_count)")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(appColors.secondary)
-                    .clipShape(Circle())
-            }
-        }
-        .frame(width: 120, height: 80)
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(appColors.text.opacity(0.1), lineWidth: 1)
-        )
     }
 
     // MARK: - Details Info List
+    // Drug name/NDC/date/time + per-bottle exp/lot/serial — all swipeable together, one page per scanned bottle.
     private var detailsInfoList: some View {
-        VStack(spacing: 0) {
-            detailRow(
-                label: L10n.History.substitutedDrug,
-                value: transaction?.drug?.drug_name ?? "N/A"
-            )
-            Divider().background(appColors.text.opacity(0.1))
+        let bottles = allBottleInfos.isEmpty ? [nil] : allBottleInfos.map { $0 as BottleInfo? }
 
-            detailRow(
-                label: L10n.History.ndc,
-                value: transaction?.drug?.ndc ?? "N/A"
-            )
-            Divider().background(appColors.text.opacity(0.1))
+        return TabView(selection: $bottlePage) {
+            ForEach(Array(bottles.enumerated()), id: \.offset) { index, bottle in
+                VStack(spacing: 0) {
+                    detailRow(
+                        label: transaction?.is_substitute == true ? L10n.History.substitutedDrug : L10n.History.dispensedDrug,
+                        value: transaction?.drug?.drug_name ?? "N/A"
+                    )
+                    Divider().background(appColors.text.opacity(0.1))
 
-            detailRow(
-                label: L10n.History.expiryNo,
-                value: transaction?.expiry ?? "N/A"
-            )
-            Divider().background(appColors.text.opacity(0.1))
+                    detailRow(
+                        label: L10n.History.ndc,
+                        value: transaction?.drug?.ndc ?? "N/A"
+                    )
+                    Divider().background(appColors.text.opacity(0.1))
 
-            detailRow(
-                label: L10n.History.lotNo,
-                value: transaction?.lot_no ?? "N/A"
-            )
-            Divider().background(appColors.text.opacity(0.1))
+                    detailRow(
+                        label: L10n.Common.dateTime,
+                        value: Formatter.getDateString(from: transaction?.created_at ?? 0) + " " + Formatter.getTimeString(from: transaction?.created_at ?? 0)
+                    )
+                    Divider().background(appColors.text.opacity(0.1))
 
-            detailRow(
-                label: L10n.Common.date,
-                value: Formatter.getDateString(from: transaction?.created_at ?? 0)
-            )
-            Divider().background(appColors.text.opacity(0.1))
+                    detailRow(label: L10n.History.expiryNo, value: bottle?.expirationDate ?? "-")
+                    Divider().background(appColors.text.opacity(0.1))
 
-            detailRow(
-                label: L10n.Common.time,
-                value: Formatter.getTimeString(from: transaction?.created_at ?? 0)
-            )
+                    detailRow(label: L10n.History.lotNo, value: bottle?.lotNumber ?? "-")
+                    Divider().background(appColors.text.opacity(0.1))
+
+                    detailRow(label: L10n.History.serialNo, value: bottle?.serialNumber ?? "-")
+                }
+                .tag(index)
+            }
         }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(height: 340)
     }
-    
+
     private var substituedInfoList: some View {
         VStack(spacing: 0) {
             detailRow(
                 label: L10n.History.drugName,
                 value: transaction?.substitueDrug?.drug_name ?? "N/A"
+                
+                
             )
             Divider().background(appColors.text.opacity(0.1))
 

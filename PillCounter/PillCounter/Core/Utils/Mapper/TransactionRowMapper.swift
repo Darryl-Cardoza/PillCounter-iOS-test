@@ -22,14 +22,17 @@ extension PillCountTransactionEntity {
             ndc: self.drug?.ndc ?? "",
             drugName: self.drug?.drug_name ?? "Unknown Pill",
             createdAt: self.created_at,
-            barcodeImagePath: self.barcode_image,
+            barcodeImagePath: [BottleInfo].decode(from: self.bottle_info_list_json).first?.barcodeImagePath,
+            drugImagePath: self.drug?.drug_image,
             pillCount: totalCount,
             targetCount: Int(self.target_count),
-            countType: self.count_type ?? "",
+            countType: self.is_dispense ? "FIXED" : "REGULAR",
             status: self.status ?? "",
             note: self.note,
             bucketId: self.bucket_id ?? "",
-            drugType: self.drug?.drug_type ?? ""
+            drugType: self.drug?.drug_type ?? "",
+            strength: self.drug?.strength ?? "",
+            dosageForm: self.drug?.dosage_form ?? ""
         )
     }
 }

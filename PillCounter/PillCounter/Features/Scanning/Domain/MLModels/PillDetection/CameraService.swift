@@ -26,11 +26,33 @@ final class CameraService: NSObject, ObservableObject {
     @Published var scannedCode: String = ""
     @Published var scannedCodeType: String = ""
     private var barcodeEnabled: Bool = false
+
+    // MARK: - BOTTLE RESCAN (multi-bottle dispense tracking)
+    // A second, independent barcode-metadata listener that stays live during
+    // dispense counting (unlike `barcodeEnabled`, which is mutually exclusive
+    // with `isCountingEnabled`). Publishes to its own property so a mid-count
+    // rescan never collides with the primary NDC-scan path (`scannedCode`),
+    // which would otherwise wrongly restart the NDC-verify flow.
+    @Published var bottleRescanCode: String = ""
+    private var bottleRescanEnabled: Bool = false
+    private var lockedBottleRescanValue: String? = nil
+    private var bottleRescanLockMissFrames: Int = 0
     // The value of the barcode currently locked in frame. Non-nil means we already
-    // fired the scan event and are waiting for the physical barcode to leave the
-    // camera's field of view before we fire again. Set to nil the moment the
-    // metadata delegate reports an empty (or different-value) frame.
+    // fired the scan event and are waiting for the physical barcode to physically
+    // leave the camera's field of view before we fire again.
+    //
+    // The lock is released only after barcodeLockMissThreshold consecutive frames
+    // with no matching barcode. This debounce absorbs brief metadata dropouts from
+    // camera shake (1-2 frames) without blocking a genuine remove-and-rescan — a
+    // physical hand moving a bottle away takes well over 5 frames at 30 fps.
     private var lockedBarcodeValue: String? = nil
+
+    // How many consecutive frames the locked barcode must be absent before the lock
+    // releases. 5 frames at 30 fps ≈ 165 ms — enough to survive a shake dropout but
+    // short enough that a real remove-and-rescan is never blocked.
+    private static let barcodeLockMissThreshold: Int = 5
+    // Running count of consecutive metadata frames where lockedBarcodeValue was absent.
+    private var barcodeLockMissFrames: Int = 0
 
     // MARK: - IMAGE PROCESSING
     // Three-model inference pipeline running on every captured camera frame:
@@ -86,8 +108,29 @@ final class CameraService: NSObject, ObservableObject {
     private var heldTrayDetections: [TrayResult] = []
     private var trayMissFrames: Int = 0
 
+    /// True once AE/AF/AWB have been locked for the current counting session.
+    /// The `.hd1280x720` preset already steadies the stream, but residual 3A
+    /// micro-adjustments still wobble borderline pills, and — critically — a hand
+    /// reaching into the tray retriggers auto-exposure for the WHOLE scene, which
+    /// shifts every pill's confidence at once and makes the count chaotic during
+    /// occlusion. Locking exposure/focus/white-balance once the tray is acquired
+    /// freezes the imaging so only real pill changes move the count. Reset on
+    /// counting pause/resume so a new scene re-meters before locking again.
+    private var is3ALocked = false
+
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
+
+    /// Target inference rate. The camera delivers frames at the device default
+    /// (~30 fps), but the three-model pipeline (glove + tray-seg + pill-detect)
+    /// can't keep up, so excess frames are wasted motion-blurred work. We throttle
+    /// inference to this rate in captureOutput; frames arriving sooner are dropped.
+    private static let targetInferenceFPS: Double = 30
+    private static let minInferenceInterval: TimeInterval = 1.0 / targetInferenceFPS
+
+    /// Presentation timestamp (in seconds) of the last frame we ran inference on.
+    /// Uses the buffer's own clock so the throttle is independent of wall-clock.
+    private var lastInferenceTimestamp: TimeInterval = -1
 
     // MARK: - TIMER
     private var inactivityTimer: DispatchSourceTimer?
@@ -101,6 +144,30 @@ final class CameraService: NSObject, ObservableObject {
     @Published var stableCount: Int = 0
     @Published var detections: [DetectionResult] = []
     @Published var trayDetections: [TrayResult] = []
+
+    /// Ids of the pills currently flagged as "excess near the chute" — the surplus
+    /// over the dispense target, picked nearest-the-chute. Computed ONCE per frame
+    /// in the pipeline (not in the SwiftUI body, which can run several times per
+    /// frame and would corrupt the picker's temporal state). The overlay just reads
+    /// this set. Empty when there is no target / no excess.
+    @Published var excessPillIDs: Set<UUID> = []
+
+    /// Dispense target for the current step. The view sets this; when > 0 the
+    /// excess-near-chute highlight is active and the surplus (stableCount − target)
+    /// pills closest to the chute are flagged. 0 disables the feature.
+    var excessTargetQuantity: Int = 0 {
+        didSet {
+            // A new target redefines what "excess" means — restart the sticky
+            // picker so it doesn't carry highlights chosen for the old target.
+            guard excessTargetQuantity != oldValue else { return }
+            chuteProximity.reset()
+        }
+    }
+
+    /// Stateful, frame-persistent excess-pill picker (tracks + smoothed distance +
+    /// margin-based steal). Lives here so it is driven once per frame by the
+    /// pipeline rather than by SwiftUI re-renders.
+    private let chuteProximity = ChuteProximity()
 
     /// All glove detections from the most recent inference run (rate-limited to 400 ms
     /// after the first detection).  Empty when gloves have never been checked or when
@@ -184,7 +251,15 @@ final class CameraService: NSObject, ObservableObject {
     private func configureSession() {
         sessionQueue.async {
             self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
+            // Use 1080p VIDEO preset for high-quality preview and inference.
+            // Falls back to 720p or .photo if unsupported.
+            if self.session.canSetSessionPreset(.hd1920x1080) {
+                self.session.sessionPreset = .hd1920x1080
+            } else if self.session.canSetSessionPreset(.hd1280x720) {
+                self.session.sessionPreset = .hd1280x720
+            } else {
+                self.session.sessionPreset = .photo
+            }
 
             guard
                 let device = AVCaptureDevice.default(
@@ -203,6 +278,19 @@ final class CameraService: NSObject, ObservableObject {
             self.maxzoom = min(device.activeFormat.videoMaxZoomFactor, 5.0)
             self.videoInput = input
             self.session.addInput(input)
+
+            if let range = device.activeFormat.videoSupportedFrameRateRanges.first {
+                let fps = min(max(30.0, range.minFrameRate), range.maxFrameRate)
+                let duration = CMTimeMake(value: 1, timescale: Int32(fps.rounded()))
+                do {
+                    try device.lockForConfiguration()
+                    device.activeVideoMinFrameDuration = duration
+                    device.activeVideoMaxFrameDuration = duration
+                    device.unlockForConfiguration()
+                } catch {
+                    print("⚠️ [CAMERA] Could not lock 15 fps — \(error)")
+                }
+            }
 
             self.videoOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String:
@@ -229,7 +317,85 @@ final class CameraService: NSObject, ObservableObject {
             }
 
             self.session.commitConfiguration()
+
+            self.configureFrameRate(fps: 30)
         }
+    }
+
+    /// Clamps the capture device to a fixed frame rate. The requested fps is
+    /// clamped to the active format's supported range, and the call is a no-op if
+    /// the device or format can't honour it (zoom/exposure are untouched).
+    private func configureFrameRate(fps: Double) {
+        guard let device = captureDevice else { return }
+
+        // The active format advertises the min/max frame-duration it supports.
+        // Requesting a duration outside that range throws, so clamp into it.
+        let ranges = device.activeFormat.videoSupportedFrameRateRanges
+        guard let range = ranges.first else { return }
+
+        let targetFps = min(max(fps, range.minFrameRate), range.maxFrameRate)
+        let duration = CMTime(value: 1, timescale: CMTimeScale(targetFps))
+
+        do {
+            try device.lockForConfiguration()
+            device.activeVideoMinFrameDuration = duration
+            device.activeVideoMaxFrameDuration = duration
+            device.unlockForConfiguration()
+        } catch {
+            // Intentionally silent — a failed fps cap must not break the camera.
+        }
+    }
+
+    // MARK: - EXPOSURE / FOCUS LOCK
+
+    /// Locks auto-exposure, auto-focus and auto-white-balance to their current
+    /// settings so the imaging stops drifting once a stable scene (complete tray)
+    /// is in view. Idempotent via `is3ALocked`; only locks the modes the device
+    /// actually supports. Called from the frame delegate the first time the
+    /// complete-product gate opens.
+    private func lock3AIfNeeded() {
+        guard !is3ALocked, let device = captureDevice else { return }
+
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.locked) {
+                device.exposureMode = .locked
+            }
+            if device.isFocusModeSupported(.locked) {
+                device.focusMode = .locked
+            }
+            if device.isWhiteBalanceModeSupported(.locked) {
+                device.whiteBalanceMode = .locked
+            }
+            device.unlockForConfiguration()
+            is3ALocked = true
+        } catch {
+            // Intentionally silent — a failed 3A lock must not break the camera.
+        }
+    }
+
+    /// Restores continuous auto-exposure/focus/white-balance so the next counting
+    /// session re-meters a fresh scene before locking again. Called on counting
+    /// pause/resume (the operator may point at a different tray/lighting).
+    private func unlock3A() {
+        guard is3ALocked, let device = captureDevice else { is3ALocked = false; return }
+
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Intentionally silent.
+        }
+        is3ALocked = false
     }
 
     // MARK: - BARCODE CONTROL
@@ -241,6 +407,16 @@ final class CameraService: NSObject, ObservableObject {
             guard let self else { return }
             self.barcodeEnabled = true
             self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            // Boost to 30fps while barcode scanning is active. More frames per second
+            // means more decode attempts, which is critical for low-quality or curved
+            // labels (bottle, worn print) that the decoder only reads on a sharp frame.
+            // The ML pipeline is NOT running during barcode scanning so the higher rate
+            // does not increase CPU/ANE load.
+            self.configureFrameRate(fps: 30)
+            // Switch to continuous auto-focus so the camera tracks a label being moved
+            // into frame. The 3A lock (used during pill counting) is NOT active here —
+            // this call re-enables the continuous mode that gives the fastest sharp lock.
+            self.activateBarcodeAutoFocus()
         }
     }
 
@@ -252,7 +428,109 @@ final class CameraService: NSObject, ObservableObject {
             // while the same physical barcode is still in frame, the lock prevents
             // it from immediately re-firing. The lock is only released when the
             // frame-presence check sees the barcode has left the camera view.
-            self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
+            // Keep the metadata delegate attached if bottle-rescan listening is active.
+            if !self.bottleRescanEnabled {
+                self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
+            }
+            self.configureFrameRate(fps: 30)
+        }
+    }
+
+    /// Keeps barcode-metadata reading live during dispense counting, without
+    /// touching `isCountingEnabled`/frame-rate state the ML pipeline depends on —
+    /// unlike `enableBarcodeScanning()`/`disableBarcodeScanning()`, which are
+    /// mutually exclusive with active pill counting. Publishes to
+    /// `bottleRescanCode`, a channel independent from `scannedCode`.
+    ///
+    /// Dense 2D codes (GS1 DataMatrix/QR) need continuous AF/AE to get a sharp
+    /// lock on a bottle label held at a different distance than the counting
+    /// scene — the previous approach (leave the pill-count 3A lock in place and
+    /// only pulse a one-shot autofocus once a second) too rarely landed a sharp
+    /// frame for the decoder to catch. So while rescan listening is active we
+    /// release the 3A lock and run continuous AF/AE, same as the primary
+    /// barcode-scan path. This trades some pill-count imaging stability for a
+    /// reliable rescan — acceptable because the operator physically pulls the
+    /// tray out of frame to hold up the second bottle anyway.
+    func enableBottleRescanListening() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.bottleRescanEnabled = true
+            self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            self.activateBarcodeAutoFocus()
+            print("📷 [CameraService] bottle rescan listening ENABLED")
+        }
+    }
+
+    func disableBottleRescanListening() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.bottleRescanEnabled = false
+            print("📷 [CameraService] bottle rescan listening DISABLED")
+            self.lockedBottleRescanValue = nil
+            self.bottleRescanLockMissFrames = 0
+            if !self.barcodeEnabled {
+                self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
+            }
+            // Re-lock 3A so the pill count settles back down once rescan listening ends.
+            self.is3ALocked = false
+            self.lock3AIfNeeded()
+        }
+    }
+
+    /// Activates continuous auto-focus + auto-exposure for barcode scanning.
+    /// Called on the session queue; safe to call even when the device is not locked.
+    private func activateBarcodeAutoFocus() {
+        guard let device = captureDevice else { return }
+        do {
+            try device.lockForConfiguration()
+            // Interest-point focus at screen centre. For bottle / curved labels the
+            // default continuous-AF tends to focus at infinity (background). Seeding the
+            // focus point at (0.5, 0.5) nudges it toward the near object in frame so the
+            // first sharp frame arrives faster. After the initial lock it stays continuous.
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                if device.isFocusPointOfInterestSupported {
+                    device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                }
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                if device.isExposurePointOfInterestSupported {
+                    device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                }
+                device.exposureMode = .continuousAutoExposure
+            }
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Intentionally silent — barcode scanning still works without focus assist.
+        }
+    }
+
+    /// Triggers a one-shot auto-focus at the given point (normalised 0-1 coordinates,
+    /// AVFoundation convention: top-left = (0,0)). Call from the UI when the operator
+    /// taps the screen while the barcode scanner is showing, so the camera can lock
+    /// focus on a curved or worn label in that area.
+    func focusForBarcode(at point: CGPoint) {
+        guard let device = captureDevice else { return }
+        sessionQueue.async {
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusPointOfInterestSupported,
+                   device.isFocusModeSupported(.autoFocus) {
+                    device.focusPointOfInterest = point
+                    device.focusMode = .autoFocus
+                }
+                if device.isExposurePointOfInterestSupported,
+                   device.isExposureModeSupported(.autoExpose) {
+                    device.exposurePointOfInterest = point
+                    device.exposureMode = .autoExpose
+                }
+                device.unlockForConfiguration()
+            } catch {
+                // Intentionally silent.
+            }
         }
     }
 
@@ -260,10 +538,20 @@ final class CameraService: NSObject, ObservableObject {
         // Clears published values so the view's onChange does not re-fire with a
         // stale value. lockedBarcodeValue is NOT cleared here — the physical barcode
         // may still be in frame. Clearing it would re-fire the scan event on the
-        // very next metadata callback. The lock releases only when the frame-presence
-        // check confirms the barcode has physically left the camera view.
+        // very next metadata callback. The lock releases only after the barcode has
+        // been absent for barcodeLockMissThreshold consecutive frames.
         scannedCode = ""
         scannedCodeType = ""
+    }
+
+    /// Force-releases the same-barcode lock. Use when starting a new scan session where
+    /// re-scanning the exact same physical barcode is expected and desired (e.g. entering
+    /// open-pill mode right after scanning that NDC's sealed bottle) — otherwise the lock
+    /// from the previous scan silently blocks the identical barcode from firing again
+    /// until it physically leaves and re-enters the camera frame.
+    func forceReleaseBarcodeLock() {
+        lockedBarcodeValue = nil
+        barcodeLockMissFrames = 0
     }
 
     // MARK: - ZOOM CONTROL
@@ -320,10 +608,16 @@ final class CameraService: NSObject, ObservableObject {
 
         sessionQueue.async {
             guard self.session.isRunning else { return }
+            // Release the 3A lock before stopping so the next start() re-meters the
+            // scene from scratch (lighting/tray may differ after a long pause).
+            self.unlock3A()
             self.session.stopRunning()
             // Session is fully stopped — no barcodes are visible. Clear the lock
             // so the next start() begins fresh rather than blocking on a stale value.
             self.lockedBarcodeValue = nil
+            self.barcodeLockMissFrames = 0
+            self.lockedBottleRescanValue = nil
+            self.bottleRescanLockMissFrames = 0
         }
     }
 
@@ -386,14 +680,23 @@ final class CameraService: NSObject, ObservableObject {
             self.trayDetections   = []
             self.gloveDetections  = []
             self.isGloveHazardous = false
+            self.excessPillIDs    = []
             self.recentCounts.removeAll()   // start the next session's median fresh
             self.emptyCountFrames = 0
         }
+        // Restart the sticky excess picker so the next session doesn't inherit
+        // highlights chosen against a stale tray/target.
+        chuteProximity.reset()
         // Drop the held tray/chute detections so the next session re-acquires them
         // from scratch rather than counting against a stale tray that may no longer
         // be in frame.
         heldTrayDetections.removeAll()
         trayMissFrames = 0
+
+        // Release the AE/AF/AWB lock on the session queue so the next counting
+        // session re-meters a fresh scene (possibly a different tray/lighting)
+        // before locking again.
+        sessionQueue.async { [weak self] in self?.unlock3A() }
     }
 
     func resumeCounting() {
@@ -537,6 +840,19 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard isCountingEnabled else { return }
 
+        // ── Inference throttle: cap the pipeline to targetInferenceFPS ────────
+        // The camera runs at ~30 fps but the three-model pipeline can't process
+        // every frame, so we skip frames that arrive sooner than minInferenceInterval
+        // after the last processed one. Uses the buffer's presentation timestamp
+        // (its own clock) rather than wall-clock. lastPixelBuffer is updated above
+        // regardless, so snapshots still use the freshest frame.
+        let ts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        if lastInferenceTimestamp >= 0,
+           ts - lastInferenceTimestamp < Self.minInferenceInterval {
+            return
+        }
+        lastInferenceTimestamp = ts
+
         // ── Model 1: Glove safety detection (YOLOX-Nano 320×320) ──────────────
         // Only runs when the current drug is hazardous (isGloveDetectionEnabled) AND
         // gloves haven't been confirmed yet for this session (glovesConfirmed).
@@ -581,6 +897,12 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         let isCompleteTray = !trayDets.isEmpty && !chuteDets.isEmpty && !trayFillsFrame
 
         let gateOpen = isCompleteTray
+
+        // Once a complete, stable scene (tray AND chute) is acquired, lock
+        // AE/AF/AWB so the imaging stops drifting and a hand reaching in can't
+        // retrigger a whole-scene re-exposure. Idempotent — only fires once per
+        // session; released on counting pause/resume.
+        if isCompleteTray { lock3AIfNeeded() }
 
         // Overlay shows tray/chute only when the scene is a complete product.
         let displayTrays = isCompleteTray ? allTrays : []
@@ -642,7 +964,13 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             }
 
             let hazardous        = gloves.contains { $0.isHazardous }
-            let glovesNowSafe    = !self.glovesConfirmed && gloves.contains { $0.gloveClass == .glove }
+            // A glove box existing somewhere in frame isn't enough — a bare hand can
+            // also trigger a spurious low-confidence glove box elsewhere (clutter,
+            // background) while the hand itself is correctly flagged noGlove. Only
+            // confirm safe when gloves are detected AND no bare-hand box is present
+            // in the same frame.
+            let glovesNowSafe    = !self.glovesConfirmed && !hazardous
+                && gloves.contains { $0.gloveClass == .glove }
 
             DispatchQueue.main.async {
                 guard self.isCountingEnabled else { return }
@@ -686,6 +1014,23 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
                 }
 
                 self.trayDetections   = displayTrays
+
+                // ── Excess-near-chute highlight (computed ONCE per frame) ──────
+                // Number of pills to mark uses the SMOOTHED stableCount (steady);
+                // WHICH pills are picked is the persistent-track picker (sticky,
+                // distance-smoothed, margin-based steal) so packed pills don't
+                // ping-pong. Chute/tray geometry is this frame's segmentation.
+                // Disabled (empty) when no real target is set.
+                if self.excessTargetQuantity > 0 {
+                    let excess = max(0, self.stableCount - self.excessTargetQuantity)
+                    let chute = displayTrays.first { $0.trayClass == .chute }
+                    let tray  = displayTrays.first { $0.trayClass == .tray }
+                    self.excessPillIDs = self.chuteProximity.nearChuteIDs(
+                        pills: filtered, chute: chute, tray: tray, excess: excess)
+                } else if !self.excessPillIDs.isEmpty {
+                    self.excessPillIDs = []
+                }
+
                 self.gloveDetections  = gloves
                 self.isGloveHazardous = hazardous
                 if glovesNowSafe { self.glovesConfirmed = true }
@@ -728,7 +1073,7 @@ extension CameraService {
             )
         }
 
-        // 3. Render
+        // 3. Renderz
         let renderer = UIGraphicsImageRenderer(size: imageSize)
         return renderer.image { ctx in
             let context = ctx.cgContext
@@ -891,18 +1236,49 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        guard barcodeEnabled else { return }
-
         // Collect all currently-visible barcode values this frame.
         let visibleValues = metadataObjects
             .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
             .compactMap { $0.stringValue }
 
-        // If the previously locked barcode is no longer in the frame, release the
-        // lock immediately — no timer, no cooldown. The next real barcode can fire
-        // the moment it enters the frame.
-        if let locked = lockedBarcodeValue, !visibleValues.contains(locked) {
-            lockedBarcodeValue = nil
+        if barcodeEnabled {
+            processBarcodeMetadata(metadataObjects: metadataObjects, visibleValues: visibleValues)
+        }
+        if bottleRescanEnabled {
+            processBottleRescanMetadata(metadataObjects: metadataObjects, visibleValues: visibleValues)
+        }
+    }
+
+    private func processBarcodeMetadata(
+        metadataObjects: [AVMetadataObject],
+        visibleValues: [String]
+    ) {
+        // Release the lock only after the locked barcode has been absent for
+        // barcodeLockMissThreshold consecutive frames. A single-frame absence caused
+        // by camera shake does NOT release the lock — the miss counter must reach the
+        // threshold first. A different barcode appearing immediately clears the lock
+        // so the new code fires without waiting.
+        if let locked = lockedBarcodeValue {
+            if visibleValues.contains(locked) {
+                // Barcode still visible — reset miss counter, keep lock.
+                barcodeLockMissFrames = 0
+            } else if visibleValues.isEmpty {
+                // Barcode absent this frame (possible shake dropout) — count the miss.
+                barcodeLockMissFrames += 1
+                if barcodeLockMissFrames >= Self.barcodeLockMissThreshold {
+                    // Absent long enough — barcode was genuinely removed.
+                    lockedBarcodeValue = nil
+                    barcodeLockMissFrames = 0
+                }
+                // Lock not yet released — don't fire for any new barcode this frame.
+                return
+            } else {
+                // A DIFFERENT barcode is now in frame — release lock immediately so
+                // the new code fires right away. Same-barcode re-scan after genuine
+                // removal also reaches here (locked != nil, visible has a new value).
+                lockedBarcodeValue = nil
+                barcodeLockMissFrames = 0
+            }
         }
 
         // Fire a scan event only when:
@@ -914,7 +1290,46 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         else { return }
 
         lockedBarcodeValue = value
+        barcodeLockMissFrames = 0
+        // Clear first so SwiftUI's onChange fires even when the same barcode value
+        // re-enters the frame after a genuine removal (onChange only fires on change).
+        scannedCode = ""
         scannedCode = value
         scannedCodeType = object.type.rawValue
+    }
+
+    /// Same lock/debounce mechanics as `processBarcodeMetadata`, on an independent
+    /// lock/channel so a mid-count bottle rescan never interferes with the primary
+    /// NDC-scan path.
+    private func processBottleRescanMetadata(
+        metadataObjects: [AVMetadataObject],
+        visibleValues: [String]
+    ) {
+        if let locked = lockedBottleRescanValue {
+            if visibleValues.contains(locked) {
+                bottleRescanLockMissFrames = 0
+            } else if visibleValues.isEmpty {
+                bottleRescanLockMissFrames += 1
+                if bottleRescanLockMissFrames >= Self.barcodeLockMissThreshold {
+                    lockedBottleRescanValue = nil
+                    bottleRescanLockMissFrames = 0
+                }
+                return
+            } else {
+                lockedBottleRescanValue = nil
+                bottleRescanLockMissFrames = 0
+            }
+        }
+
+        guard lockedBottleRescanValue == nil,
+              let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let value = object.stringValue
+        else { return }
+
+        lockedBottleRescanValue = value
+        bottleRescanLockMissFrames = 0
+        print("📷 [CameraService] bottle rescan metadata decoded: \(value)")
+        bottleRescanCode = ""
+        bottleRescanCode = value
     }
 }

@@ -17,20 +17,25 @@ struct HamburgerMenuView: View {
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var pillScanViewModel: PillScanViewModel
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
-    @StateObject private var unsyncedViewModel = UnsyncedViewModel()
+
+    // Single settings view model drives the menu's settings-derived rows:
+    // the unsynced count and the save-history display.
+    @StateObject private var settingsViewModel = SettingsViewModel()
 
     @State private var showLogoutPopup: Bool = false
     @State private var showStockCountPopup: Bool = false
     @State private var showSelectBucketIdPopup: Bool = false
     @State private var selectedStockCountOption: StockCountOption = .newBatch
-    
-    @AppStorage(AppStorageManager.AppStorageKeys.saveHistoryOption)
-    
 
-    
-    private var storedHistoryOption: String = SaveHistoryOption.default.rawValue
-    
     private let menuItems = HamburgerMenuItem.allCases
+
+    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
+
+    /// Unsynced transactions are a PMS-integration-only concept — disable the row
+    /// when PMS integration is off for this account.
+    private func isItemDisabled(_ item: HamburgerMenuItem) -> Bool {
+        item == .UnsyncedTransaction && !isPmsIntegrated
+    }
 
     // MARK: BODY
     var body: some View {
@@ -130,6 +135,8 @@ struct HamburgerMenuView: View {
 //        let isCountItem = (item == .FixedCount || item == .RegularCount)
         let isCountItem = false
 
+        let disabled = isItemDisabled(item)
+
         Button {
             handleMenuSelection(item)
         } label: {
@@ -189,6 +196,9 @@ struct HamburgerMenuView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Grayed out when PMS is off, but kept tappable so the tap can surface
+        // the "feature not available" toast (handled in handleMenuSelection).
+        .opacity(disabled ? 0.6 : 1.0)
     }
 
     // MARK: - TRAILING VIEW BUILDER
@@ -199,12 +209,12 @@ struct HamburgerMenuView: View {
         switch item {
             
         case .History:
-            Text("\(storedHistoryOption)")
+            Text(settingsViewModel.saveHistoryDisplayText)
                 .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
 
         case .UnsyncedTransaction:
-            Text("\(unsyncedViewModel.batches.count + unsyncedViewModel.transactions.count)")
+            Text("\(settingsViewModel.unsyncedCount)")
                 .foregroundStyle(appColors.secondary)
                 .padding(.horizontal, isLandscape ? 10 : 0)
               
@@ -468,9 +478,15 @@ struct HamburgerMenuView: View {
 //                    .login(.dashboard(.pillCount(.scan(.rx_label))))))
 //            
         case .UnsyncedTransaction:
+            // PMS off → unsynced transactions are unavailable; surface a toast
+            // instead of navigating.
+            if isItemDisabled(.UnsyncedTransaction) {
+                ToastManager.shared.show(message: L10n.Menu.featureNotAvailableMessage)
+                return
+            }
             router.navigate(
                 to: .authentication(.user(.userSettings(.unsyncedTransaction))))
-            
+
         case .Settings:
             router.navigate(
                 to: .authentication(.user(.userSettings(.settings))))

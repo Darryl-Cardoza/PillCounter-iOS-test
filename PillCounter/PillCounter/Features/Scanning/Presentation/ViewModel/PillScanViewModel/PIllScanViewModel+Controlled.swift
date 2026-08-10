@@ -5,7 +5,7 @@
 //  Created by Bhushan Patil on 17/03/26.
 //
 import SwiftUI
-import ComposeApp
+import Hl7Core
 
 extension PillScanViewModel{
     
@@ -19,6 +19,15 @@ extension PillScanViewModel{
         }
 
         return nil
+    }
+
+    /// Open-ended step — the user pours ALL pills and there is no meaningful
+    /// target to compare against (parent / container-initiate count). The UI
+    /// hides the target progress bar and the button is always an explicit "Done"
+    /// (completion is the user's decision, not a count == target check).
+    var isOpenEndedCountStep: Bool {
+        currentControlledStep == .containerInitiate ||
+        currentControlledStep == .containerPending
     }
     
     
@@ -69,7 +78,7 @@ extension PillScanViewModel{
             return stepTotal >= target
             
         case .targetVerification:
-            if currentTransaction?.count_type == CountType.FIXED.rawValue {
+            if currentTransaction?.is_dispense == true {
                 return stepTotal == target
             } else {
                 return true
@@ -184,7 +193,7 @@ extension PillScanViewModel{
     func updateSubstitutedDrug(
         txnId: Int64,
         rawValue: String,
-        countType: CountType,
+        isDispense: Bool,
         image: UIImage?
     ) async {
         
@@ -197,16 +206,14 @@ extension PillScanViewModel{
         // (local path is taken when getControlledDrugInfo resolved from cache and
         // never populated ndcComparisonResponse).
         let actualDrugId: Int64
-        if let apiNdc = ndcComparisonResponse?.data?.scannedNdc?.drugCode, !apiNdc.isEmpty {
+        if let scannedNdc = ndcComparisonResponse?.data?.scannedNdc,
+           let apiNdc = scannedNdc.drugCode, !apiNdc.isEmpty {
             let newDrugId = generateUniqueDrugId()
-            drugMasterDAO.saveManual(
-                ndc:         apiNdc,
-                gtin:        gtin,
-                drugId:      newDrugId,
-                drugName:    ndcComparisonResponse?.data?.scannedNdc?.lookupName ?? "",
-                drugType:    ndcComparisonResponse?.data?.scannedNdc?.regulatory?.schedule ?? "",
-                packageQty:  ndcComparisonResponse?.data?.scannedNdc?.safeQuantity ?? 0,
-                isHazardous: ndcComparisonResponse?.data?.scannedNdc?.isHazardous
+            drugMasterDAO.upsertFromApi(
+                ndc:    apiNdc,
+                drugId: newDrugId,
+                drug:   scannedNdc,
+                gtin:   gtin
             )
             actualDrugId = drugMasterDAO.fetchByNdc(apiNdc)?.drug_id ?? newDrugId
         } else if let localDrug = drugMasterDAO.fetchByGtin(gtin), let localNdc = localDrug.ndc, !localNdc.isEmpty {
@@ -216,20 +223,15 @@ extension PillScanViewModel{
             return
         }
         
-        var savedPath = ""
-
         if let img = image {
-            if let path = PhotoFileManager.shared.saveImage(img) {
-                savedPath = path
-            }
+            pendingBarcodeImagePath = PhotoFileManager.shared.saveImage(img)
         }
 
         transactionDAO.update(
             txnId: txnId,
             drugId: isNdcEquivalent ? actualDrugId : nil,
-            countType: countType,
+            isDispense: isDispense,
             targetCount: nil,
-            barcodeImagePath: savedPath,
             substituedDrugId: isNdcEquivalent ? nil : actualDrugId,
             isSubstitue: isNdcEquivalent
         )

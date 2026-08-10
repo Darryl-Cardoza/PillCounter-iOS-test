@@ -14,7 +14,7 @@ class LoginViewModel: ObservableObject {
     @Published var userEmail: String = ""
     @Published var isChecked: Bool = false
     @Published var userSavedEmails: [String] = []
-    @Published var otp: [String] = Array(repeating: "", count: 4)
+    @Published var otp: [String] = Array(repeating: "", count: 6)
     @Published var errorMessage: String?
     @Published var resendOTPSent: Bool = false
     @Published var isOtpSent: Bool = false
@@ -29,14 +29,22 @@ class LoginViewModel: ObservableObject {
 
     // MARK: - Derived
     var resendTimerText: String { "\(resendCooldown) s" }
-    var isOtpComplete: Bool { otp.joined().count == 4 }
+    var isOtpComplete: Bool { otp.joined().count == 6 }
 
-    // MARK: - Repository
-    private let loginrepo = LoginRepository.shared
+    // MARK: - Injected dependencies
+    private let loginrepo: LoginRepositoryProtocol
+    private let store: TokenStore
 
     // MARK: - Init
-    init() {
-        userSavedEmails = AppStorageManager.shared.userSavedEmails
+    /// Dependencies default to the production singletons, so existing call
+    /// sites (`LoginViewModel()`) keep working unchanged. Tests pass mocks.
+    init(
+        loginRepository: LoginRepositoryProtocol = LoginRepository.shared,
+        store: TokenStore = AppStorageManager.shared
+    ) {
+        self.loginrepo = loginRepository
+        self.store = store
+        userSavedEmails = store.userSavedEmails
     }
 
     // MARK: - Timer
@@ -69,7 +77,7 @@ class LoginViewModel: ObservableObject {
             userSavedEmails.removeFirst(userSavedEmails.count - 5)
         }
 
-        AppStorageManager.shared.userSavedEmails = userSavedEmails
+        store.userSavedEmails = userSavedEmails
     }
 
     // MARK: - Send OTP
@@ -80,7 +88,7 @@ class LoginViewModel: ObservableObject {
 
         if isChecked {
             rememberMe()
-            AppStorageManager.shared.rememberMe = true
+            store.rememberMe = true
         }
 
         do {
@@ -88,7 +96,7 @@ class LoginViewModel: ObservableObject {
             if result.isSuccess ?? false {
                 errorMessage = nil
                 isOtpSent = true
-                AppStorageManager.shared.isNewUser = result.data?.isNewUser ?? true
+                store.isNewUser = result.data?.isNewUser ?? true
             } else {
                 resendOTPSent = false
                 errorMessage = result.message ?? "Something went wrong. Please try again later."
@@ -107,7 +115,7 @@ class LoginViewModel: ObservableObject {
         let otpString = otp.joined()
 
         guard !otpString.isEmpty else { errorMessage = "Please enter the OTP."; return }
-        guard otpString.count == 4 else { errorMessage = "Invalid OTP."; return }
+        guard otpString.count == 6 else { errorMessage = "Invalid OTP."; return }
 
         isLoading = true
         defer { isLoading = false }
@@ -120,26 +128,28 @@ class LoginViewModel: ObservableObject {
             )
 
             if result.isSuccess ?? false {
-                otp = ["", "", "", ""]
+                otp = Array(repeating: "", count: 6)
                 isOtpVerificationSuccess = true
 
                 // All sensitive values written to Keychain via AppStorageManager
-                AppStorageManager.shared.isLoggedIn   = true
-                AppStorageManager.shared.isHl7Enabled = result.data?.user?.isHl7Enabled ?? false
-                AppStorageManager.shared.accessToken  = result.data?.accessToken ?? ""
-                AppStorageManager.shared.refreshToken = result.data?.refreshToken ?? ""
-                AppStorageManager.shared.userEmail    = userEmail
-                AppStorageManager.shared.userId       = result.data?.user?.userId ?? ""
+                store.isLoggedIn   = true
+                store.isPmsIntegrated = result.data?.user?.isPmsIntegrated ?? false
+                store.allowLocalStorage = result.data?.user?.allowLocalStorage ?? false
+                store.accessToken  = result.data?.accessToken ?? ""
+                store.refreshToken = result.data?.refreshToken ?? ""
+                store.userEmail    = userEmail
+                store.userId       = result.data?.user?.userId ?? ""
 
                 let expiresIn = TimeInterval(result.data?.expiresIn ?? 86400)
-                AppStorageManager.shared.tokenExpiryTimestamp =
+                store.tokenExpiryTimestamp =
                     Date().addingTimeInterval(expiresIn).timeIntervalSince1970
 
                 await MainActor.run {
                     SessionManager.shared.reset()
                     Hl7ServiceController.shared.evaluate()
                 }
-
+                print("IsPmsIntegrated \(store.isPmsIntegrated)")
+                print("allowLocalStorage \(store.allowLocalStorage)")
             } else {
                 errorMessage = result.message ?? "Invalid OTP. Please try again."
             }
@@ -157,7 +167,7 @@ class LoginViewModel: ObservableObject {
 
         do {
             let result = try await loginrepo.logout(
-                refreshToken: AppStorageManager.shared.refreshToken ?? ""
+                refreshToken: store.refreshToken ?? ""
             )
 
             if result.isSuccess ?? false {
@@ -185,7 +195,7 @@ class LoginViewModel: ObservableObject {
                 resendOTPSent = true
                 errorMessage = "A new OTP has been sent."
                 startResendTimer()
-                otp = ["", "", "", ""]
+                otp = Array(repeating: "", count: 6)
             } else {
                 errorMessage = result.message ?? "Something went wrong!"
             }

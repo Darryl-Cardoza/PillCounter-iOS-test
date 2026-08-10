@@ -16,13 +16,18 @@ struct UserProfileScreen: View {
     @EnvironmentObject private var toastManager: ToastManager
 
     @State private var showDeleteConfirmation: Bool = false
+    @State private var selectedPharmacyType: PharmacyTypeOption? = nil
 
 //    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
 //        Bool = true
 
     @State private var firstName: String = ""
-    
+
     @State private var npiText: String = ""
+
+    /// Terminal selection is a PMS-integration-only concept — disable the
+    /// dropdown when PMS integration is off for this account.
+    private var isPmsDisabled: Bool { !AppStorageManager.shared.isPmsIntegrated }
 
     
     var body: some View {
@@ -69,8 +74,13 @@ struct UserProfileScreen: View {
        
         }
         .onAppear {
-            Task {
-                await userViewModel.getUser()
+            // App launch already hydrated user/terminals/pharmacy-type from
+            // auth/me into local storage — just read the cached data, no
+            // network call on every profile visit.
+            Task { await userViewModel.getUser(forceRemote: false) }
+            let savedCode = AppStorageManager.shared.selectedPharmacyTypeCode
+            selectedPharmacyType = userViewModel.pharmacyTypeOptions.first {
+                $0.code == (savedCode ?? userViewModel.userProfileDetails?.pharmacyType)
             }
         }
         .onTapGesture {
@@ -127,7 +137,8 @@ struct UserProfileScreen: View {
                 placeholder: L10n.Profile.phoneNumber,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                maxLength: 10
+                maxLength: 10,
+                usPhoneFormat: true
             )
 
             FloatingLabelTextField(
@@ -146,13 +157,23 @@ struct UserProfileScreen: View {
             if !userViewModel.terminals.isEmpty {
                 terminalDropdown
             }
+
+            pharmacyTypeDropdown
         }
     }
 
     private var landscapeProfileColums: some View {
-        HStack(alignment: .top, spacing: 12) {
-            leftProfileColumn
-            rightProfileColumn
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                leftProfileColumn
+                rightProfileColumn
+            }
+            HStack(spacing: 12) {
+                if !userViewModel.terminals.isEmpty {
+                    terminalDropdown
+                }
+                pharmacyTypeDropdown
+            }
         }
     }
 
@@ -175,10 +196,6 @@ struct UserProfileScreen: View {
                 text: $userViewModel.email,
                 disabled: true
             )
-
-            if !userViewModel.terminals.isEmpty {
-                terminalDropdown
-            }
         }
     }
 
@@ -194,7 +211,8 @@ struct UserProfileScreen: View {
                 placeholder: L10n.Profile.phoneNumber,
                 text: $userViewModel.phoneNumber,
                 keyboardType: .phonePad,
-                maxLength: 10
+                maxLength: 10,
+                usPhoneFormat: true
             )
 
             FloatingLabelTextField(
@@ -203,6 +221,50 @@ struct UserProfileScreen: View {
                 keyboardType: .phonePad,
                 maxLength: 10
             )
+        }
+    }
+
+    private var pharmacyTypeDropdown: some View {
+        Menu {
+            ForEach(userViewModel.pharmacyTypeOptions) { type in
+                Button {
+                    selectedPharmacyType = type
+                } label: {
+                    HStack {
+                        Text(type.label)
+                        if type == selectedPharmacyType {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            ZStack(alignment: .leading) {
+                Text(L10n.Profile.pharmacyType)
+                    .font(.caption)
+                    .foregroundColor(appColors.text.opacity(0.75))
+                    .offset(y: -16)
+                    .padding(.leading, 16)
+
+                HStack {
+                    Text(selectedPharmacyType?.label ?? "")
+                        .font(.body)
+                        .foregroundColor(appColors.text)
+                        .padding(.leading, 16)
+                        .padding(.top, 10)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(appColors.text.opacity(0.75))
+                        .padding(.trailing, 16)
+                        .padding(.top, 10)
+                }
+            }
+            .frame(height: 64)
+            .background(appColors.secondaryBackground)
+            .cornerRadius(10)
         }
     }
 
@@ -232,7 +294,7 @@ struct UserProfileScreen: View {
                 HStack {
                     Text(userViewModel.pendingTerminal?.terminalName ?? "")
                         .font(.body)
-                        .foregroundColor(appColors.text)
+                        .foregroundColor(userViewModel.pendingTerminal != nil ? appColors.primary : appColors.text)
                         .padding(.leading, 16)
                         .padding(.top, 10)
 
@@ -249,40 +311,55 @@ struct UserProfileScreen: View {
             .background(appColors.secondaryBackground)
             .cornerRadius(10)
         }
+        .disabled(isPmsDisabled)
+        .opacity(isPmsDisabled ? 0.6 : 1.0)
+        // When PMS is off the Menu is disabled (inert); overlay a tap target so the
+        // tap still surfaces the "feature not available" toast instead of nothing.
+        .overlay {
+            if isPmsDisabled {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        toastManager.show(message: L10n.Menu.featureNotAvailableMessage)
+                    }
+            }
+        }
     }
 
     private var actionButtons: some View {
         EqualWidthHStackButtons(spacing: 16) {
 
-            // DELETE
-            PillCountingButton(
-                iconName: nil,
-                title: L10n.Common.delete,
-                textColor: appColors.primary,
-                backgroundColor: .clear,
-                borderColor: appColors.primary,
-                font: .system(size: 16, weight: .semibold),
-                cornerRadius: 40,
-                horizontalPadding: 22,
-                verticalPadding: 15,
-                iconSize: 24,
-                action: onDeleteTapped
-            )
-
-            // SKIP
-//            PillCountingButton(
-//                iconName: nil,
-//                title: NSLocalizedString("SKIP", comment: ""),
-//                textColor: appColors.primary,
-//                backgroundColor: .clear,
-//                borderColor: appColors.primary,
-//                font: .system(size: 16, weight: .semibold),
-//                cornerRadius: 40,
-//                horizontalPadding: 22,
-//                verticalPadding: 15,
-//                iconSize: 24,
-//                action: onSkipTapped
-//            )
+            if AppStorageManager.shared.isNewUser {
+                // SKIP
+                PillCountingButton(
+                    iconName: nil,
+                    title: NSLocalizedString("SKIP", comment: ""),
+                    textColor: appColors.primary,
+                    backgroundColor: .clear,
+                    borderColor: appColors.primary,
+                    font: .system(size: 16, weight: .semibold),
+                    cornerRadius: 40,
+                    horizontalPadding: 22,
+                    verticalPadding: 15,
+                    iconSize: 24,
+                    action: onSkipTapped
+                )
+            } else {
+                // DELETE
+                PillCountingButton(
+                    iconName: nil,
+                    title: L10n.Common.delete,
+                    textColor: appColors.primary,
+                    backgroundColor: .clear,
+                    borderColor: appColors.primary,
+                    font: .system(size: 16, weight: .semibold),
+                    cornerRadius: 40,
+                    horizontalPadding: 22,
+                    verticalPadding: 15,
+                    iconSize: 24,
+                    action: onDeleteTapped
+                )
+            }
 
             // SAVE
             PillCountingButton(
@@ -306,6 +383,7 @@ struct UserProfileScreen: View {
     }
 
     private func onSkipTapped() {
+        AppStorageManager.shared.isNewUser = false
         router.navigateBack()
     }
 
@@ -334,9 +412,9 @@ struct UserProfileScreen: View {
                 Hl7ServiceController.shared.restartForTerminalChange()
             }
 
-            let profileChanged = userViewModel.hasProfileChanged()
+            let profileChanged = userViewModel.hasProfileChanged(pharmacyTypeCode: selectedPharmacyType?.code)
             if profileChanged {
-                await userViewModel.updateUserProfile()
+                await userViewModel.updateUserProfile(pharmacyTypeCode: selectedPharmacyType?.code)
                 if !userViewModel.isProfileUpdated {
                     toastManager.show(message: L10n.Profile.Error.errorUpdateProfileMessage)
                     return
@@ -358,16 +436,7 @@ struct UserProfileScreen: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-
-                    HStack(alignment: .top, spacing: 20) {
-                        leftProfileColumn
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        rightProfileColumn
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                   
+                    landscapeProfileColums
                 }
                 .padding(.horizontal)
             }

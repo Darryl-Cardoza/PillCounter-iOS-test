@@ -322,8 +322,7 @@ struct UserHistoryView: View {
 
                 DispenseItemRowView(data: row)
                     .onTapGesture {
-                        historyViewModel.selectedTransactionId = Int64(row.id) ?? 0
-                        router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail))))
+                        router.navigate(to: .authentication(.user(.userSettings(.HistoryTransactionDetail(Int64(row.id) ?? 0)))))
                     }
                     .opacity(didAppear ? 1 : 0)
                     .offset(y: didAppear ? 0 : 20)
@@ -362,8 +361,7 @@ struct UserHistoryView: View {
                 let hasAppeared = appearedBatchIds.contains(row.batchId)
                 StockItemRowView(data: row)
                     .onTapGesture {
-                        historyViewModel.selectedBatchId = row.batchId
-                        router.navigate(to: .authentication(.user(.userSettings(.HistoryBatchDetail))))
+                        router.navigate(to: .authentication(.user(.userSettings(.HistoryBatchDetail(row.batchId)))))
                     }
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(y: hasAppeared ? 0 : 20)

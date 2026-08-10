@@ -47,13 +47,14 @@ extension UIImage {
         workflowStep:  String,   // "Target Verification", "Recount", "Vial", etc.
         count:         Int,
         targetCount:   Int32?,
-        lotNo:         String,
-        expiry:        String,
         timestamp:     Int64,
         userInitials:  String,
         geolocation:   String,   // "37.33° N, 122.03° W — 94025"
         rx:            String,
-        fileSizeKB:    Double
+        fileSizeKB:    Double,
+        lotNumber:     String? = nil,
+        expirationDate: String? = nil,
+        serialNumber:  String? = nil
     ) -> UIImage {
 
         // ── Timestamp ───────────────────────────────────────────────────
@@ -81,13 +82,14 @@ extension UIImage {
             add("Count", "\(count)")
         }
 
-        add("Lot",    lotNo)
-        add("Exp",    expiry)
         add("User",   userInitials)
         add("Rx",     rx)
         add("Loc",    geolocation)
         add("Date",   dateString)
         add("Size",   String(format: "%.1f KB", fileSizeKB))
+        add("Lot",    lotNumber ?? "")
+        add("Exp",    expirationDate ?? "")
+        add("Serial", serialNumber ?? "")
 
         // ── Typography ───────────────────────────────────────────────────
         // ~1.8% of image width, floor at 10 pt so it stays readable on small images

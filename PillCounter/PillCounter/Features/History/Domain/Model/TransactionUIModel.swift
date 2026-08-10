@@ -10,7 +10,8 @@ struct TransactionRowData: Identifiable {
     let drugName: String
     let createdAt: Int64
     let barcodeImagePath: String?
-    
+    let drugImagePath: String?
+
     let pillCount: Int
     let targetCount: Int
     let countType: String
@@ -18,4 +19,6 @@ struct TransactionRowData: Identifiable {
     let note: String?
     let bucketId: String
     let drugType: String
+    let strength: String
+    let dosageForm: String
 }

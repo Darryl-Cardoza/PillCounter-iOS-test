@@ -10,47 +10,33 @@ import SwiftUI
 struct UserSettingsView: View {
     
     
-    @State private var isPillCountingEnabled =
-    AppStorageManager.shared.isPillCountingEnabled
-    
-    @State private var isBackCountRequired =
-    AppStorageManager.shared.isBackCountRequired
-    
-    @State private var isHapticEnabled =
-    AppStorageManager.shared.isHapticEnabled
-    
-    @State private var isSoundEnabled =
-    AppStorageManager.shared.isSoundEnabled
-    
-    @State private var isSpeechEnabled =
-    AppStorageManager.shared.isSpeechEnabled
-    
-    @State private var selectedSchedules =
-    AppStorageManager.shared.selectedSchedules
-    
-    @State private var isHazardousDrugSettingEnabled =
-    AppStorageManager.shared.isHazardousDrugSetting
+    // All persisted settings now live in SettingsViewModel — the single
+    // source of truth for this screen.
+    @StateObject private var settingsViewModel = SettingsViewModel()
 
-    @State private var hazardousTrayColor =
-    AppStorageManager.shared.hazardousTrayColor
-
-
-    // 1. Source of Truth (The actual saved setting)
-    @State private var selectedSaveHistoryOption: SaveHistoryOption =
-    AppStorageManager.shared.saveHistoryOption
-    
-    // 2. Temporary State (The option the user *wants* to switch to)
+    // Temporary state: the save-history option the user *wants* to switch to.
     @State private var pendingOption: SaveHistoryOption? = nil
-    
-    // 3. UI State for Popup
+
+    // UI State for popups / sub-screens
     @State private var showConfirmationPopup: Bool = false
     @State private var showClearDataConfirmationPopup: Bool = false
     @State private var showResetHazardousTrayColorPopup: Bool = false
     @State private var activeSubScreen: SettingsSubScreen? = nil
-    
+
     @EnvironmentObject private var appColors: AppColors
-    @EnvironmentObject private var userviewmodel: UserViewModel
     @EnvironmentObject private var router: Router
+    
+    
+    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
+    /// PMS-gated rows are disabled when PMS integration is off for this account.
+    private var isPmsDisabled: Bool { !isPmsIntegrated }
+
+    /// Surface the "feature not available" toast when a PMS-gated row is tapped.
+    private func showFeatureUnavailableToast() {
+        ToastManager.shared.show(message: L10n.Menu.featureNotAvailableMessage)
+    }
+
+
     
     var body: some View {
         GeometryReader { geometry in
@@ -87,6 +73,13 @@ struct UserSettingsView: View {
         .customPopup(isPresented: $showResetHazardousTrayColorPopup) {
             resetHazardousTrayColorDialog
         }
+        .onAppear {
+            // PMS off → the gated features are unavailable; reset them to their
+            // defaults (off / empty) so a stale "on" value can't take effect.
+            if isPmsDisabled {
+                settingsViewModel.resetPmsGatedSettings()
+            }
+        }
     }
 
     private var resetHazardousTrayColorDialog: some View {
@@ -98,15 +91,14 @@ struct UserSettingsView: View {
         ) {
             showResetHazardousTrayColorPopup = false
         } onConfirm: {
-            AppStorageManager.shared.hazardousTrayColor = nil
-            hazardousTrayColor = nil
+            settingsViewModel.resetHazardousTrayColor()
             showResetHazardousTrayColorPopup = false
         }
     }
 
     private var confirmationPopUp: some View {
         ConfirmationDialogue(
-            title: String(format: L10n.Settings.confirmHistoryTitle, pendingOption?.displayText ?? selectedSaveHistoryOption.displayText),
+            title: String(format: L10n.Settings.confirmHistoryTitle, pendingOption?.displayText ?? settingsViewModel.saveHistoryOption.displayText),
             message: L10n.Settings.confirmHistoryMessage,
             cancelButtonText: L10n.Common.no,
             confirmButtonText: L10n.Common.yes
@@ -116,9 +108,7 @@ struct UserSettingsView: View {
         } onConfirm: {
             // Confirm Action: Commit the change
             if let newOption = pendingOption {
-                selectedSaveHistoryOption = newOption
-                AppStorageManager.shared.saveHistoryOption =
-                newOption
+                settingsViewModel.commitSaveHistoryOption(newOption)
             }
             withAnimation(.easeInOut(duration: 0.25)) {
                 activeSubScreen = nil
@@ -137,7 +127,7 @@ struct UserSettingsView: View {
             showClearDataConfirmationPopup = false
         } onConfirm: {
             showClearDataConfirmationPopup = false
-            userviewmodel.clearLocalData()
+            settingsViewModel.clearLocalData()
         }
     }
     
@@ -151,11 +141,12 @@ struct UserSettingsView: View {
                 // MARK: Pill Counting
                 ToggleRowView(
                     title: L10n.Settings.alwaysAskNotes,
-                    isOn: $isPillCountingEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    AppStorageManager.shared.isPillCountingEnabled = newValue
-                }
+                    isOn: $settingsViewModel.isPillCountingEnabled,
+                    onColor: appColors.primary,
+                    onToggle: { newValue in
+                        settingsViewModel.setPillCountingEnabled(newValue)
+                    }
+                )
                 
                 Divider().background(appColors.primaryBackground)
                 
@@ -169,7 +160,7 @@ struct UserSettingsView: View {
                         ForEach(Array(DrugSchedule.allCases.enumerated()), id: \.element.id) { index, schedule in
                             Text(schedule.rawValue)
                                 .foregroundColor(
-                                    selectedSchedules.contains(schedule)
+                                    settingsViewModel.isScheduleSelected(schedule)
                                     ? appColors.secondary
                                     : appColors.text.opacity(0.35)
                                 )
@@ -180,7 +171,12 @@ struct UserSettingsView: View {
                 }
                 .padding(.horizontal)
                 .contentShape(Rectangle())
+                .opacity(isPmsDisabled ? 0.6 : 1.0)
                 .onTapGesture {
+                    if isPmsDisabled {
+                        showFeatureUnavailableToast()
+                        return
+                    }
                     withAnimation(.easeInOut(duration: 0.25)) {
                         activeSubScreen = .schedule
                     }
@@ -192,11 +188,14 @@ struct UserSettingsView: View {
                 // MARK: Back Count
                 ToggleRowView(
                     title: L10n.Settings.requireBackCount,
-                    isOn: $isBackCountRequired,
-                    onColor: appColors.primary
-                ) { newValue in
-                    AppStorageManager.shared.isBackCountRequired = newValue
-                }
+                    isOn: $settingsViewModel.isBackCountRequired,
+                    onColor: appColors.primary,
+                    isDisabled: isPmsDisabled,
+                    onDisabledTap: { showFeatureUnavailableToast() },
+                    onToggle: { newValue in
+                        settingsViewModel.setBackCountRequired(newValue)
+                    }
+                )
                 
                 Divider().background(appColors.primaryBackground)
                 
@@ -210,7 +209,7 @@ struct UserSettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     
-                    Text(selectedSaveHistoryOption.displayText)
+                    Text(settingsViewModel.saveHistoryOption.displayText)
                         .foregroundColor(appColors.secondary)
                         .fontWeight(.regular)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -230,11 +229,12 @@ struct UserSettingsView: View {
                 // MARK: Sound
                 ToggleRowView(
                     title: L10n.Settings.soundFeedback,
-                    isOn: $isSoundEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    AppStorageManager.shared.isSoundEnabled = newValue
-                }
+                    isOn: $settingsViewModel.isSoundEnabled,
+                    onColor: appColors.primary,
+                    onToggle: { newValue in
+                        settingsViewModel.setSoundEnabled(newValue)
+                    }
+                )
                 
                 
                 Divider().background(appColors.primaryBackground)
@@ -242,33 +242,38 @@ struct UserSettingsView: View {
                 // MARK: Haptic
                 ToggleRowView(
                     title: L10n.Settings.hapticFeedback,
-                    isOn: $isHapticEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    AppStorageManager.shared.isHapticEnabled = newValue
-                }
+                    isOn: $settingsViewModel.isHapticEnabled,
+                    onColor: appColors.primary,
+                    onToggle: { newValue in
+                        settingsViewModel.setHapticEnabled(newValue)
+                    }
+                )
                 
                 Divider().background(appColors.primaryBackground)
                 
                 // MARK: Speech Instruction
                 ToggleRowView(
                     title: L10n.Settings.voiceInstructions,
-                    isOn: $isSpeechEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    AppStorageManager.shared.isSpeechEnabled = newValue
-                }
+                    isOn: $settingsViewModel.isSpeechEnabled,
+                    onColor: appColors.primary,
+                    onToggle: { newValue in
+                        settingsViewModel.setSpeechEnabled(newValue)
+                    }
+                )
                 
                 Divider().background(appColors.primaryBackground)
                 
                 // MARK: HAZARDOUS DRUG
                 ToggleRowView(
                     title: L10n.Settings.hazardousPillSetting,
-                    isOn: $isHazardousDrugSettingEnabled,
-                    onColor: appColors.primary
-                ) { newValue in
-                    AppStorageManager.shared.isHazardousDrugSetting = newValue
-                }
+                    isOn: $settingsViewModel.isHazardousDrugSettingEnabled,
+                    onColor: appColors.primary,
+                    isDisabled: isPmsDisabled,
+                    onDisabledTap: { showFeatureUnavailableToast() },
+                    onToggle: { newValue in
+                        settingsViewModel.setHazardousDrugSetting(newValue)
+                    }
+                )
 
                 Divider().background(appColors.primaryBackground)
 
@@ -279,16 +284,21 @@ struct UserSettingsView: View {
                         .fontWeight(.regular)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text(hazardousTrayColor ?? "—")
+                    Text(settingsViewModel.hazardousTrayColor ?? "—")
                         .foregroundColor(appColors.secondary)
                         .fontWeight(.regular)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal)
                 .contentShape(Rectangle())
+                .opacity(isPmsDisabled ? 0.6 : 1.0)
                 .onTapGesture {
+                    if isPmsDisabled {
+                        showFeatureUnavailableToast()
+                        return
+                    }
                     // Only offer to reset when a hazardous tray color is set.
-                    if hazardousTrayColor != nil {
+                    if settingsViewModel.hazardousTrayColor != nil {
                         showResetHazardousTrayColorPopup = true
                     }
                 }
@@ -364,14 +374,14 @@ struct UserSettingsView: View {
                         HStack (spacing:8){
                             Circle()
                                 .stroke(
-                                    option == selectedSaveHistoryOption
+                                    option == settingsViewModel.saveHistoryOption
                                     ? appColors.primary
                                     : appColors.text,
                                     lineWidth: 2
                                 )
                                 .frame(width: 20, height: 20)
                                 .overlay {
-                                    if option == selectedSaveHistoryOption {
+                                    if option == settingsViewModel.saveHistoryOption {
                                         Circle()
                                             .fill(appColors.primary)
                                             .frame(width: 10, height: 10)
@@ -401,20 +411,12 @@ struct UserSettingsView: View {
                 ForEach(DrugSchedule.allCases) { schedule in
                     
                     Button {
-                        // toggle selection
-                        if selectedSchedules.contains(schedule) {
-                            selectedSchedules.remove(schedule)
-                        } else {
-                            selectedSchedules.insert(schedule)
-                        }
-                        
-                        AppStorageManager.shared.selectedSchedules = selectedSchedules
-                        
+                        settingsViewModel.toggleSchedule(schedule)
                     } label: {
                         HStack(spacing: 8) {
                             RoundedRectangle(cornerRadius: 5)
                                 .stroke(
-                                    selectedSchedules.contains(schedule)
+                                    settingsViewModel.isScheduleSelected(schedule)
                                     ? appColors.primary
                                     : appColors.text.opacity(0.6),
                                     lineWidth: 2
@@ -423,13 +425,13 @@ struct UserSettingsView: View {
                                 .background(
                                     RoundedRectangle(cornerRadius: 5)
                                         .fill(
-                                            selectedSchedules.contains(schedule)
+                                            settingsViewModel.isScheduleSelected(schedule)
                                             ? appColors.primary
                                             : Color.clear
                                         )
                                 )
                                 .overlay {
-                                    if selectedSchedules.contains(schedule) {
+                                    if settingsViewModel.isScheduleSelected(schedule) {
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 12, weight: .bold))
                                             .foregroundColor(.white)
@@ -470,6 +472,10 @@ struct ToggleRowView: View {
 
     var onColor: Color = .pink
     var horizontalPadding: CGFloat = 16
+    /// When true the row is grayed out, the toggle is inert, and a tap anywhere
+    /// on the row routes to `onDisabledTap` instead of flipping the toggle.
+    var isDisabled: Bool = false
+    var onDisabledTap: (() -> Void)? = nil
     var onToggle: ((Bool) -> Void)? = nil
 
     var body: some View {
@@ -482,6 +488,7 @@ struct ToggleRowView: View {
                 isOn: Binding(
                     get: { isOn },
                     set: { newValue in
+                        guard !isDisabled else { return }
                         isOn = newValue
                         onToggle?(newValue)
                     }
@@ -489,8 +496,16 @@ struct ToggleRowView: View {
                 onColor: onColor
             )
             .scaleEffect(0.8)
+            // Block the toggle's own hit-testing when disabled so the row-level
+            // tap below is what fires (showing the "not available" popup).
+            .allowsHitTesting(!isDisabled)
         }
         .padding(.horizontal, horizontalPadding)
+        .opacity(isDisabled ? 0.6 : 1.0)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isDisabled { onDisabledTap?() }
+        }
     }
 }
 

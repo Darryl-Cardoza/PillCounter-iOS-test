@@ -7,33 +7,16 @@
 
 import Foundation
 
-// MARK: - ParsedScanData
-
-struct ParsedScanData {
-    let rxNo:     String?
-    let ndcNo:    String?
-    let drugName: String?
-    let qty:      String?
-    let rawMap:   [String: String]
-
-    init(
-        rxNo:     String?           = nil,
-        ndcNo:    String?           = nil,
-        drugName: String?           = nil,
-        qty:      String?           = nil,
-        rawMap:   [String: String]  = [:]
-    ) {
-        self.rxNo     = rxNo
-        self.ndcNo    = ndcNo
-        self.drugName = drugName
-        self.qty      = qty
-        self.rawMap   = rawMap
-    }
-}
-
 // MARK: - PillScanViewModel Rx Extension
 
 extension PillScanViewModel {
+
+    /// Local drug master record for the currently scanned Rx's NDC — used by the Rx details
+    /// sheet to show strength/form/image when there's no existing transaction yet (new Rx).
+    var scannedRxDrugMaster: DrugMasterEntity? {
+        guard let ndc = scannedRxData?.ndcNo, !ndc.isEmpty else { return nil }
+        return drugMasterDAO.fetchByNdc(ndc)
+    }
 
     // MARK: Parse Scanned Barcode
 
@@ -41,17 +24,12 @@ extension PillScanViewModel {
         let barcodeFormat = AppStorageManager.shared.barcodeFormat
 
         do {
-            let keys   = try extractKeys(from: barcodeFormat)
-            let values = extractValues(from: actualValue)
+            let mappedData = try BarcodeFormatParser.mappedData(format: barcodeFormat, actualValue: actualValue)
 
-            guard !keys.isEmpty, !values.isEmpty else {
+            guard !mappedData.isEmpty else {
                 scannedRxData   = ParsedScanData()
                 showRxFlowPopup = false
                 return
-            }
-
-            let mappedData = zip(keys, values).reduce(into: [String: String]()) { result, pair in
-                result[pair.0] = pair.1
             }
 
             let ndc    = mappedData["NDCNO"] ?? ""
@@ -97,9 +75,18 @@ extension PillScanViewModel {
                 print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
 
                 guard let existingTxn else {
-                    print("[RxScan] Rx \(rxNo) not found in DB — aborting")
-                    showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
-                    rxScanFailed = true
+                    print("[RxScan] Rx \(rxNo) not found in DB — showing Rx popup to create new txn")
+
+                    scannedRxData = ParsedScanData(
+                        rxNo:     rxNo,
+                        ndcNo:    ndc.isEmpty ? nil : ndc,
+                        drugName: drugName,
+                        qty:      mappedData["QTY"],
+                        refil:    mappedData["REFILLNO"],
+                        rawMap:   mappedData
+                    )
+                    fetchedRxTransaction = nil
+                    showRxFlowPopup = true
                     return
                 }
 
@@ -114,6 +101,7 @@ extension PillScanViewModel {
                     ndcNo:    ndc.isEmpty ? nil : ndc,
                     drugName: drugName,
                     qty:      mappedData["QTY"],
+                    refil:    mappedData["REFILLNO"],
                     rawMap:   mappedData
                 )
                 fetchedRxTransaction = existingTxn
@@ -151,21 +139,32 @@ extension PillScanViewModel {
     // MARK: Proceed with Rx Transaction
 
     /// Called when user taps PROCEED on the Rx popup.
-    /// Fetches the existing transaction for the scanned Rx and sets it as the selected transaction
-    /// so the normal barcode-scan flow (scan stock bottle → NDC match → pill count) can continue.
-    /// Does NOT modify any Rx data.
-    func proceedFromRxScan() {
+    /// If the Rx already exists locally, sets it as the selected transaction so the normal
+    /// barcode-scan flow (scan stock bottle → NDC match → pill count) can continue.
+    /// If the Rx is new, creates a transaction from the scanned data first.
+    func proceedFromRxScan() async {
         guard let rxNo = scannedRxData?.rxNo, !rxNo.isEmpty else {
             print("[RxScan] proceedFromRxScan — no rxNo, cannot proceed")
             rxScanFailed = true
             return
         }
 
-        let currentUser = userDataLocalStorage.fetchByUserId(userId)
-        guard let currentUser,
-              let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
-            print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB")
+        guard let currentUser = userDataLocalStorage.fetchByUserId(userId) else {
+            print("[RxScan] proceedFromRxScan — no current user")
             rxScanFailed = true
+            return
+        }
+
+        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+            guard !AppStorageManager.shared.isPmsIntegrated else {
+                print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB, PMS integrated, not creating txn")
+                showRxFlowPopup = false
+                showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                rxScanFailed = true
+                return
+            }
+            print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB, creating new txn")
+            await createTransactionFromRxScan()
             return
         }
 
@@ -177,8 +176,9 @@ extension PillScanViewModel {
     }
 
     /// Called when user taps PROCEED on the Rx popup.
-    /// Always updates the existing transaction found during parseScanData — never creates a new one.
-    func createTransactionFromRxScan(countType: CountType = .FIXED) async {
+    /// Updates the existing transaction found during parseScanData, or creates a new one
+    /// if the Rx wasn't found in local DB.
+    func createTransactionFromRxScan(isDispense: Bool = true) async {
         guard let rxData = scannedRxData else {
             print("[RxScan] No scanned Rx data available")
             return
@@ -201,10 +201,57 @@ extension PillScanViewModel {
         }
 
         let currentUser = userDataLocalStorage.fetchByUserId(userId)
-        guard let currentUser,
-              let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
-            print("[RxScan] Rx \(rxNo) no longer found in DB on proceed — aborting")
-            showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
+        guard let currentUser else {
+            print("[RxScan] No current user — cannot proceed")
+            rxScanFailed = true
+            return
+        }
+
+        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+            guard !AppStorageManager.shared.isPmsIntegrated else {
+                print("[RxScan] Rx \(rxNo) not found in DB, PMS integrated — not creating txn")
+                showRxFlowPopup = false
+                showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                rxScanFailed = true
+                return
+            }
+            print("[RxScan] Rx \(rxNo) not found in DB — creating new txn")
+
+            await createTransaction(
+                drugId: drug.drug_id,
+                isDispense: isDispense,
+                drugName: rxData.drugName,
+                rxNo: rxNo,
+                bucketId: selectedBucket
+            )
+
+            await MainActor.run {
+                guard let txnId = currentTransaction?.txn_id else { return }
+
+                if targetQty > 0 {
+                    transactionDAO.updateFromHL7Edit(
+                        txnId: txnId,
+                        drugId: drug.drug_id,
+                        targetCount: targetQty,
+                        priority: currentTransaction?.txn_priority
+                    )
+                    self.currentTransaction = transactionDAO.fetchById(txnId)
+                }
+
+                self.selectedTransaction = self.currentTransaction
+
+                getAllTransactionDetailsOfTheCurrentTransaction()
+
+                if targetQty > 0 {
+                    let digits = String(targetQty).map { String($0) }
+                    let padded = Array(repeating: "", count: max(0, 4 - digits.count)) + digits
+                    self.targetCount = Array(padded.suffix(4))
+                    self.updateTargetCountForCurrentTransaction()
+                }
+
+                self.showRxFlowPopup = false
+                self.selectedBucket  = ""
+            }
             return
         }
 
@@ -241,60 +288,27 @@ extension PillScanViewModel {
         }
     }
 
+    // MARK: Rx Number Extraction (no side effects)
+
+    /// Pulls just the RXNO field out of a scanned barcode using the configured
+    /// barcodeFormat, without running any of the lookup/popup flow that
+    /// `parseScanData` performs. Used by the vial auto-capture step to match a
+    /// scanned vial label against the current transaction's rx_no.
+    /// Returns nil if the value doesn't match the format or has no RXNO field.
+    func extractRxNo(from value: String) -> String? {
+        let barcodeFormat = AppStorageManager.shared.barcodeFormat
+        guard let mapped = try? BarcodeFormatParser.mappedData(format: barcodeFormat, actualValue: value),
+              !mapped.isEmpty else { return nil }
+
+        let rxNo = mapped["RXNO"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return rxNo.isEmpty ? nil : rxNo
+    }
+
     // MARK: Barcode Format Match Check
 
     /// Builds a regex from the configured barcodeFormat and tests the scanned value against it.
     func matchesBarcodeFormat(_ value: String) -> Bool {
-        let format = AppStorageManager.shared.barcodeFormat
-        guard !format.isEmpty else { return false }
-
-        do {
-            let placeholderRegex = try NSRegularExpression(pattern: "\\{[^}]+\\}")
-            let formatRange      = NSRange(format.startIndex..., in: format)
-            let matches          = placeholderRegex.matches(in: format, range: formatRange)
-            guard !matches.isEmpty else { return false }
-
-            var regexParts: [String] = []
-            var lastEnd = format.startIndex
-
-            for (index, match) in matches.enumerated() {
-                guard let matchRange = Range(match.range, in: format) else { continue }
-
-                let literal = String(format[lastEnd..<matchRange.lowerBound])
-                let keyName = String(format[matchRange])
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "{}"))
-                    .uppercased()
-
-                let isLastPlaceholder = index == matches.count - 1
-                let isOptional        = isLastPlaceholder && keyName == "BUCKET"
-
-                if isOptional {
-                    let escapedLiteral = NSRegularExpression.escapedPattern(for: literal)
-                    regexParts.append("(?:\(escapedLiteral)(.+?))?")
-                } else {
-                    if !literal.isEmpty {
-                        regexParts.append(NSRegularExpression.escapedPattern(for: literal))
-                    }
-                    regexParts.append("(.+?)")
-                }
-
-                lastEnd = matchRange.upperBound
-            }
-
-            let trailing = String(format[lastEnd...])
-            if !trailing.isEmpty {
-                regexParts.append(NSRegularExpression.escapedPattern(for: trailing))
-            }
-
-            let pattern    = "^" + regexParts.joined() + "$"
-            let valueRegex = try NSRegularExpression(pattern: pattern)
-            let valueRange = NSRange(value.startIndex..., in: value)
-            return valueRegex.firstMatch(in: value, range: valueRange) != nil
-
-        } catch {
-            print("[RxScan] matchesBarcodeFormat error: \(error)")
-            return false
-        }
+        BarcodeFormatParser.matches(value, format: AppStorageManager.shared.barcodeFormat)
     }
 
     // MARK: Drug Name Resolution (Local DB → API → nil)
@@ -330,14 +344,13 @@ extension PillScanViewModel {
 
             let resolvedName = data.scannedNdc?.lookupName ?? ""
 
-            drugMasterDAO.saveManual(
-                ndc:          ndc,
-                drugId:       generateUniqueDrugId(),
-                drugName:     resolvedName,
-                drugType:     data.scannedNdc?.regulatory?.schedule,
-                packageQty:   data.scannedNdc?.safeQuantity ?? 0,
-                isHazardous:  data.scannedNdc?.isHazardous
-            )
+            if let scannedNdc = data.scannedNdc {
+                drugMasterDAO.upsertFromApi(
+                    ndc:    ndc,
+                    drugId: generateUniqueDrugId(),
+                    drug:   scannedNdc
+                )
+            }
             print("[resolve Drug Name : isHazardous : ] \(data.scannedNdc?.isHazardous ?? false)")
 
             print("[RxScan] Drug resolved from API → '\(resolvedName)'")
@@ -349,22 +362,4 @@ extension PillScanViewModel {
         }
     }
 
-    // MARK: Private Helpers
-
-    private func extractKeys(from format: String) throws -> [String] {
-        let regex = try NSRegularExpression(pattern: "\\{(.*?)\\}")
-        let range = NSRange(format.startIndex..., in: format)
-        return regex.matches(in: format, range: range).compactMap { match in
-            guard let keyRange = Range(match.range(at: 1), in: format) else { return nil }
-            return String(format[keyRange])
-                .trimmingCharacters(in: .whitespaces)
-                .uppercased()
-        }
-    }
-
-    private func extractValues(from rawValue: String) -> [String] {
-        rawValue
-            .split(separator: "|")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-    }
 }

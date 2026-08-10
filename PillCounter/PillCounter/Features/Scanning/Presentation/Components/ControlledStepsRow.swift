@@ -14,27 +14,47 @@ private enum StepState {
     case upcoming
 }
 
+// MARK: - STEP ANCHOR PREFERENCE
+
+/// Published by `StepProgressRow` — one anchor per step keyed by `ControlledStep`
+/// — so a higher-level host (e.g. `PillCountLayout`) can render the instruction
+/// tooltip above *any* tapped step *outside* the clipped bottom bar, anchored
+/// exactly over that step's icon.
+struct StepAnchorKey: PreferenceKey {
+    static var defaultValue: [ControlledStep: Anchor<CGRect>] = [:]
+    static func reduce(
+        value: inout [ControlledStep: Anchor<CGRect>],
+        nextValue: () -> [ControlledStep: Anchor<CGRect>]
+    ) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 // MARK: - MAIN STEP ROW VIEW
 
-struct ControlledStepRow: View {
+struct StepProgressRow: View {
 
     @EnvironmentObject var appColors: AppColors
 
     let activeSteps: [ControlledStep]
     let currentStep: ControlledStep
+    /// Called when the user taps any step (host decides whether to show the
+    /// tooltip / speak that step's instruction). No-op by default for the
+    /// non-hosted call sites.
+    var onTapStep: (ControlledStep) -> Void = { _ in }
 
     private var isIpad: Bool {
         UIDevice.current.userInterfaceIdiom == .pad
     }
 
     // Sizing tokens
-    private var iconSize: CGFloat       { isIpad ? 32 : 20 }
-    private var circlePadding: CGFloat  { isIpad ? 12 : 8  }
-    private var circleFrame: CGFloat    { isIpad ? 56 : 40  }
-    private var chevronSize: CGFloat    { isIpad ? 16 : 12  }
-    private var hSpacing: CGFloat       { isIpad ? 12 : 8   }
-    private var vPadding: CGFloat       { isIpad ? 20 : 15  }
-    private var strokeWidth: CGFloat    { isIpad ? 2.5 : 2  }
+    private var iconSize: CGFloat       { isIpad ? 28 : 20 }
+    private var circlePadding: CGFloat  { isIpad ? 10 : 8  }
+    private var circleFrame: CGFloat    { isIpad ? 48 : 40  }
+    private var chevronSize: CGFloat    { isIpad ? 14 : 12  }
+    private var hSpacing: CGFloat       { isIpad ? 10 : 8   }
+    private var vPadding: CGFloat       { isIpad ? 16 : 15  }
+    private var strokeWidth: CGFloat    { isIpad ? 2 : 2  }
 
     var body: some View {
         let items = buildSteps()
@@ -55,7 +75,7 @@ struct ControlledStepRow: View {
 
 // MARK: - BUILD STEP STATES
 
-private extension ControlledStepRow {
+private extension StepProgressRow {
 
     func buildSteps() -> [(ControlledStep, StepState)] {
         guard let currentIndex = activeSteps.firstIndex(of: currentStep) else {
@@ -71,7 +91,7 @@ private extension ControlledStepRow {
 
 // MARK: - STEP ICON
 
-private extension ControlledStepRow {
+private extension StepProgressRow {
 
     @ViewBuilder
     func stepIcon(for item: (ControlledStep, StepState)) -> some View {
@@ -98,6 +118,15 @@ private extension ControlledStepRow {
             )
             .foregroundColor(appColors.text)
             .opacity(stateOpacity(for: state))
+            // Publish this icon's frame (keyed by step) so the host can float the
+            // tooltip above any tapped step, outside this (clipped) row.
+            .anchorPreference(key: StepAnchorKey.self, value: .bounds) {
+                [step: $0]
+            }
+            .contentShape(Circle())
+            // Every step is tappable — taps show that step's instruction tooltip
+            // and speak it (handled by the host).
+            .onTapGesture { onTapStep(step) }
     }
 
     func stateOpacity(for state: StepState) -> Double {
@@ -111,7 +140,7 @@ private extension ControlledStepRow {
 
 // MARK: - CONNECTOR
 
-private extension ControlledStepRow {
+private extension StepProgressRow {
 
     @ViewBuilder
     func connectorView(

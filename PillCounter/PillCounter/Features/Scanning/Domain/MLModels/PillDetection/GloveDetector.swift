@@ -2,18 +2,17 @@
 // PillCounter
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// MODEL:  gloves_detector_fp32.mlpackage
-// ARCH:   YOLOX-Nano with LeakyReLU activations
-// INPUT:  MLMultiArray — shape [1, 3, 320, 320], Float32
+// MODEL:  gloves_detector_fp16.mlpackage
+// ARCH:   YOLOX with LeakyReLU activations
+// INPUT:  MLMultiArray — shape [1, 3, 512, 512], Float32
 //         • Raw pixel values in the range [0, 255] — NO normalization.
 //         • YOLOX was trained on raw pixels; the first layer performs
 //           its own internal scaling. Do NOT subtract mean or divide by std.
-//         • Channel order: RGB (red in channel 0, green in channel 1, blue in channel 2).
-//         • The input must be letterboxed to exactly 320×320 before packing
+//         • Channel order: BGR (blue in channel 0, green in channel 1, red in channel 2) —
+//           the model was trained on cv2-loaded BGR images.
+//         • The input must be letterboxed to exactly 512×512 before packing
 //           into the MLMultiArray; padding value = 114.0 (YOLOX standard).
-// WEIGHTS: Float32 (~3.5 MB) — kept at full precision because the model is small
-//          and FP16 quantisation of YOLOX-Nano degrades accuracy noticeably at
-//          the sigmoid / exp decode steps.
+// WEIGHTS: FP16 (~18 MB).
 // COMPUTE: .cpuAndGPU — the small model fits entirely in GPU L2; Neural Engine
 //          can silently cast to FP16 and reduce accuracy on this model.
 // ─────────────────────────────────────────────────────────────────────────────

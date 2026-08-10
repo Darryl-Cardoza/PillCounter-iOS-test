@@ -100,6 +100,16 @@ struct PillCounterApp: App {
                             .task {
                                 userViewModel.loadMobileThemeSettings()
 
+                                // Hydrate the user from auth/me on launch (mirrors
+                                // mobile settings). Forcing remote ensures the profile
+                                // and terminal list are refreshed even when a stale
+                                // local user already exists.
+                                Task { await userViewModel.getUser(forceRemote: true) }
+
+                                // Pharmacy type list is server-driven but static per
+                                // session — fetch once at launch, not on every profile visit.
+                                Task { await userViewModel.fetchPharmacyTypes() }
+
                                 Task.detached(priority: .background) {
                                     await MainActor.run {
                                         HistoryCleanupStore.shared.cleanUpOldHistory()
@@ -194,10 +204,13 @@ extension PillCounterApp {
             }
             Task { await sessionManager.checkTokenOnForeground() }
 
-        case .inactive, .background:
+        case .background:
             //Apply the overlay before iOS takes the snapshot.
             isObscured = true
             SecurityMonitor.shared.stopMonitoring()
+
+        case .inactive:
+            break
 
         @unknown default:
             break

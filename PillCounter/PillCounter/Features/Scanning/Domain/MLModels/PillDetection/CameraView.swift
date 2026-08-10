@@ -22,7 +22,27 @@ struct CameraView: UIViewRepresentable {
 
         // Expose the preview layer to CameraService
         cameraService.previewLayer = view.previewLayer
+
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        view.addGestureRecognizer(tap)
         return view
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(cameraService: cameraService)
+    }
+
+    final class Coordinator: NSObject {
+        let cameraService: CameraService
+        init(cameraService: CameraService) { self.cameraService = cameraService }
+
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            guard let previewView = gesture.view as? PreviewView else { return }
+            let point = gesture.location(in: previewView)
+            // Convert from view coordinates to normalised camera coordinates (0–1)
+            let normalised = previewView.previewLayer.captureDevicePointConverted(fromLayerPoint: point)
+            cameraService.focusForBarcode(at: normalised)
+        }
     }
 
     func updateUIView(_ uiView: PreviewView, context: Context) {
@@ -91,10 +111,19 @@ final class PreviewView: UIView {
 // MARK: - Detection Overlay
 
 struct DetectionOverlay: View {
-    
+
 
     @ObservedObject var cameraService: CameraService
     @EnvironmentObject var appColors: AppColors
+
+    /// Dispense target quantity for the current step. The excess-near-chute
+    /// highlight is ENABLED only when this is > 0 (a real dispense target). When
+    /// it is 0 the feature is OFF entirely — every pill dot is drawn black exactly
+    /// like regular (non-target) counting; nothing is treated as "exceed". When
+    /// the live tray holds MORE pills than the target, the surplus pills closest
+    /// to the chute are drawn BLACK while all other (within-target) pills are drawn
+    /// in `appColors.secondary`, so the operator can see which to remove.
+    var targetQuantity: Int = 0
 
     var body: some View {
         GeometryReader { _ in
@@ -103,20 +132,29 @@ struct DetectionOverlay: View {
                 if let layer = cameraService.previewLayer,
                    layer.session != nil
                 {
+                    // ── Excess-near-chute highlight set ───────────────────────
+                    // The picker now runs ONCE per frame inside CameraService (its
+                    // sticky, distance-smoothed, margin-based-steal logic relies on
+                    // per-frame state and would be corrupted if driven by SwiftUI's
+                    // multiple body evaluations per frame). Here we only publish the
+                    // current target to the service and READ the resulting set.
+                    let highlightedIDs = cameraService.excessPillIDs
+
                     ForEach(
                         Array(cameraService.detections.enumerated()),
                         id: \.offset
                     ) { _, det in
-                        
+
                         let screenRect = getScreenRect(
                             for: det,
                             using: layer
                         )
-                        
+
                         let badgeSize: CGFloat = 16
-                        
+                        let isNearChute = highlightedIDs.contains(det.id)
+
                         Circle()
-                            .fill(Color.black.opacity(0.8))
+                            .fill(isNearChute ? Color.black.opacity(0.8) : appColors.secondary)
                             .overlay(
                                 Circle()
                                     .stroke(Color.white, lineWidth: 2)
@@ -129,9 +167,15 @@ struct DetectionOverlay: View {
                     }
                 }
             }
-            
+
         }
         .allowsHitTesting(false)
+        // Drive the pipeline's excess picker from the current dispense target.
+        // Set here (not in body) so we never mutate observed state mid-render.
+        .onAppear { cameraService.excessTargetQuantity = targetQuantity }
+        .onChange(of: targetQuantity) { _, newValue in
+            cameraService.excessTargetQuantity = newValue
+        }
     }
 
     // MARK: - Coordinate Conversion

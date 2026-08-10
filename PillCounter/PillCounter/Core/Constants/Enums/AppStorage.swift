@@ -5,6 +5,23 @@
 
 import Foundation
 
+/// HL7 spec dialect selection, driven by `auth/me` → `settings.hl7_message_spec`.
+/// Sets MSH-3 sending application and which custom Z-segment (if any) gets
+/// emitted on outbound dispense messages.
+enum Hl7Format: String, Codable {
+    case dispensesure = "DISPENSESURE"
+    case eyecon = "EYECON"
+    case vivid = "VIVID"
+
+    /// `sendingApplication` is the MSH-3 wire value, which is this enum's own rawValue.
+    static func fromSendingApplication(_ value: String?) -> Hl7Format {
+        guard let value, let format = Hl7Format(rawValue: value.uppercased()) else {
+            return .dispensesure
+        }
+        return format
+    }
+}
+
 final class AppStorageManager {
     static let shared = AppStorageManager()
     private let defaults = UserDefaults.standard
@@ -29,13 +46,17 @@ final class AppStorageManager {
         static let isLoggedIn           = "is_logged_in"
         static let rememberMe           = "remember_me"
         static let tokenExpiryTimestamp = "token_expiry_timestamp"
-        static let isHl7Enable          = "is_hl7_enable"
+        static let isPmsIntegrated      = "is_pms_integrated"
+        static let allowLocalStorage    = "allow_local_storage"
+        static let hl7Version           = "hl7_version"
         static let pmsHostName          = "pms_host_name"
         static let pillCounterHostName  = "pillcounter_host_name"
         static let barcodeFormat        = "barcode_format"
         static let bucketList           = "bucket_list"
         static let userSavedEmails      = "user_saved_emails"
         static let hazardousTrayColors  = "hazardous_tray_colors"
+        static let bypassSSL            = "bypass_ssl"
+        static let hl7MessageSpec       = "hl7_message_spec"
 
         // UserDefaults-backed (non-sensitive)
         static let drugIdCounter        = "drug_id_counter"
@@ -50,6 +71,11 @@ final class AppStorageManager {
         static let selectedTerminalName = "selected_terminal_name"
         static let storedTerminals      = "stored_terminals"
         static let isHarzardousDrugSetting = "hazardous_pill_setting"
+        static let deleteCompletedTransactions = "delete_completed_transactions"
+        static let pillCountRingOffsetX = "pill_count_ring_offset_x"
+        static let pillCountRingOffsetY = "pill_count_ring_offset_y"
+        static let selectedPharmacyType = "selected_pharmacy_type"
+        static let pharmacyTypeOptions  = "pharmacy_type_options"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -112,9 +138,40 @@ final class AppStorageManager {
         }
     }
 
-    var isHl7Enabled: Bool {
-        get { Keychain.getPassword(for: AppStorageKeys.isHl7Enable) == "true" }
-        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isHl7Enable) }
+    var isPmsIntegrated: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.isPmsIntegrated) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isPmsIntegrated) }
+    }
+
+    var allowLocalStorage: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.allowLocalStorage) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.allowLocalStorage) }
+    }
+
+    /// HL7 version the PMS integration should speak, provided by the server
+    /// (`auth/me` → `settings.hl7_version`, e.g. "2.3.1"). Falls back to "2.3"
+    /// when never set (fresh install / no PMS integration yet).
+    var hl7Version: String {
+        get { Keychain.getPassword(for: AppStorageKeys.hl7Version) ?? "2.3" }
+        set { Keychain.savePassword(newValue, for: AppStorageKeys.hl7Version) }
+    }
+
+    /// When true, HL7 MLLP and the image server skip TLS/cert trust entirely.
+    /// Server-driven (`auth/me` → `settings.bypass_ssl`), defaults to `true`
+    /// (matches Android's default) when never set.
+    var bypassSSL: Bool {
+        get {
+            guard let raw = Keychain.getPassword(for: AppStorageKeys.bypassSSL) else { return true }
+            return raw == "true"
+        }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.bypassSSL) }
+    }
+
+    /// HL7 spec dialect the PMS integration should speak, provided by the server
+    /// (`auth/me` → `settings.hl7_message_spec`). Falls back to `.dispensesure`.
+    var hl7MessageSpec: Hl7Format {
+        get { Hl7Format(rawValue: Keychain.getPassword(for: AppStorageKeys.hl7MessageSpec) ?? "") ?? .dispensesure }
+        set { Keychain.savePassword(newValue.rawValue, for: AppStorageKeys.hl7MessageSpec) }
     }
 
     var pmsHostName: String {
@@ -216,6 +273,17 @@ final class AppStorageManager {
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isHarzardousDrugSetting) }
     }
 
+    /// When true, a transaction is deleted as soon as it is completed so the
+    /// dispense is not retained in the app. Driven by the mobile settings API
+    /// (server-provided flag), defaults to `true` when never set.
+    var deleteCompletedTransactions: Bool {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.deleteCompletedTransactions) != nil else { return true }
+            return defaults.bool(forKey: AppStorageKeys.deleteCompletedTransactions)
+        }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.deleteCompletedTransactions) }
+    }
+
     var isPillCountingEnabled: Bool {
         get { defaults.bool(forKey: AppStorageKeys.isPillCountingEnabled) }
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isPillCountingEnabled) }
@@ -292,6 +360,53 @@ final class AppStorageManager {
         set {
             let data = try? JSONEncoder().encode(newValue)
             defaults.setValue(data, forKey: AppStorageKeys.storedTerminals)
+        }
+    }
+
+    
+    /// Last position the operator dragged the pill-count ring to, stored as an
+    /// offset (in points) from the screen centre. `nil` when never moved — the
+    /// layout then falls back to its default right-side resting position.
+    var pillCountRingOffset: CGSize? {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.pillCountRingOffsetX) != nil,
+                  defaults.object(forKey: AppStorageKeys.pillCountRingOffsetY) != nil
+            else { return nil }
+            return CGSize(
+                width: defaults.double(forKey: AppStorageKeys.pillCountRingOffsetX),
+                height: defaults.double(forKey: AppStorageKeys.pillCountRingOffsetY)
+            )
+        }
+        set {
+            if let size = newValue {
+                defaults.setValue(size.width, forKey: AppStorageKeys.pillCountRingOffsetX)
+                defaults.setValue(size.height, forKey: AppStorageKeys.pillCountRingOffsetY)
+            } else {
+                defaults.removeObject(forKey: AppStorageKeys.pillCountRingOffsetX)
+                defaults.removeObject(forKey: AppStorageKeys.pillCountRingOffsetY)
+            }
+        }
+    }
+
+    /// Selected pharmacy type **code** (server value, e.g. "chain_pharmacy") —
+    /// not the display label. Backed by the server-driven list in `pharmacyTypeOptions`.
+    var selectedPharmacyTypeCode: String? {
+        get { defaults.string(forKey: AppStorageKeys.selectedPharmacyType) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.selectedPharmacyType) }
+    }
+
+    /// Pharmacy type list fetched from `/users/pharmacy-types`, cached so the
+    /// dropdown still has options offline / before the next fetch completes.
+    var pharmacyTypeOptions: [PharmacyTypeOption] {
+        get {
+            guard let data = defaults.data(forKey: AppStorageKeys.pharmacyTypeOptions),
+                  let options = try? JSONDecoder().decode([PharmacyTypeOption].self, from: data)
+            else { return [] }
+            return options
+        }
+        set {
+            let data = try? JSONEncoder().encode(newValue)
+            defaults.setValue(data, forKey: AppStorageKeys.pharmacyTypeOptions)
         }
     }
 

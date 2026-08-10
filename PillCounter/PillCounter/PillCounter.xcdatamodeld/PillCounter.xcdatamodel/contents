@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24837" systemVersion="25D2128" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24837" systemVersion="25F80" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
     <entity name="BatchCountEntity" representedClassName="BatchCountEntity" syncable="YES" codeGenerationType="class">
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="bucket_id" optional="YES" attributeType="String"/>
@@ -10,17 +10,36 @@
         <attribute name="req_id_from_pms" optional="YES" attributeType="String"/>
         <attribute name="start_date_time" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="total_ndcs" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="user_id" optional="YES" attributeType="String"/>
+        <attribute name="user_name" optional="YES" attributeType="String"/>
+        <relationship name="stockTxns" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="StockTxnEntity" inverseName="batch" inverseEntity="StockTxnEntity"/>
+    </entity>
+    <entity name="BottleInfoEntity" representedClassName="BottleInfoEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="bottle_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="exp_no" optional="YES" attributeType="String"/>
+        <attribute name="loose_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="lot_no" optional="YES" attributeType="String"/>
+        <attribute name="serial_no" optional="YES" attributeType="String"/>
+        <attribute name="stock_txn_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="updated_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="stockTxn" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="StockTxnEntity" inverseName="bottleInfos" inverseEntity="StockTxnEntity"/>
     </entity>
     <entity name="DrugMasterEntity" representedClassName="DrugMasterEntity" syncable="YES" codeGenerationType="class">
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="dosage_form" optional="YES" attributeType="String"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="drug_image" optional="YES" attributeType="String"/>
         <attribute name="drug_name" optional="YES" attributeType="String"/>
         <attribute name="drug_type" optional="YES" attributeType="String"/>
         <attribute name="gtin" optional="YES" attributeType="String"/>
         <attribute name="is_hazardous" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="ndc" attributeType="String"/>
         <attribute name="package_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="strength" optional="YES" attributeType="String"/>
         <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PillCountTransactionEntity" inverseName="substitueDrug" inverseEntity="PillCountTransactionEntity"/>
     </entity>
     <entity name="PillCountTransactionDetailsEntity" representedClassName="PillCountTransactionDetailsEntity" syncable="YES" codeGenerationType="class">
@@ -36,26 +55,23 @@
         <relationship name="pillCountTransaction" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PillCountTransactionEntity" inverseName="pillCountTransactionDetails" inverseEntity="PillCountTransactionEntity"/>
     </entity>
     <entity name="PillCountTransactionEntity" representedClassName="PillCountTransactionEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="barcode_image" optional="YES" attributeType="String"/>
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="bottle_info_list_json" optional="YES" attributeType="String"/>
         <attribute name="bucket_id" optional="YES" attributeType="String"/>
-        <attribute name="count_type" optional="YES" attributeType="String"/>
+        <attribute name="is_dispense" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="created_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="expiry" optional="YES" attributeType="String"/>
         <attribute name="gloves_detected" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="hazardous_tray_detected" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="hl7_message_control_id" optional="YES" attributeType="String"/>
+        <attribute name="hl7_sequence_number" optional="YES" attributeType="String"/>
         <attribute name="is_deleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_from_pms" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_ndc_verfied" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_substitute" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="is_synced" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="local_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="loose_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="lot_no" optional="YES" attributeType="String"/>
         <attribute name="note" optional="YES" attributeType="String"/>
-        <attribute name="open_bottle_qty" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="patient_name" optional="YES" attributeType="String"/>
         <attribute name="refill_no" optional="YES" attributeType="String"/>
         <attribute name="req_id" optional="YES" attributeType="String"/>
@@ -63,6 +79,7 @@
         <attribute name="status" optional="YES" attributeType="String"/>
         <attribute name="substitute_drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="target_count" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="transaction_order_id" optional="YES" attributeType="String"/>
         <attribute name="txn_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="txn_priority" optional="YES" attributeType="String"/>
         <attribute name="updated_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -71,6 +88,19 @@
         <relationship name="pillCountTransactionDetails" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PillCountTransactionDetailsEntity" inverseName="pillCountTransaction" inverseEntity="PillCountTransactionDetailsEntity"/>
         <relationship name="substitueDrug" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DrugMasterEntity" inverseName="transactions" inverseEntity="DrugMasterEntity"/>
         <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserEntity" inverseName="transactions" inverseEntity="UserEntity"/>
+    </entity>
+    <entity name="StockTxnEntity" representedClassName="StockTxnEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="bucket_id" optional="YES" attributeType="String"/>
+        <attribute name="created_at" optional="YES" attributeType="String"/>
+        <attribute name="drug_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="is_deleted" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="stock_txn_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="updated_at" optional="YES" attributeType="String"/>
+        <relationship name="batch" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="BatchCountEntity" inverseName="stockTxns" inverseEntity="BatchCountEntity"/>
+        <relationship name="bottleInfos" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="BottleInfoEntity" inverseName="stockTxn" inverseEntity="BottleInfoEntity"/>
+        <relationship name="drug" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DrugMasterEntity"/>
     </entity>
     <entity name="UserEntity" representedClassName="UserEntity" syncable="YES" codeGenerationType="class">
         <attribute name="avatar_url" optional="YES" attributeType="String"/>

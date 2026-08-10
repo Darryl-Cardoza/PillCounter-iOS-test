@@ -20,6 +20,7 @@ enum L10n {
         static let add = NSLocalizedString("common.add", comment: "")
         static let no = NSLocalizedString("common.no", comment: "")
         static let yes = NSLocalizedString("common.yes", comment: "")
+        static let of = NSLocalizedString("common.of", comment: "")
         static let save = NSLocalizedString("common.save", comment: "")
         static let delete = NSLocalizedString("common.delete", comment: "")
         static let skip = NSLocalizedString("common.skip", comment: "")
@@ -27,6 +28,7 @@ enum L10n {
         static let note = NSLocalizedString("common.note", comment: "")
         static let date = NSLocalizedString("common.date", comment: "")
         static let time = NSLocalizedString("common.time", comment: "")
+        static let dateTime = NSLocalizedString("common.dateTime", comment: "")
         static let unselectAll = NSLocalizedString("common.unselectAll", comment: "")
         static let selectAll = NSLocalizedString("common.selectAll", comment: "")
         static let done = NSLocalizedString("common.done", comment: "")
@@ -141,6 +143,8 @@ enum L10n {
         static let totalCount = NSLocalizedString("pillCount.totalCount", comment: "")
         static let redo = NSLocalizedString("pillCount.redo", comment: "")
         static let done = NSLocalizedString("pillCount.done", comment: "")
+        static let incorrectRxLabel = NSLocalizedString("pillCount.incorrectRxLabel", comment: "")
+        static let scanVialRxToCapture = NSLocalizedString("pillCount.scanVialRxToCapture", comment: "")
         static let transactionDetail = NSLocalizedString("pillCount.transactionDetail", comment: "")
     }
     
@@ -155,6 +159,8 @@ enum L10n {
         static let confirmLogoutMessage = NSLocalizedString("menu.confirmLogoutMessage", comment: "")
         static let logoutButton = NSLocalizedString("menu.logoutButton", comment: "")
         static let noLastBatchFound = NSLocalizedString("menu.toast.noLastBatchFound", comment: "")
+        static let featureNotAvailableTitle = NSLocalizedString("menu.featureNotAvailableTitle", comment: "")
+        static let featureNotAvailableMessage = NSLocalizedString("menu.featureNotAvailableMessage", comment: "")
 
         enum HistoryDuration {
             static let month = NSLocalizedString("menu.history.duration.month", comment: "")
@@ -170,6 +176,7 @@ enum L10n {
         static let npiId = NSLocalizedString("profile.npiId", comment: "")
         static let phoneNumber = NSLocalizedString("profile.phoneNumber", comment: "")
         static let terminal = NSLocalizedString("profile.terminal", comment: "")
+        static let pharmacyType = NSLocalizedString("profile.pharmacyType", comment: "")
         static let successUpdateMessage = NSLocalizedString("profile.error.successUpdateMessage", comment: "")
 
         
@@ -187,6 +194,19 @@ enum L10n {
         }
     }
     
+    // MARK: - Pharmacy Type
+    enum PharmacyType {
+        static let chainPharmacy = NSLocalizedString("pharmacyType.chainPharmacy", comment: "")
+        static let supermarketPharmacy = NSLocalizedString("pharmacyType.supermarketPharmacy", comment: "")
+        static let independentPharmacy = NSLocalizedString("pharmacyType.independentPharmacy", comment: "")
+        static let mailOrderPharmacy = NSLocalizedString("pharmacyType.mailOrderPharmacy", comment: "")
+        static let hospitalPharmacy = NSLocalizedString("pharmacyType.hospitalPharmacy", comment: "")
+        static let clinicPharmacy = NSLocalizedString("pharmacyType.clinicPharmacy", comment: "")
+        static let longTermCarePharmacy = NSLocalizedString("pharmacyType.longTermCarePharmacy", comment: "")
+        static let compoundingPharmacy = NSLocalizedString("pharmacyType.compoundingPharmacy", comment: "")
+        static let specialityPharmacy = NSLocalizedString("pharmacyType.specialityPharmacy", comment: "")
+    }
+
     // MARK: - Settings
     enum Settings {
         static let alwaysAskNotes = NSLocalizedString("settings.alwaysAskNotes", comment: "")
@@ -234,6 +254,11 @@ enum L10n {
         static let copy = NSLocalizedString("barcodeScan.copy", comment: "")
         static let rescanRequired = NSLocalizedString("barcodeScan.rescanRequired", comment: "")
         static let ndcDoesNotMatch = NSLocalizedString("barcodeScan.ndcDoesNotMatch", comment: "")
+        static let bottleAlreadyScanned = NSLocalizedString("bottleRescan.alreadyScanned", comment: "")
+        static let addBottleTitle = NSLocalizedString("bottleRescan.addBottleTitle", comment: "")
+        static let addBottleMessage = NSLocalizedString("bottleRescan.addBottleMessage", comment: "")
+        static let replaceBottleTitle = NSLocalizedString("bottleRescan.replaceBottleTitle", comment: "")
+        static let replaceBottleMessage = NSLocalizedString("bottleRescan.replaceBottleMessage", comment: "")
         static let substitute = NSLocalizedString("barcodeScan.substitute", comment: "")
         static let rescan = NSLocalizedString("barcodeScan.rescan", comment: "")
         static let qrScannedSuccessfully = NSLocalizedString("barcodeScan.qrScannedSuccessfully", comment: "")
@@ -243,6 +268,8 @@ enum L10n {
         static let quantity = NSLocalizedString("barcodeScan.quantity", comment: "")
         static let rxNumber = NSLocalizedString("barcodeScan.rxNumber", comment: "")
         static let bucket = NSLocalizedString("barcodeScan.bucket", comment: "")
+        static let strength = NSLocalizedString("barcodeScan.strength", comment: "")
+        static let form = NSLocalizedString("barcodeScan.form", comment: "")
         static let selectContainerStatus = NSLocalizedString("barcodeScan.selectContainerStatus", comment: "")
         static let sealed = NSLocalizedString("barcodeScan.sealed", comment: "")
         static let opened = NSLocalizedString("barcodeScan.opened", comment: "")
@@ -280,13 +307,16 @@ enum L10n {
         static let dispensedDrugDetails = NSLocalizedString("history.dispensedDrugDetails", comment: "")
         static let pillRecount = NSLocalizedString("history.pillRecount", comment: "")
         static let dispensedVial = NSLocalizedString("history.dispensedVial", comment: "")
+        static let containerQrCode = NSLocalizedString("history.containerQrCode", comment: "")
         static let remainingContainerCount = NSLocalizedString("history.remainingContainerCount", comment: "")
         static let totalCount = NSLocalizedString("history.totalCount", comment: "")
         static let substitutedDrug = NSLocalizedString("history.substitutedDrug", comment: "")
+        static let dispensedDrug = NSLocalizedString("history.dispensedDrug", comment: "")
         static let drugName = NSLocalizedString("history.drugName", comment: "")
         static let ndc = NSLocalizedString("history.ndc", comment: "")
         static let expiryNo = NSLocalizedString("history.expiryNo", comment: "")
         static let lotNo = NSLocalizedString("history.lotNo", comment: "")
+        static let serialNo = NSLocalizedString("history.serialNo", comment: "")
         static let deleteConfirmMessage = NSLocalizedString("history.deleteConfirmMessage", comment: "")
         static let noItemsToDelete = NSLocalizedString("history.noItemsToDelete", comment: "")
         static let noHistory = NSLocalizedString("history.noHistory", comment: "")
@@ -319,6 +349,7 @@ enum L10n {
         static let noScansYet = NSLocalizedString("pillScan.noScansYet", comment: "")
         static let deleteScans = NSLocalizedString("pillScan.deleteScans", comment: "")
         static let deleteScansMessage = NSLocalizedString("pillScan.deleteScansMessage", comment: "")
+        static let viewAllCounts = NSLocalizedString("pillScan.viewAllCounts", comment: "")
     }
 
     // MARK: - Location
@@ -479,6 +510,7 @@ enum L10n {
         static let scanStockCountBarcode = NSLocalizedString("controlled.scanStockCountBarcode", comment: "")
         static let scanRxLabelBarcode = NSLocalizedString("controlled.scanRxLabelBarcode", comment: "")
         static let scanNdcToCountPills = NSLocalizedString("controlled.scanNdcToCountPills", comment: "")
+        static let countOpenPills = NSLocalizedString("controlled.countOpenPills", comment: "")
     }
 
     // MARK: - HL7 Notifications

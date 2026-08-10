@@ -433,10 +433,10 @@ struct CountHistoryView: View {
             date:
                 "\(Formatter.getDateString(from: txn.created_at)) • \(Formatter.getTimeString(from: txn.created_at))",
             trailingText: "\(0)"
-                + (router.selectedPillScanningType == .FIXED
+                + (router.selectedPillScanningIsDispense == true
                     ? " / \(txn.target_count)" : ""),
             icon: "ellipsis",
-            barcodeImagePath: txn.barcode_image,
+            barcodeImagePath: [BottleInfo].decode(from: txn.bottle_info_list_json).first?.barcodeImagePath,
             isFromPms: txn.is_from_pms,
             onIconTap: {
                 if !isEditing {
@@ -549,9 +549,9 @@ struct CountHistoryView: View {
 
     private func reloadTransactions() {
         print("Reload Transaction triggered for count history view....")
-        let countType: CountType = router.selectedPillScanningType ?? .FIXED
+        let isDispense: Bool = router.selectedPillScanningIsDispense ?? true
         Task {
-            await userViewModel.getAllPartialTransactions(countType: countType)
+            await userViewModel.getAllPartialTransactions(isDispense: isDispense)
         }
     }
 
@@ -583,7 +583,7 @@ struct CountHistoryView: View {
             // Call ViewModel to delete
             await userViewModel.softDeleteMultipleTransactions(
                 txnIds: selectedTxnIds,
-                countType: router.selectedPillScanningType ?? .FIXED
+                isDispense: router.selectedPillScanningIsDispense ?? true
             )
 
             await MainActor.run {
@@ -682,7 +682,7 @@ struct CountHistoryView: View {
             Task {
                 await userViewModel.softDeleteTheSelectedTransaction(
                     transactionId: id,
-                    countType: router.selectedPillScanningType ?? .FIXED
+                    isDispense: router.selectedPillScanningIsDispense ?? true
                 )
             }
 
@@ -691,7 +691,7 @@ struct CountHistoryView: View {
             Task {
                 await userViewModel.softDeleteMultipleTransactions(
                     txnIds: ids,
-                    countType: router.selectedPillScanningType ?? .FIXED
+                    isDispense: router.selectedPillScanningIsDispense ?? true
                 )
 
                 await MainActor.run {

@@ -5,7 +5,7 @@
 //  Created by Bhushan Patil on 03/02/26.
 //
 
-import ComposeApp
+import Hl7Core
 import Foundation
 
 /// Listener for all HL7 lifecycle, messaging, and connection events.
@@ -18,7 +18,7 @@ protocol Hl7EventListener: AnyObject {
     func onHl7ServerStopped()
 
     /// Called when a new HL7 message is received from PMS.
-    func onMessageReceived(message: CompleteHL7Message, rawHl7: String)
+    func onMessageReceived(message: HL7Message, rawHl7: String)
 
     /// Called after an ACK is successfully sent to PMS.
     func onAckSent(messageId: String)

@@ -19,6 +19,10 @@ struct DispenseItemRowView: View {
         data.targetCount != data.pillCount
     }
 
+    private var isFixedCount: Bool {
+        data.countType.uppercased() == "FIXED"
+    }
+
 
 
     private var displayText: String {
@@ -37,6 +41,7 @@ struct DispenseItemRowView: View {
 
             ThumbnailImageView(
                 imagePath: data.barcodeImagePath,
+                drugImagePath: data.drugImagePath,
                 width: 80,
                 height: 64,
                 cornerRadius: 8,
@@ -44,7 +49,10 @@ struct DispenseItemRowView: View {
                 placeholderImageName: "dispense_placeholder",
                 placeholderBackgroundColor: appColors.text,
                 placeholderSize: CGSize(width: 28, height: 28),
-                showImageBackground: appColors.primaryBackground
+                showImageBackground: appColors.primaryBackground,
+                dosageForm: isFixedCount ? data.dosageForm : nil,
+                strength: isFixedCount ? data.strength : nil,
+                fillDrugImage: true
             )
 
             // Center info
@@ -67,7 +75,7 @@ struct DispenseItemRowView: View {
                 // Drug name
                 Text(data.drugName)
                     .foregroundColor(appColors.text)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
 

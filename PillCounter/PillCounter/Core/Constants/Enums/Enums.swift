@@ -38,13 +38,13 @@ public enum DashboardFlow: Hashable, Codable {
 }
 
 public enum ScanningFlow: Codable, Hashable {
-    case scan(ScanType)
-    case stockCount(StockCountFlow)
-}
-
-public enum StockCountFlow: Codable, Hashable {
-    case stockCountBatchDetail
-    case stockCountPartialBatchListScreen
+    /// Payload the scan screen uses to set up its session on appear, so callers
+    /// don't poke the shared view models directly:
+    /// - `txnId`: resume/start a count for an existing dispense transaction.
+    /// - `batchId`: resume an existing stock-count batch.
+    /// - `bucketId`: start a new stock-count batch for this bucket.
+    /// All nil for flows that don't target existing data (e.g. fresh rx_label).
+    case scan(ScanType, txnId: Int64? = nil, batchId: Int64? = nil, bucketId: String? = nil)
 }
 
 
@@ -80,8 +80,8 @@ public enum HamburgerMenuFLow: Hashable, Codable {
     case profile
     case settings
     case unsyncedTransaction
-    case HistoryTransactionDetail
-    case HistoryBatchDetail
+    case HistoryTransactionDetail(Int64)   // txn_id — screen fetches the entity by id
+    case HistoryBatchDetail(Int64)         // batch_id — screen fetches the batch by id
 }
 
 public enum HamburgerMenuItem: CaseIterable, Identifiable {
@@ -168,11 +168,6 @@ enum TransactionDetailOption: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum CountType: String, Codable {
-    case REGULAR
-    case FIXED
-}
-
 enum CountStatus: String, Codable {
     case PARTIAL
     case COMPLETED
@@ -237,11 +232,37 @@ extension ControlledStep {
 
         return orderedSteps[index + 1]
     }
+
+    /// Business-meaning label sent over HL7 (OBX observationValue) and used as
+    /// the zip entry name prefix for image delivery — mirrors Android's
+    /// `imageLabel()` mapping (`StepState.kt`).
+    var imageLabel: String {
+        switch self {
+        case .scan:                 return "dispense_bottle"
+        case .containerInitiate:    return "before_dispense_stock_bottle_count"
+        case .targetVerification:   return "dispense_count"
+        case .targetReverification: return "dispense_recount"
+        case .vial:                 return "dispense_vial"
+        case .containerPending:     return "after_dispense_stock_bottle_count"
+        }
+    }
+}
+
+extension String {
+    /// Maps a raw detail/image type string to its HL7/zip-naming label. If the
+    /// raw value matches a `ControlledStep` case, uses that step's `imageLabel`;
+    /// otherwise lowercases the raw string as-is (mirrors Android's `toImageLabel()`).
+    var toImageLabel: String {
+        if let step = ControlledStep(rawValue: self) {
+            return step.imageLabel
+        }
+        return self.lowercased()
+    }
 }
 
 
 // MARK: - ASSET NAME MAPPING
-extension ControlledStepRow {
+extension StepProgressRow {
 
 func assetName(for step: ControlledStep) -> String {
 
@@ -304,7 +325,7 @@ enum MLLP {
     /// Wraps HL7 message with MLLP framing.
     static func frame(_ message: String) -> Data {
         var data = Data([start])
-        data.append(message.data(using: .utf8)!) // HL7 payload
+        data.append(message.data(using: .utf8) ?? Data())
         data.append(contentsOf: [end1, end2])    // End markers
         return data
     }
@@ -313,7 +334,8 @@ enum MLLP {
     static func unwrap(_ data: Data) -> String? {
         guard
             let startIndex = data.firstIndex(of: start),
-            let endIndex = data.firstIndex(of: end1)
+            let endIndex = data.firstIndex(of: end1),
+            startIndex < endIndex
         else { return nil }
 
         let payload = data[(startIndex + 1)..<endIndex]
@@ -340,6 +362,9 @@ enum SettingsSubScreen {
 }
 
 
+
+// Pharmacy type list is now server-driven — see PharmacyTypeOption /
+// GET /users/pharmacy-types, cached via AppStorageManager.pharmacyTypeOptions.
 
 // MARK: History
 public enum HistoryFilterType: String, Codable, Hashable {

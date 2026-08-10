@@ -37,19 +37,26 @@ final class HL7TLSServer {
 
         print("🟡 [HL7][SERVER] start() called — serviceName='\(serviceName)' serviceType='\(serviceType)' port=\(port.rawValue)")
 
-        let tlsOptions = NWProtocolTLS.Options()
-        let secIdentity = try TLSIdentityManager.loadOrCreateIdentity()
+        // Server-driven (`auth/me` -> `settings.bypass_ssl`, default true): when
+        // enabled, the MLLP server listens over plain TCP — no TLS handshake.
+        let parameters: NWParameters
+        if AppStorageManager.shared.bypassSSL {
+            parameters = NWParameters.tcp
+        } else {
+            let tlsOptions = NWProtocolTLS.Options()
+            let secIdentity = try TLSIdentityManager.loadOrCreateIdentity()
 
-        guard let osIdentity = sec_identity_create(secIdentity) else {
-            print("❌ [HL7][SERVER] sec_identity_create returned nil")
-            throw NSError(domain: "TLS", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "sec_identity_create returned nil"])
+            guard let osIdentity = sec_identity_create(secIdentity) else {
+                print("❌ [HL7][SERVER] sec_identity_create returned nil")
+                throw NSError(domain: "TLS", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "sec_identity_create returned nil"])
+            }
+
+            sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, osIdentity)
+            sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+
+            parameters = NWParameters(tls: tlsOptions)
         }
-
-        sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, osIdentity)
-        sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
-
-        let parameters = NWParameters(tls: tlsOptions)
         parameters.allowLocalEndpointReuse = true
 
         print("🟡 [HL7][SERVER] Creating NWListener on port \(port.rawValue)")

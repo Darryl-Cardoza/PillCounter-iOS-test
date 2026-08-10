@@ -146,9 +146,9 @@ struct DispenseCountPartialTxnList: View {
 
     // MARK: - Reload
     private func reloadTransactions() {
-        let countType: CountType = router.selectedPillScanningType ?? .FIXED
+        let isDispense: Bool = router.selectedPillScanningIsDispense ?? true
         Task {
-            await userViewModel.getAllPartialTransactions(countType: countType)
+            await userViewModel.getAllPartialTransactions(isDispense: isDispense)
             await MainActor.run {
                 let fresh = userViewModel.historyCountTransactions.sorted { $0.created_at > $1.created_at }
                 let freshIds = Set(fresh.map { $0.txn_id })
@@ -231,7 +231,7 @@ extension DispenseCountPartialTxnList {
         guard let action = pendingAction else { return }
         pendingAction = nil
 
-        let countType: CountType = router.selectedPillScanningType ?? .FIXED
+        let isDispense: Bool = router.selectedPillScanningIsDispense ?? true
 
         switch action {
         case .delete(let id):
@@ -241,7 +241,7 @@ extension DispenseCountPartialTxnList {
                 Task {
                     await userViewModel.softDeleteTheSelectedTransaction(
                         transactionId: id,
-                        countType: countType
+                        isDispense: isDispense
                     )
 
                     await MainActor.run {
@@ -262,7 +262,7 @@ extension DispenseCountPartialTxnList {
                 Task {
                     await userViewModel.softDeleteMultipleTransactions(
                         txnIds: ids,
-                        countType: countType
+                        isDispense: isDispense
                     )
 
                     await MainActor.run {

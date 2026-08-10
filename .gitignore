@@ -75,3 +75,7 @@ Config.plist
 
 # Internal security report — describes data-protection internals, keep out of VCS
 SECURITY_DATA_PROTECTION_REPORT.md
+
+# exclude the claude folder
+*./claude
+./claude

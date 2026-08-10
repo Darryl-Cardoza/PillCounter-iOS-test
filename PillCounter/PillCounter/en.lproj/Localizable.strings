@@ -16,6 +16,7 @@
 "common.add" = "ADD";
 "common.no" = "NO";
 "common.yes" = "YES";
+"common.of" = "of";
 "common.save" = "SAVE";
 "common.delete" = "DELETE";
 "common.skip" = "SKIP";
@@ -23,6 +24,7 @@
 "common.note" = "NOTE";
 "common.date" = "Date";
 "common.time" = "Time";
+"common.dateTime" = "Date and Time";
 "common.unselectAll" = "Unselect All";
 "common.selectAll" = "Select All";
 "common.done" = "Done";
@@ -112,6 +114,8 @@
 "pillCount.redo" = "Redo";
 "pillCount.done" = "Done";
 "pillCount.transactionDetail" = "Transaction detail %d";
+"pillCount.incorrectRxLabel" = "Incorrect RX label found";
+"pillCount.scanVialRxToCapture" = "Scan the vial RX label to capture";
 
 
 // MARK: - HAMBURGER MENU
@@ -126,6 +130,8 @@
 "menu.confirmLogoutMessage" = "Are you sure you want to logout?";
 "menu.logoutButton" = "Logout";
 "menu.toast.noLastBatchFound" = "No last batch found";
+"menu.featureNotAvailableTitle" = "Feature Not Available";
+"menu.featureNotAvailableMessage" = "This feature is not available for your account.";
 
 
 // MARK: - PROFILE
@@ -135,6 +141,7 @@
 "profile.npiId" = "Npi No.";
 "profile.phoneNumber" = "Phone Number";
 "profile.terminal" = "Terminal";
+"profile.pharmacyType" = "Pharmacy Type";
 
 "profile.popup.confirmDeleteTitle" = "Confirm Delete";
 "profile.popup.confirmDeleteMessage" = "Are you sure you want to delete your profile? This action cannot be undone.";
@@ -144,6 +151,18 @@
 "profile.error.errorUpdateTerminalMessage" = "Failed to update terminal. Please try again.";
 "profile.error.errorUpdateProfileMessage" = "Failed to update profile. Please try again.";
 "profile.error.successUpdateMessage" = "Profile updated successfully.";
+
+
+// MARK: - PHARMACY TYPE
+"pharmacyType.chainPharmacy" = "Chain Pharmacy";
+"pharmacyType.supermarketPharmacy" = "Supermarket/ Big Box Pharmacy";
+"pharmacyType.independentPharmacy" = "Independent Pharmacy";
+"pharmacyType.mailOrderPharmacy" = "Mail Order/ Online Pharmacy";
+"pharmacyType.hospitalPharmacy" = "Hospital Pharmacy";
+"pharmacyType.clinicPharmacy" = "Clinic Pharmacy";
+"pharmacyType.longTermCarePharmacy" = "Long Term Care Pharmacy";
+"pharmacyType.compoundingPharmacy" = "Compounding Pharmacy";
+"pharmacyType.specialityPharmacy" = "Speciality Pharmacy";
 
 
 // MARK: - USER SETTINGS
@@ -180,6 +199,11 @@
 "barcodeScan.copy" = "Copy";
 "barcodeScan.rescanRequired" = "Rescan Required";
 "barcodeScan.ndcDoesNotMatch" = "The scanned NDC does not match";
+"bottleRescan.alreadyScanned" = "Bottle already scanned.";
+"bottleRescan.addBottleTitle" = "New Bottle Detected";
+"bottleRescan.addBottleMessage" = "A new bottle of this drug was scanned. Do you want to add it and continue counting?";
+"bottleRescan.replaceBottleTitle" = "Replace Bottle Info";
+"bottleRescan.replaceBottleMessage" = "You have not dispensed any pills from the previously scanned bottle. Do you want to replace it with this new bottle's info?";
 "barcodeScan.substitute" = "Substitute";
 "barcodeScan.rescan" = "Rescan";
 "barcodeScan.qrScannedSuccessfully" = "Verify Stock Bottle Details";
@@ -189,6 +213,8 @@
 "barcodeScan.quantity" = "Quantity";
 "barcodeScan.rxNumber" = "Rx Number";
 "barcodeScan.bucket" = "Bucket";
+"barcodeScan.strength" = "Strength";
+"barcodeScan.form" = "Form";
 "barcodeScan.selectContainerStatus" = "Select Container Status";
 "barcodeScan.sealed" = "Sealed";
 "barcodeScan.opened" = "Opened";
@@ -223,13 +249,16 @@
 "history.dispensedDrugDetails" = "DISPENSED DRUG DETAILS";
 "history.pillRecount" = "PILL RECOUNT";
 "history.dispensedVial" = "DISPENSED VIAL";
+"history.containerQrCode" = "CONTAINER QR CODE";
 "history.remainingContainerCount" = "REMAINING PILL COUNT IN STOCK BOTTLE";
 "history.totalCount" = "TOTAL COUNT";
 "history.substitutedDrug" = "Substituted Drug";
+"history.dispensedDrug" = "Dispensed Drug";
 "history.drugName" = "Drug Name";
 "history.ndc" = "NDC";
 "history.expiryNo" = "Expiry No";
 "history.lotNo" = "Lot No";
+"history.serialNo" = "Serial No";
 "history.title" = "HISTORY";
 "history.confirmDelete" = "Confirm Delete";
 "history.deleteConfirmMessage" = "Are you sure you want to delete the records for the selected date? This action cannot be undone.";
@@ -263,6 +292,7 @@
 "pillScan.noScansYet" = "No scans yet";
 "pillScan.deleteScans" = "Delete Scans";
 "pillScan.deleteScansMessage" = "Are you sure you want to delete the selected scans?";
+"pillScan.viewAllCounts" = "View All";
 
 // MARK: - LOCATION
 "location.fetching" = "Fetching...";
@@ -395,6 +425,7 @@
 "controlled.scanStockCountBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanRxLabelBarcode" = "Scan Rx Label";
 "controlled.scanNdcToCountPills" = "Scan NDC to count pills";
+"controlled.countOpenPills" = "Count Open Pills";
 
 
 // MARK: - SECURITY

@@ -26,7 +26,7 @@ struct BottomControlsView: View {
     var targetCount: Int32 {
         if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
-        } else if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
+        } else if pillScanViewModel.currentTransaction?.is_dispense == false {
             return 0
         } else {
             return Int32(pillScanViewModel.currentControlledTargetCount ?? 0)
@@ -36,7 +36,7 @@ struct BottomControlsView: View {
     var completeCount: Int {
         if pillScanViewModel.currentTransaction?.is_from_pms == true {
             return Int(pillScanViewModel.getTotalCuntForCurrentStep())
-        } else if pillScanViewModel.currentTransaction?.count_type == CountType.REGULAR.rawValue {
+        } else if pillScanViewModel.currentTransaction?.is_dispense == false {
             return pillScanViewModel.addCurrentOpenPillCount
         } else {
             return pillScanViewModel.getTotalPillCountOfCurrentTransaction()
@@ -59,7 +59,7 @@ struct BottomControlsView: View {
             VStack {
                 BottomControlsViewBodyForPillScan(
                     appColors: appColors,
-                    countType: router.selectedPillScanningType ?? .FIXED,
+                    isDispense: router.selectedPillScanningIsDispense ?? true,
                     targetCount: targetCount,
                     currentTotalCount: completeCount,
                     currentScanningCount: cameraService.stableCount,
@@ -82,7 +82,7 @@ struct BottomControlsView: View {
 struct BottomControlsViewBodyForPillScan: View {
 
     let appColors: AppColors
-    let countType: CountType
+    let isDispense: Bool
     let targetCount: Int32?
     let currentTotalCount: Int
     let currentScanningCount: Int
@@ -113,7 +113,7 @@ struct BottomControlsViewBodyForPillScan: View {
                         totalCountView
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .onTapGesture {
-                                if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
+                                if pillScanViewModel.currentTransaction?.is_dispense == true {
                                     onShowDetailGrid()
                                 }
                             }
@@ -130,7 +130,7 @@ struct BottomControlsViewBodyForPillScan: View {
                     totalCountView
                         .frame(maxWidth: .infinity, alignment: .center)
                         .onTapGesture {
-                            if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
+                            if pillScanViewModel.currentTransaction?.is_dispense == true {
                                 onShowDetailGrid()
                             }
                         }
@@ -182,7 +182,7 @@ struct BottomControlsViewBodyForPillScan: View {
         TotalCountView(
             currentTotalCount: currentTotalCount,
             targetCount: targetCount,
-            countType: countType,
+            isDispense: isDispense,
             appColors: appColors,
             isLandscape: isLandscape
         )
@@ -263,12 +263,12 @@ struct TotalCountView: View {
 
     let currentTotalCount: Int
     let targetCount: Int32?
-    let countType: CountType
+    let isDispense: Bool
     let appColors: AppColors
     let isLandscape: Bool
 
     private var showTarget: Bool {
-        countType == .FIXED && (targetCount ?? 0) > 0
+        isDispense && (targetCount ?? 0) > 0
     }
 
     var body: some View {

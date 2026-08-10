@@ -89,7 +89,7 @@ struct StockTransactionListView: View {
                             }
                             .padding(.vertical, 14)
                             .padding(.horizontal, 4)
-                            
+
                             if !sealedDetails.isEmpty {
                                 LotColumnHeader()
                                 ForEach(sealedDetails, id: \.lot) { detail in
@@ -97,19 +97,19 @@ struct StockTransactionListView: View {
                                 }
                                 LotTotalRow(total: sealedTotal)
                             }
-                            
+
                             // ── OPENED BOTTLES SECTION ──
                             let openDetails = txn.lotDetails.filter { $0.openQty > 0 }
                             let openTotal = openDetails.reduce(Int32(0)) { $0 + $1.openQty }
-                            
+
                             HStack {
                                 Text(L10n.StockCountSheet.openedBottles)
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(appColors.text)
                                 Spacer()
-//                                Text("\(txn.openPills)")
-//                                    .font(.system(size: 14, weight: .semibold))
-//                                    .foregroundColor(appColors.text)
+                                Text("\(txn.openedBottleCount)")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(appColors.text)
                             }
                             .padding(.top, 16)
                             .padding(.vertical, 14)

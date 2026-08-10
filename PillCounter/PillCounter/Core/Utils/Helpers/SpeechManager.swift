@@ -15,20 +15,19 @@ final class SpeechManager {
 
     private init() {}
 
-    func speak(_ text: String) {
-        
-        guard AppStorageManager.shared.isSpeechEnabled else { return }
+    /// - Parameter force: when `true`, speak even if the global speech setting is
+    ///   off (used for explicit user actions like tapping the current step).
+    func speak(_ text: String, force: Bool = false) {
+
+        guard force || AppStorageManager.shared.isSpeechEnabled else { return }
 
         synthesizer.stopSpeaking(at: .immediate)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            let utterance = AVSpeechUtterance(string: text)
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.45
+        utterance.pitchMultiplier = 1.0
 
-            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-            utterance.rate = 0.45
-            utterance.pitchMultiplier = 1.0
-
-            self.synthesizer.speak(utterance)
-        }
+        synthesizer.speak(utterance)
     }
 }

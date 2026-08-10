@@ -204,10 +204,7 @@ struct DispenseTransactionListSheetContent: View {
             return
         }
 
-        let countType: CountType =
-            txn.count_type?.uppercased() == CountType.REGULAR.rawValue
-            ? .REGULAR : .FIXED
-        router.selectedPillScanningType = countType
+        router.selectedPillScanningIsDispense = txn.is_dispense
         userViewModel.currentTransactionTxnId = txn.txn_id
         pillScanViewModel.selectedTransaction = txn
 
@@ -227,13 +224,18 @@ struct DispenseTransactionListSheetContent: View {
             return
         }
 
-        let fixed = transactionDAO.fetchPartial(for: user, countType: .FIXED)
-        let regular = transactionDAO.fetchPartial(for: user, countType: .REGULAR)
+        let fixed = transactionDAO.fetchPartial(for: user, isDispense: true)
+        let regular = transactionDAO.fetchPartial(for: user, isDispense: false)
 
-        // Sort oldest → newest so the default PENDING (today) list reads top-down.
+        // Sort high-priority first, then oldest → newest within each priority tier.
         let fresh = (fixed + regular)
             .filter { $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue }
-            .sorted { $0.created_at < $1.created_at }
+            .sorted {
+                let lhsHigh = $0.txn_priority?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "high"
+                let rhsHigh = $1.txn_priority?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "high"
+                if lhsHigh != rhsHigh { return lhsHigh }
+                return $0.created_at < $1.created_at
+            }
 
         var counts: [Int64: Int] = [:]
         for txn in fresh {

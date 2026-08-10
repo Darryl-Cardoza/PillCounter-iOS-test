@@ -4,36 +4,41 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PURPOSE
 // ───────
-// Runs the YOLOX-Nano glove-safety detector on every camera frame (after the
+// Runs the YOLOX glove-safety detector on every camera frame (after the
 // first detection is found, inference is rate-limited to once per 400 ms so
 // that it does not compete with the pill and tray models on the GPU).
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// MODEL ARCHITECTURE — gloves_detector_fp32.mlpackage
+// MODEL ARCHITECTURE — gloves_fp16.mlpackage (512×512 retrain + negatives finetune)
 // ─────────────────────────────────────────────────────────────────────────────
-// YOLOX-Nano with LeakyReLU activations, trained to distinguish:
+// YOLOX with LeakyReLU activations, trained to distinguish:
 //   Class 0 → "glove"    (operator wearing protective gloves — SAFE)
 //   Class 1 → "no_glove" (bare hands visible — HAZARDOUS)
 //
 // The model uses a decoupled FPN head at three strides:
-//   Stride  8 → 40×40 grid  (detects small / close hands)
-//   Stride 16 → 20×20 grid  (mid-range)
-//   Stride 32 → 10×10 grid  (large / distant hands)
+//   Stride  8 → 64×64 grid  (detects small / close hands)
+//   Stride 16 → 32×32 grid  (mid-range)
+//   Stride 32 → 16×16 grid  (large / distant hands)
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// INPUT — MLMultiArray [1, 3, 320, 320] Float32
+// INPUT — MLMultiArray [1, 3, 512, 512] Float32
 // ─────────────────────────────────────────────────────────────────────────────
-//   • Letterbox the camera frame to exactly 320×320 (pad value = 114).
-//   • Pack RGB channels in channel-first order: [R, G, B] planes.
+//   • Letterbox the camera frame to exactly 512×512 (pad value = 114).
+//   • Pack channels in channel-first order as **BGR**: [B, G, R] planes.
+//     The model was trained with OpenCV (cv2), which loads images as BGR.
+//     Feeding RGB swaps the R and B channels and measurably degrades detection
+//     (~30% fewer glove detections in testing). Channel 0 = B, 1 = G, 2 = R.
 //   • Pixel values stay in [0, 255] — no mean subtraction, no /255 division.
-//     YOLOX-Nano was trained on raw uint8 values; normalization is not baked in.
+//     YOLOX was trained on raw uint8 values; normalization is not baked in.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // OUTPUTS — 3 MLMultiArrays (channel-first, Float32)
 // ─────────────────────────────────────────────────────────────────────────────
-//   var_1542 → [1, 7, 40, 40]  — stride-8 FPN head
-//   var_1742 → [1, 7, 20, 20]  — stride-16 FPN head
-//   var_1942 → [1, 7, 10, 10]  — stride-32 FPN head
+//   var_1184 → [1, 7, 64, 64]  — stride-8 FPN head
+//   var_1318 → [1, 7, 32, 32]  — stride-16 FPN head
+//   var_1452 → [1, 7, 16, 16]  — stride-32 FPN head
+//   (Heads are identified by grid size below, so output-name changes across
+//    re-exports do not matter.)
 //
 //   The 7 channels per anchor cell are:
 //     ch 0  : x_center offset  (raw logit — apply sigmoid → + col → × stride = cx_px)
@@ -66,13 +71,15 @@ final class GloveDetectionService {
 
     // MARK: - Configuration Constants
 
-    /// Input resolution expected by the gloves_detector_fp32 model.
-    private let inputSize: Int = 320
+    /// Input resolution expected by the gloves_fp16 model.
+    private let inputSize: Int = 512
 
     /// Minimum sigmoid(objectness) × sigmoid(class) required to emit a detection.
-    /// Tuned for YOLOX-Nano at 320×320 — lower values increase recall but add
-    /// false positives from glove-shaped objects (e.g. trays).
-    private let confThreshold: Float = 0.80
+    /// Tuned for the negatives-finetuned YOLOX-S @ 512×512 via a confidence sweep:
+    ///   0.40 → precision 87%, recall 77%, 0% clutter false positives  (recommended)
+    ///   0.45 → precision 88%, recall 76%  (stricter; also fine for compliance)
+    /// Do not go below 0.35 (clutter false positives return) or above 0.50 (recall drops).
+    private let confThreshold: Float = 0.50
 
     /// IoU threshold used during Non-Maximum Suppression.
     private let iouThreshold: Float = 0.45
@@ -115,7 +122,7 @@ final class GloveDetectionService {
     ///
     /// - Parameters:
     ///   - pixelBuffer: Raw camera frame (any resolution, any BGRA format).
-    ///                  Will be letterboxed internally to 320×320.
+    ///                  Will be letterboxed internally to 512×512.
     ///   - now:         Current timestamp from CACurrentMediaTime(). Injected so
     ///                  tests can advance time without sleeping.
     /// - Returns: Array of detected regions; empty if the rate limit skips inference.
@@ -132,13 +139,13 @@ final class GloveDetectionService {
 
         let frameSize = pixelBuffer.size
 
-        // ── Step 1: Letterbox to 320×320 ──────────────────────────────────
+        // ── Step 1: Letterbox to 512×512 ──────────────────────────────────
         guard let (letterboxed, scale, padX, padY) = letterbox(pixelBuffer) else {
             return []
         }
 
-        // ── Step 2: CVPixelBuffer → MLMultiArray [1, 3, 320, 320] Float32 ─
-        // YOLOX expects raw pixel values in [0, 255] — NO normalisation.
+        // ── Step 2: CVPixelBuffer → MLMultiArray [1, 3, 512, 512] Float32 ─
+        // YOLOX expects raw pixel values in [0, 255], channel order BGR — NO normalisation.
         guard let inputArray = pixelBufferToMLArray(letterboxed) else { return [] }
 
         // ── Step 3: Run CoreML inference ───────────────────────────────────
@@ -146,28 +153,44 @@ final class GloveDetectionService {
             dictionary: ["images": MLFeatureValue(multiArray: inputArray)]
         ) else { return [] }
 
+        print(String(format:
+            "── [GLOVE MODEL] REQUEST  frame=%.0f×%.0f letterboxed=%d×%d scale=%.4f padX=%.1f padY=%.1f",
+            frameSize.width, frameSize.height, inputSize, inputSize, scale, padX, padY))
+
         let inferenceStart = CACurrentMediaTime()
         guard let rawOutput = try? model.model.prediction(from: input) else {
-            print("❌ [GLOVE MODEL] Inference failed")
+            print("[GLOVE MODEL] Inference failed")
             return []
         }
         let inferenceMs = (CACurrentMediaTime() - inferenceStart) * 1000
 
+        print(String(format:
+            "── [GLOVE MODEL] RESPONSE infer=%.1fms outputs=%@",
+            inferenceMs, rawOutput.featureNames.sorted().description))
+
         // ── Step 4: Collect per-stride FPN tensors ─────────────────────────
-        // Each output is [1, 7, H, W] Float32 (channel-first).
-        // The three tensors correspond to strides 8, 16, and 32.
-        let strideOutputs: [(tensor: MLMultiArray, stride: Int)] = [
-            // stride 8  → 40×40 grid detects smaller / closer hands
-            ("var_1542", 8),
-            // stride 16 → 20×20 grid
-            ("var_1742", 16),
-            // stride 32 → 10×10 grid detects larger / distant hands
-            ("var_1942", 32),
-        ].compactMap { name, stride in
-            guard let arr = rawOutput.featureValue(for: name)?.multiArrayValue else {
-                return nil
+        // Each output is [1, 7, H, W] Float32 (channel-first). We no longer
+        // hardcode output tensor names (they change across model re-exports
+        // e.g. var_1542 → var_1184) — instead identify each head by its grid
+        // size, which is stride-invariant: 512/8=64, 512/16=32, 512/32=16.
+        let strideOutputs: [(tensor: MLMultiArray, stride: Int)] = rawOutput.featureNames
+            .compactMap { name -> (MLMultiArray, Int)? in
+                guard let arr = rawOutput.featureValue(for: name)?.multiArrayValue,
+                      arr.shape.count == 4 else { return nil }
+                let gridW = arr.shape[3].intValue
+                switch gridW {
+                case inputSize / 8:  return (arr, 8)
+                case inputSize / 16: return (arr, 16)
+                case inputSize / 32: return (arr, 32)
+                default: return nil
+                }
             }
-            return (arr, stride)
+            .sorted { $0.1 < $1.1 }
+
+        for (tensor, stride) in strideOutputs {
+            print(String(format:
+                "   [GLOVE MODEL] head stride=%d shape=%@",
+                stride, tensor.shape))
         }
 
         guard !strideOutputs.isEmpty else { return [] }
@@ -190,6 +213,10 @@ final class GloveDetectionService {
         let gloveRaw   = candidates.filter { $0.gloveClass == .glove   }.count
         let noGloveRaw = candidates.filter { $0.gloveClass == .noGlove }.count
 
+        print(String(format:
+            "   [GLOVE MODEL] candidates glove=%d no_glove=%d (pre-NMS, conf>=%.2f)",
+            gloveRaw, noGloveRaw, confThreshold))
+
         guard !candidates.isEmpty else { return [] }
 
         // ── Step 6: Non-Maximum Suppression ───────────────────────────────
@@ -197,6 +224,16 @@ final class GloveDetectionService {
 
         let finalGlove   = final.filter { $0.gloveClass == .glove   }.count
         let finalNoGlove = final.filter { $0.gloveClass == .noGlove }.count
+
+        print(String(format:
+            "── [GLOVE MODEL] RESULT   glove=%d no_glove=%d (post-NMS)", finalGlove, finalNoGlove))
+        for det in final {
+            let cls = det.gloveClass == .glove ? "GLOVE" : "NO_GLOVE"
+            let r = det.rect
+            print(String(format:
+                "   %@ conf=%.2f frame=(%.0f,%.0f,%.0f×%.0f)",
+                cls, det.confidence, r.origin.x, r.origin.y, r.width, r.height))
+        }
 
         if !final.isEmpty { hasDetectedOnce = true }
 
@@ -209,16 +246,16 @@ final class GloveDetectionService {
     ///
     /// YOLOX anchor-free decode for a single [1, 7, H, W] tensor:
     ///
-    ///   cx = (col + sigmoid(ch0)) × stride           // sub-pixel x center in 320×320 space
+    ///   cx = (col + sigmoid(ch0)) × stride           // sub-pixel x center in 512×512 space
     ///   cy = (row + sigmoid(ch1)) × stride           // sub-pixel y center
-    ///   w  =  exp(ch2) × stride                      // width in 320×320 space
-    ///   h  =  exp(ch3) × stride                      // height in 320×320 space
+    ///   w  =  exp(ch2) × stride                      // width in 512×512 space
+    ///   h  =  exp(ch3) × stride                      // height in 512×512 space
     ///
     ///   obj_conf  = sigmoid(ch4)                      // "is there anything here?"
     ///   cls_conf  = sigmoid(ch5 or ch6 per class)    // "which class is it?"
     ///   final_conf = obj_conf × cls_conf
     ///
-    /// After computing the box in letterboxed 320×320 space, it is un-warped back
+    /// After computing the box in letterboxed 512×512 space, it is un-warped back
     /// to the original camera-frame coordinate space using the same (scale, padX, padY)
     /// values that Letterbox applied when preparing the input.
     private func decodeYOLOXHead(tensor: MLMultiArray,
@@ -246,7 +283,7 @@ final class GloveDetectionService {
                 let base = row * sH + col * sW + 0 * s0
 
                 // ── Box channels ──────────────────────────────────────────
-                // YOLOX does NOT bake sigmoid/exp into the TFLite graph;
+                // YOLOX does NOT bake sigmoid/exp into the graph;
                 // those activations must be applied at decode time.
                 let rawX  = floats[base + 0 * sC]
                 let rawY  = floats[base + 1 * sC]
@@ -254,7 +291,7 @@ final class GloveDetectionService {
                 let rawH  = floats[base + 3 * sC]
 
                 // Sub-pixel center offset (0–1 relative to grid cell) + cell index,
-                // then scale by stride to get coordinates in 320×320 letterbox space.
+                // then scale by stride to get coordinates in 512×512 letterbox space.
                 let cx = (CGFloat(col) + CGFloat(sigmoid(rawX))) * CGFloat(stride)
                 let cy = (CGFloat(row) + CGFloat(sigmoid(rawY))) * CGFloat(stride)
 
@@ -280,7 +317,7 @@ final class GloveDetectionService {
                 let finalConf = objConf * bestClsConf
                 guard finalConf >= confThreshold else { continue }
 
-                // ── Un-letterbox: 320×320 → original frame space ──────────
+                // ── Un-letterbox: 512×512 → original frame space ──────────
                 // Letterbox.preprocess stored (scale, padX, padY) used during
                 // preprocessing. Reverse the same transform:
                 //   original_coord = (letterbox_coord − pad) / scale
@@ -332,9 +369,9 @@ final class GloveDetectionService {
         return kept
     }
 
-    // MARK: - Letterbox (320×320, pad = 114)
+    // MARK: - Letterbox (512×512, pad = 114)
 
-    /// Scales the camera frame proportionally to fit inside 320×320, then
+    /// Scales the camera frame proportionally to fit inside 512×512, then
     /// fills the remaining border with value 114 (YOLOX standard grey pad).
     ///
     /// - Returns: (resized buffer, scale, padX, padY) or nil on allocation failure.
@@ -346,7 +383,7 @@ final class GloveDetectionService {
         let srcH = src.extent.height
         let size = CGFloat(inputSize)
 
-        // Uniform scale that fits the image inside 320×320 with no distortion.
+        // Uniform scale that fits the image inside 512×512 with no distortion.
         let scale = min(size / srcW, size / srcH)
         let newW  = srcW * scale
         let newH  = srcH * scale
@@ -361,7 +398,7 @@ final class GloveDetectionService {
             .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             .transformed(by: CGAffineTransform(translationX: padX, y: padY))
 
-        // Allocate a 320×320 BGRA buffer.
+        // Allocate a 512×512 BGRA buffer.
         let attrs: [CFString: Any] = [
             kCVPixelBufferWidthKey:            inputSize as CFNumber,
             kCVPixelBufferHeightKey:           inputSize as CFNumber,
@@ -388,13 +425,14 @@ final class GloveDetectionService {
 
     // MARK: - CVPixelBuffer → MLMultiArray
 
-    /// Converts a 320×320 BGRA CVPixelBuffer to a [1, 3, 320, 320] Float32
-    /// MLMultiArray with pixel values in [0, 255] and channel order RGB.
+    /// Converts a 512×512 BGRA CVPixelBuffer to a [1, 3, 512, 512] Float32
+    /// MLMultiArray with pixel values in [0, 255] and channel order **BGR**
+    /// (the order the model was trained on — cv2 loads BGR).
     ///
     /// Layout mapping:
-    ///   array[0, 0, row, col] = R = BGRA_pixel.byte[2]
+    ///   array[0, 0, row, col] = B = BGRA_pixel.byte[0]
     ///   array[0, 1, row, col] = G = BGRA_pixel.byte[1]
-    ///   array[0, 2, row, col] = B = BGRA_pixel.byte[0]
+    ///   array[0, 2, row, col] = R = BGRA_pixel.byte[2]
     private func pixelBufferToMLArray(_ px: CVPixelBuffer) -> MLMultiArray? {
         guard let array = try? MLMultiArray(
             shape: [1, 3, NSNumber(value: inputSize), NSNumber(value: inputSize)],
@@ -414,10 +452,10 @@ final class GloveDetectionService {
         let dst = array.dataPointer.assumingMemoryBound(to: Float.self)
 
         // Pointers to each channel's plane start in the MLMultiArray buffer.
-        // R = offset 0, G = offset totalPixels, B = offset 2*totalPixels.
-        let rPlane = dst
+        // BGR order to match training: B = plane 0, G = plane 1, R = plane 2.
+        let bPlane = dst
         let gPlane = dst + totalPixels
-        let bPlane = dst + 2 * totalPixels
+        let rPlane = dst + 2 * totalPixels
 
         for row in 0..<inputSize {
             // Row pointer into the BGRA pixel buffer.
@@ -427,10 +465,11 @@ final class GloveDetectionService {
 
             for col in 0..<inputSize {
                 // BGRA byte layout: B at [4n], G at [4n+1], R at [4n+2], A at [4n+3].
+                // Pack as BGR planes (channel 0 = B, 1 = G, 2 = R) — matches cv2/training.
                 let px4 = col * 4
-                rPlane[rowBase + col] = Float(rowPtr[px4 + 2])  // R
-                gPlane[rowBase + col] = Float(rowPtr[px4 + 1])  // G
-                bPlane[rowBase + col] = Float(rowPtr[px4 + 0])  // B
+                bPlane[rowBase + col] = Float(rowPtr[px4 + 0])  // B → channel 0
+                gPlane[rowBase + col] = Float(rowPtr[px4 + 1])  // G → channel 1
+                rPlane[rowBase + col] = Float(rowPtr[px4 + 2])  // R → channel 2
             }
         }
 

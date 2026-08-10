@@ -39,7 +39,7 @@ struct BatchCountCard: View {
                 .frame(width: 64)
 
                 VStack(alignment: .center, spacing: 2) {
-                    Text("\(txn.sealedBottleQty)")
+                    Text("\(txn.totalBottleCount)")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(appColors.secondary)
                         .monospacedDigit()

@@ -7,30 +7,67 @@
 
 import Foundation
 import SwiftUI
-import ComposeApp
+import Hl7Core
 import Combine
 
 @MainActor
 class PillScanViewModel: ObservableObject {
 
-    // DAO instances
-    let drugMasterDAO = DrugCatalogStore.shared
-    let transactionDAO = TransactionStore.shared
-    let transactionDetailDAO = TransactionDetailStore.shared
-    let batchDAO = BatchStore.shared
-    let userDataLocalStorage = UserStore.shared
-
-    // decode the values of the barcode or qr, calling the api, processing it, storing it in database
-    let decoder = BarcodeAndQRDecoder()
-    let userRepo = UserRepository.shared
+    // Injected dependencies — default to production singletons so existing
+    // call sites (`PillScanViewModel()`) keep working; tests pass mocks.
+    let drugMasterDAO: DrugCatalogDataSource
+    let transactionDAO: TransactionDataSource
+    let transactionDetailDAO: TransactionDetailDataSource
+    let batchDAO: BatchDataSource
+    let stockTxnDAO: StockTxnDataSource
+    let bottleInfoDAO: BottleInfoDataSource
+    let userDataLocalStorage: UserDataSource
+    let decoder: BarcodeAndQRDecoder
+    let userRepo: UserRepositoryProtocol
 
     @Published var isDrugFound: Bool?
+
+    /// Filename of the barcode image saved for the scan currently being confirmed
+    /// (set by `updateSubstitutedDrug`/`createTransaction`/`updaetTransaction` right
+    /// after saving to disk). Consumed once by `stageFirstBottleIfNeeded` after NDC
+    /// verification lands, so the first `BottleInfo` gets the same image without
+    /// saving it to disk a second time.
+    var pendingBarcodeImagePath: String?
 
     // set the target count for fixed or dispense count
     @Published var targetCount: [String] = Array(repeating: "", count: 4)
 
     // this will hold the current scanning transaction that user is performing or working with.
+    // Only used by the regular (non-StockCount) FIXED/REGULAR dispense-counting flow.
     @Published var currentTransaction: PillCountTransactionEntity?
+
+    // Stock-count equivalents of currentTransaction — one NDC row (currentStockTxn) plus the
+    // specific BottleInfoEntity row (currentBottleInfo) written by the most recent scan.
+    @Published var currentStockTxn: StockTxnEntity?
+    @Published var currentBottleInfo: BottleInfoEntity?
+
+    /// Lot/expiry/serial from the barcode scanned to start an open-pill count.
+    /// No BottleInfoEntity row is written until the count is confirmed (Proceed) —
+    /// see `createOpenedBottleFromPendingScan`.
+    var pendingOpenBottleLot: String?
+    var pendingOpenBottleExpiry: String?
+    var pendingOpenBottleSerial: String?
+
+    /// Resolved NDC/drug/batch identity for an open-pill scan, held in memory only.
+    /// No BatchCountEntity or StockTxnEntity is created until the count is confirmed
+    /// (Proceed) — see `createOpenedBottleFromPendingScan`. This lets the header/UI
+    /// show the scanned drug immediately without persisting anything for a count the
+    /// user might abandon (back out / kill the app before finishing).
+    @Published var pendingOpenBottleDrug: DrugMasterEntity?
+    var pendingOpenBottleDrugId: Int64?
+    var pendingOpenBottleBucketId: String?
+
+    /// Drug for whichever flow is active — FIXED/REGULAR dispense (currentTransaction),
+    /// stock-count open-pill counting with a persisted StockTxn (currentStockTxn), or an
+    /// open-pill scan still pending confirmation (pendingOpenBottleDrug).
+    var currentDrug: DrugMasterEntity? {
+        currentTransaction?.drug ?? currentStockTxn?.drug ?? pendingOpenBottleDrug
+    }
 
     // this will store the transaction details array for the current transaction.
     @Published var currentTransactionTransactionDetails:
@@ -47,7 +84,32 @@ class PillScanViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     //Controlled Drug Repository
-    let controlledRepo  = ControlledRepository.shared
+    let controlledRepo: ControlledRepositoryProtocol
+
+    // MARK: - Init
+    init(
+        drugMasterDAO: DrugCatalogDataSource = DrugCatalogStore.shared,
+        transactionDAO: TransactionDataSource = TransactionStore.shared,
+        transactionDetailDAO: TransactionDetailDataSource = TransactionDetailStore.shared,
+        batchDAO: BatchDataSource = BatchStore.shared,
+        stockTxnDAO: StockTxnDataSource = StockTxnStore.shared,
+        bottleInfoDAO: BottleInfoDataSource = BottleInfoStore.shared,
+        userDataLocalStorage: UserDataSource = UserStore.shared,
+        decoder: BarcodeAndQRDecoder = BarcodeAndQRDecoder(),
+        userRepo: UserRepositoryProtocol = UserRepository.shared,
+        controlledRepo: ControlledRepositoryProtocol = ControlledRepository.shared
+    ) {
+        self.drugMasterDAO = drugMasterDAO
+        self.transactionDAO = transactionDAO
+        self.transactionDetailDAO = transactionDetailDAO
+        self.batchDAO = batchDAO
+        self.stockTxnDAO = stockTxnDAO
+        self.bottleInfoDAO = bottleInfoDAO
+        self.userDataLocalStorage = userDataLocalStorage
+        self.decoder = decoder
+        self.userRepo = userRepo
+        self.controlledRepo = controlledRepo
+    }
 
     //Toast
     @Published  var showToast: Bool = false
@@ -80,7 +142,17 @@ class PillScanViewModel: ObservableObject {
     @Published var ndcMismatchRestartFlow = false
     @Published var shouldAutoProceedToCount = false
     @Published var isNdcAdded: Bool = false
-    
+
+    // MARK: Multi-bottle tracking (dispense-only)
+    @Published var showAddBottlePopup: Bool = false
+    @Published var showReplaceBottlePopup: Bool = false
+    var pendingBottleRescan: BottleInfo?
+    var isProcessingBottleRescan: Bool = false
+    /// Snapshot captured at the moment the barcode was detected — used for the
+    /// confirmation popup instead of re-capturing at confirm-tap time, so a camera
+    /// move while the popup is up can't swap in the wrong frame.
+    var pendingBottleRescanImage: UIImage?
+
     // MARK: Stock Count State
     @Published var addCurrentOpenPillCount: Int = 0
 
@@ -92,6 +164,9 @@ class PillScanViewModel: ObservableObject {
     @Published var capturedVialImage: UIImage? = nil
     @Published var vialCapturedImagePath: String? = nil
     @Published var vialDoneTriggered: Bool = false
+    /// Toggled briefly when a vial still is captured to drive the white shutter
+    /// flash animation in UnifiedCameraLayout.
+    @Published var vialCaptureFlash: Bool = false
 
     //MARK: RX FLow
     @Published var showRxFlowPopup: Bool = false
@@ -109,10 +184,29 @@ class PillScanViewModel: ObservableObject {
     @Published var showVerifyStockBottlePopup: Bool = false
 
     
-    private func postTransactionUIUpdate(countType: CountType) {
+    // MARK: - Dispense-count entry
+
+    /// Sets up the shared scan session for an existing dispense transaction,
+    /// fetched fresh from the store by id. Centralises the setup that callers
+    /// (dashboard, history lists, sheets) previously duplicated inline.
+    /// Returns the derived count type + scan type so the caller can route, or
+    /// nil if the transaction no longer exists.
+    @discardableResult
+    func startDispenseCount(txnId: Int64) -> (isDispense: Bool, scanType: ScanType)? {
+        guard let txn = transactionDAO.fetchById(txnId) else { return nil }
+
+        selectedTransaction = txn
+
+        let isDispense = txn.is_dispense
+        let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
+
+        return (isDispense, scanType)
+    }
+
+    private func postTransactionUIUpdate(isDispense: Bool) {
         getAllTransactionDetailsOfTheCurrentTransaction()
 
-        if countType == .FIXED {
+        if isDispense {
             updateTargetCountForCurrentTransaction()
         }
 
@@ -135,15 +229,13 @@ class PillScanViewModel: ObservableObject {
     
     // create transaction for every new transaction that user scans the barcode or enters the ndc or the gtin number manually.
     func createTransaction(
-        drugId: Int64, countType: CountType,
+        drugId: Int64, isDispense: Bool,
         barcodeImage: UIImage? = nil,
         isComingFromPms:Bool = false,
         isControlled:Bool? = nil,
         targetCount: Int32? = nil,
         drugName: String? = nil,
         batchId: Int64? = nil,
-        expirationDate: String? = nil,
-        lotNumber: String? = nil,
         rxNo:String? = nil,
         bucketId: String? = nil,
         priority: String? = nil,
@@ -158,35 +250,23 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        // Save Image using Helper if it exists
-        var savedPath = ""
-
+        // Save Image using Helper if it exists; stashed for stageFirstBottleIfNeeded
+        // to attach to the transaction's first BottleInfo once NDC-verified.
         if let img = barcodeImage {
-            if let path = PhotoFileManager.shared.saveImage(img) {
-                savedPath = path
-            } else {
-                print("Failed to save image")
-            }
-
-        } else {
-            print("barcodeImage is nil")
+            pendingBarcodeImagePath = PhotoFileManager.shared.saveImage(img)
         }
 
-
-        // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
+        // step 2: we have got all, user id, drugId, count type.
         // we now call the db function to create the transaction.
         transactionDAO.create(
             for: user,
             drugId: drugId,
-            countType: countType,
+            isDispense: isDispense,
             batchId: batchId ?? 0,
-            barcodeImagePath: savedPath,
             isFromPms: isComingFromPms,
             drugName: drugName,
             targetCount: targetCount ?? 0,
             isControlled: isControlled,
-            expirationDate: expirationDate,
-            lotNumber: lotNumber,
             rxNo: rxNo,
             bucketId: bucketId,
             priority: priority,
@@ -202,7 +282,7 @@ class PillScanViewModel: ObservableObject {
     
     func updaetTransaction(
         drugId: Int64,
-        countType: CountType,
+        isDispense: Bool,
         txnId:Int64,
         barcodeImage: UIImage? = nil,
         isComingFromPms:Bool = false,
@@ -218,29 +298,19 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        // Save Image using Helper if it exists
-        var savedPath = ""
+        // Save Image using Helper if it exists; stashed for stageFirstBottleIfNeeded
+        // to attach to the transaction's first BottleInfo once NDC-verified.
         if let img = barcodeImage {
-
-
-            if let path = PhotoFileManager.shared.saveImage(img) {
-                savedPath = path
-            } else {
-            }
-
-        } else {
-            print("barcodeImage is nil")
+            pendingBarcodeImagePath = PhotoFileManager.shared.saveImage(img)
         }
 
-
-        // step 2: we have got all, user id, drugId, count type, for now the barcode image is set to empty string.
-        // we now call the db function to create the transaction.
+        // step 2: we have got all, user id, drugId, count type.
+        // we now call the db function to update the transaction.
         transactionDAO.update(
             txnId: txnId,
             drugId: drugId,
-            countType: countType,
-            targetCount: targetCount,
-            barcodeImagePath: savedPath
+            isDispense: isDispense,
+            targetCount: targetCount
         )
 
         // step 3: set the latest transaction as current transaction.
@@ -282,13 +352,21 @@ class PillScanViewModel: ObservableObject {
             return
         }
 
-        transactionDetailDAO.add(
+        let detail = transactionDetailDAO.add(
             txnId: txnId,
             pillCount: pillCount,
             imagePath: imagePath,
             type: type,
             isManual: isManual
         )
+
+        if currentTransaction?.is_dispense == true, let detailId = detail?.txn_details_id {
+            var bottles = transactionDAO.getBottleList(txnId: txnId)
+            if !bottles.isEmpty {
+                bottles[bottles.count - 1].txnDetailsIds.append(detailId)
+                transactionDAO.setBottleList(txnId: txnId, bottles)
+            }
+        }
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }

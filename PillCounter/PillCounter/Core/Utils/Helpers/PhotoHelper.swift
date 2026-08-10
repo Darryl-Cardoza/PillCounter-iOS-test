@@ -111,6 +111,14 @@ struct PhotoFileManager {
     // Encrypted extension so plain .jpg files can't be opened by Files app
     private let ext = ".enc"
 
+    // Image-encryption AES key. Account/attributes match the original
+    // KeychainHelper exactly (no service attribute) so previously stored keys
+    // — and the images they encrypted — remain readable.
+    private let imageKeyAccount = "com.pillcounter.imageEncryptionKey"
+    private var imageEncryptionKey: SymmetricKey {
+        Keychain.getOrCreateSymmetricKey(account: imageKeyAccount, service: nil)
+    }
+
     // MARK: - Save (encrypt)
     func saveImage(_ image: UIImage) -> String? {
         guard let jpeg = image.jpegData(compressionQuality: 0.8) else {
@@ -119,7 +127,7 @@ struct PhotoFileManager {
         }
 
         do {
-            let key = KeychainHelper.shared.getOrCreateEncryptionKey()
+            let key = imageEncryptionKey
             let sealedBox = try AES.GCM.seal(jpeg, using: key)
             guard let encrypted = sealedBox.combined else { return nil }
 
@@ -152,7 +160,7 @@ struct PhotoFileManager {
         do {
             let url = try fileURL(for: fileName)
             let encrypted = try Data(contentsOf: url)
-            let key = KeychainHelper.shared.getOrCreateEncryptionKey()
+            let key = imageEncryptionKey
             let sealedBox = try AES.GCM.SealedBox(combined: encrypted)
             return try AES.GCM.open(sealedBox, using: key)
         } catch {

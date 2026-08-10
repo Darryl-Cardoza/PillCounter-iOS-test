@@ -23,9 +23,10 @@ struct AppNavigation: View {
         NavigationStack(path: $router.navigationPath) {
             Group {
                 if AppStorageManager.shared.isLoggedIn {
-                    NewDashboardView()
+                    DashboardView()
                 } else {
                     LoginEmailView()
+//                    DashboardView()
                 }
             }
             .navigationDestination(for: PillCounterFlow.self) { destination in
@@ -41,7 +42,7 @@ struct AppNavigation: View {
 
                 // MARK: DASHBOARD
                 case .authentication(.login(.dashboard(.dashboardHome))):
-                    NewDashboardView()
+                    DashboardView()
                         .navigationBarBackButtonHidden(true)
 
                 case .authentication(.login(.dashboard(.fixedCountPartial))):
@@ -49,9 +50,14 @@ struct AppNavigation: View {
                         .navigationBarBackButtonHidden(true)
                     
                     
-                case .authentication(.login(.dashboard(.pillCount(.scan(let scanType))))):
-                    UnifiedCameraView(currentScanType: scanType)
-                        .navigationBarBackButtonHidden(true)
+                case .authentication(.login(.dashboard(.pillCount(.scan(let scanType, let txnId, let batchId, let bucketId))))):
+                    UnifiedCameraView(
+                        currentScanType: scanType,
+                        dispenseTxnId: txnId,
+                        stockBatchId: batchId,
+                        newBatchBucketId: bucketId
+                    )
+                    .navigationBarBackButtonHidden(true)
 
                 case .authentication(.user(.hamburgerMenu)):
                     HamburgerMenuView()
@@ -74,22 +80,14 @@ struct AppNavigation: View {
                     UserHistoryView(filterType: filterType, stautsType: statusFilter)
                         .navigationBarBackButtonHidden(true)
 
-                case .authentication(.user(.userSettings(.HistoryTransactionDetail))):
-                    HistoryTransactionDetailView()
+                case .authentication(.user(.userSettings(.HistoryTransactionDetail(let txnId)))):
+                    HistoryTransactionDetailView(txnId: txnId)
                         .navigationBarBackButtonHidden(true)
 
-                case .authentication(.user(.userSettings(.HistoryBatchDetail))):
-                    HistoryBatchDetailView()
+                case .authentication(.user(.userSettings(.HistoryBatchDetail(let batchId)))):
+                    HistoryBatchDetailView(batchId: batchId)
                         .navigationBarBackButtonHidden(true)
 
-                // MARK: STOCK COUNT
-                case .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountBatchDetail))))):
-                    StockCountBatchDetail()
-                        .navigationBarBackButtonHidden(true)
-
-                case .authentication(.login(.dashboard(.pillCount(.stockCount(.stockCountPartialBatchListScreen))))):
-                    StockCountPartialBatchListScreen()
-                        .navigationBarBackButtonHidden(true)
                 }
             }
         }
@@ -112,6 +110,11 @@ struct AppNavigation: View {
         }
         .onChange(of: colorScheme) { _, newScheme in
             appColors.updateSystemAppearance(newScheme == .dark)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+        ) { _ in
+            appColors.updateSystemAppearance(colorScheme == .dark)
         }
     }
 }

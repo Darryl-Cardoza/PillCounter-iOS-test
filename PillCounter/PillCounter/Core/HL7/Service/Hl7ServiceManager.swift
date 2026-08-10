@@ -4,9 +4,10 @@
 //
 
 import Foundation
-import ComposeApp
+import Hl7Core
 import Network
 import Combine
+
 
 final class Hl7ServiceManager {
 
@@ -18,7 +19,33 @@ final class Hl7ServiceManager {
 
     // MARK: - Server
     private let server: HL7TLSServer
-    private let parser = Hl7Parser()
+
+    /// `HL7` is the batteries-included entry point of the new Hl7Core library: it owns
+    /// parsing (`parse(raw:)`), building (`build()`), validation (`validate(message:)`)
+    /// and ACK generation (`ack(message:)`) for a given HL7 version.
+    ///
+    /// Parameters:
+    /// - `version`: HL7 version this PMS integration speaks (e.g. "2.3"). Governs which
+    ///   fields/segments are considered valid and how messages are re-encoded.
+    /// - `strictMode`: When `true`, parsing throws on any structural error instead of
+    ///   collecting them into `HL7ParseResult.Failure`. Kept `false` so a malformed
+    ///   segment from the PMS doesn't take down the whole receive pipeline — we still get
+    ///   a `partialMessage` plus the list of `errors` to log/ACK against.
+    /// - `validationConfig`: Rule set used by `validate(message:)`/`ack(message:)` to decide
+    ///   AA vs AE/AR. `.DEFAULT` applies the library's standard structural HL7 rules with no
+    ///   pharmacy-specific overrides.
+    /// - `extraSegments`: Registers additional custom (Z-)segment types so they parse as
+    ///   typed views instead of falling back to a generic/lossless segment. Left empty
+    ///   because every custom segment this app sends/receives — ZIN (inventory: opened/
+    ///   sealed quantity, lot, expiry) and ZPR (Rx priority) — is already pre-registered by
+    ///   the library itself.
+    private let hl7 = HL7(
+        version: AppStorageManager.shared.hl7Version,
+        strictMode: false,	
+        validationConfig: .companion.DEFAULT,
+        extraSegments: []
+    )
+
     var imageServer: ImageWebServer?
 
     // MARK: - Client
@@ -239,18 +266,24 @@ final class Hl7ServiceManager {
         isConnectingOrConnected = true
         print("[HL7][CLIENT] Connecting to PMS service: \(name)")
 
-        let tlsOptions = NWProtocolTLS.Options()
-        sec_protocol_options_set_min_tls_protocol_version(
-            tlsOptions.securityProtocolOptions, .TLSv12
-        )
-        // DEV: accept self-signed cert from PMS
-        sec_protocol_options_set_verify_block(
-            tlsOptions.securityProtocolOptions,
-            { _, _, completion in completion(true) },
-            DispatchQueue.global()
-        )
-
-        let parameters = NWParameters(tls: tlsOptions)
+        // Server-driven (`auth/me` -> `settings.bypass_ssl`, default true): when
+        // enabled, skip TLS entirely and connect over plain TCP. When disabled,
+        // negotiate TLS (self-signed PMS cert accepted, as before).
+        let parameters: NWParameters
+        if AppStorageManager.shared.bypassSSL {
+            parameters = NWParameters.tcp
+        } else {
+            let tlsOptions = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(
+                tlsOptions.securityProtocolOptions, .TLSv12
+            )
+            sec_protocol_options_set_verify_block(
+                tlsOptions.securityProtocolOptions,
+                { _, _, completion in completion(true) },
+                DispatchQueue.global()
+            )
+            parameters = NWParameters(tls: tlsOptions)
+        }
         parameters.includePeerToPeer = true
 
         let connection = NWConnection(to: result.endpoint, using: parameters)
@@ -306,9 +339,18 @@ final class Hl7ServiceManager {
                 onMessage: { [weak self] raw, messageId in
                     guard let self else { return }
                     print("Raw message -> \(raw)")
-                    let parsed = self.parser.parse(hl7Message: raw)
+
+                    let result = self.hl7.parse(raw: raw)
+                    guard let success = result as? HL7ParseResult.Success else {
+                        let failure = result as? HL7ParseResult.Failure
+                        let reasons = failure?.errors.map { $0.message }.joined(separator: "; ") ?? "unknown parse failure"
+                        print("[HL7][SERVER] Failed to parse incoming message: \(reasons)")
+                        self.listener?.onError(source: "Hl7ServiceManager.parse", error: Hl7ParseFailureError(reason: reasons))
+                        return
+                    }
+
                     self.listener?.onMessageReceived(
-                        message: parsed,
+                        message: success.message,
                         rawHl7: raw
                     )
                 },
@@ -404,9 +446,18 @@ final class Hl7ServiceManager {
         let end2:  UInt8 = 0x0D
 
         while true {
+            guard let startIndex = receiveBuffer.firstIndex(of: start) else { return }
+
+            guard let endIndex = receiveBuffer.firstIndex(where: { $0 == end1 }) else { return }
+
+            guard startIndex < endIndex else {
+                // Stray end-block byte before the next start-block — drop the
+                // garbage prefix (e.g. TLS/plaintext mismatch) and resync.
+                receiveBuffer.removeSubrange(0...endIndex)
+                continue
+            }
+
             guard
-                let startIndex = receiveBuffer.firstIndex(of: start),
-                let endIndex   = receiveBuffer.firstIndex(where: { $0 == end1 }),
                 endIndex + 1 < receiveBuffer.count,
                 receiveBuffer[endIndex + 1] == end2
             else { return }

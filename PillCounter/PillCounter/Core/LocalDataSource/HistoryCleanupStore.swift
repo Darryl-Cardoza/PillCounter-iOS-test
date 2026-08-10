@@ -32,8 +32,10 @@ final class HistoryCleanupStore {
 
             for transaction in oldTransactions {
 
-                if let barcodePath = transaction.barcode_image {
-                    deleteFileFromDocuments(fileName: barcodePath)
+                for bottle in [BottleInfo].decode(from: transaction.bottle_info_list_json) {
+                    if let barcodePath = bottle.barcodeImagePath {
+                        deleteFileFromDocuments(fileName: barcodePath)
+                    }
                 }
 
                 if let details = transaction.pillCountTransactionDetails

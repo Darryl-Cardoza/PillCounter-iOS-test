@@ -35,12 +35,20 @@ struct CameraContentView: View {
                     .padding(.top, isLandscape ? 0 : 30)
 
                     if pillScanViewModel.currentControlledStep != .vial {
-                        DetectionOverlay(cameraService: cameraService).ignoresSafeArea()
+                        DetectionOverlay(
+                            cameraService: cameraService,
+                            targetQuantity: {
+                                let stepTarget = pillScanViewModel.currentControlledTargetCount ?? 0
+                                guard stepTarget > 0 else { return 0 }
+                                let alreadyAdded = Int(pillScanViewModel.getTotalCuntForCurrentStep())
+                                return max(0, stepTarget - alreadyAdded)
+                            }()
+                        ).ignoresSafeArea()
 //                        TrayOverlay(cameraService: cameraService).ignoresSafeArea()
                     }
-                    if pillScanViewModel.currentTransaction?.count_type == CountType.FIXED.rawValue {
+                    if pillScanViewModel.currentTransaction?.is_dispense == true {
                         VStack {
-                            ControlledStepRow(
+                            StepProgressRow(
                                 activeSteps: PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
                                 currentStep: pillScanViewModel.currentControlledStep
                             )

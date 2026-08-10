@@ -98,4 +98,30 @@ final class CoreDataManager {
             container.viewContext.reset()
         }
     }
+
+    /// Destroys every persistent store file backing this container and
+    /// reloads a fresh, empty one at the same URL. Unlike `resetContext()`
+    /// (which only clears the in-memory context), this actually deletes the
+    /// on-disk data — used when the field-encryption DEK is unrecoverable,
+    /// so existing rows contain permanently undecryptable ciphertext.
+    func destroyAndReloadStore() {
+        for description in container.persistentStoreDescriptions {
+            guard let url = description.url else { continue }
+            do {
+                try container.persistentStoreCoordinator.destroyPersistentStore(
+                    at: url,
+                    ofType: description.type,
+                    options: nil
+                )
+            } catch {
+                Log("❌ CoreData destroyPersistentStore error: \(error.localizedDescription)")
+            }
+        }
+
+        container.loadPersistentStores { _, error in
+            if let error = error {
+                Log("❌ CoreData reload after destroy failed: \(error.localizedDescription)")
+            }
+        }
+    }
 }

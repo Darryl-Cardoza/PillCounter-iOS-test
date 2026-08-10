@@ -57,6 +57,12 @@ final class AppStorageManager {
         static let hazardousTrayColors  = "hazardous_tray_colors"
         static let bypassSSL            = "bypass_ssl"
         static let hl7MessageSpec       = "hl7_message_spec"
+        static let dekWrapped           = "dek_wrapped"
+        static let dekKekId             = "dek_kek_id"
+        static let dekKekVersion        = "dek_kek_version"
+        static let imageDekWrapped      = "image_dek_wrapped"
+        static let imageDekKekId        = "image_dek_kek_id"
+        static let imageDekKekVersion   = "image_dek_kek_version"
 
         // UserDefaults-backed (non-sensitive)
         static let drugIdCounter        = "drug_id_counter"
@@ -172,6 +178,28 @@ final class AppStorageManager {
     var hl7MessageSpec: Hl7Format {
         get { Hl7Format(rawValue: Keychain.getPassword(for: AppStorageKeys.hl7MessageSpec) ?? "") ?? .dispensesure }
         set { Keychain.savePassword(newValue.rawValue, for: AppStorageKeys.hl7MessageSpec) }
+    }
+
+    // Generic Keychain-backed accessors used by `DatabaseKeyProvider` for its
+    // per-slot DEK bookkeeping (wrapped blob, KEK id, KEK version) — one pair
+    // of key names per `DekSlot` (see `AppStorageKeys.dekWrapped` /
+    // `.imageDekWrapped` and friends), same underlying storage/behavior as
+    // every other Keychain-backed property on this type.
+    func string(forKey key: String) -> String? {
+        Keychain.getPassword(for: key)
+    }
+
+    func setString(_ value: String?, forKey key: String) {
+        if let value { Keychain.savePassword(value, for: key) }
+        else         { Keychain.deletePassword(for: key) }
+    }
+
+    func int(forKey key: String) -> Int {
+        Int(Keychain.getPassword(for: key) ?? "") ?? -1
+    }
+
+    func setInt(_ value: Int, forKey key: String) {
+        Keychain.savePassword(String(value), for: key)
     }
 
     var pmsHostName: String {

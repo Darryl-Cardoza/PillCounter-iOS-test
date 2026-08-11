@@ -61,6 +61,14 @@ struct DekSlot {
         legacyRawKeyAccount: "com.pillcounter.imageEncryptionKey",
         legacyRawKeyService: nil
     )
+
+    /// Every slot's bootstrap alias — the single source of truth
+    /// `KekDekManager` uses to decide which aliases are Secure-Enclave-backed.
+    /// Every new `DekSlot` must be added here or its bootstrap KEK silently
+    /// falls back to the weaker Keychain-AES path.
+    static var allBootstrapAliases: Set<String> {
+        [field.bootstrapAlias, image.bootstrapAlias]
+    }
 }
 
 final class DatabaseKeyProvider {
@@ -128,7 +136,12 @@ final class DatabaseKeyProvider {
         }
 
         if let legacyRaw = Keychain.data(account: slot.legacyRawKeyAccount, service: slot.legacyRawKeyService) {
-            return bootstrapWrapDek(raw: legacyRaw, slot: slot, storage: storage)
+            let dek = bootstrapWrapDek(raw: legacyRaw, slot: slot, storage: storage)
+            // The raw key is now safely wrapped and persisted above — remove
+            // the old plaintext copy so it doesn't linger in the Keychain
+            // indefinitely as a second, unwrapped exposure of the same key.
+            Keychain.deleteData(account: slot.legacyRawKeyAccount, service: slot.legacyRawKeyService)
+            return dek
         }
 
         return generateAndBootstrapWrapDek(slot: slot, storage: storage)
@@ -192,8 +205,17 @@ final class DatabaseKeyProvider {
         defer { lock.unlock() }
 
         let storage = AppStorageManager.shared
+        let currentKekId = storage.string(forKey: slot.kekIdStorageKey)
         let currentVersion = storage.int(forKey: slot.kekVersionStorageKey)
-        guard kekInfo.version > currentVersion else { return }
+
+        // Any server-issued KEK always supersedes the bootstrap KEK,
+        // regardless of version number — the bootstrap KEK isn't part of
+        // the server's version sequence, so comparing versions alone would
+        // wrongly reject a legitimate first server KEK at version 0 (0 > 0
+        // is false, yet 0 still needs to replace "local-bootstrap"). Once
+        // already on a server KEK, only a strictly higher version rotates.
+        let isFirstServerKek = currentKekId == nil || currentKekId == "local-bootstrap"
+        guard isFirstServerKek || kekInfo.version > currentVersion else { return }
 
         guard let oldKekId = storage.string(forKey: slot.kekIdStorageKey),
               let oldWrappedB64 = storage.string(forKey: slot.wrappedStorageKey),

@@ -222,6 +222,9 @@ final class MockUserRepository: UserRepositoryProtocol {
     func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, accessToken: String) async throws -> UpdateTerminalResponse {
         fatalError("not needed for bottle-rescan tests")
     }
+    func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
+        fatalError("not needed for bottle-rescan tests")
+    }
 }
 
 final class MockControlledRepository: ControlledRepositoryProtocol {

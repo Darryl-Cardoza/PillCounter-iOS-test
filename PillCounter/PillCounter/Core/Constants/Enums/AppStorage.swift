@@ -30,9 +30,28 @@ final class AppStorageManager {
     }
 
     
+    /// Keychain accounts that must survive any blanket wipe (logout,
+    /// fresh-install cleanup) — the wrapped DEK/KEK bookkeeping. Deleting
+    /// these would silently make every already-encrypted CoreData field and
+    /// photo file permanently unreadable, contradicting the explicit "local
+    /// data is preserved" contract those wipes are meant to honor for
+    /// everything else. The Secure Enclave KEK keypair itself is a
+    /// `kSecClassKey` item, not `kSecClassGenericPassword`, so it's already
+    /// untouched by `Keychain.deleteAll` regardless — only the bookkeeping
+    /// strings below (and any server KEK's raw bytes, addressed by alias,
+    /// not by these fixed account names) need explicit preservation here.
+    private static let dekBookkeepingAccounts: Set<String> = [
+        AppStorageKeys.dekWrapped,
+        AppStorageKeys.dekKekId,
+        AppStorageKeys.dekKekVersion,
+        AppStorageKeys.imageDekWrapped,
+        AppStorageKeys.imageDekKekId,
+        AppStorageKeys.imageDekKekVersion,
+    ]
+
     private func clearKeychainOnFreshInstall() {
         guard !defaults.bool(forKey: AppStorageKeys.hasLaunchedBefore) else { return }
-        Keychain.deleteAll()
+        Keychain.deleteAll(preservedAccounts: Self.dekBookkeepingAccounts)
         defaults.set(true, forKey: AppStorageKeys.hasLaunchedBefore)
     }
 
@@ -459,11 +478,15 @@ final class AppStorageManager {
         Keychain.deletePassword(for: AppStorageKeys.tokenExpiryTimestamp)
     }
 
-    /// Full logout — atomically wipes every Keychain item for this app,
-    /// then clears non-sensitive UserDefaults session flags.
+    /// Full logout — wipes every Keychain item for this app except the
+    /// wrapped DEK/KEK bookkeeping, then clears non-sensitive UserDefaults
+    /// session flags. Local CoreData (and its encrypted field values,
+    /// and encrypted photo files) is preserved so a returning user finds
+    /// their history intact AND still decryptable — wiping the DEK here
+    /// would silently make every encrypted row/photo permanently unreadable
+    /// on next login, contradicting that intent.
     func logout() {
-        // Single call removes all Keychain items — no risk of missing a key.
-        Keychain.deleteAll()
+        Keychain.deleteAll(preservedAccounts: Self.dekBookkeepingAccounts)
 
         defaults.removeObject(forKey: AppStorageKeys.isNewUser)
         clearTerminalCache()

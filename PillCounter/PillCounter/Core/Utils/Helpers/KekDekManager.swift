@@ -37,7 +37,8 @@ import CryptoKit
 import Foundation
 import Security
 
-enum KekDekError: Error {
+
+enum KekDekError: Error, Equatable {
     case keyNotFound
     case secureEnclaveKeyGenerationFailed(OSStatus)
     case malformedWrappedData
@@ -52,14 +53,19 @@ final class KekDekManager {
     private static let service = Keychain.defaultService
     private static let accessibility = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
-    /// Aliases that are backed by a Secure Enclave key pair rather than a
-    /// plain Keychain symmetric key. Currently just the device-local
-    /// bootstrap KEK — server-issued KEKs can never be SE-backed (see file
-    /// header) so they always go through the AES/Keychain path below.
-    private static let secureEnclaveAliasPrefix = "com.pillcounter.database.dek_bootstrap_kek"
+    /// Aliases backed by a Secure Enclave key pair rather than a plain
+    /// Keychain symmetric key — every `DekSlot`'s bootstrap KEK alias.
+    /// Server-issued KEKs can never be SE-backed (see file header) so they
+    /// always go through the AES/Keychain path below.
+    ///
+    /// Sourced from `DekSlot.allBootstrapAliases` rather than a hardcoded
+    /// literal so a new `DekSlot` can't silently fall through to the weaker
+    /// (non-SE) path the way the `.image` slot originally did here — adding
+    /// a slot to `DekSlot` automatically registers its bootstrap alias.
+    private static let secureEnclaveAliases: Set<String> = DekSlot.allBootstrapAliases
 
     private func isSecureEnclaveBacked(alias: String) -> Bool {
-        alias == Self.secureEnclaveAliasPrefix
+        Self.secureEnclaveAliases.contains(alias)
     }
 
     // MARK: - Public API (dispatches by alias)
@@ -163,9 +169,16 @@ final class KekDekManager {
             kSecAttrApplicationTag as String: seKeyTag(alias: alias),
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecReturnRef as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var result: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else {
+            return nil
+        }
+        // kSecMatchLimitOne + kSecReturnRef should guarantee a single SecKey,
+        // not an array — but use as? rather than force-cast so a future
+        // query change that widens the match fails safe instead of crashing.
+        guard let result, CFGetTypeID(result) == SecKeyGetTypeID() else {
             return nil
         }
         return (result as! SecKey)

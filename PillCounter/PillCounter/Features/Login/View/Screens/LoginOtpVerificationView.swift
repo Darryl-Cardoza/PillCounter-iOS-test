@@ -125,7 +125,7 @@ struct OtpVerification: View {
                 
             } label: {
                 Text(L10n.OTP.verifyButton)
-                    .foregroundColor(appColors.text)
+                    .foregroundColor(.white)
                     .fontWeight(.semibold)
                     .padding(18)
                     .padding(.horizontal)

@@ -18,6 +18,10 @@ public enum APIError: Error {
     case serverError(statusCode: Int)
     case parsingError
     case unknown(Error)
+    /// Non-2xx response whose body decoded a server-provided `message` —
+    /// carries that text verbatim so callers can show it as-is instead of
+    /// a generic status-code message.
+    case server(message: String)
 
     var localizedDescription: String {
         switch self {
@@ -43,6 +47,8 @@ public enum APIError: Error {
         case .unknown(let error):
             let format = NSLocalizedString("UNKNOWN_ERROR", comment: "API error")
             return String(format: format, error.localizedDescription)
+        case .server(let message):
+            return message
         }
     }
 }

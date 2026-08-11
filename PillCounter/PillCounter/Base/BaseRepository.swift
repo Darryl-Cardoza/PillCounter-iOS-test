@@ -7,6 +7,12 @@
 
 import Foundation
 
+// MARK: - Error body decoding
+/// Every API response (success or failure) uses the same `{ "message": ... }`
+/// envelope shape — decode just that field from an error body so callers can
+/// show the server's own text instead of a generic status-code message.
+private struct ErrorBody: Decodable { let message: String? }
+
 // MARK: - Shared session storage
 private enum SharedSession {
     static let secure: URLSession = {
@@ -102,22 +108,29 @@ extension BaseRepositoryProtocol {
                 case 401:
                     NotificationCenter.default.post(name: .unauthorizedResponseReceived, object: nil)
                     throw APIError.unauthorized
-                case 403:
-                    throw APIError.forbidden
-                case 404:
-                    throw APIError.notFound
-                case 409:
-                    throw APIError.conflict
-                case 429:
-                    // Rate-limited — never retry immediately, that only makes it worse.
-                    throw APIError.tooManyRequests
                 case 500 where attempt < maxRetries:
                     attempt += 1
                     continue
-                case 500...599:
-                    throw APIError.serverError(statusCode: httpResponse.statusCode)
                 default:
-                    throw APIError.serverError(statusCode: httpResponse.statusCode)
+                    // The body may carry a server-authored message (e.g. "Invalid OTP",
+                    // "Maximum number of logged-in devices reached...") that's more
+                    // useful to show than a generic status-code error — every
+                    // non-2xx status (403/404/409/429/5xx/etc.) prefers it when present.
+                    if let serverMessage = Self.decodedErrorMessage(from: data) {
+                        throw APIError.server(message: serverMessage)
+                    }
+                    switch httpResponse.statusCode {
+                    case 403:
+                        throw APIError.forbidden
+                    case 404:
+                        throw APIError.notFound
+                    case 409:
+                        throw APIError.conflict
+                    case 429:
+                        throw APIError.tooManyRequests
+                    default:
+                        throw APIError.serverError(statusCode: httpResponse.statusCode)
+                    }
                 }
 
             } catch let error as APIError {
@@ -136,6 +149,13 @@ extension BaseRepositoryProtocol {
         }
 
         throw APIError.serverError(statusCode: 500)
+    }
+
+    // MARK: - Error body decoding
+    private static func decodedErrorMessage(from data: Data) -> String? {
+        guard let body = try? JSONDecoder().decode(ErrorBody.self, from: data),
+              let message = body.message, !message.isEmpty else { return nil }
+        return message
     }
 
     // MARK: - Headers

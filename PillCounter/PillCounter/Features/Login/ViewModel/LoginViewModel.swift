@@ -178,6 +178,13 @@ class LoginViewModel: ObservableObject {
                 errorMessage = result.message ?? "Invalid OTP. Please try again."
             }
 
+        } catch let error as APIError {
+            isOtpVerificationSuccess = false
+            if case .server(let message) = error {
+                errorMessage = message
+            } else {
+                errorMessage = "Unable to verify OTP. Please try again."
+            }
         } catch {
             isOtpVerificationSuccess = false
             errorMessage = "Unable to verify OTP. Please try again."

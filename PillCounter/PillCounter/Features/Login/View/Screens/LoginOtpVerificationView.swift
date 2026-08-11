@@ -60,6 +60,7 @@ struct OtpVerification: View {
     @EnvironmentObject var loginViewModel: LoginViewModel
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var appColors: AppColors
+    @EnvironmentObject private var userViewModel: UserViewModel
 
     var body: some View {
         VStack(spacing: 35) {
@@ -109,11 +110,13 @@ struct OtpVerification: View {
                 
                 Task {
                     await loginViewModel.verifyOTP()
-                    
-                    // after successfull otp verification need to call the get user.
-                    // also if the user is new then directly load the profile screen to the user.
-                    
+
                     if loginViewModel.isOtpVerificationSuccess {
+                        // Go straight to the dashboard — it decides whether this
+                        // device already holds a terminal (via auth/me) on appear,
+                        // and gates to the Profile screen there if not. Awaiting
+                        // auth/me here before navigating just freezes the UI on
+                        // this screen for no benefit.
                         router.setRoot(
                             to: .authentication(
                                 .login(.dashboard(.dashboardHome))))

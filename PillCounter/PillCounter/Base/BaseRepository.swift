@@ -106,6 +106,8 @@ extension BaseRepositoryProtocol {
                     throw APIError.forbidden
                 case 404:
                     throw APIError.notFound
+                case 409:
+                    throw APIError.conflict
                 case 429:
                     // Rate-limited — never retry immediately, that only makes it worse.
                     throw APIError.tooManyRequests

@@ -168,6 +168,7 @@ struct UserTerminal: Codable {
     let terminalId: String?
     let terminalName: String?
     let isActive: Bool?
+    let deviceKey: String?
     let createdAt: String?
     let updatedAt: String?
 
@@ -175,7 +176,8 @@ struct UserTerminal: Codable {
         case terminalId = "terminal_id"
         case terminalName = "terminal_name"
         case isActive = "is_active"
-        
+        case deviceKey = "device_key"
+
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

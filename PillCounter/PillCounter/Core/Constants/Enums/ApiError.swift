@@ -13,6 +13,7 @@ public enum APIError: Error {
     case unauthorized       // 401
     case forbidden          // 403
     case notFound           // 404
+    case conflict           // 409
     case tooManyRequests    // 429
     case serverError(statusCode: Int)
     case parsingError
@@ -30,6 +31,8 @@ public enum APIError: Error {
             return NSLocalizedString("FORBIDDEN", comment: "API error")
         case .notFound:
             return NSLocalizedString("NOT_FOUND", comment: "API error")
+        case .conflict:
+            return NSLocalizedString("TERMINAL_ALREADY_CLAIMED", comment: "API error")
         case .tooManyRequests:
             return NSLocalizedString("TOO_MANY_REQUESTS", comment: "API error")
         case .serverError(let statusCode):

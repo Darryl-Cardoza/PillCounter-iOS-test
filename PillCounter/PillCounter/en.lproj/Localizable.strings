@@ -149,6 +149,8 @@
 "profile.error.errorPhoneLengthMessage" = "Phone number must be exactly 10 digits.";
 "profile.error.errorPhoneDigitsMessage" = "Phone number must contain only digits.";
 "profile.error.errorUpdateTerminalMessage" = "Failed to update terminal. Please try again.";
+"profile.error.errorTerminalAlreadyClaimedMessage" = "This terminal is already claimed by another device.";
+"profile.error.errorTerminalSelectionRequiredMessage" = "Please select a terminal to continue.";
 "profile.error.errorUpdateProfileMessage" = "Failed to update profile. Please try again.";
 "profile.error.successUpdateMessage" = "Profile updated successfully.";
 

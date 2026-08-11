@@ -67,8 +67,8 @@ struct AppNavigation: View {
                     UnsyncedTransactionView()
                         .navigationBarBackButtonHidden(true)
 
-                case .authentication(.user(.userSettings(.profile))):
-                    UserProfileScreen()
+                case .authentication(.user(.userSettings(.profile(let mustSelectTerminal)))):
+                    UserProfileScreen(mustSelectTerminal: mustSelectTerminal)
                         .navigationBarBackButtonHidden(true)
 
                 case .authentication(.user(.userSettings(.settings))):

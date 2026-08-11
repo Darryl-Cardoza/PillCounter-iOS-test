@@ -190,6 +190,8 @@ enum L10n {
             static let errorPhoneLengthMessage = NSLocalizedString("profile.error.errorPhoneLengthMessage", comment: "")
             static let errorPhoneDigitsMessage = NSLocalizedString("profile.error.errorPhoneDigitsMessage", comment: "")
             static let errorUpdateTerminalMessage = NSLocalizedString("profile.error.errorUpdateTerminalMessage", comment: "")
+            static let errorTerminalAlreadyClaimedMessage = NSLocalizedString("profile.error.errorTerminalAlreadyClaimedMessage", comment: "")
+            static let errorTerminalSelectionRequiredMessage = NSLocalizedString("profile.error.errorTerminalSelectionRequiredMessage", comment: "")
             static let errorUpdateProfileMessage = NSLocalizedString("profile.error.errorUpdateProfileMessage", comment: "")
         }
     }

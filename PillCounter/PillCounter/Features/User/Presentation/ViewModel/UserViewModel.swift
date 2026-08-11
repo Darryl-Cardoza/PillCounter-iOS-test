@@ -56,6 +56,7 @@ class UserViewModel: ObservableObject {
     @Published var terminals: [UserTerminal] = []
     @Published var selectedTerminal: UserTerminal? = nil
     @Published var pendingTerminal: UserTerminal? = nil
+    @Published var terminalErrorMessage: String? = nil
 
     // when user updates the profile successfully,
     @Published var isProfileUpdated: Bool = false
@@ -150,19 +151,24 @@ class UserViewModel: ObservableObject {
         let localUser = userID.isEmpty ? nil : userLocalDB.fetchByUserId(userID)
 
         if let localUser {
-            firstName    = localUser.fname ?? ""
-            lastName     = localUser.lname ?? ""
+            // Cached row can be blank (e.g. created before profile fields synced) —
+            // never let a blank cached field stomp values already populated in
+            // memory by an earlier successful auth/me call this session (e.g. the
+            // Dashboard's load, right before Profile re-runs this on its own appear).
+            if let fname = localUser.fname, !fname.isEmpty { firstName = fname }
+            if let lname = localUser.lname, !lname.isEmpty { lastName = lname }
             // Also set fullName here. Only the remote path (populateEditableFields)
             // was setting it, so on the common cache-served dashboard visit fullName
             // stayed "" and the header's "terminal | name" line showed a blank name.
-            fullName     = [localUser.fname, localUser.lname]
+            let cachedFullName = [localUser.fname, localUser.lname]
                 .compactMap { $0 }
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
-            email        = localUser.email ?? ""
-            pharmacyName = localUser.pharmacy_name ?? ""
-            npiID        = localUser.npi_id ?? ""
-            phoneNumber  = localUser.phone_number ?? ""
+            if !cachedFullName.isEmpty { fullName = cachedFullName }
+            if let cachedEmail = localUser.email, !cachedEmail.isEmpty { email = cachedEmail }
+            if let cachedPharmacyName = localUser.pharmacy_name, !cachedPharmacyName.isEmpty { pharmacyName = cachedPharmacyName }
+            if let cachedNpiId = localUser.npi_id, !cachedNpiId.isEmpty { npiID = cachedNpiId }
+            if let cachedPhone = localUser.phone_number, !cachedPhone.isEmpty { phoneNumber = cachedPhone }
             // Hydrate the terminal list/selection from the cached store so the
             // dropdown is populated even when we serve from local data and skip
             // the auth/me network call below.
@@ -181,11 +187,12 @@ class UserViewModel: ObservableObject {
 
         do {
             let currentAppVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+            let fcmToken = await withTimeout(seconds: 5) { await FCMManager.shared.getToken() } ?? ""
 
             let result = try await userRepo.getUser(
                 accessToken: accessToken,
                 currentAppVersion: currentAppVersion,
-                fcmToken: ""
+                fcmToken: fcmToken
             )
 
             if result.isSuccess ?? false {
@@ -227,34 +234,9 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.hl7MessageSpec = Hl7Format.fromSendingApplication(hl7MessageSpec)
                 }
 
-                let fetchedTerminals = result.data?.user?.terminals
-                    ?? result.data?.settings?.terminals
-                    ?? []
-
-                if !fetchedTerminals.isEmpty {
-                    // Fresh data from the API — replace list, cache it locally,
-                    // and always select THIS user's active terminal (don't keep
-                    // a previous user's stale selection).
-                    terminals = fetchedTerminals
-                    AppStorageManager.shared.storedTerminals = fetchedTerminals
-                    let active = fetchedTerminals.first(where: { $0.isActive == true }) ?? fetchedTerminals.first
-                    selectedTerminal = active
-                    pendingTerminal = active
-                    AppStorageManager.shared.selectedTerminalName = active?.terminalName ?? ""
-                } else {
-                    // API returned no terminals — fall back to the locally cached
-                    // list so the picker still works offline / on failure.
-                    let cached = AppStorageManager.shared.storedTerminals
-                    terminals = cached
-                    if selectedTerminal == nil {
-                        let active = cached.first(where: { $0.isActive == true }) ?? cached.first
-                        selectedTerminal = active
-                        pendingTerminal = active
-                        if let name = active?.terminalName {
-                            AppStorageManager.shared.selectedTerminalName = name
-                        }
-                    }
-                }
+                // Terminals are NOT sourced from auth/me — the dedicated
+                // GET /terminals/list endpoint (`loadTerminals()`) is the only
+                // source of truth for the Profile dropdown and its local cache.
 
                 // Keep AppStorage in sync — verifyOTP writes userId from the auth
                 // response, but getUser may return the canonical userId from the
@@ -333,19 +315,31 @@ class UserViewModel: ObservableObject {
         do {
             let trimmedFirstName = firstName.trimmingCharacters(in: .whitespaces)
             let trimmedLastName  = lastName.trimmingCharacters(in: .whitespaces)
+            let original = userProfileDetails
 
+            // PATCH /users/profile reads the body with exclude_unset — omitting a
+            // key leaves the stored value untouched, so this must be a true partial
+            // diff. Only fields the user actually edited go in; the rest are nil
+            // (omitted by JSONEncoder's encodeIfPresent), never sent as placeholders.
+            // (The old POST /users/update/profile ignored unset/blank values instead,
+            // so sending fixed placeholders for fields with no UI — avatar_url,
+            // notifications_enabled, language, timezone — was harmless there; on
+            // PATCH it would silently wipe them every save.)
             let request = UpdateUserProfileRequest(
-                fname: trimmedFirstName,
-                lname: trimmedLastName,
-                pharmacyName: pharmacyName,
-                phoneNumber: phoneNumber,
-                npiID: npiID,
+                fname: trimmedFirstName != (original?.fname ?? "") ? trimmedFirstName : nil,
+                lname: trimmedLastName != (original?.lname ?? "") ? trimmedLastName : nil,
+                pharmacyName: pharmacyName != (original?.pharmacyName ?? "") ? pharmacyName : nil,
+                phoneNumber: phoneNumber != (original?.phoneNumber ?? "") ? phoneNumber : nil,
+                npiID: npiID != (original?.npiID ?? "") ? npiID : nil,
+                // Not a UI-editable field — deliberately sent true on every save to
+                // mark the profile as complete server-side, unlike the placeholders
+                // below which have no UI and must be omitted, not overwritten.
                 isProfileComplete: true,
-                avatarURL: "",
-                notificationsEnabled: false,
-                language: "",
-                timezone: "",
-                pharmacyType: pharmacyTypeCode
+                avatarURL: nil,
+                notificationsEnabled: nil,
+                language: nil,
+                timezone: nil,
+                pharmacyType: (pharmacyTypeCode ?? "") != (original?.pharmacyType ?? "") ? pharmacyTypeCode : nil
             )
 
             // FIX: updateProfile returns UserResponse but the server may return
@@ -654,6 +648,44 @@ class UserViewModel: ObservableObject {
 
     // MARK: - UPDATE TERMINAL
 
+    /// Fetches the live, account-wide terminal list (`available_only=true`) for the
+    /// Profile dropdown — the server returns free terminals plus whichever terminal
+    /// this device already holds. Called on Profile screen appear so the picker
+    /// reflects current server state rather than the possibly-stale `auth/me` cache.
+    /// Falls back to the cached list on failure so the picker still works offline.
+    func loadTerminals() async {
+        let deviceKey = DeviceKeyProvider.shared.getDeviceKey()
+
+        do {
+            let response = try await userRepo.getTerminals(
+                availableOnly: true, deviceKey: deviceKey, accessToken: accessToken
+            )
+            guard let fetched = response.data?.terminals, !fetched.isEmpty else {
+                hydrateTerminalsFromCache()
+                return
+            }
+            terminals = fetched
+            AppStorageManager.shared.storedTerminals = fetched
+            if let held = fetched.first(where: { $0.deviceKey == deviceKey }) {
+                selectedTerminal = held
+                pendingTerminal = held
+                AppStorageManager.shared.selectedTerminalName = held.terminalName ?? ""
+            } else {
+                // Server confirms this device holds nothing — a stale local
+                // selection here would show a terminal the device no longer
+                // actually has (e.g. released elsewhere). loadTerminals() exists
+                // specifically to reflect current server-side claims, so clear
+                // rather than keep a phantom selection.
+                selectedTerminal = nil
+                pendingTerminal = nil
+                AppStorageManager.shared.selectedTerminalName = ""
+            }
+        } catch {
+            Log("❌ Failed to load terminals: \(error)")
+            hydrateTerminalsFromCache()
+        }
+    }
+
     /// Populates the in-memory terminal list/selection from the locally cached
     /// store. Used when serving the profile from local data (no auth/me call),
     /// so the dropdown still shows the list and the current selection.
@@ -662,13 +694,16 @@ class UserViewModel: ObservableObject {
         guard !cached.isEmpty else { return }
         terminals = cached
 
+        // Ownership match: deviceKey first (source of truth), then the previously
+        // persisted terminal name as a fallback when the cached list predates the
+        // device_key field. Never falls back to `isActive` — see getUser().
+        let deviceKey = DeviceKeyProvider.shared.getDeviceKey()
         let storedName = AppStorageManager.shared.selectedTerminalName
-        let active = cached.first(where: { $0.terminalName == storedName && !storedName.isEmpty })
-            ?? cached.first(where: { $0.isActive == true })
-            ?? cached.first
+        let held = cached.first(where: { $0.deviceKey == deviceKey })
+            ?? cached.first(where: { $0.terminalName == storedName && !storedName.isEmpty })
 
-        if selectedTerminal == nil { selectedTerminal = active }
-        if pendingTerminal == nil { pendingTerminal = active }
+        if selectedTerminal == nil { selectedTerminal = held }
+        if pendingTerminal == nil { pendingTerminal = held }
     }
 
     /// UI-only selection — no API call; persisted on Save.
@@ -681,39 +716,76 @@ class UserViewModel: ObservableObject {
               let terminalName = terminal.terminalName else { return false }
 
         isLoading = true
+        terminalErrorMessage = nil
         defer { isLoading = false }
 
+        let deviceKey = DeviceKeyProvider.shared.getDeviceKey()
+
         do {
+            // Re-fetch the live terminal list right before claiming rather than
+            // trusting the possibly-stale in-memory copy, so a claim decision is
+            // never made against data another device changed in the meantime.
+            // A failed re-fetch must abort the claim rather than fall through to
+            // the stale in-memory list — deciding "already held" / "not held" on
+            // stale data can silently mis-set the local selection with no server
+            // call and no error surfaced to the user.
+            guard let liveList = try? await userRepo.getTerminals(
+                availableOnly: true, deviceKey: deviceKey, accessToken: accessToken
+            ), let fresh = liveList.data?.terminals else {
+                terminalErrorMessage = L10n.Profile.Error.errorUpdateTerminalMessage
+                return false
+            }
+            terminals = fresh
+            AppStorageManager.shared.storedTerminals = fresh
+
+            let heldTerminalId = terminals.first(where: { $0.deviceKey == deviceKey })?.terminalId
+            guard heldTerminalId != terminalId else {
+                // Already holds this terminal — nothing to claim.
+                selectedTerminal = terminal
+                pendingTerminal = terminal
+                return true
+            }
+
             let response = try await userRepo.updateTerminal(
                 terminalId: terminalId,
                 terminalName: terminalName,
                 isActive: true,
+                deviceKey: deviceKey,
                 accessToken: accessToken
             )
             if response.isSuccess ?? false {
                 selectedTerminal = terminal
                 pendingTerminal = terminal
                 AppStorageManager.shared.selectedTerminalName = terminalName
-                // Keep the cached list's active flag in sync with the new selection.
-                terminals = terminals.map {
-                    UserTerminal(
-                        terminalId: $0.terminalId,
-                        terminalName: $0.terminalName,
-                        isActive: $0.terminalId == terminalId,
-                        createdAt: $0.createdAt,
-                        updatedAt: $0.updatedAt
-                    )
+                // Re-fetch the live list rather than guessing the new ownership
+                // state locally — the server, not this client, transferred the
+                // claim (old terminal released, new one held), so re-reading it
+                // is the only way to guarantee the local cache matches truth.
+                if let liveList = try? await userRepo.getTerminals(
+                    availableOnly: true, deviceKey: deviceKey, accessToken: accessToken
+                ), let fresh = liveList.data?.terminals {
+                    terminals = fresh
+                    AppStorageManager.shared.storedTerminals = fresh
+                } else {
+                    // Claim itself succeeded server-side, but this client's cached
+                    // `terminals` is now stale relative to `selectedTerminal` until
+                    // the next `loadTerminals()` call. Log so the divergence is
+                    // diagnosable instead of failing invisibly.
+                    Log("⚠️ [updateTerminal] Claim succeeded but post-claim terminal re-fetch failed — local terminals list is stale")
                 }
-                AppStorageManager.shared.storedTerminals = terminals
                 return true
             }
             return false
+        } catch APIError.conflict {
+            terminalErrorMessage = L10n.Profile.Error.errorTerminalAlreadyClaimedMessage
+            return false
         } catch {
             print("Failed to update terminal: \(error)")
+            terminalErrorMessage = L10n.Profile.Error.errorUpdateTerminalMessage
             return false
         }
     }
-    
+
     func getBatchesByDate(startDate: Date, endDate: Date) async {
 //        guard let user = userLocalDB.fetchByUserId( userID) else {
 //            await MainActor.run { self.filteredBatchesOfUserByDate = [] }

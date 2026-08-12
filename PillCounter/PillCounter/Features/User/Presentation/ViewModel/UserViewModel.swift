@@ -80,6 +80,17 @@ class UserViewModel: ObservableObject {
     // MARK: - Keychain-backed convenience
     private var accessToken: String { AppStorageManager.shared.accessToken ?? "" }
 
+    /// True when PMS is integrated for this account and no terminal in the
+    /// server's list is claimed by this device's key yet — the post-login
+    /// gate (`UserProfileScreen(mustSelectTerminal: true)`) should force a
+    /// claim before the dashboard is reachable. Call after `loadTerminals()`
+    /// so `terminals` reflects the live server state, not a stale cache.
+    var needsTerminalSelection: Bool {
+        guard AppStorageManager.shared.isPmsIntegrated else { return false }
+        let deviceKey = DeviceKeyProvider.shared.getDeviceKey()
+        return !terminals.contains { $0.deviceKey == deviceKey }
+    }
+
     private var userID: String {
         get { AppStorageManager.shared.userId ?? "" }
         set { AppStorageManager.shared.userId = newValue }

@@ -30,6 +30,11 @@ struct DashboardView: View {
     @State private var showFeatureUnavailablePopup: Bool = false
     @State private var selectedQueueTab: Int = 0  // 0 = Today's Queue, 1 = Recent Activity
 
+    // Guards the new-user redirect to fire once per appearance, not on every
+    // subsequent onAppear (e.g. returning from a pushed screen).
+    @State private var hasCheckedNewUser: Bool = false
+    private var isNewUser: Bool { AppStorageManager.shared.isNewUser }
+
     // Bucket-picker state is local to this screen's popup. The chosen bucket is
     // handed to the stock-count flow via the navigation route, so the dashboard
     // needs no stock-count or pill-scan view model.
@@ -557,6 +562,28 @@ struct DashboardView: View {
     // MARK: - Lifecycle
 
     private func onAppear() {
+        if !hasCheckedNewUser {
+            hasCheckedNewUser = true
+            Task {
+                // Live terminal list is required to know whether this device
+                // already holds a claim — the cached list can be stale (another
+                // device may have released/claimed since last sync).
+                await userViewModel.loadTerminals()
+                if userViewModel.needsTerminalSelection {
+                    router.navigate(to: .authentication(.user(.userSettings(.profile(mustSelectTerminal: true)))))
+                } else if isNewUser {
+                    router.navigate(to: .authentication(.user(.userSettings(.profile(mustSelectTerminal: false)))))
+                } else {
+                    startDashboardLoad()
+                }
+            }
+            return
+        }
+
+        startDashboardLoad()
+    }
+
+    private func startDashboardLoad() {
         Task {
             // Only hit auth/me when the token was actually refreshed; otherwise
             // serve user data from the local cache to avoid an API call on every visit.

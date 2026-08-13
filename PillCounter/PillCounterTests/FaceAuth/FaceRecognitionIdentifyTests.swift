@@ -114,8 +114,12 @@ struct FaceRecognitionIdentifyTests {
 
     @Test func loadActiveEnrollmentsSkipsUsersWithNoEmbeddings() {
         let repo = FaceRecognitionRepository.shared
-        let userWithEmbeddings = repo.registerUser(name: "Has Embeddings \(UUID().uuidString.prefix(8))")
-        let userWithoutEmbeddings = repo.registerUser(name: "No Embeddings \(UUID().uuidString.prefix(8))")
+        let userWithEmbeddings = repo.registerUser(
+            firstName: "Has", lastName: "Embeddings \(UUID().uuidString.prefix(8))"
+        )
+        let userWithoutEmbeddings = repo.registerUser(
+            firstName: "No", lastName: "Embeddings \(UUID().uuidString.prefix(8))"
+        )
         guard let idWith = userWithEmbeddings.id, let idWithout = userWithoutEmbeddings.id else {
             Issue.record("expected user ids")
             return

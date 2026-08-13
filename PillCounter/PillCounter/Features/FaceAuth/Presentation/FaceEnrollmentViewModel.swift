@@ -26,7 +26,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
     // MARK: - Published UI state
 
-    @Published var name: String = ""
+    @Published var firstName: String = ""
+    @Published var lastName: String = ""
     @Published var state: EnrollmentState = .idle
     /// Coarse yaw estimate of the current best candidate, drives the
     /// on-screen oval nudge (e.g. "turn a bit more").
@@ -92,12 +93,20 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
     // MARK: - Name validation (spec section 1)
 
+    var trimmedFirstName: String {
+        firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedLastName: String {
+        lastName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var trimmedName: String {
-        name.trimmingCharacters(in: .whitespacesAndNewlines)
+        "\(trimmedFirstName) \(trimmedLastName)"
     }
 
     var isNameValid: Bool {
-        !trimmedName.isEmpty
+        !trimmedFirstName.isEmpty && !trimmedLastName.isEmpty
     }
 
     func validateNameBeforeStarting() -> Bool {
@@ -123,7 +132,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         resetQualityThresholds()
         state = .preparing
 
-        let user = repository.registerUser(name: trimmedName)
+        let user = repository.registerUser(firstName: trimmedFirstName, lastName: trimmedLastName)
         guard let userId = user.id else {
             state = .failed(.storageError)
             return
@@ -183,6 +192,14 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
         let quality = qualityChecker.check(detection: detections[0], pixelBuffer: pixelBuffer)
         guard quality.isAcceptable else {
+            evaluateStepDeadlines(sawUsableFrame: false)
+            return
+        }
+
+        // Strict completeness gate — runs after the existing box/sharpness
+        // check, before this frame is eligible as a capture candidate. See
+        // FaceCaptureValidator.swift for what this catches and why.
+        guard FaceCaptureValidator.isFaceCaptureValid(face: detections[0], frame: pixelBuffer) == nil else {
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }

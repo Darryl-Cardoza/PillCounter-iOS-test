@@ -30,13 +30,18 @@ struct PillCounterApp: App {
     @StateObject private var stockCountViewModel = StockCountViewModel()
     @StateObject private var historyViewModel = HistoryViewModel()
     @StateObject private var toastManager = ToastManager.shared
+    @ObservedObject private var faceSessionManager = FaceSessionManager.shared
 
     private let isCompromised: Bool
 
     init() {
         _ = CoreDataManager.shared
         NSManagedObject.installEncryptionHooks()
-        
+
+        // Cold launch (app was fully closed, now reopened) always requires a
+        // fresh face scan — never resume a session from a prior process.
+        FaceSessionManager.shared.lockOnColdLaunch()
+
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised
 
@@ -85,6 +90,11 @@ struct PillCounterApp: App {
                             .environmentObject(historyViewModel)
                             .environmentObject(toastManager)
                             .environmentObject(sessionManager)
+                            .environmentObject(faceSessionManager)
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in faceSessionManager.recordActivity() }
+                            )
                             .onAppear { startSecurityMonitoring() }
                             .onChange(of: sessionManager.isSessionExpired) { _, expired in
                                 if expired {
@@ -149,7 +159,15 @@ struct PillCounterApp: App {
                             }
                             .animation(.easeInOut, value: toastManager.isShowing)
                         }
+
+                        if faceSessionManager.isOverlayVisible {
+                            SessionLockOverlay()
+                                .environmentObject(appColors)
+                                .transition(.opacity)
+                                .zIndex(1000)
+                        }
                     }
+                    .animation(.easeInOut(duration: 0.2), value: faceSessionManager.isOverlayVisible)
                 }
             }
             .overlay(
@@ -208,6 +226,7 @@ extension PillCounterApp {
             //Apply the overlay before iOS takes the snapshot.
             isObscured = true
             SecurityMonitor.shared.stopMonitoring()
+            faceSessionManager.lockOnBackground()
 
         case .inactive:
             break

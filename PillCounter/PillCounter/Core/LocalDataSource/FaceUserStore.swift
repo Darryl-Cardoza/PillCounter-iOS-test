@@ -19,12 +19,16 @@ final class FaceUserStore {
     // MARK: - Create
 
     /// Inserts a new active FaceUser. Caller is responsible for uniqueness
-    /// checks (see `isNameTaken`) before calling this.
+    /// checks (see `isNameTaken`) before calling this. `name` stays the
+    /// combined "First Last" display value that the rest of Core (embedding
+    /// lookups, authentication welcome text) already reads.
     @discardableResult
-    func insertUser(id: String, name: String) -> FaceUserEntity {
+    func insertUser(id: String, firstName: String, lastName: String) -> FaceUserEntity {
         let entity = FaceUserEntity(context: context)
         entity.id = id
-        entity.name = name
+        entity.first_name = firstName
+        entity.last_name = lastName
+        entity.name = "\(firstName) \(lastName)"
         entity.created_at = Date()
         entity.updated_at = Date()
         entity.is_active = true
@@ -66,6 +70,22 @@ final class FaceUserStore {
         guard let user = getUser(id: id) else { return }
         user.is_active = false
         user.updated_at = Date()
+        CoreDataManager.shared.save(context: context)
+    }
+
+    func activateUser(id: String) {
+        guard let user = getUser(id: id) else { return }
+        user.is_active = true
+        user.updated_at = Date()
+        CoreDataManager.shared.save(context: context)
+    }
+
+    /// Stamps the user as the current session owner. Called on every
+    /// successful face match (session unlock), independent of `updated_at`
+    /// which tracks record edits (name/active-state changes), not usage.
+    func updateLastAuthenticatedAt(id: String, date: Date = Date()) {
+        guard let user = getUser(id: id) else { return }
+        user.last_authenticated_at = date
         CoreDataManager.shared.save(context: context)
     }
 

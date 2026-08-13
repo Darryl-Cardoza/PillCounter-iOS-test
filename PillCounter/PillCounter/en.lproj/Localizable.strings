@@ -132,6 +132,7 @@
 "menu.toast.noLastBatchFound" = "No last batch found";
 "menu.featureNotAvailableTitle" = "Feature Not Available";
 "menu.featureNotAvailableMessage" = "This feature is not available for your account.";
+"menu.quickAccessUsers" = "Quick Access Users";
 
 
 // MARK: - PROFILE
@@ -191,18 +192,32 @@
 "settings.addUser" = "Add User";
 "settings.quickAccess" = "Quick Access";
 "settings.timeLimit" = "Time Limit";
+"settings.timeLimitScreenTitle" = "Session Lock Timeout";
+"settings.faceSessionTimeout30s" = "30 Seconds";
+"settings.faceSessionTimeout1m" = "1 Minute (Default)";
+"settings.faceSessionTimeout2m" = "2 Minutes";
+"settings.faceSessionTimeout5m" = "5 Minutes";
 
 "faceAuth.enrollmentTitle" = "Add New User";
+"faceAuth.setupIntroTitle" = "Setup Quick Access";
+"faceAuth.setupIntroSubtitle" = "Sign in hands-free — register your face and badge, no passwords to type at check-in.";
+"faceAuth.getStarted" = "Get Started";
+"faceAuth.firstNameFieldPlaceholder" = "First Name";
+"faceAuth.lastNameFieldPlaceholder" = "Last Name";
+"faceAuth.whatsYourName" = "What's your name?";
+"faceAuth.whatsYourNameSubtitle" = "This creates your face profile for Quick Access.";
+"faceAuth.continueButton" = "Continue";
 "faceAuth.nameFieldPlaceholder" = "Enter name";
 "faceAuth.startEnrollment" = "Start Enrollment";
 "faceAuth.cancel" = "Cancel";
 "faceAuth.done" = "Done";
-"faceAuth.nameEmptyError" = "Please enter a name.";
+"faceAuth.nameEmptyError" = "Please enter your first and last name.";
 "faceAuth.nameDuplicateError" = "A user with this name already exists.";
 
 "faceAuth.instructionIdle" = "Enter a name to begin.";
 "faceAuth.instructionPreparing" = "Preparing camera…";
 "faceAuth.instructionComplete" = "All done! Face enrolled successfully.";
+"faceAuth.enrollmentSuccessTitle" = "%@ added successfully";
 
 "faceAuth.poseCenter" = "Center your face in the oval";
 "faceAuth.poseTurnLeft" = "Slowly turn your head left";
@@ -245,6 +260,23 @@
 "faceAuth.registeredUsersDelete" = "Delete";
 "faceAuth.registeredUsersDeleteConfirmTitle" = "Delete Face Enrollment";
 "faceAuth.registeredUsersDeleteConfirmMessage" = "This removes all stored face data for this user. They will need to re-enroll to use Quick Access again.";
+
+"faceAuth.quickAccessUsersTitle" = "Quick Access Users";
+"faceAuth.quickAccessUsersEmpty" = "No users added yet.";
+"faceAuth.quickAccessUsersLastUsed" = "Last used %@";
+"faceAuth.quickAccessUsersAddUser" = "Add User";
+"faceAuth.quickAccessUsersDeleteTitle" = "Delete User";
+"faceAuth.quickAccessUsersDeleteMessage" = "This will remove the selected user(s) from Quick Access. They will need to re-enroll to use Quick Access again.";
+
+"faceAuth.sessionLockedTitle" = "Session Locked";
+"faceAuth.sessionLockedSubtitle" = "For your security, scan your face to continue.";
+"faceAuth.sessionIdleMinutes" = "Idle for %d min.\nVerify your face to pick up where you left off.";
+"faceAuth.sessionIdleSeconds" = "Idle for %d sec.\nVerify your face to pick up where you left off.";
+"faceAuth.sessionLockedUnlockButton" = "Scan Face to Unlock";
+"faceAuth.sessionWelcomeBack" = "Welcome back, %@";
+"faceAuth.sessionRestoring" = "Restoring your session...";
+"faceAuth.sessionFailedTitle" = "We couldn't recognize you";
+"faceAuth.sessionFailedSubtitle" = "Please make sure your face is clearly visible and try again.";
 
 
 // MARK: - CAMERA PERMISSION

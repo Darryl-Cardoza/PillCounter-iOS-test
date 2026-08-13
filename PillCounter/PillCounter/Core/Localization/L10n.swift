@@ -161,6 +161,7 @@ enum L10n {
         static let noLastBatchFound = NSLocalizedString("menu.toast.noLastBatchFound", comment: "")
         static let featureNotAvailableTitle = NSLocalizedString("menu.featureNotAvailableTitle", comment: "")
         static let featureNotAvailableMessage = NSLocalizedString("menu.featureNotAvailableMessage", comment: "")
+        static let quickAccessUsers = NSLocalizedString("menu.quickAccessUsers", comment: "")
 
         enum HistoryDuration {
             static let month = NSLocalizedString("menu.history.duration.month", comment: "")
@@ -234,11 +235,24 @@ enum L10n {
         static let addUser = NSLocalizedString("settings.addUser", comment: "")
         static let quickAccess = NSLocalizedString("settings.quickAccess", comment: "")
         static let timeLimit = NSLocalizedString("settings.timeLimit", comment: "")
+        static let timeLimitScreenTitle = NSLocalizedString("settings.timeLimitScreenTitle", comment: "")
+        static let faceSessionTimeout30s = NSLocalizedString("settings.faceSessionTimeout30s", comment: "")
+        static let faceSessionTimeout1m = NSLocalizedString("settings.faceSessionTimeout1m", comment: "")
+        static let faceSessionTimeout2m = NSLocalizedString("settings.faceSessionTimeout2m", comment: "")
+        static let faceSessionTimeout5m = NSLocalizedString("settings.faceSessionTimeout5m", comment: "")
     }
 
     // MARK: - Face Enrollment
     enum FaceAuth {
         static let enrollmentTitle = NSLocalizedString("faceAuth.enrollmentTitle", comment: "")
+        static let setupIntroTitle = NSLocalizedString("faceAuth.setupIntroTitle", comment: "")
+        static let setupIntroSubtitle = NSLocalizedString("faceAuth.setupIntroSubtitle", comment: "")
+        static let getStarted = NSLocalizedString("faceAuth.getStarted", comment: "")
+        static let firstNameFieldPlaceholder = NSLocalizedString("faceAuth.firstNameFieldPlaceholder", comment: "")
+        static let lastNameFieldPlaceholder = NSLocalizedString("faceAuth.lastNameFieldPlaceholder", comment: "")
+        static let whatsYourName = NSLocalizedString("faceAuth.whatsYourName", comment: "")
+        static let whatsYourNameSubtitle = NSLocalizedString("faceAuth.whatsYourNameSubtitle", comment: "")
+        static let continueButton = NSLocalizedString("faceAuth.continueButton", comment: "")
         static let nameFieldPlaceholder = NSLocalizedString("faceAuth.nameFieldPlaceholder", comment: "")
         static let startEnrollment = NSLocalizedString("faceAuth.startEnrollment", comment: "")
         static let cancel = NSLocalizedString("faceAuth.cancel", comment: "")
@@ -249,6 +263,7 @@ enum L10n {
         static let instructionIdle = NSLocalizedString("faceAuth.instructionIdle", comment: "")
         static let instructionPreparing = NSLocalizedString("faceAuth.instructionPreparing", comment: "")
         static let instructionComplete = NSLocalizedString("faceAuth.instructionComplete", comment: "")
+        static let enrollmentSuccessTitle = NSLocalizedString("faceAuth.enrollmentSuccessTitle", comment: "")
 
         static let poseCenter = NSLocalizedString("faceAuth.poseCenter", comment: "")
         static let poseTurnLeft = NSLocalizedString("faceAuth.poseTurnLeft", comment: "")
@@ -293,6 +308,25 @@ enum L10n {
         static let registeredUsersDelete = NSLocalizedString("faceAuth.registeredUsersDelete", comment: "")
         static let registeredUsersDeleteConfirmTitle = NSLocalizedString("faceAuth.registeredUsersDeleteConfirmTitle", comment: "")
         static let registeredUsersDeleteConfirmMessage = NSLocalizedString("faceAuth.registeredUsersDeleteConfirmMessage", comment: "")
+
+        // Quick Access Users (hamburger menu)
+        static let quickAccessUsersTitle = NSLocalizedString("faceAuth.quickAccessUsersTitle", comment: "")
+        static let quickAccessUsersEmpty = NSLocalizedString("faceAuth.quickAccessUsersEmpty", comment: "")
+        static let quickAccessUsersLastUsed = NSLocalizedString("faceAuth.quickAccessUsersLastUsed", comment: "")
+        static let quickAccessUsersAddUser = NSLocalizedString("faceAuth.quickAccessUsersAddUser", comment: "")
+        static let quickAccessUsersDeleteTitle = NSLocalizedString("faceAuth.quickAccessUsersDeleteTitle", comment: "")
+        static let quickAccessUsersDeleteMessage = NSLocalizedString("faceAuth.quickAccessUsersDeleteMessage", comment: "")
+
+        // Session lock overlay
+        static let sessionLockedTitle = NSLocalizedString("faceAuth.sessionLockedTitle", comment: "")
+        static let sessionLockedSubtitle = NSLocalizedString("faceAuth.sessionLockedSubtitle", comment: "")
+        static let sessionIdleMinutes = NSLocalizedString("faceAuth.sessionIdleMinutes", comment: "")
+        static let sessionIdleSeconds = NSLocalizedString("faceAuth.sessionIdleSeconds", comment: "")
+        static let sessionLockedUnlockButton = NSLocalizedString("faceAuth.sessionLockedUnlockButton", comment: "")
+        static let sessionWelcomeBack = NSLocalizedString("faceAuth.sessionWelcomeBack", comment: "")
+        static let sessionRestoring = NSLocalizedString("faceAuth.sessionRestoring", comment: "")
+        static let sessionFailedTitle = NSLocalizedString("faceAuth.sessionFailedTitle", comment: "")
+        static let sessionFailedSubtitle = NSLocalizedString("faceAuth.sessionFailedSubtitle", comment: "")
     }
 
     // MARK: - Unsynced Transactions

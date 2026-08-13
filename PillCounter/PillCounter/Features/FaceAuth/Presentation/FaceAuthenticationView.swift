@@ -13,7 +13,12 @@ import SwiftUI
 
 struct FaceAuthenticationView: View {
 
-    @StateObject private var viewModel = FaceAuthenticationViewModel()
+    @StateObject private var viewModel: FaceAuthenticationViewModel
+    /// Same instance as viewModel.cameraService — observed separately so
+    /// SwiftUI re-renders (and re-runs updateUIView on the preview) when
+    /// `cameraPosition` changes on flip. See FaceEnrollmentView for why
+    /// viewModel itself can't be relied on to republish this.
+    @ObservedObject private var cameraService: FaceEnrollmentCameraService
     @EnvironmentObject private var appColors: AppColors
     @Environment(\.dismiss) private var dismiss
 
@@ -23,6 +28,13 @@ struct FaceAuthenticationView: View {
     /// this view stays a plain, reusable "scan and report" screen.
     var onAuthenticated: ((_ userId: String, _ userName: String) -> Void)?
 
+    init(onAuthenticated: ((_ userId: String, _ userName: String) -> Void)? = nil) {
+        self.onAuthenticated = onAuthenticated
+        let vm = FaceAuthenticationViewModel()
+        _viewModel = StateObject(wrappedValue: vm)
+        _cameraService = ObservedObject(wrappedValue: vm.cameraService)
+    }
+
     var body: some View {
         VStack(spacing: 20) {
             Text(L10n.FaceAuth.authTitle)
@@ -30,7 +42,10 @@ struct FaceAuthenticationView: View {
                 .foregroundStyle(appColors.text)
 
             ZStack {
-                FaceEnrollmentCameraPreview(session: viewModel.cameraService.previewSession)
+                FaceEnrollmentCameraPreview(
+                    session: cameraService.previewSession,
+                    cameraPosition: cameraService.cameraPosition
+                )
                     .aspectRatio(3/4, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
@@ -59,12 +74,17 @@ struct FaceAuthenticationView: View {
         .padding()
         .background(appColors.secondaryBackground)
         .onAppear {
+            // See FaceEnrollmentView — same reasoning: fixed orientation
+            // during capture keeps the camera buffer's geometry consistent
+            // with what enrollment produced, so alignment/embeddings match.
+            OrientationLock.shared.lockForFaceCapture()
             viewModel.onAuthenticated = { userId, userName in
                 onAuthenticated?(userId, userName)
             }
             viewModel.startAuthentication()
         }
         .onDisappear {
+            OrientationLock.shared.unlock()
             viewModel.stopAuthentication()
         }
     }

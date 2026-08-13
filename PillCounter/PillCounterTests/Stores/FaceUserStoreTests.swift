@@ -12,12 +12,24 @@ import Testing
 @Suite(.serialized)
 struct FaceUserStoreTests {
 
+    /// `insertUser` takes first/last name separately and derives
+    /// `name = "\(firstName) \(lastName)"`. These tests assert against the
+    /// combined value, so split on the first space to reconstruct exactly the
+    /// string the store will build.
+    @discardableResult
+    private static func insert(id: String, name: String) -> FaceUserEntity {
+        let parts = name.split(separator: " ", maxSplits: 1).map(String.init)
+        return FaceUserStore.shared.insertUser(
+            id: id, firstName: parts[0], lastName: parts.count > 1 ? parts[1] : ""
+        )
+    }
+
     @Test func insertUserPersistsAndFetchesById() {
         let id = UUID().uuidString
         let name = "Test User \(id.prefix(8))"
         defer { FaceUserStore.shared.deleteUser(id: id) }
 
-        FaceUserStore.shared.insertUser(id: id, name: name)
+        Self.insert(id: id, name: name)
 
         let fetched = FaceUserStore.shared.getUser(id: id)
         #expect(fetched?.name == name)
@@ -31,7 +43,7 @@ struct FaceUserStoreTests {
 
         #expect(FaceUserStore.shared.isNameTaken(name) == false)
 
-        FaceUserStore.shared.insertUser(id: id, name: name)
+        Self.insert(id: id, name: name)
 
         #expect(FaceUserStore.shared.isNameTaken(name) == true)
         #expect(FaceUserStore.shared.isNameTaken(name.uppercased()) == true)
@@ -42,7 +54,7 @@ struct FaceUserStoreTests {
         let name = "Deactivate Me \(id.prefix(8))"
         defer { FaceUserStore.shared.deleteUser(id: id) }
 
-        FaceUserStore.shared.insertUser(id: id, name: name)
+        Self.insert(id: id, name: name)
         #expect(FaceUserStore.shared.isNameTaken(name) == true)
 
         FaceUserStore.shared.deactivateUser(id: id)
@@ -53,7 +65,7 @@ struct FaceUserStoreTests {
 
     @Test func deleteUserRemovesRow() {
         let id = UUID().uuidString
-        FaceUserStore.shared.insertUser(id: id, name: "Delete Me")
+        Self.insert(id: id, name: "Delete Me")
 
         FaceUserStore.shared.deleteUser(id: id)
 

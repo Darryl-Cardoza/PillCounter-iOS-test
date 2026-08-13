@@ -25,6 +25,7 @@ struct UserSettingsView: View {
     @State private var showAddFaceUser: Bool = false
     @State private var showQuickAccess: Bool = false
     @State private var showRegisteredFaces: Bool = false
+    @State private var showTimeLimitPicker: Bool = false
 
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
@@ -89,6 +90,10 @@ struct UserSettingsView: View {
                 FaceRegisteredUsersView()
                     .environmentObject(appColors)
             }
+        }
+        .sheet(isPresented: $showTimeLimitPicker) {
+            FaceSessionTimeoutPickerView(settingsViewModel: settingsViewModel)
+                .environmentObject(appColors)
         }
         .onAppear {
             // PMS off → the gated features are unavailable; reset them to their
@@ -501,7 +506,12 @@ struct UserSettingsView: View {
                 faceRecognitionRow(title: L10n.Settings.quickAccess) {
                     showQuickAccess = true
                 }
-                faceRecognitionRow(title: L10n.Settings.timeLimit)
+                faceRecognitionRow(
+                    title: L10n.Settings.timeLimit,
+                    value: settingsViewModel.faceSessionTimeoutOption.displayText
+                ) {
+                    showTimeLimitPicker = true
+                }
                 faceRecognitionRow(title: L10n.FaceAuth.registeredUsersTitle) {
                     showRegisteredFaces = true
                 }
@@ -514,11 +524,16 @@ struct UserSettingsView: View {
         .background(appColors.primaryBackground)
     }
 
-    private func faceRecognitionRow(title: String, onTap: (() -> Void)? = nil) -> some View {
+    private func faceRecognitionRow(title: String, value: String? = nil, onTap: (() -> Void)? = nil) -> some View {
         HStack {
             Text(title)
                 .foregroundColor(appColors.text)
             Spacer()
+            if let value {
+                Text(value)
+                    .foregroundColor(appColors.text.opacity(0.6))
+                    .padding(.trailing, 30)
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }

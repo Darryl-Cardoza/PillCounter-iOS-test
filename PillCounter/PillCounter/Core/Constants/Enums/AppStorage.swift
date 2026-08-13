@@ -87,6 +87,9 @@ final class AppStorageManager {
         static let pillCountRingOffsetY = "pill_count_ring_offset_y"
         static let selectedPharmacyType = "selected_pharmacy_type"
         static let pharmacyTypeOptions  = "pharmacy_type_options"
+        static let faceLockCurrentUserId   = "face_lock_current_user_id"
+        static let faceLockCurrentUserName = "face_lock_current_user_name"
+        static let faceSessionTimeoutOption = "face_session_timeout_option"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -349,6 +352,17 @@ final class AppStorageManager {
         set { defaults.setValue(newValue.rawValue, forKey: AppStorageKeys.saveHistoryOption) }
     }
 
+    /// Session-lock idle timeout, editable under Settings > Face Recognition
+    /// > Time Limit. Read by FaceSessionManager to configure its idle timer.
+    var faceSessionTimeoutOption: FaceSessionTimeoutOption {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.faceSessionTimeoutOption) != nil else { return .default }
+            let raw = defaults.integer(forKey: AppStorageKeys.faceSessionTimeoutOption)
+            return FaceSessionTimeoutOption(rawValue: raw) ?? .default
+        }
+        set { defaults.setValue(newValue.rawValue, forKey: AppStorageKeys.faceSessionTimeoutOption) }
+    }
+
     var selectedTerminalName: String {
         get {
             defaults.string(forKey: AppStorageKeys.selectedTerminalName) ?? ""
@@ -419,6 +433,20 @@ final class AppStorageManager {
             let data = try? JSONEncoder().encode(newValue)
             defaults.setValue(data, forKey: AppStorageKeys.pharmacyTypeOptions)
         }
+    }
+
+    /// Last session-lock owner, persisted so the owner's name/id survive an
+    /// app relaunch for display purposes (e.g. "last used" attribution). This
+    /// does NOT bypass the lock screen — cold launch always re-locks
+    /// regardless of these values (see FaceSessionManager.lockOnColdLaunch).
+    var faceLockCurrentUserId: String? {
+        get { defaults.string(forKey: AppStorageKeys.faceLockCurrentUserId) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.faceLockCurrentUserId) }
+    }
+
+    var faceLockCurrentUserName: String? {
+        get { defaults.string(forKey: AppStorageKeys.faceLockCurrentUserName) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.faceLockCurrentUserName) }
     }
 
     /// Clears the cached terminal list + selected terminal name.

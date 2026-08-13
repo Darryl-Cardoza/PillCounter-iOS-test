@@ -22,7 +22,7 @@ struct RegisteredUserEmbeddings {
 
 protocol FaceRecognitionRepositoryProtocol {
     func isNameTaken(_ name: String) -> Bool
-    func registerUser(name: String) -> FaceUserEntity
+    func registerUser(firstName: String, lastName: String) -> FaceUserEntity
     func generateEnrollmentEmbedding(
         pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, qualityScore: Float
     ) -> FaceEmbedding?
@@ -91,8 +91,8 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
         userStore.isNameTaken(name)
     }
 
-    func registerUser(name: String) -> FaceUserEntity {
-        userStore.insertUser(id: UUID().uuidString, name: name)
+    func registerUser(firstName: String, lastName: String) -> FaceUserEntity {
+        userStore.insertUser(id: UUID().uuidString, firstName: firstName, lastName: lastName)
     }
 
     func deleteUser(id: String) {

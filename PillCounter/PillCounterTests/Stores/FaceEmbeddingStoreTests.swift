@@ -15,7 +15,7 @@ struct FaceEmbeddingStoreTests {
             FaceEmbeddingStore.shared.deleteEmbeddingsForUser(userId: userId)
             FaceUserStore.shared.deleteUser(id: userId)
         }
-        FaceUserStore.shared.insertUser(id: userId, name: "Embedding Owner")
+        FaceUserStore.shared.insertUser(id: userId, firstName: "Embedding", lastName: "Owner")
 
         let embedding = FaceEmbedding(vector: [0.1, 0.2, 0.3], qualityScore: 0.9)
         FaceEmbeddingStore.shared.insertEmbedding(
@@ -34,7 +34,7 @@ struct FaceEmbeddingStoreTests {
             FaceEmbeddingStore.shared.deleteEmbeddingsForUser(userId: userId)
             FaceUserStore.shared.deleteUser(id: userId)
         }
-        FaceUserStore.shared.insertUser(id: userId, name: "Multi Embedding Owner")
+        FaceUserStore.shared.insertUser(id: userId, firstName: "Multi", lastName: "Embedding Owner")
 
         for i in 0..<5 {
             let embedding = FaceEmbedding(vector: [Float(i), Float(i) + 1], qualityScore: Float(i) / 5)
@@ -56,8 +56,8 @@ struct FaceEmbeddingStoreTests {
             FaceUserStore.shared.deleteUser(id: userA)
             FaceUserStore.shared.deleteUser(id: userB)
         }
-        FaceUserStore.shared.insertUser(id: userA, name: "A")
-        FaceUserStore.shared.insertUser(id: userB, name: "B")
+        FaceUserStore.shared.insertUser(id: userA, firstName: "A", lastName: "User")
+        FaceUserStore.shared.insertUser(id: userB, firstName: "B", lastName: "User")
 
         let embedding = FaceEmbedding(vector: [1, 2, 3], qualityScore: 1)
         FaceEmbeddingStore.shared.insertEmbedding(

@@ -504,6 +504,9 @@ struct HamburgerMenuView: View {
         case .Profile:
             router.navigate(to: .authentication(.user(.userSettings(.profile))))
 
+        case .QuickAccessUsers:
+            router.navigate(to: .authentication(.user(.userSettings(.quickAccessUsers))))
+
         case .History:
             router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .all)))))
 

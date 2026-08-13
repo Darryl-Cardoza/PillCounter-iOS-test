@@ -12,6 +12,7 @@
 
 import AVFoundation
 import CoreVideo
+import UIKit
 
 final class FaceEnrollmentCameraService: NSObject, ObservableObject {
 
@@ -19,7 +20,7 @@ final class FaceEnrollmentCameraService: NSObject, ObservableObject {
     @Published var errorMessage: String?
     /// Which physical camera is currently feeding the session — drives the
     /// flip-camera button's icon/state in the UI.
-    @Published private(set) var cameraPosition: AVCaptureDevice.Position = .back
+    @Published private(set) var cameraPosition: AVCaptureDevice.Position = .front
 
     /// Called on the session queue for every frame — NOT the main thread.
     var onFrame: ((CVPixelBuffer) -> Void)?
@@ -143,22 +144,35 @@ final class FaceEnrollmentCameraService: NSObject, ObservableObject {
     }
 
     /// Without this, AVCaptureVideoDataOutput delivers frames in the
-    /// sensor's native (landscape) orientation regardless of how the phone
-    /// is held — every downstream box/landmark/roll computation assumes an
-    /// upright portrait face, so a real face never passes YuNet's
-    /// confidence gate and never passes FaceQualityChecker's roll gate
-    /// (roll reads as ~±90° for a portrait-held phone's landscape buffer).
-    /// This was the primary reason detection appeared to silently do
-    /// nothing. Must be called after every input change (initial configure
-    /// AND flipCamera) since a fresh input creates a fresh connection.
-    /// Takes the target position explicitly rather than reading
-    /// `cameraPosition` — that's `@Published` and updated on the main queue
-    /// asynchronously, so it can't be trusted to already reflect a flip
-    /// that just happened on this (session) queue.
+    /// sensor's native orientation regardless of how the phone is held —
+    /// every downstream box/landmark computation assumes an upright face,
+    /// so a rotated buffer corrupts detection and (worse) silently shifts
+    /// alignment/embeddings enough to match the wrong enrolled user. Must be
+    /// called after every input change (initial configure AND flipCamera)
+    /// since a fresh input creates a fresh connection. Takes the target
+    /// position explicitly rather than reading `cameraPosition` — that's
+    /// `@Published` and updated on the main queue asynchronously, so it
+    /// can't be trusted to already reflect a flip that just happened on
+    /// this (session) queue.
+    ///
+    /// The target orientation matches OrientationLock.shared.lockForFaceCapture()
+    /// — the presenting view locks the INTERFACE to portrait (iPhone) or
+    /// landscape (iPad) for the duration of the capture, so the connection's
+    /// videoOrientation only ever needs to match that one fixed value, not
+    /// track live device rotation.
     private func applyConnectionOrientation(position: AVCaptureDevice.Position) {
         guard let connection = videoOutput.connection(with: .video) else { return }
         if connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                // Front and back sensors are mounted mirrored relative to
+                // each other, so "upright" in a landscape-locked interface
+                // is the OPPOSITE videoOrientation for each — using the same
+                // value for both is what produced a buffer that read as
+                // portrait (90° off) on the front camera.
+                connection.videoOrientation = position == .front ? .landscapeRight : .landscapeLeft
+            } else {
+                connection.videoOrientation = .portrait
+            }
         }
         if connection.isVideoMirroringSupported {
             connection.isVideoMirrored = (position == .front)

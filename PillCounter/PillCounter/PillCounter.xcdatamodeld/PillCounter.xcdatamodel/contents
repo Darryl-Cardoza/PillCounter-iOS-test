@@ -54,6 +54,22 @@
         <attribute name="updated_at" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <relationship name="pillCountTransaction" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PillCountTransactionEntity" inverseName="pillCountTransactionDetails" inverseEntity="PillCountTransactionEntity"/>
     </entity>
+    <entity name="FaceUserEntity" representedClassName="FaceUserEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="String"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="created_at" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updated_at" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="is_active" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <relationship name="embeddings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FaceEmbeddingEntity" inverseName="user" inverseEntity="FaceEmbeddingEntity"/>
+    </entity>
+    <entity name="FaceEmbeddingEntity" representedClassName="FaceEmbeddingEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="String"/>
+        <attribute name="user_id" optional="YES" attributeType="String"/>
+        <attribute name="embedding" optional="YES" attributeType="String"/>
+        <attribute name="quality_score" optional="YES" attributeType="Float" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="created_at" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="FaceUserEntity" inverseName="embeddings" inverseEntity="FaceUserEntity"/>
+    </entity>
     <entity name="PillCountTransactionEntity" representedClassName="PillCountTransactionEntity" syncable="YES" codeGenerationType="class">
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="bottle_info_list_json" optional="YES" attributeType="String"/>

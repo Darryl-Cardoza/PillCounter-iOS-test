@@ -33,7 +33,18 @@ final class AppStorageManager {
     private func clearKeychainOnFreshInstall() {
         guard !defaults.bool(forKey: AppStorageKeys.hasLaunchedBefore) else { return }
         Keychain.deleteAll()
+        purgeFaceEnrollments()
         defaults.set(true, forKey: AppStorageKeys.hasLaunchedBefore)
+    }
+
+    /// Wiping the Keychain destroys the field-encryption key. Any
+    /// FaceEmbeddingEntity/FaceUserEntity rows already on disk were
+    /// encrypted with the now-gone key and can never be decrypted again —
+    /// leaving orphaned ciphertext that silently fails "quick access"
+    /// forever. Purge them so a wiped key never outlives its data.
+    private func purgeFaceEnrollments() {
+        FaceEmbeddingStore.shared.deleteAll()
+        FaceUserStore.shared.deleteAll()
     }
 
     // MARK: - Key constants
@@ -436,6 +447,7 @@ final class AppStorageManager {
     func logout() {
         // Single call removes all Keychain items — no risk of missing a key.
         Keychain.deleteAll()
+        purgeFaceEnrollments()
 
         defaults.removeObject(forKey: AppStorageKeys.isNewUser)
         clearTerminalCache()

@@ -22,6 +22,9 @@ struct UserSettingsView: View {
     @State private var showClearDataConfirmationPopup: Bool = false
     @State private var showResetHazardousTrayColorPopup: Bool = false
     @State private var activeSubScreen: SettingsSubScreen? = nil
+    @State private var showAddFaceUser: Bool = false
+    @State private var showQuickAccess: Bool = false
+    @State private var showRegisteredFaces: Bool = false
 
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
@@ -72,6 +75,20 @@ struct UserSettingsView: View {
         }
         .customPopup(isPresented: $showResetHazardousTrayColorPopup) {
             resetHazardousTrayColorDialog
+        }
+        .sheet(isPresented: $showAddFaceUser) {
+            FaceEnrollmentView()
+                .environmentObject(appColors)
+        }
+        .sheet(isPresented: $showQuickAccess) {
+            FaceAuthenticationView()
+                .environmentObject(appColors)
+        }
+        .sheet(isPresented: $showRegisteredFaces) {
+            NavigationStack {
+                FaceRegisteredUsersView()
+                    .environmentObject(appColors)
+            }
         }
         .onAppear {
             // PMS off → the gated features are unavailable; reset them to their
@@ -225,7 +242,24 @@ struct UserSettingsView: View {
                 
                 
                 Divider().background(appColors.primaryBackground)
-                
+
+                // MARK: Face Recognition
+                HStack {
+                    Text(L10n.Settings.faceRecognition)
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.regular)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        activeSubScreen = .faceRecognition
+                    }
+                }
+
+                Divider().background(appColors.primaryBackground)
+
                 // MARK: Sound
                 ToggleRowView(
                     title: L10n.Settings.soundFeedback,
@@ -340,6 +374,8 @@ struct UserSettingsView: View {
                     saveHistoryContent
                 case .schedule:
                     scheduleContent
+                case .faceRecognition:
+                    faceRecognitionContent
                 }
             },
             bottomContent: { EmptyView() },
@@ -360,6 +396,7 @@ struct UserSettingsView: View {
         switch screen {
         case .saveHistory: return L10n.Settings.saveHistoryScreenTitle
         case .schedule: return L10n.Settings.scheduleScreenTitle
+        case .faceRecognition: return L10n.Settings.faceRecognitionScreenTitle
         }
     }
     
@@ -452,6 +489,39 @@ struct UserSettingsView: View {
         }
         .padding(.top, SafeAreaInsets.top + 60)
         .background(appColors.primaryBackground)
+    }
+
+    private var faceRecognitionContent: some View {
+        VStack(alignment: .leading, spacing: 25) {
+            VStack(alignment: .leading, spacing: 45) {
+                faceRecognitionRow(title: L10n.Settings.lockNow)
+                faceRecognitionRow(title: L10n.Settings.addUser) {
+                    showAddFaceUser = true
+                }
+                faceRecognitionRow(title: L10n.Settings.quickAccess) {
+                    showQuickAccess = true
+                }
+                faceRecognitionRow(title: L10n.Settings.timeLimit)
+                faceRecognitionRow(title: L10n.FaceAuth.registeredUsersTitle) {
+                    showRegisteredFaces = true
+                }
+            }
+            .padding(.leading, 30)
+
+            Spacer()
+        }
+        .padding(.top, SafeAreaInsets.top + 60)
+        .background(appColors.primaryBackground)
+    }
+
+    private func faceRecognitionRow(title: String, onTap: (() -> Void)? = nil) -> some View {
+        HStack {
+            Text(title)
+                .foregroundColor(appColors.text)
+            Spacer()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
     }
 }
 

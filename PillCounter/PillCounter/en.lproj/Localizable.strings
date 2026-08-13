@@ -185,6 +185,66 @@
 "settings.hazardousTrayColor" = "Hazardous Tray Color";
 "settings.resetHazardousTrayColorTitle" = "Are you sure you want to reset the hazardous tray color?";
 "settings.resetHazardousTrayColorMessage" = "You will be prompted to set a new hazardous tray color the next time one is detected.";
+"settings.faceRecognition" = "Face Recognition";
+"settings.faceRecognitionScreenTitle" = "Face Recognition";
+"settings.lockNow" = "Lock Now";
+"settings.addUser" = "Add User";
+"settings.quickAccess" = "Quick Access";
+"settings.timeLimit" = "Time Limit";
+
+"faceAuth.enrollmentTitle" = "Add New User";
+"faceAuth.nameFieldPlaceholder" = "Enter name";
+"faceAuth.startEnrollment" = "Start Enrollment";
+"faceAuth.cancel" = "Cancel";
+"faceAuth.done" = "Done";
+"faceAuth.nameEmptyError" = "Please enter a name.";
+"faceAuth.nameDuplicateError" = "A user with this name already exists.";
+
+"faceAuth.instructionIdle" = "Enter a name to begin.";
+"faceAuth.instructionPreparing" = "Preparing camera…";
+"faceAuth.instructionComplete" = "All done! Face enrolled successfully.";
+
+"faceAuth.poseCenter" = "Center your face in the oval";
+"faceAuth.poseTurnLeft" = "Slowly turn your head left";
+"faceAuth.poseTurnRight" = "Slowly turn your head right";
+"faceAuth.poseChinUp" = "Lift your chin up slightly";
+"faceAuth.poseCenterAgain" = "Look straight ahead again";
+"faceAuth.poseHoldStill" = "Hold still…";
+"faceAuth.poseCaptured" = "Got it!";
+
+"faceAuth.failureNoFace" = "No face detected. Position your face in the oval.";
+"faceAuth.failureMultipleFaces" = "Multiple faces detected. Ask others to step away.";
+"faceAuth.failurePoorQuality" = "Move to better lighting and hold steady.";
+"faceAuth.failureEmbedding" = "Could not process this face. Try again.";
+"faceAuth.failureCamera" = "Camera unavailable.";
+"faceAuth.failureStorage" = "Could not save enrollment. Please try again.";
+"faceAuth.failureDuplicate" = "This face is already enrolled for another user.";
+"faceAuth.failureTimedOut" = "Enrollment took too long. Please try again in good lighting.";
+"faceAuth.retry" = "Try Again";
+
+"faceAuth.authTitle" = "Face Authentication";
+"faceAuth.authIdle" = "Starting…";
+"faceAuth.authDetecting" = "Look at the camera to continue";
+"faceAuth.authFaceDetected" = "Face detected. Hold still…";
+"faceAuth.authChecking" = "Checking image quality…";
+"faceAuth.authVerifying" = "Verifying…";
+"faceAuth.authWelcome" = "Welcome, %@";
+"faceAuth.authNoFace" = "No face detected. Position your face in the frame.";
+"faceAuth.authMultipleFaces" = "Please ensure only one person is visible.";
+"faceAuth.authPoorQuality" = "Move to better lighting and hold steady.";
+"faceAuth.authUnknownUser" = "No user found.";
+"faceAuth.authNoRegisteredUsers" = "No users are registered on this device.";
+"faceAuth.authCancel" = "Cancel";
+"faceAuth.authContinue" = "Continue";
+
+"faceAuth.registeredUsersTitle" = "Registered Faces";
+"faceAuth.registeredUsersEmpty" = "No users enrolled yet.";
+"faceAuth.registeredUsersInactive" = "(inactive)";
+"faceAuth.registeredUsersEmbeddingCount" = "%d embeddings";
+"faceAuth.registeredUsersAvgQuality" = "Avg quality: %.2f";
+"faceAuth.registeredUsersDelete" = "Delete";
+"faceAuth.registeredUsersDeleteConfirmTitle" = "Delete Face Enrollment";
+"faceAuth.registeredUsersDeleteConfirmMessage" = "This removes all stored face data for this user. They will need to re-enroll to use Quick Access again.";
 
 
 // MARK: - CAMERA PERMISSION

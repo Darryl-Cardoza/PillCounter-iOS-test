@@ -20,11 +20,34 @@ final class CoreDataManager {
 
     private static let modelName = "PillCounter"
 
+    /// Loaded exactly once per process and reused by EVERY `CoreDataManager`
+    /// instance (`.shared` and every `init(inMemory:)`). `NSPersistentContainer
+    /// (name:)` on its own resolves/loads the named `.xcdatamodeld` itself —
+    /// calling it more than once in one process (e.g. `.shared` plus a
+    /// test's own `CoreDataManager(inMemory: true)`) can produce two
+    /// distinct `NSManagedObjectModel` instances for the same model name,
+    /// and Core Data can then fail to bind a generated class (e.g.
+    /// `UserEntity`) to a single unambiguous `NSEntityDescription` —
+    /// surfacing as "+[UserEntity entity] Failed to find a unique match for
+    /// an NSEntityDescription to a managed object subclass" the first time
+    /// any entity of that type is touched, and breaking encryption's
+    /// `entity.name` lookup (in `NsManagedObject+Encryption.swift`) silently
+    /// for the remainder of the process. Sharing one model instance across
+    /// every container avoids the ambiguity entirely.
+    private static let managedObjectModel: NSManagedObjectModel = {
+        guard let url = Bundle.main.url(forResource: modelName, withExtension: "momd"),
+              let model = NSManagedObjectModel(contentsOf: url)
+        else {
+            fatalError("Failed to load Core Data model \(modelName)")
+        }
+        return model
+    }()
+
     let container: NSPersistentContainer
 
     /// Production initializer — loads the on-disk, file-protected SQLite store.
     private init() {
-        container = NSPersistentContainer(name: CoreDataManager.modelName)
+        container = NSPersistentContainer(name: CoreDataManager.modelName, managedObjectModel: CoreDataManager.managedObjectModel)
 
         guard let description = container.persistentStoreDescriptions.first else {
             fatalError("No store description")
@@ -50,7 +73,9 @@ final class CoreDataManager {
 
     /// In-memory initializer for unit tests. Each instance gets an isolated
     /// store that never touches disk, so tests can build and query entities
-    /// without affecting the app database or each other.
+    /// without affecting the app database or each other. Shares the same
+    /// cached `managedObjectModel` as `.shared` — see that property's doc
+    /// comment for why that matters.
     ///
     /// Usage in a test:
     /// ```
@@ -58,7 +83,7 @@ final class CoreDataManager {
     /// let txn = PillCountTransactionEntity(context: cd.context)
     /// ```
     init(inMemory: Bool) {
-        container = NSPersistentContainer(name: CoreDataManager.modelName)
+        container = NSPersistentContainer(name: CoreDataManager.modelName, managedObjectModel: CoreDataManager.managedObjectModel)
 
         if inMemory {
             let description = NSPersistentStoreDescription()
@@ -96,6 +121,42 @@ final class CoreDataManager {
     func resetContext() {
         container.viewContext.performAndWait {
             container.viewContext.reset()
+        }
+    }
+
+    /// Destroys every persistent store file backing this container and
+    /// reloads a fresh, empty one at the same URL. Unlike `resetContext()`
+    /// (which only clears the in-memory context), this actually deletes the
+    /// on-disk data — used when the field-encryption DEK is unrecoverable,
+    /// so existing rows contain permanently undecryptable ciphertext.
+    ///
+    /// Only safe to call when nothing else is actively fetching/saving on
+    /// this coordinator — `destroyPersistentStore` is not documented as safe
+    /// concurrent with in-flight context operations, and any `NSManagedObject`
+    /// already faulted from the destroyed store becomes invalid afterward.
+    /// This is an accepted, narrow risk: the call site (an unrecoverable-DEK
+    /// recovery) is expected to be exceedingly rare — normally only right
+    /// after a corrupted/invalidated Keychain item — not a routine path.
+    func destroyAndReloadStore() {
+        resetContext()
+
+        for description in container.persistentStoreDescriptions {
+            guard let url = description.url else { continue }
+            do {
+                try container.persistentStoreCoordinator.destroyPersistentStore(
+                    at: url,
+                    ofType: description.type,
+                    options: nil
+                )
+            } catch {
+                Log("❌ CoreData destroyPersistentStore error: \(error.localizedDescription)")
+            }
+        }
+
+        container.loadPersistentStores { _, error in
+            if let error = error {
+                Log("❌ CoreData reload after destroy failed: \(error.localizedDescription)")
+            }
         }
     }
 }

@@ -227,6 +227,15 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.hl7MessageSpec = Hl7Format.fromSendingApplication(hl7MessageSpec)
                 }
 
+                if let kekResponse = result.data?.kek,
+                   let keyId = kekResponse.keyId,
+                   let version = kekResponse.version,
+                   let keyMaterial = kekResponse.keyMaterial {
+                    DatabaseKeyProvider.shared.rotateKekIfNewer(
+                        KekInfo(keyId: keyId, version: version, keyMaterial: keyMaterial)
+                    )
+                }
+
                 let fetchedTerminals = result.data?.user?.terminals
                     ?? result.data?.settings?.terminals
                     ?? []

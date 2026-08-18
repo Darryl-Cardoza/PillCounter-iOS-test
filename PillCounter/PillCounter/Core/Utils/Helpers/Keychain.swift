@@ -122,10 +122,52 @@ final class Keychain {
         SecItemDelete(query as CFDictionary)
     }
 
+    /// Removes every generic-password item under `service` EXCEPT the given
+    /// accounts. Used where a blanket wipe (logout, fresh-install cleanup)
+    /// must not destroy state that's meant to outlive it — e.g. the wrapped
+    /// DEK bookkeeping that must survive logout so a returning user's already
+    /// -encrypted CoreData fields/photos stay decryptable.
+    ///
+    /// `SecItemDelete` has no "not equal" matcher, so this enumerates
+    /// matching accounts first and deletes everything not in `preservedAccounts`.
+    static func deleteAll(service: String = defaultService, preservedAccounts: Set<String>) {
+        guard !preservedAccounts.isEmpty else {
+            deleteAll(service: service)
+            return
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String:        kSecClassGenericPassword,
+            kSecAttrService as String:  service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String:   kSecMatchLimitAll,
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]]
+        else { return }
+
+        for item in items {
+            guard let account = item[kSecAttrAccount as String] as? String,
+                  !preservedAccounts.contains(account)
+            else { continue }
+            deleteData(account: account, service: service)
+        }
+    }
+
     // MARK: - SymmetricKey layer (AES keys)
 
     /// Returns the AES key stored for `account`/`service`, or generates a new
     /// 256-bit key, stores it, and returns that.
+    ///
+    /// Known limitation (tracked, not fixed): the check-then-create sequence
+    /// below has no lock. Two concurrent first-time calls for the same
+    /// `account` can each observe "no key yet," generate different keys, and
+    /// race on `setData` — whichever write loses leaves its caller holding a
+    /// key that was never persisted, silently orphaning anything sealed
+    /// under it. Low probability in practice (callers generally hit this
+    /// once per alias, well before concurrent access is likely), but a real
+    /// gap if two callers ever race a brand-new alias's first use.
     static func getOrCreateSymmetricKey(
         account: String,
         service: String? = defaultService,

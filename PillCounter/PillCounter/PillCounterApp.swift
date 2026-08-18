@@ -106,10 +106,6 @@ struct PillCounterApp: App {
                                 // local user already exists.
                                 Task { await userViewModel.getUser(forceRemote: true) }
 
-                                // Pharmacy type list is server-driven but static per
-                                // session — fetch once at launch, not on every profile visit.
-                                Task { await userViewModel.fetchPharmacyTypes() }
-
                                 Task.detached(priority: .background) {
                                     await MainActor.run {
                                         HistoryCleanupStore.shared.cleanUpOldHistory()

@@ -95,6 +95,7 @@ final class AppStorageManager {
         static let selectedSchedules    = "selectedSchedules"
         static let selectedTerminalName = "selected_terminal_name"
         static let storedTerminals      = "stored_terminals"
+        static let deviceKey            = "device_key"
         static let isHarzardousDrugSetting = "hazardous_pill_setting"
         static let deleteCompletedTransactions = "delete_completed_transactions"
         static let pillCountRingOffsetX = "pill_count_ring_offset_x"
@@ -392,6 +393,20 @@ final class AppStorageManager {
         set {
             defaults.setValue(newValue, forKey: AppStorageKeys.selectedTerminalName)
         }
+    }
+
+    /// Stable per-install device identifier (from `identifierForVendor`), used to
+    /// determine which terminal this device currently holds — never infer that
+    /// from a terminal's `isActive` flag, which is account-wide, not per-device.
+    /// Set once by `DeviceKeyProvider`; UserDefaults-backed (not Keychain) so a
+    /// reinstall clears this value along with the rest of UserDefaults. Note this
+    /// is not a hard reinstall guarantee: `identifierForVendor` itself can return
+    /// the same UUID across reinstall if another app from the same vendor is still
+    /// installed — in that case the underlying device key is unchanged regardless
+    /// of where we cache it.
+    var deviceKey: String? {
+        get { defaults.string(forKey: AppStorageKeys.deviceKey) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.deviceKey) }
     }
 
     /// Locally cached terminal list for the current user. Persisted so the

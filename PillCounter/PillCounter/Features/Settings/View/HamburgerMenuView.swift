@@ -502,7 +502,7 @@ struct HamburgerMenuView: View {
             }
 
         case .Profile:
-            router.navigate(to: .authentication(.user(.userSettings(.profile))))
+            router.navigate(to: .authentication(.user(.userSettings(.profile(mustSelectTerminal: false)))))
 
         case .History:
             router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .all)))))

@@ -39,9 +39,28 @@ final class AppStorageManager {
         set { defaults.set(newValue, forKey: AppStorageKeys.faceEnrollmentPurgePending) }
     }
 
+    /// Keychain accounts that must survive any blanket wipe (logout,
+    /// fresh-install cleanup) — the wrapped DEK/KEK bookkeeping. Deleting
+    /// these would silently make every already-encrypted CoreData field and
+    /// photo file permanently unreadable, contradicting the explicit "local
+    /// data is preserved" contract those wipes are meant to honor for
+    /// everything else. The Secure Enclave KEK keypair itself is a
+    /// `kSecClassKey` item, not `kSecClassGenericPassword`, so it's already
+    /// untouched by `Keychain.deleteAll` regardless — only the bookkeeping
+    /// strings below (and any server KEK's raw bytes, addressed by alias,
+    /// not by these fixed account names) need explicit preservation here.
+    private static let dekBookkeepingAccounts: Set<String> = [
+        AppStorageKeys.dekWrapped,
+        AppStorageKeys.dekKekId,
+        AppStorageKeys.dekKekVersion,
+        AppStorageKeys.imageDekWrapped,
+        AppStorageKeys.imageDekKekId,
+        AppStorageKeys.imageDekKekVersion,
+    ]
+
     private func clearKeychainOnFreshInstall() {
         guard !defaults.bool(forKey: AppStorageKeys.hasLaunchedBefore) else { return }
-        Keychain.deleteAll()
+        Keychain.deleteAll(preservedAccounts: Self.dekBookkeepingAccounts)
         // Core Data is deliberately NOT touched here. This initializer can run
         // before CoreDataManager.shared has loaded the managed object model —
         // AppStorageManager.shared is reachable from view model default
@@ -88,6 +107,12 @@ final class AppStorageManager {
         static let hazardousTrayColors  = "hazardous_tray_colors"
         static let bypassSSL            = "bypass_ssl"
         static let hl7MessageSpec       = "hl7_message_spec"
+        static let dekWrapped           = "dek_wrapped"
+        static let dekKekId             = "dek_kek_id"
+        static let dekKekVersion        = "dek_kek_version"
+        static let imageDekWrapped      = "image_dek_wrapped"
+        static let imageDekKekId        = "image_dek_kek_id"
+        static let imageDekKekVersion   = "image_dek_kek_version"
 
         // UserDefaults-backed (non-sensitive)
         static let faceEnrollmentPurgePending = "face_enrollment_purge_pending"
@@ -102,6 +127,7 @@ final class AppStorageManager {
         static let selectedSchedules    = "selectedSchedules"
         static let selectedTerminalName = "selected_terminal_name"
         static let storedTerminals      = "stored_terminals"
+        static let deviceKey            = "device_key"
         static let isHarzardousDrugSetting = "hazardous_pill_setting"
         static let deleteCompletedTransactions = "delete_completed_transactions"
         static let pillCountRingOffsetX = "pill_count_ring_offset_x"
@@ -207,6 +233,28 @@ final class AppStorageManager {
     var hl7MessageSpec: Hl7Format {
         get { Hl7Format(rawValue: Keychain.getPassword(for: AppStorageKeys.hl7MessageSpec) ?? "") ?? .dispensesure }
         set { Keychain.savePassword(newValue.rawValue, for: AppStorageKeys.hl7MessageSpec) }
+    }
+
+    // Generic Keychain-backed accessors used by `DatabaseKeyProvider` for its
+    // per-slot DEK bookkeeping (wrapped blob, KEK id, KEK version) — one pair
+    // of key names per `DekSlot` (see `AppStorageKeys.dekWrapped` /
+    // `.imageDekWrapped` and friends), same underlying storage/behavior as
+    // every other Keychain-backed property on this type.
+    func string(forKey key: String) -> String? {
+        Keychain.getPassword(for: key)
+    }
+
+    func setString(_ value: String?, forKey key: String) {
+        if let value { Keychain.savePassword(value, for: key) }
+        else         { Keychain.deletePassword(for: key) }
+    }
+
+    func int(forKey key: String) -> Int {
+        Int(Keychain.getPassword(for: key) ?? "") ?? -1
+    }
+
+    func setInt(_ value: Int, forKey key: String) {
+        Keychain.savePassword(String(value), for: key)
     }
 
     var pmsHostName: String {
@@ -393,6 +441,20 @@ final class AppStorageManager {
         }
     }
 
+    /// Stable per-install device identifier (from `identifierForVendor`), used to
+    /// determine which terminal this device currently holds — never infer that
+    /// from a terminal's `isActive` flag, which is account-wide, not per-device.
+    /// Set once by `DeviceKeyProvider`; UserDefaults-backed (not Keychain) so a
+    /// reinstall clears this value along with the rest of UserDefaults. Note this
+    /// is not a hard reinstall guarantee: `identifierForVendor` itself can return
+    /// the same UUID across reinstall if another app from the same vendor is still
+    /// installed — in that case the underlying device key is unchanged regardless
+    /// of where we cache it.
+    var deviceKey: String? {
+        get { defaults.string(forKey: AppStorageKeys.deviceKey) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.deviceKey) }
+    }
+
     /// Locally cached terminal list for the current user. Persisted so the
     /// terminal picker still works if /auth/me fails or the device is offline.
     /// Cleared on logout via `logout()` / `clearTerminalCache()`.
@@ -491,11 +553,15 @@ final class AppStorageManager {
         Keychain.deletePassword(for: AppStorageKeys.tokenExpiryTimestamp)
     }
 
-    /// Full logout — atomically wipes every Keychain item for this app,
-    /// then clears non-sensitive UserDefaults session flags.
+    /// Full logout — wipes every Keychain item for this app except the
+    /// wrapped DEK/KEK bookkeeping, then clears non-sensitive UserDefaults
+    /// session flags. Local CoreData (and its encrypted field values,
+    /// and encrypted photo files) is preserved so a returning user finds
+    /// their history intact AND still decryptable — wiping the DEK here
+    /// would silently make every encrypted row/photo permanently unreadable
+    /// on next login, contradicting that intent.
     func logout() {
-        // Single call removes all Keychain items — no risk of missing a key.
-        Keychain.deleteAll()
+        Keychain.deleteAll(preservedAccounts: Self.dekBookkeepingAccounts)
         // Same reason as on a fresh install: the wipe above destroys the
         // field-encryption key, so the face rows it wrote can never be read
         // again. Flag first, then purge — if the purge is interrupted, the

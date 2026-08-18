@@ -27,6 +27,11 @@ class LoginViewModel: ObservableObject {
     @Published var isResendDisabled: Bool = true
     private var resendTimer: Timer?
 
+    // MARK: - FCM token prefetch
+    // Kicked off as soon as the OTP is sent (user is typing the code for the
+    // next ~60s anyway) so verifyOTP() doesn't pay the FCM wait inline.
+    private var fcmTokenTask: Task<String?, Never>?
+
     // MARK: - Derived
     var resendTimerText: String { "\(resendCooldown) s" }
     var isOtpComplete: Bool { otp.joined().count == 6 }
@@ -97,6 +102,7 @@ class LoginViewModel: ObservableObject {
                 errorMessage = nil
                 isOtpSent = true
                 store.isNewUser = result.data?.isNewUser ?? true
+                fcmTokenTask = Task { await withTimeout(seconds: 5) { await FCMManager.shared.getToken() } }
             } else {
                 resendOTPSent = false
                 errorMessage = result.message ?? "Something went wrong. Please try again later."
@@ -121,10 +127,28 @@ class LoginViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
+            let deviceKey = DeviceKeyProvider.shared.getDeviceKey()
+            // FCMManager.getToken() awaits a delegate callback that may never fire
+            // (no push permission, simulator, no network) — don't let that block
+            // OTP verification indefinitely. Prefetched in sendOTP() so this await
+            // usually just reads an already-finished task instead of waiting 5s here;
+            // fcmTokenTask is nil only if verifyOTP somehow runs without a prior
+            // sendOTP() in this ViewModel's lifetime (falls back to fetching inline).
+            let fetchedFcmToken: String?
+            if let prefetch = fcmTokenTask {
+                fetchedFcmToken = await prefetch.value
+            } else {
+                fetchedFcmToken = await withTimeout(seconds: 5) { await FCMManager.shared.getToken() }
+            }
+            let fcmToken = fetchedFcmToken ?? ""
+            let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+
             let result = try await loginrepo.verifyOTP(
                 email: userEmail,
                 otp: otpString,
-                fcmToken: ""
+                fcmToken: fcmToken,
+                deviceKey: deviceKey,
+                appVersion: appVersion
             )
 
             if result.isSuccess ?? false {
@@ -154,6 +178,13 @@ class LoginViewModel: ObservableObject {
                 errorMessage = result.message ?? "Invalid OTP. Please try again."
             }
 
+        } catch let error as APIError {
+            isOtpVerificationSuccess = false
+            if case .server(let message) = error {
+                errorMessage = message
+            } else {
+                errorMessage = "Unable to verify OTP. Please try again."
+            }
         } catch {
             isOtpVerificationSuccess = false
             errorMessage = "Unable to verify OTP. Please try again."
@@ -167,7 +198,8 @@ class LoginViewModel: ObservableObject {
 
         do {
             let result = try await loginrepo.logout(
-                refreshToken: store.refreshToken ?? ""
+                refreshToken: store.refreshToken ?? "",
+                deviceKey: DeviceKeyProvider.shared.getDeviceKey()
             )
 
             if result.isSuccess ?? false {

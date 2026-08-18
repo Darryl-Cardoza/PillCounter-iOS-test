@@ -77,7 +77,11 @@ public enum ScanType: Codable, Hashable {
 
 public enum HamburgerMenuFLow: Hashable, Codable {
     case History(HistoryFilterType, HistoryStatusFilter)
-    case profile
+    /// `mustSelectTerminal`: true only for the post-login gate shown when a
+    /// PMS-integrated account has no terminal claimed on this device yet —
+    /// hides the back/skip affordances and routes to dashboard on save instead
+    /// of navigating back, since there is nothing to go back to.
+    case profile(mustSelectTerminal: Bool)
     case settings
     case unsyncedTransaction
     case quickAccessUsers

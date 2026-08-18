@@ -22,16 +22,18 @@ struct DashboardView: View {
     // userId is stored in Keychain via AppStorageManager — @AppStorage reads UserDefaults
     // and would always return "". Read directly from the Keychain-backed store instead.
     private var userId: String { AppStorageManager.shared.userId ?? "" }
-    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
-        Bool = true
     private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
     @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
     var selectedTerminalName: String = ""
 
     /// Shown when a dispense action is tapped while PMS integration is off.
     @State private var showFeatureUnavailablePopup: Bool = false
-    @State private var hasCheckedNewUser: Bool = false
     @State private var selectedQueueTab: Int = 0  // 0 = Today's Queue, 1 = Recent Activity
+
+    // Guards the new-user redirect to fire once per appearance, not on every
+    // subsequent onAppear (e.g. returning from a pushed screen).
+    @State private var hasCheckedNewUser: Bool = false
+    private var isNewUser: Bool { AppStorageManager.shared.isNewUser }
 
     // Bucket-picker state is local to this screen's popup. The chosen bucket is
     // handed to the stock-count flow via the navigation route, so the dashboard
@@ -560,18 +562,35 @@ struct DashboardView: View {
     // MARK: - Lifecycle
 
     private func onAppear() {
-        if isNewUser && !hasCheckedNewUser {
+        if !hasCheckedNewUser {
             hasCheckedNewUser = true
-            router.navigate(to: .authentication(.user(.userSettings(.profile))))
-        } else {
             Task {
-                // Only hit auth/me when the token was actually refreshed; otherwise
-                // serve user data from the local cache to avoid an API call on every visit.
-                let didRefresh = await userViewModel.checkAndRefreshTokenIfNeeded()
-                await userViewModel.getUser(forceRemote: didRefresh)
-                // Reload after async user data is ready to ensure queue is populated
-                await MainActor.run { viewModel.loadQueueData(userId: userId) }
+                // Live terminal list is required to know whether this device
+                // already holds a claim — the cached list can be stale (another
+                // device may have released/claimed since last sync).
+                await userViewModel.loadTerminals()
+                if userViewModel.needsTerminalSelection {
+                    router.navigate(to: .authentication(.user(.userSettings(.profile(mustSelectTerminal: true)))))
+                } else if isNewUser {
+                    router.navigate(to: .authentication(.user(.userSettings(.profile(mustSelectTerminal: false)))))
+                } else {
+                    startDashboardLoad()
+                }
             }
+            return
+        }
+
+        startDashboardLoad()
+    }
+
+    private func startDashboardLoad() {
+        Task {
+            // Only hit auth/me when the token was actually refreshed; otherwise
+            // serve user data from the local cache to avoid an API call on every visit.
+            let didRefresh = await userViewModel.checkAndRefreshTokenIfNeeded()
+            await userViewModel.getUser(forceRemote: didRefresh)
+            // Reload after async user data is ready to ensure queue is populated
+            await MainActor.run { viewModel.loadQueueData(userId: userId) }
         }
 
         locationService.requestPermission()

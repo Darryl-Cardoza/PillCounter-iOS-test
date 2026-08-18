@@ -264,6 +264,9 @@ enum L10n {
         static let instructionPreparing = NSLocalizedString("faceAuth.instructionPreparing", comment: "")
         static let instructionComplete = NSLocalizedString("faceAuth.instructionComplete", comment: "")
         static let enrollmentSuccessTitle = NSLocalizedString("faceAuth.enrollmentSuccessTitle", comment: "")
+        static let enrollmentCompleteTitle = NSLocalizedString("faceAuth.enrollmentCompleteTitle", comment: "")
+        static let enrollmentCompleteSubtitle = NSLocalizedString("faceAuth.enrollmentCompleteSubtitle", comment: "")
+        static let enrollmentFailedTitle = NSLocalizedString("faceAuth.enrollmentFailedTitle", comment: "")
 
         static let poseCenter = NSLocalizedString("faceAuth.poseCenter", comment: "")
         static let poseTurnLeft = NSLocalizedString("faceAuth.poseTurnLeft", comment: "")
@@ -285,6 +288,7 @@ enum L10n {
 
         // Authentication screen
         static let authTitle = NSLocalizedString("faceAuth.authTitle", comment: "")
+        static let scanFaceTitle = NSLocalizedString("faceAuth.scanFaceTitle", comment: "")
         static let authIdle = NSLocalizedString("faceAuth.authIdle", comment: "")
         static let authDetecting = NSLocalizedString("faceAuth.authDetecting", comment: "")
         static let authFaceDetected = NSLocalizedString("faceAuth.authFaceDetected", comment: "")

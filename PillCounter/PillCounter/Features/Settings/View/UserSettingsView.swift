@@ -22,9 +22,6 @@ struct UserSettingsView: View {
     @State private var showClearDataConfirmationPopup: Bool = false
     @State private var showResetHazardousTrayColorPopup: Bool = false
     @State private var activeSubScreen: SettingsSubScreen? = nil
-    @State private var showAddFaceUser: Bool = false
-    @State private var showQuickAccess: Bool = false
-    @State private var showRegisteredFaces: Bool = false
     @State private var showTimeLimitPicker: Bool = false
 
     @EnvironmentObject private var appColors: AppColors
@@ -76,20 +73,6 @@ struct UserSettingsView: View {
         }
         .customPopup(isPresented: $showResetHazardousTrayColorPopup) {
             resetHazardousTrayColorDialog
-        }
-        .sheet(isPresented: $showAddFaceUser) {
-            FaceEnrollmentView()
-                .environmentObject(appColors)
-        }
-        .sheet(isPresented: $showQuickAccess) {
-            FaceAuthenticationView()
-                .environmentObject(appColors)
-        }
-        .sheet(isPresented: $showRegisteredFaces) {
-            NavigationStack {
-                FaceRegisteredUsersView()
-                    .environmentObject(appColors)
-            }
         }
         .sheet(isPresented: $showTimeLimitPicker) {
             FaceSessionTimeoutPickerView(settingsViewModel: settingsViewModel)
@@ -496,24 +479,17 @@ struct UserSettingsView: View {
         .background(appColors.primaryBackground)
     }
 
+    /// Session time limit is the only face-recognition setting exposed here.
+    /// Enrollment, quick access and registered-user management all live in
+    /// QuickAccessUsersView, reached from the hamburger menu.
     private var faceRecognitionContent: some View {
         VStack(alignment: .leading, spacing: 25) {
             VStack(alignment: .leading, spacing: 45) {
-                faceRecognitionRow(title: L10n.Settings.lockNow)
-                faceRecognitionRow(title: L10n.Settings.addUser) {
-                    showAddFaceUser = true
-                }
-                faceRecognitionRow(title: L10n.Settings.quickAccess) {
-                    showQuickAccess = true
-                }
                 faceRecognitionRow(
                     title: L10n.Settings.timeLimit,
                     value: settingsViewModel.faceSessionTimeoutOption.displayText
                 ) {
                     showTimeLimitPicker = true
-                }
-                faceRecognitionRow(title: L10n.FaceAuth.registeredUsersTitle) {
-                    showRegisteredFaces = true
                 }
             }
             .padding(.leading, 30)

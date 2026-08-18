@@ -60,11 +60,49 @@ final class FaceSessionManager: ObservableObject {
         currentUserName = AppStorageManager.shared.faceLockCurrentUserName
     }
 
+    // MARK: - Enrollment gate
+
+    /// Face unlock is only meaningful when somebody is enrolled AND active.
+    /// With nothing to match against, a lock is unrecoverable — no scan can
+    /// ever succeed, so the overlay would trap the app with no way out. Every
+    /// lock entry point checks this, and `releaseLockIfNoUsersEnrolled()`
+    /// releases an existing lock the moment the roster empties.
+    ///
+    /// `activeOnly: true` deliberately mirrors the identify path
+    /// (FaceRecognitionRepository) — deactivating every user is just as
+    /// unrecoverable as deleting them.
+    var hasEnrolledUsers: Bool {
+        !FaceUserStore.shared.getAllUsers(activeOnly: true).isEmpty
+    }
+
+    /// Drops any active lock when the roster is empty — called on app
+    /// foreground/launch and right after user deletion, so deleting the last
+    /// enrolled user can never leave the app stuck behind the overlay.
+    /// No-op while users remain.
+    func releaseLockIfNoUsersEnrolled() {
+        guard !hasEnrolledUsers else { return }
+
+        currentUserId = nil
+        currentUserName = nil
+        AppStorageManager.shared.faceLockCurrentUserId = nil
+        AppStorageManager.shared.faceLockCurrentUserName = nil
+
+        idleDurationAtLock = nil
+        lockState = .unlocked(userName: "")
+        isOverlayVisible = false
+        stopIdleTimer()
+    }
+
     // MARK: - Lock / unlock
 
     /// Cold launch (app was fully closed and reopened) always requires a
     /// fresh scan — call once at app start, before the first frame renders.
+    /// Skipped entirely when nobody is enrolled.
     func lockOnColdLaunch() {
+        guard hasEnrolledUsers else {
+            releaseLockIfNoUsersEnrolled()
+            return
+        }
         lockState = .locked
         isOverlayVisible = true
         idleDurationAtLock = nil
@@ -74,6 +112,10 @@ final class FaceSessionManager: ObservableObject {
     /// App entered background — always lock; resuming to foreground with a
     /// stale session is exactly the gap this feature closes.
     func lockOnBackground() {
+        guard hasEnrolledUsers else {
+            releaseLockIfNoUsersEnrolled()
+            return
+        }
         idleDurationAtLock = isLocked ? idleDurationAtLock : Date().timeIntervalSince(lastActiveAt)
         lockState = .locked
         isOverlayVisible = true
@@ -82,15 +124,26 @@ final class FaceSessionManager: ObservableObject {
 
     func lockDueToInactivity() {
         guard !isLocked else { return }
+        guard hasEnrolledUsers else {
+            releaseLockIfNoUsersEnrolled()
+            return
+        }
         idleDurationAtLock = Date().timeIntervalSince(lastActiveAt)
         lockState = .locked
         isOverlayVisible = true
         stopIdleTimer()
     }
 
+    /// Allowed from `.locked` (first scan) and from `.failed` (Try Again).
+    /// Guarded against `.scanning`/`.unlocked` so a stray call can't restart
+    /// a scan that is already in flight or re-lock an unlocked session.
     func beginScanning() {
-        guard case .locked = lockState else { return }
-        lockState = .scanning
+        switch lockState {
+        case .locked, .failed:
+            lockState = .scanning
+        case .scanning, .unlocked:
+            return
+        }
     }
 
     func markFailed() {
@@ -141,6 +194,9 @@ final class FaceSessionManager: ObservableObject {
 
     private func startIdleTimer() {
         stopIdleTimer()
+        // Nothing to lock back to — don't arm a timer that would fire into a
+        // dead end.
+        guard hasEnrolledUsers else { return }
         idleTimer = Timer.scheduledTimer(withTimeInterval: inactivityTimeout, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.lockDueToInactivity()

@@ -1,8 +1,9 @@
 //
-//  FaceEnrollmentCameraService.swift
+//  FaceCameraService.swift
 //  PillCounter
 //
-//  Minimal front-camera capture session for the face enrollment screen.
+//  Minimal front-camera capture session shared by the face enrollment and
+//  face authentication screens.
 //  Deliberately separate from Features/Scanning's CameraService — that
 //  class is wired for the back-camera pill-counting pipeline (barcode
 //  metadata, tray/glove/pill detectors) and isn't a fit for a front-facing,
@@ -14,7 +15,7 @@ import AVFoundation
 import CoreVideo
 import UIKit
 
-final class FaceEnrollmentCameraService: NSObject, ObservableObject {
+final class FaceCameraService: NSObject, ObservableObject {
 
     @Published var isAuthorized: Bool = false
     @Published var errorMessage: String?
@@ -30,6 +31,11 @@ final class FaceEnrollmentCameraService: NSObject, ObservableObject {
     private let sessionQueue = DispatchQueue(label: "faceauth.camera.session.queue")
     private var isRunning = false
     private var currentInput: AVCaptureDeviceInput?
+    /// Inputs/outputs survive a stop(), so a second start() must only
+    /// resume the existing graph. Re-running the full configure would try
+    /// to add a second input, fail canAddInput, and leave the session with
+    /// no usable connection — the black preview seen on retry.
+    private var isConfigured = false
 
     var previewSession: AVCaptureSession { session }
 
@@ -58,7 +64,7 @@ final class FaceEnrollmentCameraService: NSObject, ObservableObject {
                 let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
                 let newInput = try? AVCaptureDeviceInput(device: device)
             else {
-                Log("FaceEnrollmentCameraService: flip failed — no camera at position \(newPosition)")
+                Log("FaceCameraService: flip failed — no camera at position \(newPosition)")
                 return
             }
 
@@ -77,7 +83,7 @@ final class FaceEnrollmentCameraService: NSObject, ObservableObject {
             self.applyConnectionOrientation(position: newPosition)
 
             DispatchQueue.main.async { self.cameraPosition = newPosition }
-            Log("FaceEnrollmentCameraService: flipped to \(newPosition)")
+            Log("FaceCameraService: flipped to \(newPosition)")
         }
     }
 
@@ -106,6 +112,17 @@ final class FaceEnrollmentCameraService: NSObject, ObservableObject {
     private func configureAndStart() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
+
+            // Already built by an earlier start() — just resume it.
+            if self.isConfigured {
+                self.applyConnectionOrientation(position: self.cameraPosition)
+                if !self.isRunning {
+                    self.session.startRunning()
+                    self.isRunning = true
+                }
+                return
+            }
+
             self.session.beginConfiguration()
 
             if self.session.canSetSessionPreset(.hd1280x720) {
@@ -137,6 +154,7 @@ final class FaceEnrollmentCameraService: NSObject, ObservableObject {
             }
 
             self.session.commitConfiguration()
+            self.isConfigured = true
             self.applyConnectionOrientation(position: self.cameraPosition)
             self.session.startRunning()
             self.isRunning = true
@@ -180,7 +198,7 @@ final class FaceEnrollmentCameraService: NSObject, ObservableObject {
     }
 }
 
-extension FaceEnrollmentCameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
+extension FaceCameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(
         _ output: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,

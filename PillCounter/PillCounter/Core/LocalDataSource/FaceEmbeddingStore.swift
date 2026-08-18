@@ -19,6 +19,21 @@ final class FaceEmbeddingStore {
         CoreDataManager.shared.context
     }
 
+    /// Entity name spelled out instead of going through the generated
+    /// `FaceEmbeddingEntity.fetchRequest()`. That generated helper resolves the
+    /// entity via `+[NSManagedObject entity]`, which returns nil (and builds a
+    /// request with an empty entity name) if it runs before the model is
+    /// loaded — Core Data then throws NSInternalInconsistencyException.
+    private static let entityName = "FaceEmbeddingEntity"
+
+    private func makeDeleteRequest() -> NSFetchRequest<NSFetchRequestResult> {
+        NSFetchRequest<NSFetchRequestResult>(entityName: FaceEmbeddingStore.entityName)
+    }
+
+    private func makeFetchRequest() -> NSFetchRequest<FaceEmbeddingEntity> {
+        NSFetchRequest<FaceEmbeddingEntity>(entityName: FaceEmbeddingStore.entityName)
+    }
+
     // MARK: - Create
 
     @discardableResult
@@ -41,7 +56,7 @@ final class FaceEmbeddingStore {
     // MARK: - Read
 
     func getEmbeddingsForUser(userId: String) -> [FaceEmbeddingEntity] {
-        let request: NSFetchRequest<FaceEmbeddingEntity> = FaceEmbeddingEntity.fetchRequest()
+        let request = makeFetchRequest()
         request.predicate = NSPredicate(format: "user_id == %@", userId)
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
         let results = (try? context.fetch(request)) ?? []
@@ -55,7 +70,7 @@ final class FaceEmbeddingStore {
     }
 
     func getAllEmbeddings() -> [FaceEmbeddingEntity] {
-        let request: NSFetchRequest<FaceEmbeddingEntity> = FaceEmbeddingEntity.fetchRequest()
+        let request = makeFetchRequest()
         let results = (try? context.fetch(request)) ?? []
         results.forEach { $0.decryptEncryptedFieldsInPlace() }
         return results
@@ -64,7 +79,7 @@ final class FaceEmbeddingStore {
     // MARK: - Delete
 
     func deleteEmbeddingsForUser(userId: String) {
-        let request: NSFetchRequest<NSFetchRequestResult> = FaceEmbeddingEntity.fetchRequest()
+        let request = makeDeleteRequest()
         request.predicate = NSPredicate(format: "user_id == %@", userId)
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
@@ -77,7 +92,7 @@ final class FaceEmbeddingStore {
     /// key is wiped/rotated (see AppStorageManager.clearKeychainOnFreshInstall)
     /// so no ciphertext is left behind that the new key can never open.
     func deleteAll() {
-        let request: NSFetchRequest<NSFetchRequestResult> = FaceEmbeddingEntity.fetchRequest()
+        let request = makeDeleteRequest()
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
         } catch {

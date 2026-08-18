@@ -32,7 +32,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
     private let detector: YuNetDetectorService
     private let qualityChecker: FaceQualityChecker
     private let config: FaceRecognitionConfig
-    let cameraService: FaceEnrollmentCameraService
+    let cameraService: FaceCameraService
 
     /// Called once, on the main actor, when authentication succeeds.
     var onAuthenticated: ((String, String) -> Void)?
@@ -52,7 +52,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
         detector: YuNetDetectorService = .shared,
         qualityChecker: FaceQualityChecker = .shared,
         config: FaceRecognitionConfig = .shared,
-        cameraService: FaceEnrollmentCameraService = FaceEnrollmentCameraService()
+        cameraService: FaceCameraService = FaceCameraService()
     ) {
         self.repository = repository
         self.detector = detector

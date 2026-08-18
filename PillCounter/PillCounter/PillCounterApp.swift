@@ -38,6 +38,12 @@ struct PillCounterApp: App {
         _ = CoreDataManager.shared
         NSManagedObject.installEncryptionHooks()
 
+        // Deferred from AppStorageManager.init: a fresh install wipes the
+        // Keychain (and with it the field-encryption key), so any face rows
+        // left on disk are undecryptable ciphertext. The purge needs the Core
+        // Data stack, which only exists from the line above onwards.
+        AppStorageManager.shared.purgeFaceEnrollmentsIfKeychainWasWiped()
+
         // Cold launch (app was fully closed, now reopened) always requires a
         // fresh face scan — never resume a session from a prior process.
         FaceSessionManager.shared.lockOnColdLaunch()
@@ -221,6 +227,10 @@ extension PillCounterApp {
                 startSecurityMonitoring()
             }
             Task { await sessionManager.checkTokenOnForeground() }
+            // Face unlock is unusable with an empty roster — if the last
+            // enrolled user was deleted (or removed while backgrounded), drop
+            // the lock instead of stranding the app behind an unpassable scan.
+            faceSessionManager.releaseLockIfNoUsersEnrolled()
 
         case .background:
             //Apply the overlay before iOS takes the snapshot.

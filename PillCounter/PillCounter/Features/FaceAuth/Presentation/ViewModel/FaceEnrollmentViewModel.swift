@@ -32,6 +32,13 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// Coarse yaw estimate of the current best candidate, drives the
     /// on-screen oval nudge (e.g. "turn a bit more").
     @Published private(set) var liveYawDegrees: Float = 0
+    /// Companion to `liveYawDegrees` — together they drive the directional
+    /// arrow in EnrollmentPoseGuidance.
+    @Published private(set) var livePitchDegrees: Float = 0
+    /// Whether the current frame yielded a usable face. False leaves every
+    /// arrow unlit rather than pointing from a stale pose estimate — the row
+    /// itself stays on screen either way.
+    @Published private(set) var hasLiveFace: Bool = false
 
     private let poseSteps = EnrollmentPoseStep.allCases
 
@@ -40,7 +47,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private let repository: FaceRecognitionRepositoryProtocol
     private let detector: YuNetDetectorService
     private let qualityChecker: FaceQualityChecker
-    let cameraService: FaceEnrollmentCameraService
+    let cameraService: FaceCameraService
 
     // MARK: - Tuning (see research notes — grounded, not guessed, defaults)
 
@@ -83,7 +90,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         repository: FaceRecognitionRepositoryProtocol = FaceRecognitionRepository.shared,
         detector: YuNetDetectorService = .shared,
         qualityChecker: FaceQualityChecker = .shared,
-        cameraService: FaceEnrollmentCameraService = FaceEnrollmentCameraService()
+        cameraService: FaceCameraService = FaceCameraService()
     ) {
         self.repository = repository
         self.detector = detector
@@ -130,6 +137,9 @@ final class FaceEnrollmentViewModel: ObservableObject {
         relaxedThisStep = false
         pendingUserId = nil
         resetQualityThresholds()
+        hasLiveFace = false
+        liveYawDegrees = 0
+        livePitchDegrees = 0
         state = .preparing
 
         let user = repository.registerUser(firstName: trimmedFirstName, lastName: trimmedLastName)
@@ -163,11 +173,29 @@ final class FaceEnrollmentViewModel: ObservableObject {
         pendingUserId = nil
         collectedEmbeddings = []
         bestCandidate = nil
+        hasLiveFace = false
         state = .idle
     }
 
     func retry() {
         startEnrollment()
+    }
+
+    /// Resets to a clean `.idle` after a *successful* enrollment so the UI can
+    /// run the flow again for a different person. Unlike `cancelEnrollment`
+    /// this must not delete the user just enrolled — the samples are already
+    /// persisted and `pendingUserId` still points at them.
+    func prepareForNextUser() {
+        isCapturingFrames = false
+        cameraService.stop()
+        cameraService.onFrame = nil
+        pendingUserId = nil
+        collectedEmbeddings = []
+        bestCandidate = nil
+        hasLiveFace = false
+        firstName = ""
+        lastName = ""
+        state = .idle
     }
 
     // MARK: - Frame pipeline
@@ -186,12 +214,14 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
         guard detections.count == 1 else {
             Log("Enrollment: frame skipped — \(detections.count) face(s) detected")
+            DispatchQueue.main.async { self.hasLiveFace = false }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
 
         let quality = qualityChecker.check(detection: detections[0], pixelBuffer: pixelBuffer)
         guard quality.isAcceptable else {
+            DispatchQueue.main.async { self.hasLiveFace = false }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
@@ -200,6 +230,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         // check, before this frame is eligible as a capture candidate. See
         // FaceCaptureValidator.swift for what this catches and why.
         guard FaceCaptureValidator.isFaceCaptureValid(face: detections[0], frame: pixelBuffer) == nil else {
+            DispatchQueue.main.async { self.hasLiveFace = false }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
@@ -207,7 +238,11 @@ final class FaceEnrollmentViewModel: ObservableObject {
         let step = poseSteps[currentStepIndex]
         let poseMatches = isPoseInRange(step: step, quality: quality)
 
-        DispatchQueue.main.async { self.liveYawDegrees = quality.yawDegrees }
+        DispatchQueue.main.async {
+            self.liveYawDegrees = quality.yawDegrees
+            self.livePitchDegrees = quality.pitchDegrees
+            self.hasLiveFace = true
+        }
 
         if poseMatches {
             poseHoldFrames += 1
@@ -398,6 +433,31 @@ final class FaceEnrollmentViewModel: ObservableObject {
         case .capturingSample: return L10n.FaceAuth.poseCaptured
         case .enrollmentComplete: return L10n.FaceAuth.instructionComplete
         case .failed(let reason): return failureText(reason)
+        }
+    }
+
+    /// Which way the user must move for the current step, or nil when there
+    /// is nothing to nudge (no usable face in frame, or not mid-capture).
+    /// Derived live from the published yaw/pitch, so the arrow tracks the
+    /// actual head pose rather than a timed script.
+    var poseNudge: PoseNudge? {
+        guard hasLiveFace else { return nil }
+        switch state {
+        case .awaitingPose(let step, _, _), .poseHeld(let step, _, _):
+            return PoseNudge.from(step: step, yawDegrees: liveYawDegrees, pitchDegrees: livePitchDegrees)
+        case .capturingSample:
+            return .onTarget
+        default:
+            return nil
+        }
+    }
+
+    /// Spinner state for the shared scan screen — EnrollmentState doesn't map
+    /// onto AuthenticationState, so the screen takes this as an override.
+    var isBusy: Bool {
+        switch state {
+        case .preparing, .poseHeld, .capturingSample: return true
+        default: return false
         }
     }
 

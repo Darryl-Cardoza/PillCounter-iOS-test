@@ -16,6 +16,21 @@ final class FaceUserStore {
         CoreDataManager.shared.context
     }
 
+    /// Entity name spelled out instead of going through the generated
+    /// `FaceUserEntity.fetchRequest()` — see the same note in
+    /// FaceEmbeddingStore: the generated helper resolves the entity via
+    /// `+[NSManagedObject entity]`, which yields an empty entity name if it
+    /// runs before the managed object model is loaded.
+    private static let entityName = "FaceUserEntity"
+
+    private func makeDeleteRequest() -> NSFetchRequest<NSFetchRequestResult> {
+        NSFetchRequest<NSFetchRequestResult>(entityName: FaceUserStore.entityName)
+    }
+
+    private func makeFetchRequest() -> NSFetchRequest<FaceUserEntity> {
+        NSFetchRequest<FaceUserEntity>(entityName: FaceUserStore.entityName)
+    }
+
     // MARK: - Create
 
     /// Inserts a new active FaceUser. Caller is responsible for uniqueness
@@ -39,14 +54,14 @@ final class FaceUserStore {
     // MARK: - Read
 
     func getUser(id: String) -> FaceUserEntity? {
-        let request: NSFetchRequest<FaceUserEntity> = FaceUserEntity.fetchRequest()
+        let request = makeFetchRequest()
         request.predicate = NSPredicate(format: "id == %@", id)
         request.fetchLimit = 1
         return try? context.fetch(request).first
     }
 
     func getAllUsers(activeOnly: Bool = true) -> [FaceUserEntity] {
-        let request: NSFetchRequest<FaceUserEntity> = FaceUserEntity.fetchRequest()
+        let request = makeFetchRequest()
         if activeOnly {
             request.predicate = NSPredicate(format: "is_active == YES")
         }
@@ -56,7 +71,7 @@ final class FaceUserStore {
 
     /// Case-insensitive active-name check, used to reject duplicate enrollment names.
     func isNameTaken(_ name: String) -> Bool {
-        let request: NSFetchRequest<FaceUserEntity> = FaceUserEntity.fetchRequest()
+        let request = makeFetchRequest()
         request.predicate = NSPredicate(
             format: "is_active == YES AND name ==[c] %@", name
         )
@@ -99,7 +114,7 @@ final class FaceUserStore {
     /// key is wiped/rotated (see AppStorageManager.clearKeychainOnFreshInstall)
     /// so no stale user rows are left pointing at now-undecryptable embeddings.
     func deleteAll() {
-        let request: NSFetchRequest<NSFetchRequestResult> = FaceUserEntity.fetchRequest()
+        let request = makeDeleteRequest()
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
         } catch {

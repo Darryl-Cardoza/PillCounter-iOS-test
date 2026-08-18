@@ -29,11 +29,26 @@ final class AppStorageManager {
         clearKeychainOnFreshInstall()
     }
 
-    
+    /// Set by `clearKeychainOnFreshInstall` when this launch wiped the
+    /// Keychain, and consumed by `purgeFaceEnrollmentsIfKeychainWasWiped()`.
+    /// Backed by UserDefaults rather than an in-memory flag so a crash between
+    /// the wipe and the purge still leaves the orphaned rows scheduled for
+    /// deletion on the next launch.
+    private var faceEnrollmentPurgePending: Bool {
+        get { defaults.bool(forKey: AppStorageKeys.faceEnrollmentPurgePending) }
+        set { defaults.set(newValue, forKey: AppStorageKeys.faceEnrollmentPurgePending) }
+    }
+
     private func clearKeychainOnFreshInstall() {
         guard !defaults.bool(forKey: AppStorageKeys.hasLaunchedBefore) else { return }
         Keychain.deleteAll()
-        purgeFaceEnrollments()
+        // Core Data is deliberately NOT touched here. This initializer can run
+        // before CoreDataManager.shared has loaded the managed object model —
+        // AppStorageManager.shared is reachable from view model default
+        // arguments, which SwiftUI evaluates as stored-property initializers
+        // before PillCounterApp.init's body runs. Fetching an entity at that
+        // point crashes with "could not locate an NSEntityDescription".
+        faceEnrollmentPurgePending = true
         defaults.set(true, forKey: AppStorageKeys.hasLaunchedBefore)
     }
 
@@ -42,9 +57,14 @@ final class AppStorageManager {
     /// encrypted with the now-gone key and can never be decrypted again —
     /// leaving orphaned ciphertext that silently fails "quick access"
     /// forever. Purge them so a wiped key never outlives its data.
-    private func purgeFaceEnrollments() {
+    ///
+    /// Must be called only once the Core Data stack is up — see
+    /// `PillCounterApp.init`.
+    func purgeFaceEnrollmentsIfKeychainWasWiped() {
+        guard faceEnrollmentPurgePending else { return }
         FaceEmbeddingStore.shared.deleteAll()
         FaceUserStore.shared.deleteAll()
+        faceEnrollmentPurgePending = false
     }
 
     // MARK: - Key constants
@@ -70,6 +90,7 @@ final class AppStorageManager {
         static let hl7MessageSpec       = "hl7_message_spec"
 
         // UserDefaults-backed (non-sensitive)
+        static let faceEnrollmentPurgePending = "face_enrollment_purge_pending"
         static let drugIdCounter        = "drug_id_counter"
         static let isNewUser            = "is_new_user"
         static let saveHistoryOption    = "save_history_option"
@@ -475,7 +496,12 @@ final class AppStorageManager {
     func logout() {
         // Single call removes all Keychain items — no risk of missing a key.
         Keychain.deleteAll()
-        purgeFaceEnrollments()
+        // Same reason as on a fresh install: the wipe above destroys the
+        // field-encryption key, so the face rows it wrote can never be read
+        // again. Flag first, then purge — if the purge is interrupted, the
+        // flag survives and the next launch finishes the job.
+        faceEnrollmentPurgePending = true
+        purgeFaceEnrollmentsIfKeychainWasWiped()
 
         defaults.removeObject(forKey: AppStorageKeys.isNewUser)
         clearTerminalCache()

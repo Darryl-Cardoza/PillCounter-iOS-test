@@ -59,126 +59,62 @@ struct SessionLockOverlay: View {
     // MARK: - LOCKED
 
     private var lockedView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 56, weight: .semibold))
-                .foregroundStyle(appColors.primary)
-
-            Text(L10n.FaceAuth.sessionLockedTitle)
-                .font(.title2.bold())
-                .foregroundStyle(appColors.text)
-
-            Text(sessionManager.idleDurationText ?? L10n.FaceAuth.sessionLockedSubtitle)
-                .font(.subheadline)
-                .foregroundStyle(appColors.text.opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-
+        SessionStatusScreen(
+            iconName: "icon_session_lock",
+            title: L10n.FaceAuth.sessionLockedTitle,
+            subtitle: sessionManager.idleDurationText ?? L10n.FaceAuth.sessionLockedSubtitle
+        ) {
             PillCountingButton(
-                iconName: nil,
                 title: L10n.FaceAuth.sessionLockedUnlockButton,
                 textColor: .white,
                 backgroundColor: appColors.primary,
-                borderColor: .clear,
-                font: .system(size: 15, weight: .semibold),
-                cornerRadius: 30,
-                horizontalPadding: 36,
-                verticalPadding: 16,
-                iconSize: 0,
-                action: startScan
+                action: startScan,
+                width: 160
             )
-            .fixedSize()
-            .padding(.top, 12)
+            .frame(width: 160)
         }
-        .padding()
     }
 
-    // MARK: - SCANNING (transitional)
+    // MARK: - SCANNING
 
+    /// Shows the same viewfinder as FaceAuthenticationView (via the shared
+    /// FaceScanSurface) rather than a bare spinner — without a preview the
+    /// user has no idea where to look while the scan runs.
     private var scanningView: some View {
-        VStack(spacing: 20) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .tint(appColors.primary)
-                .scaleEffect(1.4)
-
-            Text(viewModel.instructionText)
-                .font(.headline)
-                .foregroundStyle(appColors.text)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+        FaceScanScreen(
+            cameraService: viewModel.cameraService,
+            state: viewModel.state,
+            instructionText: viewModel.instructionText
+        ) {
+            scanTimeoutTask?.cancel()
+            stopScan()
+            sessionManager.cancelScan()
         }
-        .padding()
     }
 
     // MARK: - UNLOCKED (welcome-back transitional)
 
     private func unlockedView(userName: String) -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 56, weight: .semibold))
-                .foregroundStyle(.green)
-
-            Text(String(format: L10n.FaceAuth.sessionWelcomeBack, userName))
-                .font(.title2.bold())
-                .foregroundStyle(appColors.text)
-
-            Text(L10n.FaceAuth.sessionRestoring)
-                .font(.subheadline)
-                .foregroundStyle(appColors.text.opacity(0.7))
-        }
-        .padding()
+        SessionStatusScreen(
+            iconName: "done_icon",
+            title: String(format: L10n.FaceAuth.sessionWelcomeBack, userName),
+            subtitle: L10n.FaceAuth.sessionRestoring
+        )
     }
 
     // MARK: - FAILED
 
     private var failedView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 56, weight: .semibold))
-                .foregroundStyle(.red)
-
-            Text(L10n.FaceAuth.sessionFailedTitle)
-                .font(.title2.bold())
-                .foregroundStyle(appColors.text)
-
-            Text(L10n.FaceAuth.sessionFailedSubtitle)
-                .font(.subheadline)
-                .foregroundStyle(appColors.text.opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-
-            HStack(spacing: 12) {
-                PillCountingButton(
-                    iconName: nil,
-                    title: L10n.FaceAuth.cancel,
-                    textColor: appColors.primary,
-                    backgroundColor: .clear,
-                    borderColor: appColors.primary,
-                    font: .system(size: 15, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 28,
-                    verticalPadding: 16,
-                    iconSize: 0,
-                    action: { sessionManager.cancelScan() }
-                )
-                PillCountingButton(
-                    iconName: nil,
-                    title: L10n.FaceAuth.retry,
-                    textColor: .white,
-                    backgroundColor: appColors.primary,
-                    borderColor: .clear,
-                    font: .system(size: 15, weight: .semibold),
-                    cornerRadius: 30,
-                    horizontalPadding: 28,
-                    verticalPadding: 16,
-                    iconSize: 0,
-                    action: startScan
-                )
-            }
-            .padding(.top, 12)
+        SessionStatusScreen(
+            iconName: "icon_close",
+            title: L10n.FaceAuth.sessionFailedTitle,
+            subtitle: L10n.FaceAuth.sessionFailedSubtitle
+        ) {
+            SessionActionButtonPair(
+                onCancel: { sessionManager.cancelScan() },
+                onConfirm: startScan
+            )
         }
-        .padding()
     }
 
     // MARK: - Scan lifecycle

@@ -33,7 +33,23 @@ struct UserData: Codable {
     let user: UserDetails?
     let profile: UserProfile?
     let settings: UserSettings?
-   
+    let kek: KekInfoResponse?
+
+}
+
+// MARK: - KEK (server-issued key-encryption-key for DEK rotation)
+struct KekInfoResponse: Codable {
+    let keyId: String?
+    let version: Int?
+    let algorithm: String?
+    let keyMaterial: String?
+
+    enum CodingKeys: String, CodingKey {
+        case keyId = "key_id"
+        case version
+        case algorithm
+        case keyMaterial = "key_material"
+    }
 }
 
 // MARK: - UserDetails

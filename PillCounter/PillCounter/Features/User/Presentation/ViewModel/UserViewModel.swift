@@ -245,6 +245,24 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.hl7MessageSpec = Hl7Format.fromSendingApplication(hl7MessageSpec)
                 }
 
+                if let kekResponse = result.data?.kek,
+                   let keyId = kekResponse.keyId,
+                   let version = kekResponse.version,
+                   let keyMaterial = kekResponse.keyMaterial {
+                    DatabaseKeyProvider.shared.rotateKekIfNewer(
+                        KekInfo(keyId: keyId, version: version, keyMaterial: keyMaterial)
+                    )
+                }
+
+                if let kekResponse = result.data?.kek,
+                   let keyId = kekResponse.keyId,
+                   let version = kekResponse.version,
+                   let keyMaterial = kekResponse.keyMaterial {
+                    DatabaseKeyProvider.shared.rotateKekIfNewer(
+                        KekInfo(keyId: keyId, version: version, keyMaterial: keyMaterial)
+                    )
+                }
+
                 // Terminals are NOT sourced from auth/me — the dedicated
                 // GET /terminals/list endpoint (`loadTerminals()`) is the only
                 // source of truth for the Profile dropdown and its local cache.

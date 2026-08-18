@@ -93,19 +93,10 @@ final class FieldEncryptionManager {
 
     // MARK: - Key management
 
-    // Account/service/accessibility preserved exactly from the original
-    // implementation so the existing field-encryption key stays readable.
-    // WhenUnlockedThisDeviceOnly: device-bound, not backed up to iCloud.
-    private static let keyAccount = "com.pillcounter.field.encryption.key.v1"
-    private static let keyService = "com.ritetechnologies.PillCounting"
-
-    /// Loads the AES-256-GCM field key from the Keychain, or generates and
-    /// stores a new one.
+    /// This is the app's DEK: envelope-wrapped under a KEK and persisted via
+    /// `DatabaseKeyProvider` rather than stored raw. See that type for the
+    /// bootstrap/rotation/recovery lifecycle.
     private func loadOrCreateKey() -> SymmetricKey {
-        Keychain.getOrCreateSymmetricKey(
-            account: Self.keyAccount,
-            service: Self.keyService,
-            accessibility: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        )
+        DatabaseKeyProvider.shared.getOrCreateDek(for: .field)
     }
 }

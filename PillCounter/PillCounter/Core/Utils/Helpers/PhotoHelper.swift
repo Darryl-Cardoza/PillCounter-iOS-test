@@ -111,12 +111,13 @@ struct PhotoFileManager {
     // Encrypted extension so plain .jpg files can't be opened by Files app
     private let ext = ".enc"
 
-    // Image-encryption AES key. Account/attributes match the original
-    // KeychainHelper exactly (no service attribute) so previously stored keys
-    // — and the images they encrypted — remain readable.
-    private let imageKeyAccount = "com.pillcounter.imageEncryptionKey"
+    // Image DEK: envelope-wrapped under a KEK and persisted via
+    // `DatabaseKeyProvider` (see `DekSlot.image`) rather than stored raw.
+    // A pre-existing raw key at the old KeychainHelper-compatible account
+    // (no service attribute) is migrated in automatically, not regenerated,
+    // so previously encrypted images stay readable.
     private var imageEncryptionKey: SymmetricKey {
-        Keychain.getOrCreateSymmetricKey(account: imageKeyAccount, service: nil)
+        DatabaseKeyProvider.shared.getOrCreateDek(for: .image)
     }
 
     // MARK: - Save (encrypt)

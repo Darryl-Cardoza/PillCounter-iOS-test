@@ -188,17 +188,16 @@
 "settings.hazardousTrayColor" = "Hazardous Tray Color";
 "settings.resetHazardousTrayColorTitle" = "Are you sure you want to reset the hazardous tray color?";
 "settings.resetHazardousTrayColorMessage" = "You will be prompted to set a new hazardous tray color the next time one is detected.";
-"settings.faceRecognition" = "Face Recognition";
-"settings.faceRecognitionScreenTitle" = "Face Recognition";
+"settings.autoLockSession" = "Auto Lock Session";
 "settings.lockNow" = "Lock Now";
 "settings.addUser" = "Add User";
 "settings.quickAccess" = "Quick Access";
 "settings.timeLimit" = "Time Limit";
 "settings.timeLimitScreenTitle" = "Session Lock Timeout";
-"settings.faceSessionTimeout30s" = "30 Seconds";
-"settings.faceSessionTimeout1m" = "1 Minute (Default)";
-"settings.faceSessionTimeout2m" = "2 Minutes";
+"settings.faceSessionTimeout1m" = "1 Minute";
+"settings.faceSessionTimeout2m" = "2 Minutes (Default)";
 "settings.faceSessionTimeout5m" = "5 Minutes";
+"settings.faceSessionTimeout10m" = "10 Minutes";
 
 "faceAuth.enrollmentTitle" = "Add New User";
 "faceAuth.setupIntroTitle" = "Setup Quick Access";
@@ -275,7 +274,7 @@
 "faceAuth.quickAccessUsersDeleteMessage" = "This will remove the selected user(s) from Quick Access. They will need to re-enroll to use Quick Access again.";
 
 "faceAuth.sessionLockedTitle" = "Session Locked";
-"faceAuth.sessionLockedSubtitle" = "Idle for 2 min.\nVerify your face to pick up \n where you left off.";
+"faceAuth.sessionLockedSubtitle" = "Verify your face to pick up \n where you left off.";
 "faceAuth.sessionIdleMinutes" = "Idle for %d min.\nVerify your face to pick up where you left off.";
 "faceAuth.sessionIdleSeconds" = "Idle for %d sec.\nVerify your face to pick up where you left off.";
 "faceAuth.sessionLockedUnlockButton" = "VERIFY WITH FACE";
@@ -283,6 +282,14 @@
 "faceAuth.sessionRestoring" = "Identity verified.\nResuming your session...";
 "faceAuth.sessionFailedTitle" = "We couldn't recognize you";
 "faceAuth.sessionFailedSubtitle" = "Make sure your face is well lit \n and centered,then try again.";
+
+"faceAuth.idScan.title" = "Scan Photo ID";
+"faceAuth.idScan.hint" = "Hold your photo ID or badge inside the frame";
+"faceAuth.idScan.enterManually" = "Enter Manually";
+"faceAuth.idScan.statusScanning" = "Scanning for ID…";
+"faceAuth.idScan.statusPaused" = "Scanning paused";
+"faceAuth.idScan.statusRestarting" = "Restarting camera…";
+"faceAuth.idScan.suggestionsLabel" = "%@ Suggestions";
 
 
 // MARK: - CAMERA PERMISSION

@@ -27,13 +27,6 @@ struct HamburgerMenuView: View {
     @State private var showSelectBucketIdPopup: Bool = false
     @State private var selectedStockCountOption: StockCountOption = .newBatch
 
-    #if DEBUG
-    /// Drives the debug-only face-verification screen. Presented as a cover
-    /// rather than a route so HamburgerMenuFLow — which is Codable and feeds a
-    /// persisted navigation path — gains no debug-only case.
-    @State private var showDebugFaceVerify: Bool = false
-    #endif
-
     private let menuItems = HamburgerMenuItem.allCases
 
     private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
@@ -75,20 +68,7 @@ struct HamburgerMenuView: View {
                 userViewModel.getAllTransactionsAndFilterByCountType()
             }
         }
-        .modifier(DebugFaceVerifyCover(isPresented: debugFaceVerifyBinding))
     }
-
-    /// A live binding in DEBUG; an inert constant in release, so the cover
-    /// modifier can stay unconditional in `body` (a `#if` around a modifier in
-    /// a `some View` chain changes the returned type).
-    private var debugFaceVerifyBinding: Binding<Bool> {
-        #if DEBUG
-        return $showDebugFaceVerify
-        #else
-        return .constant(false)
-        #endif
-    }
-
 
     // MARK: - LOGOUT POP UP
     private var logoutPopUp: some View {
@@ -523,59 +503,10 @@ struct HamburgerMenuView: View {
         case .Profile:
             router.navigate(to: .authentication(.user(.userSettings(.profile(mustSelectTerminal: false)))))
 
-        case .QuickAccessUsers:
-            router.navigate(to: .authentication(.user(.userSettings(.quickAccessUsers))))
-
-        #if DEBUG
-        case .DebugVerifyFace:
-            // A scan with nothing enrolled can only ever fail — say so instead
-            // of opening a camera that cannot succeed.
-            guard FaceSessionManager.shared.hasEnrolledUsers else {
-                ToastManager.shared.show(message: "No enrolled users")
-                return
-            }
-            showDebugFaceVerify = true
-
-        case .DebugLockNow:
-            // lockDueToInactivity() silently no-ops when nobody is enrolled,
-            // which would make this row look dead — surface it instead.
-            guard FaceSessionManager.shared.hasEnrolledUsers else {
-                ToastManager.shared.show(message: "No enrolled users")
-                return
-            }
-            // Nav stack left alone on purpose: the overlay lives at the app
-            // root and covers this menu, so unlocking lands back here — which
-            // is exactly the resume-in-place behavior worth eyeballing.
-            FaceSessionManager.shared.lockDueToInactivity()
-        #endif
-
         case .History:
             router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .all)))))
 
         }
-    }
-}
-
-/// Presents the debug face-verification screen. Real cover in DEBUG, a no-op
-/// passthrough in release, so `body` needs no conditional compilation.
-private struct DebugFaceVerifyCover: ViewModifier {
-
-    @Binding var isPresented: Bool
-
-    func body(content: Content) -> some View {
-        #if DEBUG
-        content.fullScreenCover(isPresented: $isPresented) {
-            FaceAuthenticationView { userId, userName in
-                Log("DEBUG VerifyFace: matched \(userName) (\(userId))")
-                // Exercise the real unlock plumbing — session owner switch,
-                // last_authenticated_at write, idle timer arming — not just
-                // the detection pipeline.
-                FaceSessionManager.shared.unlock(userId: userId, userName: userName)
-            }
-        }
-        #else
-        content
-        #endif
     }
 }
 

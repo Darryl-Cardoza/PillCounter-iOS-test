@@ -210,9 +210,12 @@ final class FaceSessionManager: ObservableObject {
     }
 
     /// "Idle for 2 min" / "Idle for 45 sec" style text for the locked
-    /// screen's subtitle. `nil` when there's nothing to report (cold launch).
+    /// screen's subtitle. Always reflects the configured auto-lock timeout
+    /// (Settings > Face Recognition > Time Limit), not the measured idle
+    /// duration. `nil` when there's nothing to report (cold launch).
     var idleDurationText: String? {
-        guard let seconds = idleDurationAtLock else { return nil }
+        guard idleDurationAtLock != nil else { return nil }
+        let seconds = inactivityTimeout
         if seconds >= 60 {
             let minutes = Int((seconds / 60).rounded())
             return String(format: L10n.FaceAuth.sessionIdleMinutes, minutes)

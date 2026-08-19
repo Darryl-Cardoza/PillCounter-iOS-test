@@ -225,26 +225,39 @@ final class FaceCameraService: NSObject, ObservableObject {
         }
     }
 
-    /// Seeds `currentCameraOrientation` from the window scene, since
-    /// UIDevice.orientation is `.unknown` until the first rotation
-    /// notification arrives.
+    /// Seeds `currentCameraOrientation`, preferring the live device sensor
+    /// reading over the window scene's interface orientation.
     ///
-    /// The landscape cases are mapped WITHOUT swapping, deliberately. Every
-    /// later update comes from `UIDevice.current.orientation` in
-    /// `handleOrientationChange`, so the seed has to speak the same
-    /// UIDeviceOrientation vocabulary — otherwise the initial angle and the
-    /// post-rotation angle disagree by 180° in landscape, which shows up as one
-    /// landscape being upside down and (because front-camera mirroring is then
-    /// applied in a flipped frame) reading as horizontally inverted.
+    /// The scene reading is only a fallback, used when the device sensor
+    /// hasn't reported yet — UIDevice.orientation is `.unknown` until
+    /// `beginGeneratingDeviceOrientationNotifications()` has been called at
+    /// least once anywhere in the process (this class's own
+    /// `startObservingOrientation()` is the first and only place that
+    /// happens for this service). On the very first scan of a cold launch —
+    /// e.g. tapping "Verify with Face" on SessionLockOverlay — that has never
+    /// run yet, so this fallback is not a rare edge case, it is the ONLY path
+    /// taken on every first open.
     ///
-    /// Note this differs from CameraService.initialOrientation, which does swap.
-    /// That swap converts to the UIInterfaceOrientation convention; mixing the
-    /// two conventions in one pipeline is the bug being fixed here.
+    /// The scene reports a UIInterfaceOrientation, which uses the opposite
+    /// landscape convention from UIDeviceOrientation: physically rotating the
+    /// device so its right edge is up (device orientation `.landscapeRight`)
+    /// makes the interface read as `.landscapeLeft`, and vice versa — a
+    /// documented UIKit inversion, not a typo. Copying the case name directly
+    /// (as a previous version of this method did) is off by 180° in
+    /// landscape on that first-ever open; matches the swap
+    /// `IdScanCameraService.initialOrientation()` already applies for the
+    /// same reason.
     private func seedOrientationFromScene() {
+        let deviceOrientation = UIDevice.current.orientation
+        if deviceOrientation.isValidInterfaceOrientation {
+            currentCameraOrientation = deviceOrientation
+            return
+        }
+
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
         switch scene.interfaceOrientation {
-        case .landscapeLeft: currentCameraOrientation = .landscapeLeft
-        case .landscapeRight: currentCameraOrientation = .landscapeRight
+        case .landscapeLeft: currentCameraOrientation = .landscapeRight
+        case .landscapeRight: currentCameraOrientation = .landscapeLeft
         case .portraitUpsideDown: currentCameraOrientation = .portraitUpsideDown
         default: currentCameraOrientation = .portrait
         }
@@ -266,16 +279,15 @@ final class FaceCameraService: NSObject, ObservableObject {
     /// asynchronously, so it can't be trusted to already reflect a flip that
     /// just happened on this (session) queue.
     ///
-    /// Rotation is driven by DEVICE ORIENTATION ONLY, never by camera position.
-    /// A previous version varied it by position (front vs back), which was
-    /// wrong twice over: front and back sensors differ by mirroring, not
-    /// rotation, and mirroring is already handled by `isVideoMirrored` below —
-    /// so the rotation term double-compensated and left one of the two
-    /// positions 180° off.
+    /// The rotation angle's landscape cases depend on whether `position` is
+    /// mirrored (front camera) — see `rotationAngle(for:mirrored:)`. Confirmed
+    /// on device: an un-mirrored-table angle left the front camera's preview
+    /// 180° off in landscape, since mirroring the frame after rotating it
+    /// reverses which landscape angle looks upright.
     private func applyConnectionOrientation(position: AVCaptureDevice.Position) {
         guard let connection = videoOutput.connection(with: .video) else { return }
 
-        let angle = Self.rotationAngle(for: currentCameraOrientation)
+        let angle = Self.rotationAngle(for: currentCameraOrientation, mirrored: position == .front)
         if connection.isVideoRotationAngleSupported(angle) {
             connection.videoRotationAngle = angle
         }
@@ -288,17 +300,26 @@ final class FaceCameraService: NSObject, ObservableObject {
     /// order, as they must be — any two orientations that differ by a physical
     /// 180° must differ by 180° here too.
     ///
-    /// Based on Features/Scanning's CameraService.rotationAngle, with one
-    /// correction: that table returns 90 for BOTH .portrait and
-    /// .portraitUpsideDown, which is 180° wrong for upside-down. It never
-    /// surfaced there (back camera, effectively single-orientation screens);
-    /// here it showed up as an inverted preview as soon as that orientation
-    /// became reachable.
-    static func rotationAngle(for orientation: UIDeviceOrientation) -> CGFloat {
+    /// Based on Features/Scanning's CameraService.rotationAngle, with two
+    /// corrections:
+    /// - That table returns 90 for BOTH .portrait and .portraitUpsideDown,
+    ///   which is 180° wrong for upside-down. It never surfaced there
+    ///   (back camera, effectively single-orientation screens); here it
+    ///   showed up as an inverted preview as soon as that orientation
+    ///   became reachable.
+    /// - `mirrored` swaps the landscapeLeft/landscapeRight angles. Confirmed
+    ///   by device log: on an iPad physically in landscapeRight,
+    ///   currentCameraOrientation correctly resolved to .landscapeLeft, but
+    ///   the un-mirrored angle (0°) rendered the front-camera preview 180°
+    ///   wrong — mirroring the frame after rotating it (vs. before) reverses
+    ///   which landscape angle looks upright, so the front (mirrored) camera
+    ///   needs the opposite angle from the back (unmirrored) camera for the
+    ///   same physical orientation.
+    static func rotationAngle(for orientation: UIDeviceOrientation, mirrored: Bool) -> CGFloat {
         switch orientation {
         case .portrait: return 90
-        case .landscapeLeft: return 0
-        case .landscapeRight: return 180
+        case .landscapeLeft: return mirrored ? 180 : 0
+        case .landscapeRight: return mirrored ? 0 : 180
         case .portraitUpsideDown: return 270
         // .faceUp / .faceDown / .unknown have no meaningful angle — hold
         // portrait rather than snapping the preview to something arbitrary.

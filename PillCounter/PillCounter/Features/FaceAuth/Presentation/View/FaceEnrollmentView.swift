@@ -30,7 +30,7 @@ struct FaceEnrollmentView: View {
     /// UI, the ViewModel has no notion of "intro"/"name form".
     private enum OnboardingStep {
         case intro
-        case nameEntry
+        case scanId
     }
 
     @StateObject private var viewModel: FaceEnrollmentViewModel
@@ -56,7 +56,6 @@ struct FaceEnrollmentView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var onboardingStep: OnboardingStep = .intro
-    @State private var nameError: String?
 
     /// Fired once, right when enrollment succeeds, with the enrolled name —
     /// the presenter uses this to drive its own success overlay/dismiss.
@@ -74,7 +73,7 @@ struct FaceEnrollmentView: View {
         self.onEnrolled = onEnrolled
         self.showsIntro = showsIntro
         _viewModel = StateObject(wrappedValue: FaceEnrollmentViewModel())
-        _onboardingStep = State(initialValue: showsIntro ? .intro : .nameEntry)
+        _onboardingStep = State(initialValue: showsIntro ? .intro : .scanId)
     }
 
     var body: some View {
@@ -86,10 +85,9 @@ struct FaceEnrollmentView: View {
                     introSection
                         .background(appColors.primaryBackground)
                         .ignoresSafeArea()
-                case .nameEntry:
-                    nameEntrySection
-                        .padding()
-                        .background(appColors.secondaryBackground)
+                case .scanId:
+                    scanIdSection
+                        .ignoresSafeArea()
                 }
 
             case .enrollmentComplete:
@@ -148,87 +146,35 @@ struct FaceEnrollmentView: View {
                 cancelTitle: L10n.FaceAuth.cancel,
                 confirmTitle: L10n.FaceAuth.getStarted,
                 onCancel: { dismiss() },
-                onConfirm: { onboardingStep = .nameEntry }
+                onConfirm: { onboardingStep = .scanId }
             )
         }
     }
 
-    // MARK: - Name entry
+    // MARK: - Scan photo ID
 
-    private var nameEntrySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Button {
-                    // With no intro step behind us, back means "leave".
-                    if showsIntro {
-                        onboardingStep = .intro
-                    } else {
-                        dismiss()
-                    }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .foregroundStyle(appColors.text)
-                }
-                Spacer()
-                Button {
+    private var scanIdSection: some View {
+        ScanPhotoIdView(
+            firstName: $viewModel.firstName,
+            lastName: $viewModel.lastName,
+            onBack: {
+                // With no intro step behind us, back means "leave".
+                if showsIntro {
+                    onboardingStep = .intro
+                } else {
                     dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .foregroundStyle(appColors.text)
                 }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.FaceAuth.whatsYourName)
-                    .font(.title3.bold())
-                    .foregroundStyle(appColors.primary)
-
-                Text(L10n.FaceAuth.whatsYourNameSubtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(appColors.text.opacity(0.7))
-            }
-
-            TextField(L10n.FaceAuth.firstNameFieldPlaceholder, text: $viewModel.firstName)
-                .textFieldStyle(.roundedBorder)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.words)
-
-            TextField(L10n.FaceAuth.lastNameFieldPlaceholder, text: $viewModel.lastName)
-                .textFieldStyle(.roundedBorder)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.words)
-
-            if let nameError {
-                Text(nameError)
-                    .foregroundStyle(.red)
-                    .font(.footnote)
-            }
-
-            Spacer()
-
-            FaceAuthActionButton(
-                title: L10n.FaceAuth.continueButton,
-                isPrimary: true,
-                isEnabled: viewModel.isNameValid,
-                fillsWidth: true
-            ) {
-                continueTapped()
-            }
-            .padding(.bottom, 12)
-        }
-    }
-
-    private func continueTapped() {
-        guard viewModel.isNameValid else {
-            nameError = L10n.FaceAuth.nameEmptyError
-            return
-        }
-        guard viewModel.validateNameBeforeStarting() else {
-            nameError = L10n.FaceAuth.nameDuplicateError
-            return
-        }
-        nameError = nil
-        viewModel.startEnrollment()
+            },
+            // Returns nil to proceed, or an error to show inline in the
+            // sheet — the duplicate-name check now surfaces where the name
+            // lives, since the standalone form is gone.
+            validateName: {
+                guard viewModel.isNameValid else { return L10n.FaceAuth.nameEmptyError }
+                guard viewModel.validateNameBeforeStarting() else { return L10n.FaceAuth.nameDuplicateError }
+                return nil
+            },
+            onContinue: { viewModel.startEnrollment() }
+        )
     }
 
     // MARK: - Capture (shared viewfinder + enrollment guidance)
@@ -243,7 +189,11 @@ struct FaceEnrollmentView: View {
             state: .idle,
             instructionText: viewModel.instructionText,
             title: L10n.FaceAuth.enrollmentTitle,
-            showsFlipCamera: true,
+            // Enrollment always needs a face in frame to make progress —
+            // flipping to the back camera starves the pose detector, which
+            // hard-fails the step (~12s, see stepHardTimeoutSeconds) and
+            // stops the session, making the flip button look dead afterward.
+            showsFlipCamera: false,
             isBusy: viewModel.isBusy,
             guideColorOverride: guideColor,
             onBack: {
@@ -301,10 +251,9 @@ struct FaceEnrollmentView: View {
     }
 
     /// "Add User" from the success screen: clear the previous name and drop
-    /// back to name entry rather than re-capturing for the same person.
+    /// back to the scan step rather than re-capturing for the same person.
     private func startAnotherEnrollment() {
         viewModel.prepareForNextUser()
-        nameError = nil
-        onboardingStep = .nameEntry
+        onboardingStep = .scanId
     }
 }

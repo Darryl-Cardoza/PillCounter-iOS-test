@@ -228,9 +228,6 @@ final class MockUserRepository: UserRepositoryProtocol {
     func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
         fatalError("not needed for bottle-rescan tests")
     }
-    func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
-        fatalError("not needed for bottle-rescan tests")
-    }
 }
 
 final class MockControlledRepository: ControlledRepositoryProtocol {

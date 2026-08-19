@@ -96,16 +96,6 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
     case UnsyncedTransaction
     case Settings
     case Profile
-    case QuickAccessUsers
-    #if DEBUG
-    /// Debug-only: opens the face-auth camera screen on demand, so
-    /// recognition can be exercised without waiting for the inactivity
-    /// timer. Compiled out of release builds.
-    case DebugVerifyFace
-    /// Debug-only: locks the session immediately and shows the
-    /// session-locked screen. Compiled out of release builds.
-    case DebugLockNow
-    #endif
     case Logout
 
     public var id: String { title }
@@ -120,12 +110,6 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
             case .History: return L10n.Menu.history
             case .UnsyncedTransaction: return L10n.Menu.unsync
             case .Settings: return L10n.Menu.settings
-            case .QuickAccessUsers: return L10n.Menu.quickAccessUsers
-            #if DEBUG
-            // Not localized on purpose — debug scaffolding.
-            case .DebugVerifyFace: return "⚙︎ Verify Face (Debug)"
-            case .DebugLockNow: return "⚙︎ Lock Now (Debug)"
-            #endif
             case .Logout: return L10n.Menu.logout
         }
 
@@ -139,11 +123,6 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
         case .History: return "history_icon"
         case .UnsyncedTransaction: return "unsync_icon"
         case .Settings: return "settings_icon"
-        case .QuickAccessUsers: return "profile_icon"
-        #if DEBUG
-        case .DebugVerifyFace: return "profile_icon"
-        case .DebugLockNow: return "logout_icon"
-        #endif
         case .Logout: return "logout_icon"
         }
     }
@@ -385,16 +364,15 @@ enum DrugSchedule: String, CaseIterable, Identifiable {
 enum SettingsSubScreen {
     case saveHistory
     case schedule
-    case faceRecognition
 }
 
 /// Session-lock idle timeout — how long the app can sit untouched before the
 /// face-lock overlay appears (spec: "configurable timeout (e.g. 60s)").
 enum FaceSessionTimeoutOption: Int, CaseIterable, Identifiable {
-    case thirtySeconds = 30
     case oneMinute = 60
     case twoMinutes = 120
     case fiveMinutes = 300
+    case tenMinutes = 600
 
     var id: Int { rawValue }
 
@@ -402,14 +380,14 @@ enum FaceSessionTimeoutOption: Int, CaseIterable, Identifiable {
 
     var displayText: String {
         switch self {
-        case .thirtySeconds: return L10n.Settings.faceSessionTimeout30s
         case .oneMinute: return L10n.Settings.faceSessionTimeout1m
         case .twoMinutes: return L10n.Settings.faceSessionTimeout2m
         case .fiveMinutes: return L10n.Settings.faceSessionTimeout5m
+        case .tenMinutes: return L10n.Settings.faceSessionTimeout10m
         }
     }
 
-    static var `default`: FaceSessionTimeoutOption { .oneMinute }
+    static var `default`: FaceSessionTimeoutOption { .twoMinutes }
 }
 
 

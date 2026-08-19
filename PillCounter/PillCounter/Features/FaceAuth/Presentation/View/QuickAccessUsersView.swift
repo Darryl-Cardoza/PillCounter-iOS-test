@@ -27,9 +27,6 @@ struct QuickAccessUsersView: View {
     @State private var selectedIds: Set<String> = []
     @State private var showDeleteConfirm: Bool = false
     @State private var showAddUser: Bool = false
-    /// Guards against flashing the setup pitch for one frame before the first
-    /// `reload()` has told us whether any users exist.
-    @State private var hasLoaded: Bool = false
 
     private struct Row: Identifiable {
         let id: String
@@ -52,21 +49,11 @@ struct QuickAccessUsersView: View {
     }
 
     var body: some View {
-        Group {
-            if hasLoaded && rows.isEmpty {
-                // Nothing enrolled yet: the screen IS the setup pitch. A list
-                // screen showing only an empty-state message, with the pitch
-                // hidden one tap deeper behind "Add User", made the user work
-                // for the thing they came here to do.
-                FaceEnrollmentView(showsIntro: true, onEnrolled: { _ in
-                    reload()
-                })
-                .environmentObject(appColors)
-            } else {
-                userListScreen
-            }
-        }
-        .onAppear(perform: reload)
+        // The "Setup Quick Access" pitch is first-run dashboard onboarding
+        // only (see UserProfileScreen) — reaching this screen from the
+        // hamburger menu always gets the plain list, empty or not.
+        userListScreen
+            .onAppear(perform: reload)
     }
 
     private var userListScreen: some View {
@@ -380,7 +367,6 @@ struct QuickAccessUsersView: View {
     }
 
     private func reload() {
-        hasLoaded = true
         let users = FaceUserStore.shared.getAllUsers(activeOnly: false)
         rows = users.compactMap { user -> Row? in
             guard let id = user.id, let name = user.name else { return nil }

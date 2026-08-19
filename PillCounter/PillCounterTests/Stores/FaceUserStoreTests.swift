@@ -6,6 +6,7 @@
 //  matches TransactionStoreTests. Every row is uniquely-id'd and torn down.
 //
 
+import Foundation
 import Testing
 @testable import PillCounter
 

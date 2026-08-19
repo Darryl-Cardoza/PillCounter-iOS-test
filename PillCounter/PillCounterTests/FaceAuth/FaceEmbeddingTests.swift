@@ -3,6 +3,7 @@
 //  PillCounterTests
 //
 
+import Foundation
 import Testing
 @testable import PillCounter
 

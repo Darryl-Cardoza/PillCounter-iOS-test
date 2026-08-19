@@ -24,6 +24,13 @@ struct UserSettingsView: View {
     @State private var activeSubScreen: SettingsSubScreen? = nil
     @State private var showTimeLimitPicker: Bool = false
 
+    #if DEBUG
+    /// Drives the debug-only face-verification screen. Presented as a cover
+    /// rather than a route so navigation state stays untouched by debug-only
+    /// scaffolding.
+    @State private var showDebugFaceVerify: Bool = false
+    #endif
+
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
     
@@ -37,8 +44,19 @@ struct UserSettingsView: View {
         ToastManager.shared.show(message: L10n.Menu.featureNotAvailableMessage)
     }
 
+    /// A live binding in DEBUG; an inert constant in release, so the cover
+    /// modifier can stay unconditional in `body` (a `#if` around a modifier in
+    /// a `some View` chain changes the returned type).
+    private var debugFaceVerifyBinding: Binding<Bool> {
+        #if DEBUG
+        return $showDebugFaceVerify
+        #else
+        return .constant(false)
+        #endif
+    }
 
-    
+
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -78,6 +96,7 @@ struct UserSettingsView: View {
             FaceSessionTimeoutPickerView(settingsViewModel: settingsViewModel)
                 .environmentObject(appColors)
         }
+        .modifier(DebugFaceVerifyCover(isPresented: debugFaceVerifyBinding))
         .onAppear {
             // PMS off → the gated features are unavailable; reset them to their
             // defaults (off / empty) so a stale "on" value can't take effect.
@@ -231,9 +250,9 @@ struct UserSettingsView: View {
                 
                 Divider().background(appColors.primaryBackground)
 
-                // MARK: Face Recognition
+                // MARK: Auto Lock Session
                 HStack {
-                    Text(L10n.Settings.faceRecognition)
+                    Text(L10n.Settings.autoLockSession)
                         .foregroundStyle(appColors.text)
                         .fontWeight(.regular)
                 }
@@ -241,12 +260,72 @@ struct UserSettingsView: View {
                 .padding(.horizontal)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        activeSubScreen = .faceRecognition
-                    }
+                    showTimeLimitPicker = true
                 }
 
                 Divider().background(appColors.primaryBackground)
+
+                // MARK: Quick Access Users
+                HStack {
+                    Text(L10n.Menu.quickAccessUsers)
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.regular)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    router.navigate(to: .authentication(.user(.userSettings(.quickAccessUsers))))
+                }
+
+                Divider().background(appColors.primaryBackground)
+
+                #if DEBUG
+                // Debug-only: opens the face-auth camera screen on demand, so
+                // recognition can be exercised without waiting for the
+                // inactivity timer. Compiled out of release builds.
+                HStack {
+                    Text("⚙︎ Verify Face (Debug)")
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.regular)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard FaceSessionManager.shared.hasEnrolledUsers else {
+                        ToastManager.shared.show(message: "No enrolled users")
+                        return
+                    }
+                    showDebugFaceVerify = true
+                }
+
+                Divider().background(appColors.primaryBackground)
+
+                // Debug-only: locks the session immediately and shows the
+                // session-locked screen. Compiled out of release builds.
+                HStack {
+                    Text("⚙︎ Lock Now (Debug)")
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.regular)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard FaceSessionManager.shared.hasEnrolledUsers else {
+                        ToastManager.shared.show(message: "No enrolled users")
+                        return
+                    }
+                    // Nav stack left alone on purpose: the overlay lives at the
+                    // app root and covers this screen, so unlocking lands back
+                    // here — which is exactly the resume-in-place behavior
+                    // worth eyeballing.
+                    FaceSessionManager.shared.lockDueToInactivity()
+                }
+
+                Divider().background(appColors.primaryBackground)
+                #endif
 
                 // MARK: Sound
                 ToggleRowView(
@@ -362,8 +441,6 @@ struct UserSettingsView: View {
                     saveHistoryContent
                 case .schedule:
                     scheduleContent
-                case .faceRecognition:
-                    faceRecognitionContent
                 }
             },
             bottomContent: { EmptyView() },
@@ -384,7 +461,6 @@ struct UserSettingsView: View {
         switch screen {
         case .saveHistory: return L10n.Settings.saveHistoryScreenTitle
         case .schedule: return L10n.Settings.scheduleScreenTitle
-        case .faceRecognition: return L10n.Settings.faceRecognitionScreenTitle
         }
     }
     
@@ -479,43 +555,31 @@ struct UserSettingsView: View {
         .background(appColors.primaryBackground)
     }
 
-    /// Session time limit is the only face-recognition setting exposed here.
-    /// Enrollment, quick access and registered-user management all live in
-    /// QuickAccessUsersView, reached from the hamburger menu.
-    private var faceRecognitionContent: some View {
-        VStack(alignment: .leading, spacing: 25) {
-            VStack(alignment: .leading, spacing: 45) {
-                faceRecognitionRow(
-                    title: L10n.Settings.timeLimit,
-                    value: settingsViewModel.faceSessionTimeoutOption.displayText
-                ) {
-                    showTimeLimitPicker = true
-                }
-            }
-            .padding(.leading, 30)
-
-            Spacer()
-        }
-        .padding(.top, SafeAreaInsets.top + 60)
-        .background(appColors.primaryBackground)
-    }
-
-    private func faceRecognitionRow(title: String, value: String? = nil, onTap: (() -> Void)? = nil) -> some View {
-        HStack {
-            Text(title)
-                .foregroundColor(appColors.text)
-            Spacer()
-            if let value {
-                Text(value)
-                    .foregroundColor(appColors.text.opacity(0.6))
-                    .padding(.trailing, 30)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { onTap?() }
-    }
 }
 
+
+/// Presents the debug face-verification screen. Real cover in DEBUG, a no-op
+/// passthrough in release, so `body` needs no conditional compilation.
+private struct DebugFaceVerifyCover: ViewModifier {
+
+    @Binding var isPresented: Bool
+
+    func body(content: Content) -> some View {
+        #if DEBUG
+        content.fullScreenCover(isPresented: $isPresented) {
+            FaceAuthenticationView { userId, userName in
+                Log("DEBUG VerifyFace: matched \(userName) (\(userId))")
+                // Exercise the real unlock plumbing — session owner switch,
+                // last_authenticated_at write, idle timer arming — not just
+                // the detection pipeline.
+                FaceSessionManager.shared.unlock(userId: userId, userName: userName)
+            }
+        }
+        #else
+        content
+        #endif
+    }
+}
 
 private func alignmentFor(_ index: Int) -> Alignment {
     switch index {

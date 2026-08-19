@@ -8,6 +8,7 @@
 //  suite; no DI seam for Core Data in this project).
 //
 
+import Foundation
 import Testing
 @testable import PillCounter
 

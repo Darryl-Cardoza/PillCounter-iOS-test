@@ -231,17 +231,16 @@ enum L10n {
         static let hazardousTrayColor = NSLocalizedString("settings.hazardousTrayColor", comment: "")
         static let resetHazardousTrayColorTitle = NSLocalizedString("settings.resetHazardousTrayColorTitle", comment: "")
         static let resetHazardousTrayColorMessage = NSLocalizedString("settings.resetHazardousTrayColorMessage", comment: "")
-        static let faceRecognition = NSLocalizedString("settings.faceRecognition", comment: "")
-        static let faceRecognitionScreenTitle = NSLocalizedString("settings.faceRecognitionScreenTitle", comment: "")
+        static let autoLockSession = NSLocalizedString("settings.autoLockSession", comment: "")
         static let lockNow = NSLocalizedString("settings.lockNow", comment: "")
         static let addUser = NSLocalizedString("settings.addUser", comment: "")
         static let quickAccess = NSLocalizedString("settings.quickAccess", comment: "")
         static let timeLimit = NSLocalizedString("settings.timeLimit", comment: "")
         static let timeLimitScreenTitle = NSLocalizedString("settings.timeLimitScreenTitle", comment: "")
-        static let faceSessionTimeout30s = NSLocalizedString("settings.faceSessionTimeout30s", comment: "")
         static let faceSessionTimeout1m = NSLocalizedString("settings.faceSessionTimeout1m", comment: "")
         static let faceSessionTimeout2m = NSLocalizedString("settings.faceSessionTimeout2m", comment: "")
         static let faceSessionTimeout5m = NSLocalizedString("settings.faceSessionTimeout5m", comment: "")
+        static let faceSessionTimeout10m = NSLocalizedString("settings.faceSessionTimeout10m", comment: "")
     }
 
     // MARK: - Face Enrollment
@@ -333,6 +332,17 @@ enum L10n {
         static let sessionRestoring = NSLocalizedString("faceAuth.sessionRestoring", comment: "")
         static let sessionFailedTitle = NSLocalizedString("faceAuth.sessionFailedTitle", comment: "")
         static let sessionFailedSubtitle = NSLocalizedString("faceAuth.sessionFailedSubtitle", comment: "")
+
+        // Photo ID scan
+        enum IdScan {
+            static let title = NSLocalizedString("faceAuth.idScan.title", comment: "")
+            static let hint = NSLocalizedString("faceAuth.idScan.hint", comment: "")
+            static let enterManually = NSLocalizedString("faceAuth.idScan.enterManually", comment: "")
+            static let statusScanning = NSLocalizedString("faceAuth.idScan.statusScanning", comment: "")
+            static let statusPaused = NSLocalizedString("faceAuth.idScan.statusPaused", comment: "")
+            static let statusRestarting = NSLocalizedString("faceAuth.idScan.statusRestarting", comment: "")
+            static let suggestionsLabel = NSLocalizedString("faceAuth.idScan.suggestionsLabel", comment: "")
+        }
     }
 
     // MARK: - Unsynced Transactions

@@ -46,7 +46,8 @@ struct FaceScanScreen<Guidance: View>: View {
             // raw camera buffer, never on what's displayed.
             FaceCameraPreview(
                 session: cameraService.previewSession,
-                deviceOrientation: cameraService.currentCameraOrientation
+                deviceOrientation: cameraService.currentCameraOrientation,
+                isMirrored: cameraService.cameraPosition == .front
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(FaceFrameGuide(color: guideColor))
@@ -100,7 +101,11 @@ struct FaceScanScreen<Guidance: View>: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.top, 4)
+        // The ZStack above ignores safe area for a full-bleed camera, so this
+        // header floats at the physical top edge unless padded explicitly —
+        // SafeAreaInsets.top clears the notch/status bar/Dynamic Island on
+        // both iPhone and iPad.
+        .padding(.top, SafeAreaInsets.top + 4)
     }
 
     // MARK: - Instruction

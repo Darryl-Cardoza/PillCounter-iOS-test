@@ -466,10 +466,12 @@ struct FaceMatchCalibrationTests {
 
         guard identities.count >= 2 else {
             withKnownIssue(
-                "No calibration data. Set FACE_CALIBRATION_FIXTURE to a JSON export "
-                + "with >=2 identities (including >=1 with isEnrolled:false), or run on a "
-                + "device with multiple users enrolled. Synthetic vectors cannot calibrate "
-                + "a real threshold."
+                Comment(rawValue:
+                    "No calibration data. Set FACE_CALIBRATION_FIXTURE to a JSON export "
+                    + "with >=2 identities (including >=1 with isEnrolled:false), or run on a "
+                    + "device with multiple users enrolled. Synthetic vectors cannot calibrate "
+                    + "a real threshold."
+                )
             ) {
                 Issue.record("insufficient calibration identities: \(identities.count)")
             }

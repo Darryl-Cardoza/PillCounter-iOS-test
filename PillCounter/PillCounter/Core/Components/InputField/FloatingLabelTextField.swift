@@ -3,9 +3,9 @@ import SwiftUI
 // MARK: - FloatingLabelTextField
 
 struct FloatingLabelTextField: View {
-    
+
     @EnvironmentObject var appColors: AppColors
-    
+
     let placeholder: String
     @Binding var text: String
     var keyboardType: UIKeyboardType = .default
@@ -17,7 +17,24 @@ struct FloatingLabelTextField: View {
     /// max number of digits (typically 10) rather than max characters.
     var usPhoneFormat: Bool = false
 
-    @FocusState private var isFocused: Bool
+    /// Optional external focus wiring, for callers that need to drive or observe
+    /// focus (e.g. Next/Done chaining across sibling fields). When nil, focus is
+    /// tracked internally as before.
+    var field: AnyHashable? = nil
+    var externalFocus: FocusState<AnyHashable?>.Binding? = nil
+    var submitLabel: SubmitLabel = .done
+    var onSubmit: (() -> Void)? = nil
+    var autocorrectionDisabled: Bool = false
+    var textInputAutocapitalization: TextInputAutocapitalization? = nil
+
+    @FocusState private var internalFocus: Bool
+
+    private var isFocused: Bool {
+        if let externalFocus, let field {
+            return externalFocus.wrappedValue == field
+        }
+        return internalFocus
+    }
 
     private var isActive: Bool {
         isFocused || !text.isEmpty
@@ -77,9 +94,13 @@ struct FloatingLabelTextField: View {
                     TextField("", text: displayBinding)
                         .padding(.leading, 8)
                         .keyboardType(keyboardType)
+                        .autocorrectionDisabled(autocorrectionDisabled)
+                        .textInputAutocapitalization(textInputAutocapitalization)
                 }
             }
-            .focused($isFocused)
+            .modifier(FloatingFieldFocusModifier(field: field, externalFocus: externalFocus, internalFocus: $internalFocus))
+            .submitLabel(submitLabel)
+            .onSubmit { onSubmit?() }
             .font(.body)
             .foregroundColor(disabled ? appColors.text.opacity(0.75) : appColors.text)
             .padding(.top, isActive ? 10 : 0)
@@ -102,7 +123,26 @@ struct FloatingLabelTextField: View {
         )
         .cornerRadius(10)
         .onTapGesture {
-            if !disabled { isFocused = true }
+            guard !disabled else { return }
+            if let externalFocus, let field {
+                externalFocus.wrappedValue = field
+            } else {
+                internalFocus = true
+            }
+        }
+    }
+}
+
+private struct FloatingFieldFocusModifier: ViewModifier {
+    let field: AnyHashable?
+    let externalFocus: FocusState<AnyHashable?>.Binding?
+    var internalFocus: FocusState<Bool>.Binding
+
+    func body(content: Content) -> some View {
+        if let field, let externalFocus {
+            content.focused(externalFocus, equals: field)
+        } else {
+            content.focused(internalFocus)
         }
     }
 }

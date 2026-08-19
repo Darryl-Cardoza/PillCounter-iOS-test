@@ -19,12 +19,17 @@ struct FaceCameraPreview: UIViewRepresentable {
     /// `updateUIView` on rotation, so the preview follows the device instead of
     /// staying pinned to whatever it was when the screen appeared.
     var deviceOrientation: UIDeviceOrientation = .portrait
+    /// Whether the active camera is the front (mirrored) one — the rotation
+    /// angle for landscape differs between mirrored and unmirrored cameras,
+    /// same reasoning as FaceCameraService.applyConnectionOrientation.
+    var isMirrored: Bool = true
 
     func makeUIView(context: Context) -> PreviewLayerView {
         let view = PreviewLayerView()
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
         view.deviceOrientation = deviceOrientation
+        view.isMirrored = isMirrored
         view.applyOrientation()
         return view
     }
@@ -34,6 +39,7 @@ struct FaceCameraPreview: UIViewRepresentable {
             uiView.previewLayer.session = session
         }
         uiView.deviceOrientation = deviceOrientation
+        uiView.isMirrored = isMirrored
         uiView.applyOrientation()
     }
 
@@ -44,6 +50,7 @@ struct FaceCameraPreview: UIViewRepresentable {
         /// Cached so layoutSubviews can re-assert the orientation without the
         /// SwiftUI wrapper having to push an update.
         var deviceOrientation: UIDeviceOrientation = .portrait
+        var isMirrored: Bool = true
 
         override func layoutSubviews() {
             super.layoutSubviews()
@@ -58,14 +65,13 @@ struct FaceCameraPreview: UIViewRepresentable {
             applyOrientation()
         }
 
-        /// Rotates by device orientation only, using the same angle table as
-        /// FaceCameraService. Camera position is deliberately NOT a factor —
-        /// front/back differ by mirroring, which the session's own connection
-        /// handles; folding it into the rotation angle here is what previously
-        /// left the flipped camera 180° off.
+        /// Rotates by device orientation, using the same angle table as
+        /// FaceCameraService — including the mirrored flag, since a mirrored
+        /// (front) camera needs the opposite landscape angle from an
+        /// unmirrored (back) one for the same physical device orientation.
         func applyOrientation() {
             guard let connection = previewLayer.connection else { return }
-            let angle = FaceCameraService.rotationAngle(for: deviceOrientation)
+            let angle = FaceCameraService.rotationAngle(for: deviceOrientation, mirrored: isMirrored)
             guard connection.isVideoRotationAngleSupported(angle) else { return }
             connection.videoRotationAngle = angle
         }

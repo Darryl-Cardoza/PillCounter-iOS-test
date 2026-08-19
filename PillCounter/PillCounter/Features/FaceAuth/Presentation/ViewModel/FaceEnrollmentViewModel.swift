@@ -200,6 +200,15 @@ final class FaceEnrollmentViewModel: ObservableObject {
     }
 
     func retry() {
+        // The failed attempt's partial user record is still in the store —
+        // startEnrollment() re-registers the same name, so it must be
+        // deleted first or validateNameBeforeStarting() rejects it as a
+        // duplicate and re-fails immediately without ever reopening the
+        // camera.
+        if let userId = pendingUserId {
+            repository.deleteUser(id: userId)
+            pendingUserId = nil
+        }
         startEnrollment()
     }
 

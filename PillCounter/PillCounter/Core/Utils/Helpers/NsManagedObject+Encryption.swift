@@ -52,6 +52,13 @@ private let encryptedFieldRegistry: [String: [String]] = [
     "BottleInfoEntity": [
         "lot_no",
         "serial_no"
+    ],
+    "FaceUserEntity": [
+        // Filename of the enrollment avatar on disk, same treatment as
+        // PillCountTransactionDetailsEntity.image_path. Unlike `embedding`
+        // below, a failed decrypt here is recoverable — the row simply falls
+        // back to the placeholder avatar, and the image on disk is untouched.
+        "photo_path"
     ]
     // FaceEmbeddingEntity.embedding intentionally NOT encrypted — field
     // encryption caused permanent decrypt failures whenever the Keychain

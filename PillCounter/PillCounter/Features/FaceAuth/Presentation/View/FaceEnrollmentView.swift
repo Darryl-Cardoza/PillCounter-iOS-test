@@ -34,11 +34,24 @@ struct FaceEnrollmentView: View {
     }
 
     @StateObject private var viewModel: FaceEnrollmentViewModel
-    /// Same instance as viewModel.cameraService — observed separately so
-    /// SwiftUI re-renders (and re-runs updateUIView on the preview) when
-    /// `cameraPosition` changes on flip. viewModel itself doesn't republish
-    /// its cameraService's @Published changes.
-    @ObservedObject private var cameraService: FaceCameraService
+
+    /// Always the camera owned by the SURVIVING view model, never a snapshot
+    /// taken in `init`.
+    ///
+    /// SwiftUI re-runs `init` on every re-render of the presenting view, so a
+    /// second FaceEnrollmentViewModel (and a second FaceCameraService) is
+    /// constructed each time. `@StateObject` keeps the first and discards the
+    /// duplicate — but an `@ObservedObject` initialized in `init` captured the
+    /// DISCARDED instance's camera. The flip button then reconfigured a session
+    /// nobody was previewing, so flipping appeared to do nothing. This showed
+    /// up from Quick Access Users, whose `reload()` mutates @State while the
+    /// enrollment cover is presented and therefore forces exactly that
+    /// re-render.
+    ///
+    /// The view model forwards the camera's `@Published` changes (see its
+    /// cameraService subscription), so reading through it still re-renders the
+    /// preview on flip.
+    private var cameraService: FaceCameraService { viewModel.cameraService }
     @EnvironmentObject private var appColors: AppColors
     @Environment(\.dismiss) private var dismiss
 
@@ -60,9 +73,7 @@ struct FaceEnrollmentView: View {
     init(showsIntro: Bool = true, onEnrolled: ((String) -> Void)? = nil) {
         self.onEnrolled = onEnrolled
         self.showsIntro = showsIntro
-        let vm = FaceEnrollmentViewModel()
-        _viewModel = StateObject(wrappedValue: vm)
-        _cameraService = ObservedObject(wrappedValue: vm.cameraService)
+        _viewModel = StateObject(wrappedValue: FaceEnrollmentViewModel())
         _onboardingStep = State(initialValue: showsIntro ? .intro : .nameEntry)
     }
 

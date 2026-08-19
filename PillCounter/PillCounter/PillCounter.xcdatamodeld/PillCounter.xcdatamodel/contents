@@ -63,6 +63,7 @@
         <attribute name="updated_at" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="is_active" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="last_authenticated_at" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="photo_path" optional="YES" attributeType="String"/>
         <relationship name="embeddings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FaceEmbeddingEntity" inverseName="user" inverseEntity="FaceEmbeddingEntity"/>
     </entity>
     <entity name="FaceEmbeddingEntity" representedClassName="FaceEmbeddingEntity" syncable="YES" codeGenerationType="class">

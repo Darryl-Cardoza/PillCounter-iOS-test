@@ -57,7 +57,13 @@ final class FaceUserStore {
         let request = makeFetchRequest()
         request.predicate = NSPredicate(format: "id == %@", id)
         request.fetchLimit = 1
-        return try? context.fetch(request).first
+        let result = try? context.fetch(request).first
+        // `photo_path` is a registered encrypted field, and a refaulted object
+        // can hand back the ciphertext snapshot willSave wrote rather than
+        // re-running awakeFromFetch — decrypt deterministically instead (same
+        // reasoning as UserStore/FaceEmbeddingStore).
+        result?.decryptEncryptedFieldsInPlace()
+        return result
     }
 
     func getAllUsers(activeOnly: Bool = true) -> [FaceUserEntity] {
@@ -66,7 +72,9 @@ final class FaceUserStore {
             request.predicate = NSPredicate(format: "is_active == YES")
         }
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
-        return (try? context.fetch(request)) ?? []
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { $0.decryptEncryptedFieldsInPlace() }
+        return results
     }
 
     /// Case-insensitive active-name check, used to reject duplicate enrollment names.
@@ -104,8 +112,21 @@ final class FaceUserStore {
         CoreDataManager.shared.save(context: context)
     }
 
+    /// Points the user row at its stored enrollment avatar. `filename` is the
+    /// bare filename inside FaceAvatarStore's directory, never an absolute
+    /// path — container paths change across reinstall and restore.
+    func setPhotoPath(id: String, filename: String?) {
+        guard let user = getUser(id: id) else { return }
+        user.photo_path = filename
+        user.updated_at = Date()
+        CoreDataManager.shared.save(context: context)
+    }
+
     func deleteUser(id: String) {
         guard let user = getUser(id: id) else { return }
+        // The avatar file has no owner once this row is gone, so it must go
+        // with it — read the filename before the object is deleted.
+        FaceAvatarStore.shared.delete(filename: user.photo_path)
         context.delete(user)
         CoreDataManager.shared.save(context: context)
     }
@@ -120,5 +141,8 @@ final class FaceUserStore {
         } catch {
             Log("FaceUserStore: failed to delete all users")
         }
+        // A batch delete bypasses `deleteUser`, so no per-row avatar cleanup
+        // ran — clear the whole avatar directory instead.
+        FaceAvatarStore.shared.deleteAll()
     }
 }

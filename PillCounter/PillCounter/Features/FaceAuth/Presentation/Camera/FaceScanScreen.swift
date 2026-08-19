@@ -39,14 +39,16 @@ struct FaceScanScreen<Guidance: View>: View {
         ZStack {
             appColors.primaryBackground.ignoresSafeArea()
 
-            // Full-height column, narrowed horizontally: the themed surround
-            // shows either side, so the frame reads as "stand here" instead
-            // of the whole screen being live.
+            // Full-bleed on every device, iPad included — the guide square
+            // (a fraction of the narrower edge) is what says "stand here",
+            // so the preview itself doesn't need narrowing. Alignment and
+            // matching are unaffected either way: FaceAligner works on the
+            // raw camera buffer, never on what's displayed.
             FaceCameraPreview(
                 session: cameraService.previewSession,
-                cameraPosition: cameraService.cameraPosition
+                deviceOrientation: cameraService.currentCameraOrientation
             )
-            .frame(maxWidth: previewMaxWidth, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(FaceFrameGuide(color: guideColor))
             .ignoresSafeArea()
 
@@ -58,12 +60,6 @@ struct FaceScanScreen<Guidance: View>: View {
             }
         }
         .statusBarHidden(false)
-    }
-
-    /// Keeps the preview a portrait-ish column on iPad, where a full-width
-    /// band would leave the face tiny in the middle of a very wide frame.
-    private var previewMaxWidth: CGFloat {
-        UIDevice.current.userInterfaceIdiom == .pad ? 520 : .infinity
     }
 
     // MARK: - Header

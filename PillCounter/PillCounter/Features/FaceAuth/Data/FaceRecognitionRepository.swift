@@ -9,6 +9,7 @@
 
 import Foundation
 import CoreVideo
+import UIKit
 
 /// One registered user's id/name plus their stored embedding vectors,
 /// unpacked once and held for the lifetime of an authentication session
@@ -29,6 +30,15 @@ protocol FaceRecognitionRepositoryProtocol {
     func saveEnrollmentEmbeddings(userId: String, embeddings: [FaceEmbedding]) -> Bool
     func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> String?
     func deleteUser(id: String)
+
+    /// Stores the enrollment thumbnail and points the user row at it. Call
+    /// only once the user's embeddings are durably persisted — an avatar for a
+    /// rolled-back enrollment would outlive the user it belongs to.
+    func saveAvatar(userId: String, image: UIImage)
+
+    /// The stored enrollment thumbnail, or nil when the user has none (enrolled
+    /// before avatars existed, capture failed, or the file went missing).
+    func loadAvatar(userId: String) -> UIImage?
 
     /// Loads every active user's stored embeddings once, for reuse across
     /// an entire authentication session (spec section 2/5).
@@ -59,6 +69,7 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
 
     private let userStore: FaceUserStore
     private let embeddingStore: FaceEmbeddingStore
+    private let avatarStore: FaceAvatarStore
     private let aligner: FaceAligner
     private let sface: SFaceEmbeddingService
 
@@ -76,11 +87,13 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
     init(
         userStore: FaceUserStore = .shared,
         embeddingStore: FaceEmbeddingStore = .shared,
+        avatarStore: FaceAvatarStore = .shared,
         aligner: FaceAligner = .shared,
         sface: SFaceEmbeddingService = .shared
     ) {
         self.userStore = userStore
         self.embeddingStore = embeddingStore
+        self.avatarStore = avatarStore
         self.aligner = aligner
         self.sface = sface
     }
@@ -97,7 +110,26 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
 
     func deleteUser(id: String) {
         embeddingStore.deleteEmbeddingsForUser(userId: id)
+        // FaceUserStore.deleteUser removes the avatar file alongside the row,
+        // so the image can never outlive the user regardless of caller.
         userStore.deleteUser(id: id)
+    }
+
+    // MARK: - Enrollment avatar
+
+    func saveAvatar(userId: String, image: UIImage) {
+        guard let filename = avatarStore.save(userId: userId, image: image) else {
+            // Writing the image failed, so there is no filename worth storing —
+            // the row keeps a nil photo_path and renders the placeholder.
+            Log("Repository: avatar write failed for user \(userId)")
+            return
+        }
+        userStore.setPhotoPath(id: userId, filename: filename)
+    }
+
+    func loadAvatar(userId: String) -> UIImage? {
+        guard let user = userStore.getUser(id: userId) else { return nil }
+        return avatarStore.loadImage(filename: user.photo_path)
     }
 
     // MARK: - Embedding generation

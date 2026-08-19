@@ -22,6 +22,7 @@
 
 import Foundation
 import CoreVideo
+import Combine
 
 @MainActor
 final class FaceAuthenticationViewModel: ObservableObject {
@@ -33,6 +34,9 @@ final class FaceAuthenticationViewModel: ObservableObject {
     private let qualityChecker: FaceQualityChecker
     private let config: FaceRecognitionConfig
     let cameraService: FaceCameraService
+    /// Keeps the nested camera service's @Published changes flowing out of
+    /// this view model — see the note in `init`.
+    private var cameraServiceSubscription: AnyCancellable?
 
     /// Called once, on the main actor, when authentication succeeds.
     var onAuthenticated: ((String, String) -> Void)?
@@ -59,6 +63,15 @@ final class FaceAuthenticationViewModel: ObservableObject {
         self.qualityChecker = qualityChecker
         self.config = config
         self.cameraService = cameraService
+
+        // A nested ObservableObject does not propagate its own changes, so the
+        // view (which now reads the camera through this view model rather than
+        // observing it directly) would not re-render when `cameraPosition` or
+        // `currentCameraOrientation` changes — leaving the preview's connection
+        // un-rotated after a flip. Forward them explicitly.
+        cameraServiceSubscription = cameraService.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     // MARK: - Lifecycle

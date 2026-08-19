@@ -31,7 +31,7 @@ struct FaceScanSurface: View {
         ZStack {
             FaceCameraPreview(
                 session: cameraService.previewSession,
-                cameraPosition: cameraService.cameraPosition
+                deviceOrientation: cameraService.currentCameraOrientation
             )
             .aspectRatio(3 / 4, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))

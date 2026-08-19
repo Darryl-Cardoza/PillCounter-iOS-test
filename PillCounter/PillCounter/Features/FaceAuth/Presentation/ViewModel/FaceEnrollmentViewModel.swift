@@ -20,6 +20,8 @@
 
 import Foundation
 import CoreVideo
+import Combine
+import UIKit
 
 @MainActor
 final class FaceEnrollmentViewModel: ObservableObject {
@@ -48,6 +50,9 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private let detector: YuNetDetectorService
     private let qualityChecker: FaceQualityChecker
     let cameraService: FaceCameraService
+    /// Keeps the nested camera service's @Published changes flowing out of
+    /// this view model — see the note in `init`.
+    private var cameraServiceSubscription: AnyCancellable?
 
     // MARK: - Tuning (see research notes — grounded, not guessed, defaults)
 
@@ -85,6 +90,12 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// Best candidate seen so far in the current step's window (frame +
     /// detection + quality), replaced whenever a higher-scoring one arrives.
     private nonisolated(unsafe) var bestCandidate: (pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, quality: FaceQualityResult)?
+    /// Thumbnail rendered from the `.center` step's accepted frame, persisted
+    /// once enrollment succeeds and shown in the Quick Access Users row. Held
+    /// as a rendered UIImage rather than the raw CVPixelBuffer because the
+    /// buffer belongs to the capture session's pool and is recycled as soon as
+    /// the frame callback returns.
+    private nonisolated(unsafe) var frontalAvatar: UIImage?
 
     init(
         repository: FaceRecognitionRepositoryProtocol = FaceRecognitionRepository.shared,
@@ -96,6 +107,15 @@ final class FaceEnrollmentViewModel: ObservableObject {
         self.detector = detector
         self.qualityChecker = qualityChecker
         self.cameraService = cameraService
+
+        // A nested ObservableObject does not propagate its own changes, so the
+        // view (which reads the camera through this view model rather than
+        // observing it directly) would not re-render when `cameraPosition` or
+        // `currentCameraOrientation` changes — leaving the preview's connection
+        // un-rotated after a flip. Forward them explicitly.
+        cameraServiceSubscription = cameraService.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     // MARK: - Name validation (spec section 1)
@@ -134,6 +154,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         currentStepIndex = 0
         poseHoldFrames = 0
         bestCandidate = nil
+        frontalAvatar = nil
         relaxedThisStep = false
         pendingUserId = nil
         resetQualityThresholds()
@@ -173,6 +194,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         pendingUserId = nil
         collectedEmbeddings = []
         bestCandidate = nil
+        frontalAvatar = nil
         hasLiveFace = false
         state = .idle
     }
@@ -192,6 +214,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         pendingUserId = nil
         collectedEmbeddings = []
         bestCandidate = nil
+        frontalAvatar = nil
         hasLiveFace = false
         firstName = ""
         lastName = ""
@@ -349,6 +372,21 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
 
         collectedEmbeddings.append(embedding)
+
+        // Render the row thumbnail from the frontal step only — the turned and
+        // chin-up poses make for a poor portrait. Done here rather than in
+        // `finishEnrollment` because the candidate's pixel buffer is owned by
+        // the capture session's pool and gets recycled once this returns.
+        // A nil result just means no avatar; enrollment carries on regardless.
+        if step == .center {
+            frontalAvatar = FaceAvatarRenderer.makeAvatar(
+                pixelBuffer: candidate.pixelBuffer, detection: candidate.detection
+            )
+            if frontalAvatar == nil {
+                Log("Enrollment: frontal avatar render failed — user will show the placeholder")
+            }
+        }
+
         Log("Enrollment: step \(currentStepIndex) (\(step)) captured — \(collectedEmbeddings.count)/\(poseSteps.count) embeddings, quality=\(String(format: "%.2f", candidate.quality.qualityScore))")
         advanceToNextStep()
     }
@@ -390,6 +428,14 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
         let success = repository.saveEnrollmentEmbeddings(userId: userId, embeddings: embeddings)
         Log("Enrollment: finishing for user \(userId) — \(embeddings.count) embeddings, persisted=\(success)")
+
+        if success {
+            // Only after the embeddings are durably stored — a rolled-back
+            // enrollment must not leave an avatar file behind.
+            if let avatar = frontalAvatar {
+                repository.saveAvatar(userId: userId, image: avatar)
+            }
+        }
 
         DispatchQueue.main.async {
             if success {

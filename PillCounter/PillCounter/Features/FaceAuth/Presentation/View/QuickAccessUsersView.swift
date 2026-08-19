@@ -36,6 +36,9 @@ struct QuickAccessUsersView: View {
         let name: String
         let lastUsed: Date?
         var isActive: Bool
+        /// Enrollment thumbnail, nil for users enrolled before avatars existed
+        /// or whose capture failed — those rows show a placeholder.
+        let avatar: UIImage?
     }
 
     private static let lastUsedFormatter: DateFormatter = {
@@ -244,8 +247,34 @@ struct QuickAccessUsersView: View {
         }
     }
 
+    /// Display edge of the enrollment thumbnail. Kept at 64 so the row holds
+    /// its existing 84pt height and the toggle stays where it is.
+    private static let avatarSize: CGFloat = 64
+
+    @ViewBuilder
+    private func avatarView(_ row: Row) -> some View {
+        if let avatar = row.avatar {
+            Image(uiImage: avatar)
+                .resizable()
+                // Fill then clip, so a crop that isn't perfectly square is
+                // cropped rather than squashed.
+                .scaledToFill()
+                .frame(width: Self.avatarSize, height: Self.avatarSize)
+                .clipped()
+                .cornerRadius(8)
+        } else {
+            Image(systemName: "person.crop.circle.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: Self.avatarSize, height: Self.avatarSize)
+                .foregroundStyle(appColors.text.opacity(0.3))
+        }
+    }
+
     private func userRow(_ row: Row) -> some View {
         HStack(spacing: 16) {
+            avatarView(row)
+
             // Equal spacing above/below the divide between the two lines, so
             // the block reads as one centred pair rather than a name with a
             // caption hung off it.
@@ -338,8 +367,10 @@ struct QuickAccessUsersView: View {
 
     private func deleteSelected() {
         for id in selectedIds {
-            FaceEmbeddingStore.shared.deleteEmbeddingsForUser(userId: id)
-            FaceUserStore.shared.deleteUser(id: id)
+            // Through the repository rather than the two stores directly, so
+            // embeddings AND the avatar file are cleaned up in one place
+            // instead of every caller having to remember the full set.
+            FaceRecognitionRepository.shared.deleteUser(id: id)
         }
         exitEditMode()
         reload()
@@ -353,7 +384,13 @@ struct QuickAccessUsersView: View {
         let users = FaceUserStore.shared.getAllUsers(activeOnly: false)
         rows = users.compactMap { user -> Row? in
             guard let id = user.id, let name = user.name else { return nil }
-            return Row(id: id, name: name, lastUsed: user.last_authenticated_at, isActive: user.is_active)
+            return Row(
+                id: id,
+                name: name,
+                lastUsed: user.last_authenticated_at,
+                isActive: user.is_active,
+                avatar: FaceAvatarStore.shared.loadImage(filename: user.photo_path)
+            )
         }
         // Nothing left to edit — don't strand the header in edit mode.
         if rows.isEmpty && isEditing {

@@ -14,11 +14,11 @@ import SwiftUI
 struct FaceAuthenticationView: View {
 
     @StateObject private var viewModel: FaceAuthenticationViewModel
-    /// Same instance as viewModel.cameraService — observed separately so
-    /// SwiftUI re-renders (and re-runs updateUIView on the preview) when
-    /// `cameraPosition` changes on flip. See FaceEnrollmentView for why
-    /// viewModel itself can't be relied on to republish this.
-    @ObservedObject private var cameraService: FaceCameraService
+    /// Read through the surviving view model rather than captured in `init` —
+    /// see the detailed note in FaceEnrollmentView for why an init-time
+    /// `@ObservedObject` binds to a discarded FaceCameraService and breaks the
+    /// flip button.
+    private var cameraService: FaceCameraService { viewModel.cameraService }
     @EnvironmentObject private var appColors: AppColors
     @Environment(\.dismiss) private var dismiss
 
@@ -30,9 +30,7 @@ struct FaceAuthenticationView: View {
 
     init(onAuthenticated: ((_ userId: String, _ userName: String) -> Void)? = nil) {
         self.onAuthenticated = onAuthenticated
-        let vm = FaceAuthenticationViewModel()
-        _viewModel = StateObject(wrappedValue: vm)
-        _cameraService = ObservedObject(wrappedValue: vm.cameraService)
+        _viewModel = StateObject(wrappedValue: FaceAuthenticationViewModel())
     }
 
     var body: some View {

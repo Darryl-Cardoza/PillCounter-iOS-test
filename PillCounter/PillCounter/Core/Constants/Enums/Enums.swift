@@ -97,6 +97,15 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
     case Settings
     case Profile
     case QuickAccessUsers
+    #if DEBUG
+    /// Debug-only: opens the face-auth camera screen on demand, so
+    /// recognition can be exercised without waiting for the inactivity
+    /// timer. Compiled out of release builds.
+    case DebugVerifyFace
+    /// Debug-only: locks the session immediately and shows the
+    /// session-locked screen. Compiled out of release builds.
+    case DebugLockNow
+    #endif
     case Logout
 
     public var id: String { title }
@@ -112,6 +121,11 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
             case .UnsyncedTransaction: return L10n.Menu.unsync
             case .Settings: return L10n.Menu.settings
             case .QuickAccessUsers: return L10n.Menu.quickAccessUsers
+            #if DEBUG
+            // Not localized on purpose — debug scaffolding.
+            case .DebugVerifyFace: return "⚙︎ Verify Face (Debug)"
+            case .DebugLockNow: return "⚙︎ Lock Now (Debug)"
+            #endif
             case .Logout: return L10n.Menu.logout
         }
 
@@ -126,6 +140,10 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
         case .UnsyncedTransaction: return "unsync_icon"
         case .Settings: return "settings_icon"
         case .QuickAccessUsers: return "profile_icon"
+        #if DEBUG
+        case .DebugVerifyFace: return "profile_icon"
+        case .DebugLockNow: return "logout_icon"
+        #endif
         case .Logout: return "logout_icon"
         }
     }

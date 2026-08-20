@@ -82,9 +82,8 @@ struct UserProfileScreen: View {
                     PillCountingLoader()
                 }
             }
-            
-       
         }
+        .dropdownOverlayHost()
         .onAppear {
             Task {
                 // App launch already hydrated user/pharmacy-type from auth/me into
@@ -270,47 +269,13 @@ struct UserProfileScreen: View {
     }
 
     private var pharmacyTypeDropdown: some View {
-        Menu {
-            ForEach(userViewModel.pharmacyTypeOptions) { type in
-                Button {
-                    selectedPharmacyType = type
-                } label: {
-                    HStack {
-                        Text(type.label)
-                        if type == selectedPharmacyType {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            ZStack(alignment: .leading) {
-                Text(L10n.Profile.pharmacyType)
-                    .font(.caption)
-                    .foregroundColor(appColors.text.opacity(0.75))
-                    .offset(y: -16)
-                    .padding(.leading, 16)
-
-                HStack {
-                    Text(selectedPharmacyType?.label ?? "")
-                        .font(.body)
-                        .foregroundColor(appColors.text)
-                        .padding(.leading, 16)
-                        .padding(.top, 10)
-
-                    Spacer()
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(appColors.text.opacity(0.75))
-                        .padding(.trailing, 16)
-                        .padding(.top, 10)
-                }
-            }
-            .frame(height: 64)
-            .background(appColors.secondaryBackground)
-            .cornerRadius(10)
-        }
+        SearchableDropdownField(
+            placeholder: L10n.Profile.pharmacyType,
+            options: userViewModel.pharmacyTypeOptions,
+            selection: $selectedPharmacyType,
+            showSearch: false,
+            displayText: { $0.label }
+        )
     }
 
     private var countryDropdown: some View {
@@ -339,61 +304,28 @@ struct UserProfileScreen: View {
     }
 
     private var terminalDropdown: some View {
-        Menu {
-            ForEach(userViewModel.terminals, id: \.terminalId) { terminal in
-                Button {
-                    guard terminal.terminalId != userViewModel.pendingTerminal?.terminalId else { return }
-                    userViewModel.selectTerminal(terminal)
-                } label: {
-                    HStack {
-                        Text(terminal.terminalName ?? "")
-                        if terminal.terminalId == userViewModel.pendingTerminal?.terminalId {
-                            Image(systemName: "checkmark")
-                        }
-                    }
+        SearchableDropdownField(
+            placeholder: L10n.Profile.terminal,
+            options: userViewModel.terminals.map(TerminalOption.init),
+            selection: Binding(
+                get: {
+                    userViewModel.pendingTerminal.map(TerminalOption.init)
+                },
+                set: { newValue in
+                    guard let newValue,
+                          newValue.terminal.terminalId != userViewModel.pendingTerminal?.terminalId
+                    else { return }
+                    userViewModel.selectTerminal(newValue.terminal)
                 }
+            ),
+            disabled: isPmsDisabled,
+            showSearch: false,
+            displayText: { $0.name },
+            onDisabledTap: {
+                toastManager.show(message: L10n.Menu.featureNotAvailableMessage)
             }
-        } label: {
-            ZStack(alignment: .leading) {
-                Text(L10n.Profile.terminal)
-                    .font(.caption)
-                    .foregroundColor(appColors.text.opacity(0.75))
-                    .offset(y: -16)
-                    .padding(.leading, 16)
-
-                HStack {
-                    Text(userViewModel.pendingTerminal?.terminalName ?? "")
-                        .font(.body)
-                        .foregroundColor(userViewModel.pendingTerminal != nil ? appColors.primary : appColors.text)
-                        .padding(.leading, 16)
-                        .padding(.top, 10)
-
-                    Spacer()
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(appColors.text.opacity(0.75))
-                        .padding(.trailing, 16)
-                        .padding(.top, 10)
-                }
-            }
-            .frame(height: 64)
-            .background(appColors.secondaryBackground)
-            .cornerRadius(10)
-        }
-        .disabled(isPmsDisabled)
+        )
         .opacity(isPmsDisabled ? 0.6 : 1.0)
-        // When PMS is off the Menu is disabled (inert); overlay a tap target so the
-        // tap still surfaces the "feature not available" toast instead of nothing.
-        .overlay {
-            if isPmsDisabled {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        toastManager.show(message: L10n.Menu.featureNotAvailableMessage)
-                    }
-            }
-        }
     }
 
     private var actionButtons: some View {

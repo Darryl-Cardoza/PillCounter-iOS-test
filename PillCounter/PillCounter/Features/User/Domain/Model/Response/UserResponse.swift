@@ -196,8 +196,19 @@ struct UserTerminal: Codable {
         case terminalName = "terminal_name"
         case isActive = "is_active"
         case deviceKey = "device_key"
-
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
+}
+
+/// Adapts `UserTerminal` (no code concept, optional fields) to `CodeNameOption`
+/// so the terminal picker can reuse `SearchableDropdownField`'s chrome.
+struct TerminalOption: CodeNameOption {
+    let terminal: UserTerminal
+    var id: String { terminal.terminalId ?? "" }
+    var code: String { terminal.terminalId ?? "" }
+    var name: String { terminal.terminalName ?? "" }
+
+    static func == (lhs: TerminalOption, rhs: TerminalOption) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }

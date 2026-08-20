@@ -28,6 +28,7 @@
 "common.unselectAll" = "Unselect All";
 "common.selectAll" = "Select All";
 "common.done" = "Done";
+"common.search" = "Search";
 "common.typeHere" = "Type here";
 "common.pms" = "PMS";
 "common.confirmation" = "Confirmation";
@@ -143,6 +144,8 @@
 "profile.phoneNumber" = "Phone Number";
 "profile.terminal" = "Terminal";
 "profile.pharmacyType" = "Pharmacy Type";
+"profile.country" = "Country";
+"profile.state" = "State";
 
 "profile.popup.confirmDeleteTitle" = "Confirm Delete";
 "profile.popup.confirmDeleteMessage" = "Are you sure you want to delete your profile? This action cannot be undone.";
@@ -154,6 +157,8 @@
 "profile.error.errorTerminalSelectionRequiredMessage" = "Please select a terminal to continue.";
 "profile.error.errorUpdateProfileMessage" = "Failed to update profile. Please try again.";
 "profile.error.successUpdateMessage" = "Profile updated successfully.";
+"profile.error.errorCountrySelectionRequiredMessage" = "Please select a country to continue.";
+"profile.error.errorStateSelectionRequiredMessage" = "Please select a state to continue.";
 
 
 // MARK: - PHARMACY TYPE

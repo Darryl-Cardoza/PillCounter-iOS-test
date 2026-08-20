@@ -33,6 +33,8 @@ struct UserProfileScreen: View {
     /// navigation, since Cancel and enrollment-complete Done both resolve to
     /// this cover's own `dismiss()`.
     @State private var showFaceSetupIntro: Bool = false
+    @State private var selectedCountry: Country? = nil
+    @State private var selectedState: StateItem? = nil
 
 //    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
 //        Bool = true
@@ -86,9 +88,8 @@ struct UserProfileScreen: View {
                     PillCountingLoader()
                 }
             }
-            
-       
         }
+        .dropdownOverlayHost()
         .onAppear {
             Task {
                 // App launch already hydrated user/pharmacy-type from auth/me into
@@ -113,6 +114,17 @@ struct UserProfileScreen: View {
                 selectedPharmacyType = userViewModel.pharmacyTypeOptions.first {
                     $0.code == (savedCode ?? userViewModel.userProfileDetails?.pharmacyType)
                 }
+
+                // Country/state list is server-driven and fetched fresh on every
+                // visit (unlike pharmacy types) so the picker always reflects the
+                // latest reference data.
+                await userViewModel.fetchCountries()
+
+                let savedCountryCode = AppStorageManager.shared.selectedCountryCode
+                selectedCountry = userViewModel.countryOptions.first { $0.code == savedCountryCode }
+
+                let savedStateCode = AppStorageManager.shared.selectedStateCode
+                selectedState = selectedCountry?.states?.first { $0.code == savedStateCode }
             }
         }
         .onTapGesture {
@@ -224,6 +236,8 @@ struct UserProfileScreen: View {
             }
 
             pharmacyTypeDropdown
+            countryDropdown
+            stateDropdown
         }
     }
 
@@ -238,6 +252,10 @@ struct UserProfileScreen: View {
                     terminalDropdown
                 }
                 pharmacyTypeDropdown
+            }
+            HStack(spacing: 12) {
+                countryDropdown
+                stateDropdown
             }
         }
     }
@@ -290,105 +308,63 @@ struct UserProfileScreen: View {
     }
 
     private var pharmacyTypeDropdown: some View {
-        Menu {
-            ForEach(userViewModel.pharmacyTypeOptions) { type in
-                Button {
-                    selectedPharmacyType = type
-                } label: {
-                    HStack {
-                        Text(type.label)
-                        if type == selectedPharmacyType {
-                            Image(systemName: "checkmark")
-                        }
-                    }
+        SearchableDropdownField(
+            placeholder: L10n.Profile.pharmacyType,
+            options: userViewModel.pharmacyTypeOptions,
+            selection: $selectedPharmacyType,
+            showSearch: false,
+            displayText: { $0.label }
+        )
+    }
+
+    private var countryDropdown: some View {
+        SearchableDropdownField(
+            placeholder: L10n.Profile.country,
+            options: userViewModel.countryOptions,
+            selection: Binding(
+                get: { selectedCountry },
+                set: { newValue in
+                    selectedCountry = newValue
+                    // Changing the country invalidates whatever state was
+                    // picked for the previous country.
+                    selectedState = nil
                 }
-            }
-        } label: {
-            ZStack(alignment: .leading) {
-                Text(L10n.Profile.pharmacyType)
-                    .font(.caption)
-                    .foregroundColor(appColors.text.opacity(0.75))
-                    .offset(y: -16)
-                    .padding(.leading, 16)
+            )
+        )
+    }
 
-                HStack {
-                    Text(selectedPharmacyType?.label ?? "")
-                        .font(.body)
-                        .foregroundColor(appColors.text)
-                        .padding(.leading, 16)
-                        .padding(.top, 10)
-
-                    Spacer()
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(appColors.text.opacity(0.75))
-                        .padding(.trailing, 16)
-                        .padding(.top, 10)
-                }
-            }
-            .frame(height: 64)
-            .background(appColors.secondaryBackground)
-            .cornerRadius(10)
-        }
+    private var stateDropdown: some View {
+        SearchableDropdownField(
+            placeholder: L10n.Profile.state,
+            options: selectedCountry?.states ?? [],
+            selection: $selectedState,
+            disabled: selectedCountry == nil
+        )
     }
 
     private var terminalDropdown: some View {
-        Menu {
-            ForEach(userViewModel.terminals, id: \.terminalId) { terminal in
-                Button {
-                    guard terminal.terminalId != userViewModel.pendingTerminal?.terminalId else { return }
-                    userViewModel.selectTerminal(terminal)
-                } label: {
-                    HStack {
-                        Text(terminal.terminalName ?? "")
-                        if terminal.terminalId == userViewModel.pendingTerminal?.terminalId {
-                            Image(systemName: "checkmark")
-                        }
-                    }
+        SearchableDropdownField(
+            placeholder: L10n.Profile.terminal,
+            options: userViewModel.terminals.map(TerminalOption.init),
+            selection: Binding(
+                get: {
+                    userViewModel.pendingTerminal.map(TerminalOption.init)
+                },
+                set: { newValue in
+                    guard let newValue,
+                          newValue.terminal.terminalId != userViewModel.pendingTerminal?.terminalId
+                    else { return }
+                    userViewModel.selectTerminal(newValue.terminal)
                 }
+            ),
+            disabled: isPmsDisabled,
+            showSearch: false,
+            displayText: { $0.name },
+            onDisabledTap: {
+                toastManager.show(message: L10n.Menu.featureNotAvailableMessage)
             }
-        } label: {
-            ZStack(alignment: .leading) {
-                Text(L10n.Profile.terminal)
-                    .font(.caption)
-                    .foregroundColor(appColors.text.opacity(0.75))
-                    .offset(y: -16)
-                    .padding(.leading, 16)
-
-                HStack {
-                    Text(userViewModel.pendingTerminal?.terminalName ?? "")
-                        .font(.body)
-                        .foregroundColor(userViewModel.pendingTerminal != nil ? appColors.primary : appColors.text)
-                        .padding(.leading, 16)
-                        .padding(.top, 10)
-
-                    Spacer()
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(appColors.text.opacity(0.75))
-                        .padding(.trailing, 16)
-                        .padding(.top, 10)
-                }
-            }
-            .frame(height: 64)
-            .background(appColors.secondaryBackground)
-            .cornerRadius(10)
-        }
-        .disabled(isPmsDisabled)
+        )
         .opacity(isPmsDisabled ? 0.6 : 1.0)
-        // When PMS is off the Menu is disabled (inert); overlay a tap target so the
-        // tap still surfaces the "feature not available" toast instead of nothing.
-        .overlay {
-            if isPmsDisabled {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        toastManager.show(message: L10n.Menu.featureNotAvailableMessage)
-                    }
-            }
-        }
     }
 
     private var actionButtons: some View {
@@ -464,6 +440,16 @@ struct UserProfileScreen: View {
                 return
             }
 
+            guard selectedCountry != nil else {
+                toastManager.show(message: L10n.Profile.Error.errorCountrySelectionRequiredMessage)
+                return
+            }
+
+            guard selectedState != nil else {
+                toastManager.show(message: L10n.Profile.Error.errorStateSelectionRequiredMessage)
+                return
+            }
+
             if !userViewModel.phoneNumber.isEmpty {
                 if userViewModel.phoneNumber.count != 10 {
                     toastManager.show(message: L10n.Profile.Error.errorPhoneLengthMessage)
@@ -489,19 +475,29 @@ struct UserProfileScreen: View {
                 Hl7ServiceController.shared.restartForTerminalChange()
             }
 
-            let profileChanged = userViewModel.hasProfileChanged(pharmacyTypeCode: selectedPharmacyType?.code)
+            let profileChanged = userViewModel.hasProfileChanged(
+                pharmacyTypeCode: selectedPharmacyType?.code,
+                countryCode: selectedCountry?.code,
+                stateCode: selectedState?.code
+            )
             if profileChanged {
-                await userViewModel.updateUserProfile(pharmacyTypeCode: selectedPharmacyType?.code)
-                guard userViewModel.isProfileUpdated else {
-                    // A failed profile-details PATCH (e.g. duplicate NPI) must
-                    // block entry — even a successful terminal claim above
-                    // isn't enough on its own to let the user through with
-                    // bad/rejected profile data still unsaved.
+                await userViewModel.updateUserProfile(
+                    pharmacyTypeCode: selectedPharmacyType?.code,
+                    countryCode: selectedCountry?.code,
+                    stateCode: selectedState?.code
+                )
+                if !userViewModel.isProfileUpdated {
+                    // A failed profile-details PATCH must not undo an already-
+                    // successful terminal claim above — in mustSelectTerminal mode
+                    // that claim is the only thing gating the dashboard, so still
+                    // let the user through; surface the profile error as a toast
+                    // instead of blocking navigation.
                     toastManager.show(message: userViewModel.profileErrorMessage ?? L10n.Profile.Error.errorUpdateProfileMessage)
-                    return
+                    if !mustSelectTerminal { return }
+                } else {
+                    AppStorageManager.shared.isNewUser = false
+                    userViewModel.isProfileUpdated = false
                 }
-                AppStorageManager.shared.isNewUser = false
-                userViewModel.isProfileUpdated = false
             }
 
             toastManager.show(message: L10n.Profile.successUpdateMessage)

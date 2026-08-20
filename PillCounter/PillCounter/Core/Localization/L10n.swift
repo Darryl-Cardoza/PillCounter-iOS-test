@@ -32,6 +32,7 @@ enum L10n {
         static let unselectAll = NSLocalizedString("common.unselectAll", comment: "")
         static let selectAll = NSLocalizedString("common.selectAll", comment: "")
         static let done = NSLocalizedString("common.done", comment: "")
+        static let search = NSLocalizedString("common.search", comment: "")
         static let typeHere = NSLocalizedString("common.typeHere", comment: "")
         static let pms = NSLocalizedString("common.pms", comment: "")
         static let confirmation = NSLocalizedString("common.confirmation", comment: "")
@@ -178,6 +179,8 @@ enum L10n {
         static let phoneNumber = NSLocalizedString("profile.phoneNumber", comment: "")
         static let terminal = NSLocalizedString("profile.terminal", comment: "")
         static let pharmacyType = NSLocalizedString("profile.pharmacyType", comment: "")
+        static let country = NSLocalizedString("profile.country", comment: "")
+        static let state = NSLocalizedString("profile.state", comment: "")
         static let successUpdateMessage = NSLocalizedString("profile.error.successUpdateMessage", comment: "")
 
         
@@ -194,6 +197,8 @@ enum L10n {
             static let errorTerminalAlreadyClaimedMessage = NSLocalizedString("profile.error.errorTerminalAlreadyClaimedMessage", comment: "")
             static let errorTerminalSelectionRequiredMessage = NSLocalizedString("profile.error.errorTerminalSelectionRequiredMessage", comment: "")
             static let errorUpdateProfileMessage = NSLocalizedString("profile.error.errorUpdateProfileMessage", comment: "")
+            static let errorCountrySelectionRequiredMessage = NSLocalizedString("profile.error.errorCountrySelectionRequiredMessage", comment: "")
+            static let errorStateSelectionRequiredMessage = NSLocalizedString("profile.error.errorStateSelectionRequiredMessage", comment: "")
         }
     }
     

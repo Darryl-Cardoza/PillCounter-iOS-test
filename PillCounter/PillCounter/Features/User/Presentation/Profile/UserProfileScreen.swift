@@ -27,6 +27,8 @@ struct UserProfileScreen: View {
 
     @State private var showDeleteConfirmation: Bool = false
     @State private var selectedPharmacyType: PharmacyTypeOption? = nil
+    @State private var selectedCountry: Country? = nil
+    @State private var selectedState: StateItem? = nil
 
 //    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
 //        Bool = true
@@ -107,6 +109,17 @@ struct UserProfileScreen: View {
                 selectedPharmacyType = userViewModel.pharmacyTypeOptions.first {
                     $0.code == (savedCode ?? userViewModel.userProfileDetails?.pharmacyType)
                 }
+
+                // Country/state list is server-driven and fetched fresh on every
+                // visit (unlike pharmacy types) so the picker always reflects the
+                // latest reference data.
+                await userViewModel.fetchCountries()
+
+                let savedCountryCode = AppStorageManager.shared.selectedCountryCode
+                selectedCountry = userViewModel.countryOptions.first { $0.code == savedCountryCode }
+
+                let savedStateCode = AppStorageManager.shared.selectedStateCode
+                selectedState = selectedCountry?.states?.first { $0.code == savedStateCode }
             }
         }
         .onTapGesture {
@@ -185,6 +198,8 @@ struct UserProfileScreen: View {
             }
 
             pharmacyTypeDropdown
+            countryDropdown
+            stateDropdown
         }
     }
 
@@ -199,6 +214,10 @@ struct UserProfileScreen: View {
                     terminalDropdown
                 }
                 pharmacyTypeDropdown
+            }
+            HStack(spacing: 12) {
+                countryDropdown
+                stateDropdown
             }
         }
     }
@@ -292,6 +311,31 @@ struct UserProfileScreen: View {
             .background(appColors.secondaryBackground)
             .cornerRadius(10)
         }
+    }
+
+    private var countryDropdown: some View {
+        SearchableDropdownField(
+            placeholder: L10n.Profile.country,
+            options: userViewModel.countryOptions,
+            selection: Binding(
+                get: { selectedCountry },
+                set: { newValue in
+                    selectedCountry = newValue
+                    // Changing the country invalidates whatever state was
+                    // picked for the previous country.
+                    selectedState = nil
+                }
+            )
+        )
+    }
+
+    private var stateDropdown: some View {
+        SearchableDropdownField(
+            placeholder: L10n.Profile.state,
+            options: selectedCountry?.states ?? [],
+            selection: $selectedState,
+            disabled: selectedCountry == nil
+        )
     }
 
     private var terminalDropdown: some View {
@@ -423,6 +467,16 @@ struct UserProfileScreen: View {
                 return
             }
 
+            guard selectedCountry != nil else {
+                toastManager.show(message: L10n.Profile.Error.errorCountrySelectionRequiredMessage)
+                return
+            }
+
+            guard selectedState != nil else {
+                toastManager.show(message: L10n.Profile.Error.errorStateSelectionRequiredMessage)
+                return
+            }
+
             if !userViewModel.phoneNumber.isEmpty {
                 if userViewModel.phoneNumber.count != 10 {
                     toastManager.show(message: L10n.Profile.Error.errorPhoneLengthMessage)
@@ -448,9 +502,17 @@ struct UserProfileScreen: View {
                 Hl7ServiceController.shared.restartForTerminalChange()
             }
 
-            let profileChanged = userViewModel.hasProfileChanged(pharmacyTypeCode: selectedPharmacyType?.code)
+            let profileChanged = userViewModel.hasProfileChanged(
+                pharmacyTypeCode: selectedPharmacyType?.code,
+                countryCode: selectedCountry?.code,
+                stateCode: selectedState?.code
+            )
             if profileChanged {
-                await userViewModel.updateUserProfile(pharmacyTypeCode: selectedPharmacyType?.code)
+                await userViewModel.updateUserProfile(
+                    pharmacyTypeCode: selectedPharmacyType?.code,
+                    countryCode: selectedCountry?.code,
+                    stateCode: selectedState?.code
+                )
                 if !userViewModel.isProfileUpdated {
                     // A failed profile-details PATCH must not undo an already-
                     // successful terminal claim above — in mustSelectTerminal mode

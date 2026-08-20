@@ -104,6 +104,7 @@ struct UserProfile: Codable {
     let userId: String?
 
     enum CodingKeys: String, CodingKey {
+        
         case fname
         case lname
         case email
@@ -132,6 +133,7 @@ struct UserSettings: Codable {
     let language: String?
     let timezone: String?
     let country: String?
+    let state: String?
     let hl7Version: String?
     let fcmToken: String?
     let terminals: [UserTerminal]?
@@ -146,6 +148,7 @@ struct UserSettings: Codable {
         case language
         case timezone
         case country
+        case state
         case hl7Version = "hl7_version"
         case fcmToken = "fcm_token"
         case terminals

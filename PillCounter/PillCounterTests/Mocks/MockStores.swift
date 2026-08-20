@@ -228,7 +228,7 @@ final class MockUserRepository: UserRepositoryProtocol {
     func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
         fatalError("not needed for bottle-rescan tests")
     }
-    func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
+    func getCountries(accessToken: String) async throws -> CountryResponse {
         fatalError("not needed for bottle-rescan tests")
     }
 }
@@ -248,9 +248,11 @@ final class MockTerminalUserRepository: UserRepositoryProtocol {
     var getTerminalsResults: [Result<TerminalListResponse, Error>] = []
     var updateTerminalResults: [Result<UpdateTerminalResponse, Error>] = []
     var updateUserProfileResult: Result<UserResponse, Error>?
+    var getCountriesResult: Result<CountryResponse, Error>?
 
     private(set) var getTerminalsCallCount = 0
     private(set) var updateTerminalCallCount = 0
+    private(set) var getCountriesCallCount = 0
     private(set) var lastUpdateTerminalDeviceKey: String?
     private(set) var lastUpdateUserProfileRequest: UpdateUserProfileRequest?
 
@@ -272,6 +274,14 @@ final class MockTerminalUserRepository: UserRepositoryProtocol {
     }
     func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
         fatalError("not used by terminal-flow tests")
+    }
+
+    func getCountries(accessToken: String) async throws -> CountryResponse {
+        getCountriesCallCount += 1
+        guard let result = getCountriesResult else {
+            fatalError("getCountries called but no result was scripted")
+        }
+        return try result.get()
     }
 
     func getTerminals(availableOnly: Bool, deviceKey: String, accessToken: String) async throws -> TerminalListResponse {

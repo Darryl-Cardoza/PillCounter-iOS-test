@@ -870,7 +870,6 @@
 		79A66A18302B3D110039EE27 /* XCLocalSwiftPackageReference "../../DISPENSESURE/swiftpackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../DISPENSESURE/swiftpackage;
-			relativePath = ../../DISPENSESURE/swiftpackage;
 		};
 /* End XCLocalSwiftPackageReference section */
 

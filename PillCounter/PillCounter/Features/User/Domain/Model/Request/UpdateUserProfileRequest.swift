@@ -20,6 +20,8 @@ struct UpdateUserProfileRequest: Codable {
     let language: String?
     let timezone: String?
     let pharmacyType: String?
+    let country: String?
+    let state: String?
 
     enum CodingKeys: String, CodingKey {
         case fname = "fname"
@@ -33,5 +35,7 @@ struct UpdateUserProfileRequest: Codable {
         case language
         case timezone
         case pharmacyType = "pharmacy_type"
+        case country
+        case state
     }
 }

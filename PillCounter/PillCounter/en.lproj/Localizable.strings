@@ -195,6 +195,7 @@
 "settings.resetHazardousTrayColorMessage" = "You will be prompted to set a new hazardous tray color the next time one is detected.";
 "settings.autoLockSession" = "Auto Lock Session";
 "settings.lockNow" = "Lock Now";
+"settings.lockNowDebug" = "Lock Now";
 "settings.addUser" = "Add User";
 "settings.quickAccess" = "Quick Access";
 "settings.timeLimit" = "Time Limit";

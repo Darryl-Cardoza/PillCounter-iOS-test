@@ -280,32 +280,31 @@ struct UserSettingsView: View {
 
                 Divider().background(appColors.primaryBackground)
 
-                #if DEBUG
-                // Debug-only: opens the face-auth camera screen on demand, so
-                // recognition can be exercised without waiting for the
-                // inactivity timer. Compiled out of release builds.
-                HStack {
-                    Text("⚙︎ Verify Face (Debug)")
-                        .foregroundStyle(appColors.text)
-                        .fontWeight(.regular)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    guard FaceSessionManager.shared.hasEnrolledUsers else {
-                        ToastManager.shared.show(message: "No enrolled users")
-                        return
-                    }
-                    showDebugFaceVerify = true
-                }
-
-                Divider().background(appColors.primaryBackground)
+//                // Debug-only: opens the face-auth camera screen on demand, so
+//                // recognition can be exercised without waiting for the
+//                // inactivity timer. Compiled out of release builds.
+//                HStack {
+//                    Text("⚙︎ Verify Face (Debug)")
+//                        .foregroundStyle(appColors.text)
+//                        .fontWeight(.regular)
+//                }
+//                .frame(maxWidth: .infinity, alignment: .leading)
+//                .padding(.horizontal)
+//                .contentShape(Rectangle())
+//                .onTapGesture {
+//                    guard FaceSessionManager.shared.hasEnrolledUsers else {
+//                        ToastManager.shared.show(message: "No enrolled users")
+//                        return
+//                    }
+//                    showDebugFaceVerify = true
+//                }
+//
+//                Divider().background(appColors.primaryBackground)
 
                 // Debug-only: locks the session immediately and shows the
                 // session-locked screen. Compiled out of release builds.
                 HStack {
-                    Text("⚙︎ Lock Now (Debug)")
+                    Text(L10n.Settings.lockNowDebug)
                         .foregroundStyle(appColors.text)
                         .fontWeight(.regular)
                 }
@@ -325,7 +324,6 @@ struct UserSettingsView: View {
                 }
 
                 Divider().background(appColors.primaryBackground)
-                #endif
 
                 // MARK: Sound
                 ToggleRowView(

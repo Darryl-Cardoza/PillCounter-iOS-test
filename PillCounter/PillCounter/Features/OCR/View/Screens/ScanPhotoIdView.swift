@@ -124,11 +124,7 @@ struct ScanPhotoIdView: View {
             }
         }
         .padding(.horizontal, 8)
-        // The screen ignores safe area for a full-bleed camera, so this
-        // header floats at the physical top edge unless padded explicitly —
-        // SafeAreaInsets.top clears the notch/status bar/Dynamic Island on
-        // both iPhone and iPad.
-        .padding(.top, SafeAreaInsets.top + 4)
+        .padding(.top, SafeAreaInsets.top)
     }
 
     // MARK: - Bottom card

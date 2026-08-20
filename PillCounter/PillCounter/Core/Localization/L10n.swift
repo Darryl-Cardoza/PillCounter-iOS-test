@@ -238,6 +238,7 @@ enum L10n {
         static let resetHazardousTrayColorMessage = NSLocalizedString("settings.resetHazardousTrayColorMessage", comment: "")
         static let autoLockSession = NSLocalizedString("settings.autoLockSession", comment: "")
         static let lockNow = NSLocalizedString("settings.lockNow", comment: "")
+        static let lockNowDebug = NSLocalizedString("settings.lockNowDebug", comment: "")
         static let addUser = NSLocalizedString("settings.addUser", comment: "")
         static let quickAccess = NSLocalizedString("settings.quickAccess", comment: "")
         static let timeLimit = NSLocalizedString("settings.timeLimit", comment: "")

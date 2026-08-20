@@ -45,6 +45,8 @@ struct VerifyOTPUser: Codable {
     let authIsLocked: Bool?
     let isPmsIntegrated: Bool?
     let allowLocalStorage: Bool?
+    let isProfileCompleted: Bool?
+    let bypassSSL: Bool?
     let isStandalone: Bool?
 
     enum CodingKeys: String, CodingKey {
@@ -55,6 +57,8 @@ struct VerifyOTPUser: Codable {
         case authIsLocked = "auth_is_locked"
         case isPmsIntegrated = "is_pms_integrated"
         case allowLocalStorage = "allow_local_storage"
+        case isProfileCompleted = "is_profile_completed"
+        case bypassSSL = "bypass_ssl"
         case isStandalone = "is_standalone"
     }
 }

@@ -29,6 +29,7 @@ struct APIConstants {
     
     /// Services
     static let updateProfile = "\(baseURL)/users/update/profile"
+    static let updateProfilePatch = "\(baseURL)/users/profile"
     static let deleteProfile = "\(baseURL)/users/delete/profile"
     static let pharmacyTypes = "\(baseURL)/users/pharmacy-types"
 
@@ -41,6 +42,15 @@ struct APIConstants {
     // MARK: - TERMINAL
     static func updateTerminal(terminalId: String) -> String {
         "\(baseURL)/terminals/update/\(terminalId)"
+    }
+
+    static func getTerminals(availableOnly: Bool, deviceKey: String) -> String {
+        var components = URLComponents(string: "\(baseURL)/terminals/list")
+        components?.queryItems = [
+            URLQueryItem(name: "available_only", value: String(availableOnly)),
+            URLQueryItem(name: "device_key", value: deviceKey)
+        ]
+        return components?.url?.absoluteString ?? "\(baseURL)/terminals/list"
     }
     
     // MARK: - DRUG

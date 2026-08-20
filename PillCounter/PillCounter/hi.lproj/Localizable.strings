@@ -144,7 +144,7 @@
 "history.dispensedDrugDetails" = "वितरित दवा विवरण";
 "history.pillRecount" = "गोलियों की पुनर्गणना";
 "history.dispensedVial" = "वितरित वायल";
-"history.containerQrCode" = "CONTAINER QR CODE";
+"history.containerQrCode" = "कंटेनर QR कोड";
 "history.remainingContainerCount" = "स्टॉक बोतल में शेष गोलियों की गिनती";
 "history.totalCount" = "कुल गिनती";
 "history.substitutedDrug" = "प्रतिस्थापित दवा";
@@ -311,14 +311,14 @@
 
 
 // MARK: - HL7 Notifications
-"hl7Notification.newRxTitle" = "New Rx Received";
-"hl7Notification.rxUpdatedTitle" = "Rx Updated";
-"hl7Notification.rxOnHoldTitle" = "Rx On Hold";
-"hl7Notification.rxCancelledTitle" = "Rx Cancelled";
-"hl7Notification.rxCompletedTitle" = "Rx Completed";
-"hl7Notification.qtyLabel" = "Qty";
-"hl7Notification.inventoryRequestTitle" = "Inventory Request";
-"hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
-"hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
+"hl7Notification.newRxTitle" = "नया Rx प्राप्त हुआ";
+"hl7Notification.rxUpdatedTitle" = "Rx अपडेट किया गया";
+"hl7Notification.rxOnHoldTitle" = "Rx होल्ड पर है";
+"hl7Notification.rxCancelledTitle" = "Rx रद्द किया गया";
+"hl7Notification.rxCompletedTitle" = "Rx पूरा हुआ";
+"hl7Notification.qtyLabel" = "मात्रा";
+"hl7Notification.inventoryRequestTitle" = "इन्वेंटरी अनुरोध";
+"hl7Notification.inventoryRequestBodySingle" = "1 आइटम को स्टॉक गिनती की आवश्यकता है";
+"hl7Notification.inventoryRequestBodyMultiple" = "%d आइटम को स्टॉक गिनती की आवश्यकता है";
 "barcodeScan.hazardousNdcDetected" = "खतरनाक NDC का पता चला।";
 "barcodeScan.wearGlovesAndProceedWithCaution" = "दस्ताने पहनें और सावधानी से आगे बढ़ें।";

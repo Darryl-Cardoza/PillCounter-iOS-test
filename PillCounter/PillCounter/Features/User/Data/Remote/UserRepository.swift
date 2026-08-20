@@ -20,7 +20,9 @@ protocol UserRepositoryProtocol {
 
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse
 
-    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, accessToken: String) async throws -> UpdateTerminalResponse
+    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, deviceKey: String, accessToken: String) async throws -> UpdateTerminalResponse
+
+    func getTerminals(availableOnly: Bool, deviceKey: String, accessToken: String) async throws -> TerminalListResponse
 
     func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse
 
@@ -58,8 +60,8 @@ final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
             ) as? [String: Any]
 
         return try await Self.performRequest(
-            url: APIConstants.updateProfile,
-            method: .post,
+            url: APIConstants.updateProfilePatch,
+            method: .patch,
             accessToken: accessToken,
             body: body,
             responseType: UserResponse.self
@@ -87,10 +89,11 @@ final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
 //        )
 //    }
 //    
-    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, accessToken: String) async throws -> UpdateTerminalResponse {
+    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, deviceKey: String, accessToken: String) async throws -> UpdateTerminalResponse {
         let body: [String: Any] = [
             "terminal_name": terminalName,
-            "is_active": isActive
+            "is_active": isActive,
+            "device_key": deviceKey
         ]
         return try await Self.performRequest(
             url: APIConstants.updateTerminal(terminalId: terminalId),
@@ -98,6 +101,15 @@ final class UserRepository: UserRepositoryProtocol, BaseRepositoryProtocol {
             accessToken: accessToken,
             body: body,
             responseType: UpdateTerminalResponse.self
+        )
+    }
+
+    func getTerminals(availableOnly: Bool, deviceKey: String, accessToken: String) async throws -> TerminalListResponse {
+        return try await Self.performRequest(
+            url: APIConstants.getTerminals(availableOnly: availableOnly, deviceKey: deviceKey),
+            method: .get,
+            accessToken: accessToken,
+            responseType: TerminalListResponse.self
         )
     }
 

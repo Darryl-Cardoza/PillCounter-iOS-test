@@ -9,6 +9,16 @@ import SwiftUI
 
 struct UserProfileScreen: View {
 
+    /// True only for the post-login gate on PMS-integrated accounts that have
+    /// no terminal claimed on this device yet — hides back/skip and routes to
+    /// the dashboard on save instead of navigating back (there's nothing to
+    /// go back to: this screen was reached before the dashboard ever loaded).
+    let mustSelectTerminal: Bool
+
+    init(mustSelectTerminal: Bool = false) {
+        self.mustSelectTerminal = mustSelectTerminal
+    }
+
     @Environment(\.isLandscape) var isLandscape
     @EnvironmentObject private var userViewModel: UserViewModel
     @EnvironmentObject private var router: Router
@@ -57,7 +67,7 @@ struct UserProfileScreen: View {
                     EmptyView()
                 },
                 headerActions: { EmptyView() },
-                showBackButton: true,
+                showBackButton: !mustSelectTerminal,
                 showHamburgerMenu: false,
                 title: L10n.Menu.profile,
                 backgroundColor: appColors.primaryBackground,
@@ -77,17 +87,31 @@ struct UserProfileScreen: View {
         }
         .dropdownOverlayHost()
         .onAppear {
-            // App launch already hydrated user/terminals/pharmacy-type from
-            // auth/me into local storage — just read the cached data, no
-            // network call on every profile visit.
-            Task { await userViewModel.getUser(forceRemote: false) }
             Task {
+                // App launch already hydrated user/pharmacy-type from auth/me into
+                // local storage — just read the cached data, no network call on
+                // every profile visit for those fields.
+                await userViewModel.getUser(forceRemote: false)
+                // Terminals are the exception: fetch the live list on every Profile
+                // visit so the dropdown reflects current server-side claims (another
+                // device may have released/claimed a terminal since the last sync).
+                // Run after getUser completes — both write terminals/selectedTerminal/
+                // pendingTerminal, and running them concurrently in separate Tasks
+                // raced, letting the cache-fallback path in getUser clobber the live
+                // fetch (or vice versa) depending on which finished last.
+                await userViewModel.loadTerminals()
+                // Pharmacy type list is server-driven but static per session —
+                // only needed for this screen's picker, so fetch it here. Must
+                // finish before reading pharmacyTypeOptions below, or the picker's
+                // default selection misses on this screen's first appear.
+                await userViewModel.fetchPharmacyTypes()
                 await userViewModel.fetchCountries()
                 resolveSelectedCountryAndState()
-            }
-            let savedCode = AppStorageManager.shared.selectedPharmacyTypeCode
-            selectedPharmacyType = userViewModel.pharmacyTypeOptions.first {
-                $0.code == (savedCode ?? userViewModel.userProfileDetails?.pharmacyType)
+
+                let savedCode = AppStorageManager.shared.selectedPharmacyTypeCode
+                selectedPharmacyType = userViewModel.pharmacyTypeOptions.first {
+                    $0.code == (savedCode ?? userViewModel.userProfileDetails?.pharmacyType)
+                }
             }
             resolveSelectedCountryAndState()
         }
@@ -306,7 +330,10 @@ struct UserProfileScreen: View {
     private var actionButtons: some View {
         EqualWidthHStackButtons(spacing: 16) {
 
-            if AppStorageManager.shared.isNewUser {
+            if mustSelectTerminal {
+                // No skip/delete here — a terminal claim is mandatory before the
+                // dashboard is reachable, so there's nothing to bypass to.
+            } else if AppStorageManager.shared.isNewUser {
                 // SKIP
                 PillCountingButton(
                     iconName: nil,
@@ -366,6 +393,11 @@ struct UserProfileScreen: View {
 
     private func onSaveTapped() {
         Task {
+            if mustSelectTerminal && userViewModel.pendingTerminal == nil {
+                toastManager.show(message: L10n.Profile.Error.errorTerminalSelectionRequiredMessage)
+                return
+            }
+
             if !userViewModel.phoneNumber.isEmpty {
                 if userViewModel.phoneNumber.count != 10 {
                     toastManager.show(message: L10n.Profile.Error.errorPhoneLengthMessage)
@@ -383,7 +415,9 @@ struct UserProfileScreen: View {
             if let pending = userViewModel.pendingTerminal, terminalChanged {
                 let terminalSuccess = await userViewModel.updateTerminal(pending)
                 if !terminalSuccess {
-                    toastManager.show(message: L10n.Profile.Error.errorUpdateTerminalMessage)
+                    toastManager.show(
+                        message: userViewModel.terminalErrorMessage ?? L10n.Profile.Error.errorUpdateTerminalMessage
+                    )
                     return
                 }
                 Hl7ServiceController.shared.restartForTerminalChange()
@@ -401,16 +435,28 @@ struct UserProfileScreen: View {
                     stateCode: selectedState?.code
                 )
                 if !userViewModel.isProfileUpdated {
+                    // A failed profile-details PATCH must not undo an already-
+                    // successful terminal claim above — in mustSelectTerminal mode
+                    // that claim is the only thing gating the dashboard, so still
+                    // let the user through; surface the profile error as a toast
+                    // instead of blocking navigation.
                     toastManager.show(message: L10n.Profile.Error.errorUpdateProfileMessage)
-                    return
+                    if !mustSelectTerminal { return }
+                } else {
+                    AppStorageManager.shared.isNewUser = false
+                    userViewModel.isProfileUpdated = false
                 }
-                AppStorageManager.shared.isNewUser = false
-                userViewModel.isProfileUpdated = false
             }
 
             toastManager.show(message: L10n.Profile.successUpdateMessage)
             AppStorageManager.shared.isNewUser = false
-            router.navigateBack()
+            if mustSelectTerminal {
+                // This screen was reached before the dashboard ever loaded — there
+                // is nothing to navigate back to, so replace the root instead.
+                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+            } else {
+                router.navigateBack()
+            }
         }
     }
 

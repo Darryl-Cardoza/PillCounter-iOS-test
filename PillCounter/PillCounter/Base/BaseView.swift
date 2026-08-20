@@ -114,6 +114,7 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
                         }
 
                     confirmationDialogueManager.popupView
+                        .frame(maxWidth: 300)
                         .padding()
                         .transition(.scale)
                         .zIndex(100)

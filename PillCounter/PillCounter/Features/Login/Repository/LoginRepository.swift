@@ -13,10 +13,10 @@ protocol LoginRepositoryProtocol {
     
     func resendOTP(email: String) async throws -> SendOTPResponse
     
-    func verifyOTP(email: String, otp: String, fcmToken:String) async throws -> VerifyOTPResponse
-    
-    func logout(refreshToken: String) async throws -> LogoutResponse
-    
+    func verifyOTP(email: String, otp: String, fcmToken: String, deviceKey: String, appVersion: String) async throws -> VerifyOTPResponse
+
+    func logout(refreshToken: String, deviceKey: String) async throws -> LogoutResponse
+
 }
 
 final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
@@ -50,12 +50,14 @@ final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
         )
     }
     
-    func verifyOTP(email: String, otp: String, fcmToken: String) async throws -> VerifyOTPResponse {
-        print("FcmToken is: \(fcmToken)")
+    func verifyOTP(email: String, otp: String, fcmToken: String, deviceKey: String, appVersion: String) async throws -> VerifyOTPResponse {
         let body: [String: Any] = [
             "email": email,
             "otp": otp,
-            "fcm_token": fcmToken
+            "fcm_token": fcmToken,
+            "device_key": deviceKey,
+            "platform": AppConstants.platformIOS,
+            "app_version": appVersion
         ]
         return try await Self.performRequest(
             url: APIConstants.verifyOTP,
@@ -66,13 +68,14 @@ final class LoginRepository: LoginRepositoryProtocol, BaseRepositoryProtocol {
         )
     }
     
-    func logout(refreshToken: String) async throws -> LogoutResponse {
+    func logout(refreshToken: String, deviceKey: String) async throws -> LogoutResponse {
         // code
         return try await Self.performRequest(
             url: APIConstants.logout,
             method: .post,
             body: [
-                "refresh_token": refreshToken
+                "refresh_token": refreshToken,
+                "device_key": deviceKey
             ],
             responseType: LogoutResponse.self,
             extraHeaders: ["Cache-Control": "no-store"]

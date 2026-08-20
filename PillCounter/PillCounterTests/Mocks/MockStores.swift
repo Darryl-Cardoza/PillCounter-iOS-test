@@ -219,7 +219,16 @@ final class MockUserRepository: UserRepositoryProtocol {
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
         fatalError("not needed for bottle-rescan tests")
     }
-    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, accessToken: String) async throws -> UpdateTerminalResponse {
+    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, deviceKey: String, accessToken: String) async throws -> UpdateTerminalResponse {
+        fatalError("not needed for bottle-rescan tests")
+    }
+    func getTerminals(availableOnly: Bool, deviceKey: String, accessToken: String) async throws -> TerminalListResponse {
+        fatalError("not needed for bottle-rescan tests")
+    }
+    func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
+        fatalError("not needed for bottle-rescan tests")
+    }
+    func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
         fatalError("not needed for bottle-rescan tests")
     }
 }
@@ -228,4 +237,63 @@ final class MockControlledRepository: ControlledRepositoryProtocol {
     func getControlledDrugInfo(ndcValidationRequest: NdcValidationRequest) async throws -> NdcComparisonResponse {
         fatalError("not needed for bottle-rescan tests")
     }
+}
+
+// MARK: - MockTerminalUserRepository
+
+/// Controllable fake for the terminal claim/release flow (`UserViewModel.updateTerminal`,
+/// `loadTerminals`). Separate from `MockUserRepository` above, which fatalErrors on every
+/// method — this one lets tests script `getTerminals`/`updateTerminal` responses and errors.
+final class MockTerminalUserRepository: UserRepositoryProtocol {
+    var getTerminalsResults: [Result<TerminalListResponse, Error>] = []
+    var updateTerminalResults: [Result<UpdateTerminalResponse, Error>] = []
+    var updateUserProfileResult: Result<UserResponse, Error>?
+
+    private(set) var getTerminalsCallCount = 0
+    private(set) var updateTerminalCallCount = 0
+    private(set) var lastUpdateTerminalDeviceKey: String?
+    private(set) var lastUpdateUserProfileRequest: UpdateUserProfileRequest?
+
+    func getUser(accessToken: String, currentAppVersion: String, fcmToken: String) async throws -> UserResponse {
+        fatalError("not used by terminal-flow tests")
+    }
+    func updateUserProfile(request: UpdateUserProfileRequest, accessToken: String) async throws -> UserResponse {
+        lastUpdateUserProfileRequest = request
+        guard let result = updateUserProfileResult else {
+            fatalError("updateUserProfile called but no result was scripted")
+        }
+        return try result.get()
+    }
+    func deleteUserProfile(accessToken: String) async throws -> DeleteUserResponse {
+        fatalError("not used by terminal-flow tests")
+    }
+    func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
+        fatalError("not used by terminal-flow tests")
+    }
+    func getPharmacyTypes(accessToken: String) async throws -> PharmacyTypeResponse {
+        fatalError("not used by terminal-flow tests")
+    }
+
+    func getTerminals(availableOnly: Bool, deviceKey: String, accessToken: String) async throws -> TerminalListResponse {
+        let index = getTerminalsCallCount
+        getTerminalsCallCount += 1
+        guard index < getTerminalsResults.count else {
+            fatalError("getTerminals called \(getTerminalsCallCount) times but only \(getTerminalsResults.count) results were scripted")
+        }
+        return try getTerminalsResults[index].get()
+    }
+
+    func updateTerminal(terminalId: String, terminalName: String, isActive: Bool, deviceKey: String, accessToken: String) async throws -> UpdateTerminalResponse {
+        let index = updateTerminalCallCount
+        updateTerminalCallCount += 1
+        lastUpdateTerminalDeviceKey = deviceKey
+        guard index < updateTerminalResults.count else {
+            fatalError("updateTerminal called \(updateTerminalCallCount) times but only \(updateTerminalResults.count) results were scripted")
+        }
+        return try updateTerminalResults[index].get()
+    }
+}
+
+enum MockRepositoryError: Error {
+    case generic
 }

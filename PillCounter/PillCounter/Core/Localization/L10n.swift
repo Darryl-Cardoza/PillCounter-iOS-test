@@ -32,6 +32,7 @@ enum L10n {
         static let unselectAll = NSLocalizedString("common.unselectAll", comment: "")
         static let selectAll = NSLocalizedString("common.selectAll", comment: "")
         static let done = NSLocalizedString("common.done", comment: "")
+        static let search = NSLocalizedString("common.search", comment: "")
         static let typeHere = NSLocalizedString("common.typeHere", comment: "")
         static let pms = NSLocalizedString("common.pms", comment: "")
         static let confirmation = NSLocalizedString("common.confirmation", comment: "")
@@ -161,6 +162,7 @@ enum L10n {
         static let noLastBatchFound = NSLocalizedString("menu.toast.noLastBatchFound", comment: "")
         static let featureNotAvailableTitle = NSLocalizedString("menu.featureNotAvailableTitle", comment: "")
         static let featureNotAvailableMessage = NSLocalizedString("menu.featureNotAvailableMessage", comment: "")
+        static let quickAccessUsers = NSLocalizedString("menu.quickAccessUsers", comment: "")
 
         enum HistoryDuration {
             static let month = NSLocalizedString("menu.history.duration.month", comment: "")
@@ -179,7 +181,6 @@ enum L10n {
         static let pharmacyType = NSLocalizedString("profile.pharmacyType", comment: "")
         static let country = NSLocalizedString("profile.country", comment: "")
         static let state = NSLocalizedString("profile.state", comment: "")
-        static let searchState = NSLocalizedString("profile.searchState", comment: "")
         static let successUpdateMessage = NSLocalizedString("profile.error.successUpdateMessage", comment: "")
 
         
@@ -196,6 +197,8 @@ enum L10n {
             static let errorTerminalAlreadyClaimedMessage = NSLocalizedString("profile.error.errorTerminalAlreadyClaimedMessage", comment: "")
             static let errorTerminalSelectionRequiredMessage = NSLocalizedString("profile.error.errorTerminalSelectionRequiredMessage", comment: "")
             static let errorUpdateProfileMessage = NSLocalizedString("profile.error.errorUpdateProfileMessage", comment: "")
+            static let errorCountrySelectionRequiredMessage = NSLocalizedString("profile.error.errorCountrySelectionRequiredMessage", comment: "")
+            static let errorStateSelectionRequiredMessage = NSLocalizedString("profile.error.errorStateSelectionRequiredMessage", comment: "")
         }
     }
     
@@ -246,6 +249,119 @@ enum L10n {
         static let testingConnection = NSLocalizedString("settings.testingConnection", comment: "")
         static let connectionSuccessful = NSLocalizedString("settings.connectionSuccessful", comment: "")
         static let pmsConnectionInfoMissing = NSLocalizedString("settings.pmsConnectionInfoMissing", comment: "")
+        static let autoLockSession = NSLocalizedString("settings.autoLockSession", comment: "")
+        static let lockNow = NSLocalizedString("settings.lockNow", comment: "")
+        static let lockNowDebug = NSLocalizedString("settings.lockNowDebug", comment: "")
+        static let addUser = NSLocalizedString("settings.addUser", comment: "")
+        static let quickAccess = NSLocalizedString("settings.quickAccess", comment: "")
+        static let timeLimit = NSLocalizedString("settings.timeLimit", comment: "")
+        static let timeLimitScreenTitle = NSLocalizedString("settings.timeLimitScreenTitle", comment: "")
+        static let faceSessionTimeout1m = NSLocalizedString("settings.faceSessionTimeout1m", comment: "")
+        static let faceSessionTimeout2m = NSLocalizedString("settings.faceSessionTimeout2m", comment: "")
+        static let faceSessionTimeout5m = NSLocalizedString("settings.faceSessionTimeout5m", comment: "")
+        static let faceSessionTimeout10m = NSLocalizedString("settings.faceSessionTimeout10m", comment: "")
+    }
+
+    // MARK: - Face Enrollment
+    enum FaceAuth {
+        static let enrollmentTitle = NSLocalizedString("faceAuth.enrollmentTitle", comment: "")
+        static let setupIntroTitle = NSLocalizedString("faceAuth.setupIntroTitle", comment: "")
+        static let setupIntroSubtitle = NSLocalizedString("faceAuth.setupIntroSubtitle", comment: "")
+        static let getStarted = NSLocalizedString("faceAuth.getStarted", comment: "")
+        static let firstNameFieldPlaceholder = NSLocalizedString("faceAuth.firstNameFieldPlaceholder", comment: "")
+        static let lastNameFieldPlaceholder = NSLocalizedString("faceAuth.lastNameFieldPlaceholder", comment: "")
+        static let whatsYourName = NSLocalizedString("faceAuth.whatsYourName", comment: "")
+        static let whatsYourNameSubtitle = NSLocalizedString("faceAuth.whatsYourNameSubtitle", comment: "")
+        static let continueButton = NSLocalizedString("faceAuth.continueButton", comment: "")
+        static let nameFieldPlaceholder = NSLocalizedString("faceAuth.nameFieldPlaceholder", comment: "")
+        static let startEnrollment = NSLocalizedString("faceAuth.startEnrollment", comment: "")
+        static let cancel = NSLocalizedString("faceAuth.cancel", comment: "")
+        static let done = NSLocalizedString("faceAuth.done", comment: "")
+        static let nameEmptyError = NSLocalizedString("faceAuth.nameEmptyError", comment: "")
+        static let nameDuplicateError = NSLocalizedString("faceAuth.nameDuplicateError", comment: "")
+
+        static let instructionIdle = NSLocalizedString("faceAuth.instructionIdle", comment: "")
+        static let instructionPreparing = NSLocalizedString("faceAuth.instructionPreparing", comment: "")
+        static let instructionComplete = NSLocalizedString("faceAuth.instructionComplete", comment: "")
+        static let enrollmentSuccessTitle = NSLocalizedString("faceAuth.enrollmentSuccessTitle", comment: "")
+        static let enrollmentCompleteTitle = NSLocalizedString("faceAuth.enrollmentCompleteTitle", comment: "")
+        static let enrollmentCompleteSubtitle = NSLocalizedString("faceAuth.enrollmentCompleteSubtitle", comment: "")
+        static let enrollmentFailedTitle = NSLocalizedString("faceAuth.enrollmentFailedTitle", comment: "")
+
+        static let poseCenter = NSLocalizedString("faceAuth.poseCenter", comment: "")
+        static let poseTurnLeft = NSLocalizedString("faceAuth.poseTurnLeft", comment: "")
+        static let poseTurnRight = NSLocalizedString("faceAuth.poseTurnRight", comment: "")
+        static let poseChinUp = NSLocalizedString("faceAuth.poseChinUp", comment: "")
+        static let poseCenterAgain = NSLocalizedString("faceAuth.poseCenterAgain", comment: "")
+        static let poseHoldStill = NSLocalizedString("faceAuth.poseHoldStill", comment: "")
+        static let poseCaptured = NSLocalizedString("faceAuth.poseCaptured", comment: "")
+
+        static let failureNoFace = NSLocalizedString("faceAuth.failureNoFace", comment: "")
+        static let failureMultipleFaces = NSLocalizedString("faceAuth.failureMultipleFaces", comment: "")
+        static let failurePoorQuality = NSLocalizedString("faceAuth.failurePoorQuality", comment: "")
+        static let failureEmbedding = NSLocalizedString("faceAuth.failureEmbedding", comment: "")
+        static let failureCamera = NSLocalizedString("faceAuth.failureCamera", comment: "")
+        static let failureStorage = NSLocalizedString("faceAuth.failureStorage", comment: "")
+        static let failureDuplicate = NSLocalizedString("faceAuth.failureDuplicate", comment: "")
+        static let failureTimedOut = NSLocalizedString("faceAuth.failureTimedOut", comment: "")
+        static let retry = NSLocalizedString("faceAuth.retry", comment: "")
+
+        // Authentication screen
+        static let authTitle = NSLocalizedString("faceAuth.authTitle", comment: "")
+        static let scanFaceTitle = NSLocalizedString("faceAuth.scanFaceTitle", comment: "")
+        static let authIdle = NSLocalizedString("faceAuth.authIdle", comment: "")
+        static let authDetecting = NSLocalizedString("faceAuth.authDetecting", comment: "")
+        static let authFaceDetected = NSLocalizedString("faceAuth.authFaceDetected", comment: "")
+        static let authChecking = NSLocalizedString("faceAuth.authChecking", comment: "")
+        static let authVerifying = NSLocalizedString("faceAuth.authVerifying", comment: "")
+        static let authWelcome = NSLocalizedString("faceAuth.authWelcome", comment: "")
+        static let authNoFace = NSLocalizedString("faceAuth.authNoFace", comment: "")
+        static let authMultipleFaces = NSLocalizedString("faceAuth.authMultipleFaces", comment: "")
+        static let authPoorQuality = NSLocalizedString("faceAuth.authPoorQuality", comment: "")
+        static let authUnknownUser = NSLocalizedString("faceAuth.authUnknownUser", comment: "")
+        static let authNoRegisteredUsers = NSLocalizedString("faceAuth.authNoRegisteredUsers", comment: "")
+        static let authCancel = NSLocalizedString("faceAuth.authCancel", comment: "")
+        static let authContinue = NSLocalizedString("faceAuth.authContinue", comment: "")
+
+        // Registered users diagnostic list
+        static let registeredUsersTitle = NSLocalizedString("faceAuth.registeredUsersTitle", comment: "")
+        static let registeredUsersEmpty = NSLocalizedString("faceAuth.registeredUsersEmpty", comment: "")
+        static let registeredUsersInactive = NSLocalizedString("faceAuth.registeredUsersInactive", comment: "")
+        static let registeredUsersEmbeddingCount = NSLocalizedString("faceAuth.registeredUsersEmbeddingCount", comment: "")
+        static let registeredUsersAvgQuality = NSLocalizedString("faceAuth.registeredUsersAvgQuality", comment: "")
+        static let registeredUsersDelete = NSLocalizedString("faceAuth.registeredUsersDelete", comment: "")
+        static let registeredUsersDeleteConfirmTitle = NSLocalizedString("faceAuth.registeredUsersDeleteConfirmTitle", comment: "")
+        static let registeredUsersDeleteConfirmMessage = NSLocalizedString("faceAuth.registeredUsersDeleteConfirmMessage", comment: "")
+
+        // Quick Access Users (hamburger menu)
+        static let quickAccessUsersTitle = NSLocalizedString("faceAuth.quickAccessUsersTitle", comment: "")
+        static let quickAccessUsersEmpty = NSLocalizedString("faceAuth.quickAccessUsersEmpty", comment: "")
+        static let quickAccessUsersLastUsed = NSLocalizedString("faceAuth.quickAccessUsersLastUsed", comment: "")
+        static let quickAccessUsersAddUser = NSLocalizedString("faceAuth.quickAccessUsersAddUser", comment: "")
+        static let quickAccessUsersDeleteTitle = NSLocalizedString("faceAuth.quickAccessUsersDeleteTitle", comment: "")
+        static let quickAccessUsersDeleteMessage = NSLocalizedString("faceAuth.quickAccessUsersDeleteMessage", comment: "")
+
+        // Session lock overlay
+        static let sessionLockedTitle = NSLocalizedString("faceAuth.sessionLockedTitle", comment: "")
+        static let sessionLockedSubtitle = NSLocalizedString("faceAuth.sessionLockedSubtitle", comment: "")
+        static let sessionIdleMinutes = NSLocalizedString("faceAuth.sessionIdleMinutes", comment: "")
+        static let sessionIdleSeconds = NSLocalizedString("faceAuth.sessionIdleSeconds", comment: "")
+        static let sessionLockedUnlockButton = NSLocalizedString("faceAuth.sessionLockedUnlockButton", comment: "")
+        static let sessionWelcomeBack = NSLocalizedString("faceAuth.sessionWelcomeBack", comment: "")
+        static let sessionRestoring = NSLocalizedString("faceAuth.sessionRestoring", comment: "")
+        static let sessionFailedTitle = NSLocalizedString("faceAuth.sessionFailedTitle", comment: "")
+        static let sessionFailedSubtitle = NSLocalizedString("faceAuth.sessionFailedSubtitle", comment: "")
+
+        // Photo ID scan
+        enum IdScan {
+            static let title = NSLocalizedString("faceAuth.idScan.title", comment: "")
+            static let hint = NSLocalizedString("faceAuth.idScan.hint", comment: "")
+            static let enterManually = NSLocalizedString("faceAuth.idScan.enterManually", comment: "")
+            static let statusScanning = NSLocalizedString("faceAuth.idScan.statusScanning", comment: "")
+            static let statusPaused = NSLocalizedString("faceAuth.idScan.statusPaused", comment: "")
+            static let statusRestarting = NSLocalizedString("faceAuth.idScan.statusRestarting", comment: "")
+            static let suggestionsLabel = NSLocalizedString("faceAuth.idScan.suggestionsLabel", comment: "")
+        }
     }
 
     // MARK: - Unsynced Transactions

@@ -30,6 +30,7 @@ protocol SettingsStore: AnyObject {
     var isHazardousDrugSetting: Bool { get set }
     var hazardousTrayColor: String? { get set }
     var saveHistoryOption: SaveHistoryOption { get set }
+    var faceSessionTimeoutOption: FaceSessionTimeoutOption { get set }
 }
 
 extension AppStorageManager: SettingsStore {}
@@ -55,6 +56,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var selectedSchedules: Set<DrugSchedule>
     @Published var hazardousTrayColor: String?
     @Published var saveHistoryOption: SaveHistoryOption
+    @Published var faceSessionTimeoutOption: FaceSessionTimeoutOption
 
     // MARK: - Menu-facing state (formerly in HamburgerMenuView)
     @Published var unsyncedCount: Int = 0
@@ -92,6 +94,7 @@ final class SettingsViewModel: ObservableObject {
         self.selectedSchedules            = store.selectedSchedules
         self.hazardousTrayColor           = store.hazardousTrayColor
         self.saveHistoryOption            = store.saveHistoryOption
+        self.faceSessionTimeoutOption     = store.faceSessionTimeoutOption
 
         // Keep the unsynced count live for the menu badge.
         batchStore.transactionsDidChange
@@ -155,6 +158,14 @@ final class SettingsViewModel: ObservableObject {
     func commitSaveHistoryOption(_ option: SaveHistoryOption) {
         saveHistoryOption = option
         store.saveHistoryOption = option
+    }
+
+    // MARK: - Session lock timeout
+
+    func commitFaceSessionTimeoutOption(_ option: FaceSessionTimeoutOption) {
+        faceSessionTimeoutOption = option
+        store.faceSessionTimeoutOption = option
+        FaceSessionManager.shared.inactivityTimeout = option.seconds
     }
 
     // MARK: - Hazardous tray color

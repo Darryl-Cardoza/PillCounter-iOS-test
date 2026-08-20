@@ -51,7 +51,7 @@ class UserViewModel: ObservableObject {
     @Published var pharmacyName: String = ""
     @Published var npiID: String = ""
     @Published var pharmacyTypeOptions: [PharmacyTypeOption] = []
-    @Published var countryOptions: [CountryOption] = []
+    @Published var countryOptions: [Country] = []
 
     // terminals
     @Published var terminals: [UserTerminal] = []
@@ -61,6 +61,10 @@ class UserViewModel: ObservableObject {
 
     // when user updates the profile successfully,
     @Published var isProfileUpdated: Bool = false
+    /// Server-provided message from the most recent failed profile PATCH
+    /// (e.g. duplicate NPI conflict) — nil when it failed for a reason the
+    /// server didn't explain, so callers fall back to a generic string.
+    @Published var profileErrorMessage: String? = nil
     @Published var historyCountTransactions: [PillCountTransactionEntity] = []
     @Published var fixedCountTransactionCompletedCount: Int = 0
     @Published var fixedCountTransactionPartialCount: Int = 0
@@ -351,24 +355,23 @@ class UserViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Countries
+    // MARK: - Countries / States
 
-    /// Fetches the server-driven country/state list and caches it so the
-    /// dropdown still has options offline / before the next fetch completes.
+    /// Fetches the server-driven country/state list on every call and overwrites
+    /// the cache, so the picker always reflects the latest reference data. Falls
+    /// back to the cache only if the network call fails.
     func fetchCountries() async {
-        let cached = AppStorageManager.shared.countryOptions
-        if !cached.isEmpty {
-            countryOptions = cached
-        }
-
         do {
             let result = try await userRepo.getCountries(accessToken: accessToken)
             if result.isSuccess ?? false, let countries = result.data?.countries {
                 countryOptions = countries
                 AppStorageManager.shared.countryOptions = countries
+            } else {
+                countryOptions = AppStorageManager.shared.countryOptions
             }
         } catch {
             Log("❌ Failed to fetch countries: \(error)")
+            countryOptions = AppStorageManager.shared.countryOptions
         }
     }
 
@@ -441,10 +444,14 @@ class UserViewModel: ObservableObject {
                 }
 
                 AppStorageManager.shared.selectedPharmacyTypeCode = pharmacyTypeCode
-                AppStorageManager.shared.selectedCountryCode = countryCode
-                AppStorageManager.shared.selectedStateCode = stateCode
+                if let countryCode { AppStorageManager.shared.selectedCountryCode = countryCode }
+                if let stateCode { AppStorageManager.shared.selectedStateCode = stateCode }
             }
+        } catch APIError.server(let message) {
+            profileErrorMessage = message
+            Log("updateUserProfile error: \(message)")
         } catch {
+            profileErrorMessage = nil
             Log("updateUserProfile error: \(error)")
         }
     }
@@ -463,8 +470,9 @@ class UserViewModel: ObservableObject {
         let npiChanged         = npiID        != (original.npiID ?? "")
         let pharmacyTypeChanged = (pharmacyTypeCode ?? "") != (original.pharmacyType ?? "")
         let countryChanged = (countryCode ?? "") != (AppStorageManager.shared.selectedCountryCode ?? "")
-        let stateChanged   = (stateCode ?? "")   != (AppStorageManager.shared.selectedStateCode ?? "")
-        return firstNameChanged || lastNameChanged || pharmacyChanged || phoneChanged || npiChanged || pharmacyTypeChanged || countryChanged || stateChanged
+        let stateChanged = (stateCode ?? "") != (AppStorageManager.shared.selectedStateCode ?? "")
+        return firstNameChanged || lastNameChanged || pharmacyChanged || phoneChanged || npiChanged
+            || pharmacyTypeChanged || countryChanged || stateChanged
     }
 
     // MARK: - Transactions
@@ -786,8 +794,8 @@ class UserViewModel: ObservableObject {
     }
 
     func updateTerminal(_ terminal: UserTerminal) async -> Bool {
-        guard let terminalId = terminal.terminalId,
-              let terminalName = terminal.terminalName else { return false }
+        guard let terminalId = terminal.terminalId, !terminalId.isEmpty,
+              let terminalName = terminal.terminalName, !terminalName.isEmpty else { return false }
 
         isLoading = true
         terminalErrorMessage = nil

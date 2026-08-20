@@ -30,13 +30,24 @@ struct PillCounterApp: App {
     @StateObject private var stockCountViewModel = StockCountViewModel()
     @StateObject private var historyViewModel = HistoryViewModel()
     @StateObject private var toastManager = ToastManager.shared
+    @ObservedObject private var faceSessionManager = FaceSessionManager.shared
 
     private let isCompromised: Bool
 
     init() {
         _ = CoreDataManager.shared
         NSManagedObject.installEncryptionHooks()
-        
+
+        // Deferred from AppStorageManager.init: a fresh install wipes the
+        // Keychain (and with it the field-encryption key), so any face rows
+        // left on disk are undecryptable ciphertext. The purge needs the Core
+        // Data stack, which only exists from the line above onwards.
+        AppStorageManager.shared.purgeFaceEnrollmentsIfKeychainWasWiped()
+
+        // Cold launch (app was fully closed, now reopened) always requires a
+        // fresh face scan — never resume a session from a prior process.
+        FaceSessionManager.shared.lockOnColdLaunch()
+
         let compromised = SecurityManager.isDeviceCompromised()
         self.isCompromised = compromised
 
@@ -85,6 +96,11 @@ struct PillCounterApp: App {
                             .environmentObject(historyViewModel)
                             .environmentObject(toastManager)
                             .environmentObject(sessionManager)
+                            .environmentObject(faceSessionManager)
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in faceSessionManager.recordActivity() }
+                            )
                             .onAppear { startSecurityMonitoring() }
                             .onChange(of: sessionManager.isSessionExpired) { _, expired in
                                 if expired {
@@ -144,7 +160,15 @@ struct PillCounterApp: App {
                             }
                             .animation(.easeInOut, value: toastManager.isShowing)
                         }
+
+                        if faceSessionManager.isOverlayVisible {
+                            SessionLockOverlay()
+                                .environmentObject(appColors)
+                                .transition(.opacity)
+                                .zIndex(1000)
+                        }
                     }
+                    .animation(.easeInOut(duration: 0.2), value: faceSessionManager.isOverlayVisible)
                 }
             }
             .overlay(
@@ -216,11 +240,16 @@ extension PillCounterApp {
                 startSecurityMonitoring()
             }
             Task { await sessionManager.checkTokenOnForeground() }
+            // Face unlock is unusable with an empty roster — if the last
+            // enrolled user was deleted (or removed while backgrounded), drop
+            // the lock instead of stranding the app behind an unpassable scan.
+            faceSessionManager.releaseLockIfNoUsersEnrolled()
 
         case .background:
             //Apply the overlay before iOS takes the snapshot.
             isObscured = true
             SecurityMonitor.shared.stopMonitoring()
+            faceSessionManager.lockOnBackground()
 
         case .inactive:
             break

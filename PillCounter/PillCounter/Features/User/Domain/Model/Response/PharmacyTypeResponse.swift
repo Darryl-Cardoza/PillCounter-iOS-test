@@ -29,9 +29,10 @@ struct PharmacyTypeData: Codable {
     }
 }
 
-struct PharmacyTypeOption: Codable, Identifiable, Hashable {
+struct PharmacyTypeOption: Codable, Identifiable, Equatable, Hashable, CodeNameOption {
     let code: String
     let label: String
 
     var id: String { code }
+    var name: String { label }
 }

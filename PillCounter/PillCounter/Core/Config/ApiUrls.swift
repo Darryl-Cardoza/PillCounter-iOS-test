@@ -33,7 +33,7 @@ struct APIConstants {
     static let deleteProfile = "\(baseURL)/users/delete/profile"
     static let pharmacyTypes = "\(baseURL)/users/pharmacy-types"
 
-    // MARK: - REFERENCE
+    // MARK: - REFERENCE DATA
     static let countries = "\(baseURL)/reference/countries"
 
     // MARK: - MOBILE

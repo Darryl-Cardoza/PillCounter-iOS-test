@@ -19,6 +19,7 @@
 //
 
 import CoreData
+import CryptoKit
 
 // MARK: - Encrypted field registry
 
@@ -51,7 +52,18 @@ private let encryptedFieldRegistry: [String: [String]] = [
     "BottleInfoEntity": [
         "lot_no",
         "serial_no"
+    ],
+    "FaceUserEntity": [
+        // Filename of the enrollment avatar on disk, same treatment as
+        // PillCountTransactionDetailsEntity.image_path. Unlike `embedding`
+        // below, a failed decrypt here is recoverable — the row simply falls
+        // back to the placeholder avatar, and the image on disk is untouched.
+        "photo_path"
     ]
+    // FaceEmbeddingEntity.embedding intentionally NOT encrypted — field
+    // encryption caused permanent decrypt failures whenever the Keychain
+    // key was wiped/rotated (logout, fresh install), orphaning stored
+    // embeddings. Store as plain base64 for now.
 ]
 
 // MARK: - NSManagedObject extension
@@ -161,12 +173,23 @@ extension NSManagedObject {
 
     // MARK: - Helpers
 
+    /// Whether `value` is base64 that decodes to a genuine AES-GCM sealed
+    /// box (nonce + ciphertext + 16-byte tag), NOT just "long enough base64."
+    ///
+    /// The previous version of this check only verified base64-validity and
+    /// a >=28-byte length. That misclassified any sufficiently long
+    /// plaintext base64 payload — e.g. a packed 128-float face embedding
+    /// (~512 bytes decoded, ~684 chars base64) — as "encrypted," which meant
+    /// `willSave` skipped encrypting it (guard already true) and every
+    /// subsequent fetch's `decryptEncryptedFieldsInPlace()` tried to AES-GCM
+    /// -open the plaintext bytes, failed, and blanked the field to "" (see
+    /// below) — silently destroying the stored embedding on first read.
+    /// Actually attempting the SealedBox parse (structural only, no key
+    /// needed) is the only reliable way to tell "real ciphertext" from
+    /// "plaintext that happens to be long base64."
     private func looksEncrypted(_ value: String) -> Bool {
-        guard value.count >= 28,
-              let data = Data(base64Encoded: value),
-              data.count >= 28
-        else { return false }
-        return true
+        guard let data = Data(base64Encoded: value) else { return false }
+        return (try? AES.GCM.SealedBox(combined: data)) != nil
     }
 
     // MARK: - Swizzle utility

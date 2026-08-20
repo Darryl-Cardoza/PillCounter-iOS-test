@@ -27,8 +27,14 @@ struct UserProfileScreen: View {
 
     @State private var showDeleteConfirmation: Bool = false
     @State private var selectedPharmacyType: PharmacyTypeOption? = nil
-    @State private var selectedCountry: CountryOption? = nil
-    @State private var selectedState: StateOption? = nil
+    /// Shown once, right after a first-run profile save/skip flips `isNewUser`
+    /// false — the "Setup Quick Access" pitch that otherwise only lives on the
+    /// dashboard's first visit. `onDismiss` (not `onEnrolled`) does the actual
+    /// navigation, since Cancel and enrollment-complete Done both resolve to
+    /// this cover's own `dismiss()`.
+    @State private var showFaceSetupIntro: Bool = false
+    @State private var selectedCountry: Country? = nil
+    @State private var selectedState: StateItem? = nil
 
 //    @AppStorage(AppStorageManager.AppStorageKeys.isNewUser) var isNewUser:
 //        Bool = true
@@ -82,8 +88,6 @@ struct UserProfileScreen: View {
                     PillCountingLoader()
                 }
             }
-
-
         }
         .dropdownOverlayHost()
         .onAppear {
@@ -112,6 +116,17 @@ struct UserProfileScreen: View {
                 selectedPharmacyType = userViewModel.pharmacyTypeOptions.first {
                     $0.code == (savedCode ?? userViewModel.userProfileDetails?.pharmacyType)
                 }
+
+                // Country/state list is server-driven and fetched fresh on every
+                // visit (unlike pharmacy types) so the picker always reflects the
+                // latest reference data.
+                await userViewModel.fetchCountries()
+
+                let savedCountryCode = AppStorageManager.shared.selectedCountryCode
+                selectedCountry = userViewModel.countryOptions.first { $0.code == savedCountryCode }
+
+                let savedStateCode = AppStorageManager.shared.selectedStateCode
+                selectedState = selectedCountry?.states?.first { $0.code == savedStateCode }
             }
             resolveSelectedCountryAndState()
         }
@@ -121,6 +136,39 @@ struct UserProfileScreen: View {
         }
         .customPopup(isPresented: $showDeleteConfirmation) {
             deleteConfirmation
+        }
+        // "Get Started" never dismisses this cover — it only moves
+        // FaceEnrollmentView's own internal step from intro to capture, so
+        // this fires solely on the intro's Cancel or on Done from the
+        // enrolled/failed terminal screens. This screen (and its `setRoot`)
+        // is deliberately deferred until then, in both the normal and
+        // terminal-gate flows — see `finishProfileFlow`.
+        .fullScreenCover(isPresented: $showFaceSetupIntro, onDismiss: onFaceSetupIntroDismissed) {
+            FaceEnrollmentView(showsIntro: true)
+                .environmentObject(appColors)
+        }
+    }
+
+    /// Routes past Skip/Save once `isNewUser` is settled: the pitch shows
+    /// only the one time it was still true when this screen was reached.
+    /// When it's due, this screen stays alive under the cover — `setRoot`
+    /// (for the terminal-gate flow) or `navigateBack` (otherwise) only runs
+    /// once the cover is dismissed, in `onFaceSetupIntroDismissed`.
+    private func finishProfileFlow(wasNewUser: Bool) {
+        if wasNewUser {
+            showFaceSetupIntro = true
+        } else if mustSelectTerminal {
+            router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+        } else {
+            router.navigateBack()
+        }
+    }
+
+    private func onFaceSetupIntroDismissed() {
+        if mustSelectTerminal {
+            router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+        } else {
+            router.navigateBack()
         }
     }
 
@@ -271,60 +319,63 @@ struct UserProfileScreen: View {
     }
 
     private var pharmacyTypeDropdown: some View {
-        FloatingLabelDropdown(
+        SearchableDropdownField(
             placeholder: L10n.Profile.pharmacyType,
-            selection: $selectedPharmacyType,
             options: userViewModel.pharmacyTypeOptions,
-            labelText: { $0.label }
+            selection: $selectedPharmacyType,
+            showSearch: false,
+            displayText: { $0.label }
         )
     }
 
     private var countryDropdown: some View {
-        FloatingLabelDropdown(
+        SearchableDropdownField(
             placeholder: L10n.Profile.country,
-            selection: $selectedCountry,
             options: userViewModel.countryOptions,
-            labelText: { "\($0.code) - \($0.name)" },
-            onSelect: { _ in selectedState = nil }
+            selection: Binding(
+                get: { selectedCountry },
+                set: { newValue in
+                    selectedCountry = newValue
+                    // Changing the country invalidates whatever state was
+                    // picked for the previous country.
+                    selectedState = nil
+                }
+            )
         )
     }
 
-    private var isStateDropdownDisabled: Bool {
-        (selectedCountry?.states ?? []).isEmpty
-    }
-
     private var stateDropdown: some View {
-        FloatingLabelDropdown(
+        SearchableDropdownField(
             placeholder: L10n.Profile.state,
-            selection: $selectedState,
             options: selectedCountry?.states ?? [],
-            labelText: { "\($0.code) - \($0.name)" },
-            disabled: isStateDropdownDisabled,
-            searchable: true,
-            searchPlaceholder: L10n.Profile.searchState
+            selection: $selectedState,
+            disabled: selectedCountry == nil
         )
     }
 
     private var terminalDropdown: some View {
-        FloatingLabelDropdown(
+        SearchableDropdownField(
             placeholder: L10n.Profile.terminal,
-            selection: $userViewModel.pendingTerminal,
-            options: userViewModel.terminals,
-            labelText: { $0.terminalName ?? "" },
+            options: userViewModel.terminals.map(TerminalOption.init),
+            selection: Binding(
+                get: {
+                    userViewModel.pendingTerminal.map(TerminalOption.init)
+                },
+                set: { newValue in
+                    guard let newValue,
+                          newValue.terminal.terminalId != userViewModel.pendingTerminal?.terminalId
+                    else { return }
+                    userViewModel.selectTerminal(newValue.terminal)
+                }
+            ),
             disabled: isPmsDisabled,
-            onSelect: { terminal in userViewModel.selectTerminal(terminal) }
-        )
-        // When PMS is off the dropdown is disabled (inert); overlay a tap target so
-        // the tap still surfaces the "feature not available" toast instead of nothing.
-        .overlay {
-            if isPmsDisabled {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        toastManager.show(message: L10n.Menu.featureNotAvailableMessage)
-                    }
+            showSearch: false,
+            displayText: { $0.name },
+            onDisabledTap: {
+                toastManager.show(message: L10n.Menu.featureNotAvailableMessage)
             }
-        }
+        )
+        .opacity(isPmsDisabled ? 0.6 : 1.0)
     }
 
     private var actionButtons: some View {
@@ -387,14 +438,26 @@ struct UserProfileScreen: View {
     }
 
     private func onSkipTapped() {
+        let wasNewUser = AppStorageManager.shared.isNewUser
         AppStorageManager.shared.isNewUser = false
-        router.navigateBack()
+        finishProfileFlow(wasNewUser: wasNewUser)
     }
 
     private func onSaveTapped() {
+        let wasNewUser = AppStorageManager.shared.isNewUser
         Task {
             if mustSelectTerminal && userViewModel.pendingTerminal == nil {
                 toastManager.show(message: L10n.Profile.Error.errorTerminalSelectionRequiredMessage)
+                return
+            }
+
+            guard selectedCountry != nil else {
+                toastManager.show(message: L10n.Profile.Error.errorCountrySelectionRequiredMessage)
+                return
+            }
+
+            guard selectedState != nil else {
+                toastManager.show(message: L10n.Profile.Error.errorStateSelectionRequiredMessage)
                 return
             }
 
@@ -440,7 +503,7 @@ struct UserProfileScreen: View {
                     // that claim is the only thing gating the dashboard, so still
                     // let the user through; surface the profile error as a toast
                     // instead of blocking navigation.
-                    toastManager.show(message: L10n.Profile.Error.errorUpdateProfileMessage)
+                    toastManager.show(message: userViewModel.profileErrorMessage ?? L10n.Profile.Error.errorUpdateProfileMessage)
                     if !mustSelectTerminal { return }
                 } else {
                     AppStorageManager.shared.isNewUser = false
@@ -450,29 +513,20 @@ struct UserProfileScreen: View {
 
             toastManager.show(message: L10n.Profile.successUpdateMessage)
             AppStorageManager.shared.isNewUser = false
-            if mustSelectTerminal {
-                // This screen was reached before the dashboard ever loaded — there
-                // is nothing to navigate back to, so replace the root instead.
-                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
-            } else {
-                router.navigateBack()
-            }
+            finishProfileFlow(wasNewUser: wasNewUser)
         }
     }
 
     private func profileScreenLandscape() -> some View {
         VStack(spacing: 0) {
 
-            ScrollViewReader { scrollProxy in
-                ScrollView {
-                    VStack(spacing: 20) {
-                        landscapeProfileColums
-                    }
-                    .padding(.horizontal)
-                    .environment(\.dropdownScrollProxy, scrollProxy)
+            ScrollView {
+                VStack(spacing: 20) {
+                    landscapeProfileColums
                 }
-                .modifier(KeyboardAdaptive())
+                .padding(.horizontal)
             }
+            .modifier(KeyboardAdaptive())
 
             Spacer()
 
@@ -490,16 +544,13 @@ struct UserProfileScreen: View {
     private func profileScreenPotrait() -> some View {
         VStack(spacing: 0) {
 
-            ScrollViewReader { scrollProxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        potraitProfileColums
-                    }
-                    .environment(\.dropdownScrollProxy, scrollProxy)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    potraitProfileColums
                 }
-                .padding(.horizontal)
-                .modifier(KeyboardAdaptive())
             }
+            .padding(.horizontal)
+            .modifier(KeyboardAdaptive())
 
             Spacer()
 

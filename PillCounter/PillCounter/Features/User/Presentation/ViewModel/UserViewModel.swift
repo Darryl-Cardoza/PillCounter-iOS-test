@@ -61,6 +61,10 @@ class UserViewModel: ObservableObject {
 
     // when user updates the profile successfully,
     @Published var isProfileUpdated: Bool = false
+    /// Server-provided message from the most recent failed profile PATCH
+    /// (e.g. duplicate NPI conflict) — nil when it failed for a reason the
+    /// server didn't explain, so callers fall back to a generic string.
+    @Published var profileErrorMessage: String? = nil
     @Published var historyCountTransactions: [PillCountTransactionEntity] = []
     @Published var fixedCountTransactionCompletedCount: Int = 0
     @Published var fixedCountTransactionPartialCount: Int = 0
@@ -436,7 +440,11 @@ class UserViewModel: ObservableObject {
                 if let countryCode { AppStorageManager.shared.selectedCountryCode = countryCode }
                 if let stateCode { AppStorageManager.shared.selectedStateCode = stateCode }
             }
+        } catch APIError.server(let message) {
+            profileErrorMessage = message
+            Log("updateUserProfile error: \(message)")
         } catch {
+            profileErrorMessage = nil
             Log("updateUserProfile error: \(error)")
         }
     }
@@ -779,8 +787,8 @@ class UserViewModel: ObservableObject {
     }
 
     func updateTerminal(_ terminal: UserTerminal) async -> Bool {
-        guard let terminalId = terminal.terminalId,
-              let terminalName = terminal.terminalName else { return false }
+        guard let terminalId = terminal.terminalId, !terminalId.isEmpty,
+              let terminalName = terminal.terminalName, !terminalName.isEmpty else { return false }
 
         isLoading = true
         terminalErrorMessage = nil

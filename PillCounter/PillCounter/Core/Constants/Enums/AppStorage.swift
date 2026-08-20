@@ -29,7 +29,16 @@ final class AppStorageManager {
         clearKeychainOnFreshInstall()
     }
 
-    
+    /// Set by `clearKeychainOnFreshInstall` when this launch wiped the
+    /// Keychain, and consumed by `purgeFaceEnrollmentsIfKeychainWasWiped()`.
+    /// Backed by UserDefaults rather than an in-memory flag so a crash between
+    /// the wipe and the purge still leaves the orphaned rows scheduled for
+    /// deletion on the next launch.
+    private var faceEnrollmentPurgePending: Bool {
+        get { defaults.bool(forKey: AppStorageKeys.faceEnrollmentPurgePending) }
+        set { defaults.set(newValue, forKey: AppStorageKeys.faceEnrollmentPurgePending) }
+    }
+
     /// Keychain accounts that must survive any blanket wipe (logout,
     /// fresh-install cleanup) — the wrapped DEK/KEK bookkeeping. Deleting
     /// these would silently make every already-encrypted CoreData field and
@@ -52,7 +61,29 @@ final class AppStorageManager {
     private func clearKeychainOnFreshInstall() {
         guard !defaults.bool(forKey: AppStorageKeys.hasLaunchedBefore) else { return }
         Keychain.deleteAll(preservedAccounts: Self.dekBookkeepingAccounts)
+        // Core Data is deliberately NOT touched here. This initializer can run
+        // before CoreDataManager.shared has loaded the managed object model —
+        // AppStorageManager.shared is reachable from view model default
+        // arguments, which SwiftUI evaluates as stored-property initializers
+        // before PillCounterApp.init's body runs. Fetching an entity at that
+        // point crashes with "could not locate an NSEntityDescription".
+        faceEnrollmentPurgePending = true
         defaults.set(true, forKey: AppStorageKeys.hasLaunchedBefore)
+    }
+
+    /// Wiping the Keychain destroys the field-encryption key. Any
+    /// FaceEmbeddingEntity/FaceUserEntity rows already on disk were
+    /// encrypted with the now-gone key and can never be decrypted again —
+    /// leaving orphaned ciphertext that silently fails "quick access"
+    /// forever. Purge them so a wiped key never outlives its data.
+    ///
+    /// Must be called only once the Core Data stack is up — see
+    /// `PillCounterApp.init`.
+    func purgeFaceEnrollmentsIfKeychainWasWiped() {
+        guard faceEnrollmentPurgePending else { return }
+        FaceEmbeddingStore.shared.deleteAll()
+        FaceUserStore.shared.deleteAll()
+        faceEnrollmentPurgePending = false
     }
 
     // MARK: - Key constants
@@ -84,6 +115,7 @@ final class AppStorageManager {
         static let imageDekKekVersion   = "image_dek_kek_version"
 
         // UserDefaults-backed (non-sensitive)
+        static let faceEnrollmentPurgePending = "face_enrollment_purge_pending"
         static let drugIdCounter        = "drug_id_counter"
         static let isNewUser            = "is_new_user"
         static let saveHistoryOption    = "save_history_option"
@@ -102,6 +134,9 @@ final class AppStorageManager {
         static let pillCountRingOffsetY = "pill_count_ring_offset_y"
         static let selectedPharmacyType = "selected_pharmacy_type"
         static let pharmacyTypeOptions  = "pharmacy_type_options"
+        static let faceLockCurrentUserId   = "face_lock_current_user_id"
+        static let faceLockCurrentUserName = "face_lock_current_user_name"
+        static let faceSessionTimeoutOption = "face_session_timeout_option"
         static let selectedCountryCode  = "selected_country_code"
         static let selectedStateCode    = "selected_state_code"
         static let countryOptions       = "country_options"
@@ -389,6 +424,17 @@ final class AppStorageManager {
         set { defaults.setValue(newValue.rawValue, forKey: AppStorageKeys.saveHistoryOption) }
     }
 
+    /// Session-lock idle timeout, editable under Settings > Face Recognition
+    /// > Time Limit. Read by FaceSessionManager to configure its idle timer.
+    var faceSessionTimeoutOption: FaceSessionTimeoutOption {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.faceSessionTimeoutOption) != nil else { return .default }
+            let raw = defaults.integer(forKey: AppStorageKeys.faceSessionTimeoutOption)
+            return FaceSessionTimeoutOption(rawValue: raw) ?? .default
+        }
+        set { defaults.setValue(newValue.rawValue, forKey: AppStorageKeys.faceSessionTimeoutOption) }
+    }
+
     var selectedTerminalName: String {
         get {
             defaults.string(forKey: AppStorageKeys.selectedTerminalName) ?? ""
@@ -475,6 +521,20 @@ final class AppStorageManager {
         }
     }
 
+    /// Last session-lock owner, persisted so the owner's name/id survive an
+    /// app relaunch for display purposes (e.g. "last used" attribution). This
+    /// does NOT bypass the lock screen — cold launch always re-locks
+    /// regardless of these values (see FaceSessionManager.lockOnColdLaunch).
+    var faceLockCurrentUserId: String? {
+        get { defaults.string(forKey: AppStorageKeys.faceLockCurrentUserId) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.faceLockCurrentUserId) }
+    }
+
+    var faceLockCurrentUserName: String? {
+        get { defaults.string(forKey: AppStorageKeys.faceLockCurrentUserName) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.faceLockCurrentUserName) }
+    }
+
     /// Selected country **code** (server value, e.g. "US"), required field.
     var selectedCountryCode: String? {
         get { defaults.string(forKey: AppStorageKeys.selectedCountryCode) }
@@ -532,6 +592,12 @@ final class AppStorageManager {
     /// on next login, contradicting that intent.
     func logout() {
         Keychain.deleteAll(preservedAccounts: Self.dekBookkeepingAccounts)
+        // Same reason as on a fresh install: the wipe above destroys the
+        // field-encryption key, so the face rows it wrote can never be read
+        // again. Flag first, then purge — if the purge is interrupted, the
+        // flag survives and the next launch finishes the job.
+        faceEnrollmentPurgePending = true
+        purgeFaceEnrollmentsIfKeychainWasWiped()
 
         defaults.removeObject(forKey: AppStorageKeys.isNewUser)
         clearTerminalCache()

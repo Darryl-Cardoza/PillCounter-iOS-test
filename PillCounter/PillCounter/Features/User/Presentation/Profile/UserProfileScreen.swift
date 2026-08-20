@@ -27,6 +27,12 @@ struct UserProfileScreen: View {
 
     @State private var showDeleteConfirmation: Bool = false
     @State private var selectedPharmacyType: PharmacyTypeOption? = nil
+    /// Shown once, right after a first-run profile save/skip flips `isNewUser`
+    /// false — the "Setup Quick Access" pitch that otherwise only lives on the
+    /// dashboard's first visit. `onDismiss` (not `onEnrolled`) does the actual
+    /// navigation, since Cancel and enrollment-complete Done both resolve to
+    /// this cover's own `dismiss()`.
+    @State private var showFaceSetupIntro: Bool = false
     @State private var selectedCountry: Country? = nil
     @State private var selectedState: StateItem? = nil
 
@@ -127,6 +133,39 @@ struct UserProfileScreen: View {
         }
         .customPopup(isPresented: $showDeleteConfirmation) {
             deleteConfirmation
+        }
+        // "Get Started" never dismisses this cover — it only moves
+        // FaceEnrollmentView's own internal step from intro to capture, so
+        // this fires solely on the intro's Cancel or on Done from the
+        // enrolled/failed terminal screens. This screen (and its `setRoot`)
+        // is deliberately deferred until then, in both the normal and
+        // terminal-gate flows — see `finishProfileFlow`.
+        .fullScreenCover(isPresented: $showFaceSetupIntro, onDismiss: onFaceSetupIntroDismissed) {
+            FaceEnrollmentView(showsIntro: true)
+                .environmentObject(appColors)
+        }
+    }
+
+    /// Routes past Skip/Save once `isNewUser` is settled: the pitch shows
+    /// only the one time it was still true when this screen was reached.
+    /// When it's due, this screen stays alive under the cover — `setRoot`
+    /// (for the terminal-gate flow) or `navigateBack` (otherwise) only runs
+    /// once the cover is dismissed, in `onFaceSetupIntroDismissed`.
+    private func finishProfileFlow(wasNewUser: Bool) {
+        if wasNewUser {
+            showFaceSetupIntro = true
+        } else if mustSelectTerminal {
+            router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+        } else {
+            router.navigateBack()
+        }
+    }
+
+    private func onFaceSetupIntroDismissed() {
+        if mustSelectTerminal {
+            router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
+        } else {
+            router.navigateBack()
         }
     }
 
@@ -388,11 +427,13 @@ struct UserProfileScreen: View {
     }
 
     private func onSkipTapped() {
+        let wasNewUser = AppStorageManager.shared.isNewUser
         AppStorageManager.shared.isNewUser = false
-        router.navigateBack()
+        finishProfileFlow(wasNewUser: wasNewUser)
     }
 
     private func onSaveTapped() {
+        let wasNewUser = AppStorageManager.shared.isNewUser
         Task {
             if mustSelectTerminal && userViewModel.pendingTerminal == nil {
                 toastManager.show(message: L10n.Profile.Error.errorTerminalSelectionRequiredMessage)
@@ -451,7 +492,7 @@ struct UserProfileScreen: View {
                     // that claim is the only thing gating the dashboard, so still
                     // let the user through; surface the profile error as a toast
                     // instead of blocking navigation.
-                    toastManager.show(message: L10n.Profile.Error.errorUpdateProfileMessage)
+                    toastManager.show(message: userViewModel.profileErrorMessage ?? L10n.Profile.Error.errorUpdateProfileMessage)
                     if !mustSelectTerminal { return }
                 } else {
                     AppStorageManager.shared.isNewUser = false
@@ -461,13 +502,7 @@ struct UserProfileScreen: View {
 
             toastManager.show(message: L10n.Profile.successUpdateMessage)
             AppStorageManager.shared.isNewUser = false
-            if mustSelectTerminal {
-                // This screen was reached before the dashboard ever loaded — there
-                // is nothing to navigate back to, so replace the root instead.
-                router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
-            } else {
-                router.navigateBack()
-            }
+            finishProfileFlow(wasNewUser: wasNewUser)
         }
     }
 

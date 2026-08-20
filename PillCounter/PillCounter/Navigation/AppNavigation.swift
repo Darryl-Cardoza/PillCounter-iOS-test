@@ -75,6 +75,10 @@ struct AppNavigation: View {
                     UserSettingsView()
                         .navigationBarBackButtonHidden(true)
 
+                case .authentication(.user(.userSettings(.quickAccessUsers))):
+                    QuickAccessUsersView()
+                        .navigationBarBackButtonHidden(true)
+
                 // MARK: HISTORY
                 case .authentication(.user(.userSettings(.History(let filterType, let statusFilter)))):
                     UserHistoryView(filterType: filterType, stautsType: statusFilter)

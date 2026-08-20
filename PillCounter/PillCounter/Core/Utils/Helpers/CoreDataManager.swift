@@ -59,8 +59,18 @@ final class CoreDataManager {
             forKey: NSPersistentStoreFileProtectionKey
         )
 
+        // An existing on-disk store predating a model change (e.g. the
+        // FaceUserEntity/FaceEmbeddingEntity additions) must migrate, or the
+        // store never loads and every later fetch fails.
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
+
         container.loadPersistentStores { description, error in
             if let error = error {
+                // Continuing here leaves a container with no store attached —
+                // every fetch afterwards fails in a way that reads like a
+                // missing entity rather than a failed migration.
+                assertionFailure("Failed to load Core Data: \(error)")
                 print("Failed to load Core Data: \(error.localizedDescription)")
             }
             #if DEBUG

@@ -22,6 +22,14 @@ struct UserSettingsView: View {
     @State private var showClearDataConfirmationPopup: Bool = false
     @State private var showResetHazardousTrayColorPopup: Bool = false
     @State private var activeSubScreen: SettingsSubScreen? = nil
+    @State private var showTimeLimitPicker: Bool = false
+
+    #if DEBUG
+    /// Drives the debug-only face-verification screen. Presented as a cover
+    /// rather than a route so navigation state stays untouched by debug-only
+    /// scaffolding.
+    @State private var showDebugFaceVerify: Bool = false
+    #endif
 
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var router: Router
@@ -36,8 +44,19 @@ struct UserSettingsView: View {
         ToastManager.shared.show(message: L10n.Menu.featureNotAvailableMessage)
     }
 
+    /// A live binding in DEBUG; an inert constant in release, so the cover
+    /// modifier can stay unconditional in `body` (a `#if` around a modifier in
+    /// a `some View` chain changes the returned type).
+    private var debugFaceVerifyBinding: Binding<Bool> {
+        #if DEBUG
+        return $showDebugFaceVerify
+        #else
+        return .constant(false)
+        #endif
+    }
 
-    
+
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -73,6 +92,11 @@ struct UserSettingsView: View {
         .customPopup(isPresented: $showResetHazardousTrayColorPopup) {
             resetHazardousTrayColorDialog
         }
+        .sheet(isPresented: $showTimeLimitPicker) {
+            FaceSessionTimeoutPickerView(settingsViewModel: settingsViewModel)
+                .environmentObject(appColors)
+        }
+        .modifier(DebugFaceVerifyCover(isPresented: debugFaceVerifyBinding))
         .onAppear {
             // PMS off → the gated features are unavailable; reset them to their
             // defaults (off / empty) so a stale "on" value can't take effect.
@@ -225,7 +249,82 @@ struct UserSettingsView: View {
                 
                 
                 Divider().background(appColors.primaryBackground)
-                
+
+                // MARK: Auto Lock Session
+                HStack {
+                    Text(L10n.Settings.autoLockSession)
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.regular)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    showTimeLimitPicker = true
+                }
+
+                Divider().background(appColors.primaryBackground)
+
+                // MARK: Quick Access Users
+                HStack {
+                    Text(L10n.Menu.quickAccessUsers)
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.regular)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    router.navigate(to: .authentication(.user(.userSettings(.quickAccessUsers))))
+                }
+
+                Divider().background(appColors.primaryBackground)
+
+//                // Debug-only: opens the face-auth camera screen on demand, so
+//                // recognition can be exercised without waiting for the
+//                // inactivity timer. Compiled out of release builds.
+//                HStack {
+//                    Text("⚙︎ Verify Face (Debug)")
+//                        .foregroundStyle(appColors.text)
+//                        .fontWeight(.regular)
+//                }
+//                .frame(maxWidth: .infinity, alignment: .leading)
+//                .padding(.horizontal)
+//                .contentShape(Rectangle())
+//                .onTapGesture {
+//                    guard FaceSessionManager.shared.hasEnrolledUsers else {
+//                        ToastManager.shared.show(message: "No enrolled users")
+//                        return
+//                    }
+//                    showDebugFaceVerify = true
+//                }
+//
+//                Divider().background(appColors.primaryBackground)
+
+                // Debug-only: locks the session immediately and shows the
+                // session-locked screen. Compiled out of release builds.
+                HStack {
+                    Text(L10n.Settings.lockNowDebug)
+                        .foregroundStyle(appColors.text)
+                        .fontWeight(.regular)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard FaceSessionManager.shared.hasEnrolledUsers else {
+                        ToastManager.shared.show(message: "No enrolled users")
+                        return
+                    }
+                    // Nav stack left alone on purpose: the overlay lives at the
+                    // app root and covers this screen, so unlocking lands back
+                    // here — which is exactly the resume-in-place behavior
+                    // worth eyeballing.
+                    FaceSessionManager.shared.lockDueToInactivity()
+                }
+
+                Divider().background(appColors.primaryBackground)
+
                 // MARK: Sound
                 ToggleRowView(
                     title: L10n.Settings.soundFeedback,
@@ -453,8 +552,32 @@ struct UserSettingsView: View {
         .padding(.top, SafeAreaInsets.top + 60)
         .background(appColors.primaryBackground)
     }
+
 }
 
+
+/// Presents the debug face-verification screen. Real cover in DEBUG, a no-op
+/// passthrough in release, so `body` needs no conditional compilation.
+private struct DebugFaceVerifyCover: ViewModifier {
+
+    @Binding var isPresented: Bool
+
+    func body(content: Content) -> some View {
+        #if DEBUG
+        content.fullScreenCover(isPresented: $isPresented) {
+            FaceAuthenticationView { userId, userName in
+                Log("DEBUG VerifyFace: matched \(userName) (\(userId))")
+                // Exercise the real unlock plumbing — session owner switch,
+                // last_authenticated_at write, idle timer arming — not just
+                // the detection pipeline.
+                FaceSessionManager.shared.unlock(userId: userId, userName: userName)
+            }
+        }
+        #else
+        content
+        #endif
+    }
+}
 
 private func alignmentFor(_ index: Int) -> Alignment {
     switch index {

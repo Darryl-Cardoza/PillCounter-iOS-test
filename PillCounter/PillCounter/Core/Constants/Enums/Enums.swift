@@ -84,6 +84,7 @@ public enum HamburgerMenuFLow: Hashable, Codable {
     case profile(mustSelectTerminal: Bool)
     case settings
     case unsyncedTransaction
+    case quickAccessUsers
     case HistoryTransactionDetail(Int64)   // txn_id — screen fetches the entity by id
     case HistoryBatchDetail(Int64)         // batch_id — screen fetches the batch by id
 }
@@ -111,7 +112,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
             case .Settings: return L10n.Menu.settings
             case .Logout: return L10n.Menu.logout
         }
-        
+
     }
 
     var iconName: String {
@@ -363,6 +364,30 @@ enum DrugSchedule: String, CaseIterable, Identifiable {
 enum SettingsSubScreen {
     case saveHistory
     case schedule
+}
+
+/// Session-lock idle timeout — how long the app can sit untouched before the
+/// face-lock overlay appears (spec: "configurable timeout (e.g. 60s)").
+enum FaceSessionTimeoutOption: Int, CaseIterable, Identifiable {
+    case oneMinute = 60
+    case twoMinutes = 120
+    case fiveMinutes = 300
+    case tenMinutes = 600
+
+    var id: Int { rawValue }
+
+    var seconds: TimeInterval { TimeInterval(rawValue) }
+
+    var displayText: String {
+        switch self {
+        case .oneMinute: return L10n.Settings.faceSessionTimeout1m
+        case .twoMinutes: return L10n.Settings.faceSessionTimeout2m
+        case .fiveMinutes: return L10n.Settings.faceSessionTimeout5m
+        case .tenMinutes: return L10n.Settings.faceSessionTimeout10m
+        }
+    }
+
+    static var `default`: FaceSessionTimeoutOption { .twoMinutes }
 }
 
 

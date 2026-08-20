@@ -133,6 +133,7 @@
 "menu.toast.noLastBatchFound" = "No last batch found";
 "menu.featureNotAvailableTitle" = "Feature Not Available";
 "menu.featureNotAvailableMessage" = "This feature is not available for your account.";
+"menu.quickAccessUsers" = "Quick Access Users";
 
 
 // MARK: - PROFILE
@@ -192,6 +193,109 @@
 "settings.hazardousTrayColor" = "Hazardous Tray Color";
 "settings.resetHazardousTrayColorTitle" = "Are you sure you want to reset the hazardous tray color?";
 "settings.resetHazardousTrayColorMessage" = "You will be prompted to set a new hazardous tray color the next time one is detected.";
+"settings.autoLockSession" = "Auto Lock Session";
+"settings.lockNow" = "Lock Now";
+"settings.lockNowDebug" = "Lock Now";
+"settings.addUser" = "Add User";
+"settings.quickAccess" = "Quick Access";
+"settings.timeLimit" = "Time Limit";
+"settings.timeLimitScreenTitle" = "Session Lock Timeout";
+"settings.faceSessionTimeout1m" = "1 Minute";
+"settings.faceSessionTimeout2m" = "2 Minutes (Default)";
+"settings.faceSessionTimeout5m" = "5 Minutes";
+"settings.faceSessionTimeout10m" = "10 Minutes";
+
+"faceAuth.enrollmentTitle" = "Add New User";
+"faceAuth.setupIntroTitle" = "Setup Quick Access";
+"faceAuth.setupIntroSubtitle" = "Sign in to the pharmacy counter in a glance. Enroll your face once — no badges, no passwords to type at the bench.";
+"faceAuth.getStarted" = "Get Started";
+"faceAuth.firstNameFieldPlaceholder" = "First Name";
+"faceAuth.lastNameFieldPlaceholder" = "Last Name";
+"faceAuth.whatsYourName" = "What's your name?";
+"faceAuth.whatsYourNameSubtitle" = "This creates your face profile for Quick Access.";
+"faceAuth.continueButton" = "Continue";
+"faceAuth.nameFieldPlaceholder" = "Enter name";
+"faceAuth.startEnrollment" = "Start Enrollment";
+"faceAuth.cancel" = "Cancel";
+"faceAuth.done" = "Done";
+"faceAuth.nameEmptyError" = "Please enter your first and last name.";
+"faceAuth.nameDuplicateError" = "A user with this name already exists.";
+
+"faceAuth.instructionIdle" = "Enter a name to begin.";
+"faceAuth.instructionPreparing" = "Preparing camera…";
+"faceAuth.instructionComplete" = "All done! Face enrolled successfully.";
+"faceAuth.enrollmentSuccessTitle" = "%@ added successfully";
+"faceAuth.enrollmentCompleteTitle" = "Face enrolled";
+"faceAuth.enrollmentCompleteSubtitle" = "You're all set. You can now unlock \n the counter with a glance.";
+"faceAuth.enrollmentFailedTitle" = "We couldn't enroll your face";
+
+"faceAuth.poseCenter" = "Center your face in the oval";
+"faceAuth.poseTurnLeft" = "Slowly turn your head left";
+"faceAuth.poseTurnRight" = "Slowly turn your head right";
+"faceAuth.poseChinUp" = "Lift your chin up slightly";
+"faceAuth.poseCenterAgain" = "Look straight ahead again";
+"faceAuth.poseHoldStill" = "Hold still…";
+"faceAuth.poseCaptured" = "Got it!";
+
+"faceAuth.failureNoFace" = "No face detected. Position your face in the oval.";
+"faceAuth.failureMultipleFaces" = "Multiple faces detected. Ask others to step away.";
+"faceAuth.failurePoorQuality" = "Move to better lighting and hold steady.";
+"faceAuth.failureEmbedding" = "Could not process this face. Try again.";
+"faceAuth.failureCamera" = "Camera unavailable.";
+"faceAuth.failureStorage" = "Could not save enrollment. Please try again.";
+"faceAuth.failureDuplicate" = "This face is already enrolled for another user.";
+"faceAuth.failureTimedOut" = "Enrollment took too long. Please try again in good lighting.";
+"faceAuth.retry" = "Try Again";
+
+"faceAuth.authTitle" = "Face Authentication";
+"faceAuth.scanFaceTitle" = "Scan Face";
+"faceAuth.authIdle" = "Starting…";
+"faceAuth.authDetecting" = "Look at the camera to continue";
+"faceAuth.authFaceDetected" = "Face detected. Hold still…";
+"faceAuth.authChecking" = "Checking image quality…";
+"faceAuth.authVerifying" = "Verifying…";
+"faceAuth.authWelcome" = "Welcome, %@";
+"faceAuth.authNoFace" = "No face detected. Position your face in the frame.";
+"faceAuth.authMultipleFaces" = "Please ensure only one person is visible.";
+"faceAuth.authPoorQuality" = "Move to better lighting and hold steady.";
+"faceAuth.authUnknownUser" = "No user found.";
+"faceAuth.authNoRegisteredUsers" = "No users are registered on this device.";
+"faceAuth.authCancel" = "Cancel";
+"faceAuth.authContinue" = "Continue";
+
+"faceAuth.registeredUsersTitle" = "Registered Faces";
+"faceAuth.registeredUsersEmpty" = "No users enrolled yet.";
+"faceAuth.registeredUsersInactive" = "(inactive)";
+"faceAuth.registeredUsersEmbeddingCount" = "%d embeddings";
+"faceAuth.registeredUsersAvgQuality" = "Avg quality: %.2f";
+"faceAuth.registeredUsersDelete" = "Delete";
+"faceAuth.registeredUsersDeleteConfirmTitle" = "Delete Face Enrollment";
+"faceAuth.registeredUsersDeleteConfirmMessage" = "This removes all stored face data for this user. They will need to re-enroll to use Quick Access again.";
+
+"faceAuth.quickAccessUsersTitle" = "Quick Access Users";
+"faceAuth.quickAccessUsersEmpty" = "No users added yet.";
+"faceAuth.quickAccessUsersLastUsed" = "Last used %@";
+"faceAuth.quickAccessUsersAddUser" = "+ Add User";
+"faceAuth.quickAccessUsersDeleteTitle" = "Delete User";
+"faceAuth.quickAccessUsersDeleteMessage" = "This will remove the selected user(s) from Quick Access. They will need to re-enroll to use Quick Access again.";
+
+"faceAuth.sessionLockedTitle" = "Session Locked";
+"faceAuth.sessionLockedSubtitle" = "Verify your face to pick up \n where you left off.";
+"faceAuth.sessionIdleMinutes" = "Idle for %d min.\nVerify your face to pick up where you left off.";
+"faceAuth.sessionIdleSeconds" = "Idle for %d sec.\nVerify your face to pick up where you left off.";
+"faceAuth.sessionLockedUnlockButton" = "VERIFY WITH FACE";
+"faceAuth.sessionWelcomeBack" = "Welcome back, %@";
+"faceAuth.sessionRestoring" = "Identity verified.\nResuming your session...";
+"faceAuth.sessionFailedTitle" = "We couldn't recognize you";
+"faceAuth.sessionFailedSubtitle" = "Make sure your face is well lit \n and centered,then try again.";
+
+"faceAuth.idScan.title" = "Scan Photo ID";
+"faceAuth.idScan.hint" = "Hold your photo ID or badge inside the frame";
+"faceAuth.idScan.enterManually" = "Enter Manually";
+"faceAuth.idScan.statusScanning" = "Scanning for ID…";
+"faceAuth.idScan.statusPaused" = "Scanning paused";
+"faceAuth.idScan.statusRestarting" = "Restarting camera…";
+"faceAuth.idScan.suggestionsLabel" = "%@ Suggestions";
 
 
 // MARK: - CAMERA PERMISSION

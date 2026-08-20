@@ -69,7 +69,6 @@ struct HamburgerMenuView: View {
             }
         }
     }
-      
 
     // MARK: - LOGOUT POP UP
     private var logoutPopUp: some View {

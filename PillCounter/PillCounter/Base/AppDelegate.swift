@@ -21,6 +21,17 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return true
     }
 
+    // MARK: - Orientation lock (see OrientationLock.swift)
+    func application(
+        _ application: UIApplication,
+        supportedInterfaceOrientationsFor window: UIWindow?
+    ) -> UIInterfaceOrientationMask {
+        if let locked = OrientationLock.shared.current {
+            return locked
+        }
+        return UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown
+    }
+
     // MARK: - APNs token forwarding
     func application(
         _ application: UIApplication,

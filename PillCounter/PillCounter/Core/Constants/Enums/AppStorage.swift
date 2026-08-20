@@ -102,6 +102,9 @@ final class AppStorageManager {
         static let pillCountRingOffsetY = "pill_count_ring_offset_y"
         static let selectedPharmacyType = "selected_pharmacy_type"
         static let pharmacyTypeOptions  = "pharmacy_type_options"
+        static let selectedCountryCode  = "selected_country_code"
+        static let selectedStateCode    = "selected_state_code"
+        static let countryOptions       = "country_options"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -469,6 +472,33 @@ final class AppStorageManager {
         set {
             let data = try? JSONEncoder().encode(newValue)
             defaults.setValue(data, forKey: AppStorageKeys.pharmacyTypeOptions)
+        }
+    }
+
+    /// Selected country **code** (server value, e.g. "US"), required field.
+    var selectedCountryCode: String? {
+        get { defaults.string(forKey: AppStorageKeys.selectedCountryCode) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.selectedCountryCode) }
+    }
+
+    /// Selected state **code** (server value, e.g. "AK"), required field.
+    var selectedStateCode: String? {
+        get { defaults.string(forKey: AppStorageKeys.selectedStateCode) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.selectedStateCode) }
+    }
+
+    /// Country (with nested states) list fetched from `/reference/countries`,
+    /// cached so the dropdown still has options offline / before the next fetch completes.
+    var countryOptions: [Country] {
+        get {
+            guard let data = defaults.data(forKey: AppStorageKeys.countryOptions),
+                  let options = try? JSONDecoder().decode([Country].self, from: data)
+            else { return [] }
+            return options
+        }
+        set {
+            let data = try? JSONEncoder().encode(newValue)
+            defaults.setValue(data, forKey: AppStorageKeys.countryOptions)
         }
     }
 

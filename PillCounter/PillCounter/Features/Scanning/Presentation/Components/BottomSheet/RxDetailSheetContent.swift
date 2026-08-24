@@ -259,35 +259,6 @@ struct RxDetailsSheetContent: View {
             )
         }
     }
-    
-
-//    private var iPadButtons: some View {
-//        EqualWidthHStackButtons(spacing: 8) {
-//            PillCountingButton(
-//                title: L10n.Common.cancel,
-//                textColor: appColors.primary,
-//                backgroundColor: .clear,
-//                borderColor: appColors.primary,
-//                font: .system(size: 14, weight: .semibold),
-//                cornerRadius: 40,
-//                horizontalPadding: 40,
-//                verticalPadding: 12,
-//                action: onCancel
-//            )
-//            PillCountingButton(
-//                title: L10n.BarcodeScan.proceed,
-//                textColor: .white,
-//                backgroundColor: appColors.primary,
-//                borderColor: .clear,
-//                font: .system(size: 14, weight: .semibold),
-//                cornerRadius: 40,
-//                horizontalPadding: 40,
-//                verticalPadding: 12,
-//                action: onProceed
-//            )
-//        }
-//        .frame(maxWidth: .infinity, alignment: .center)
-//    }
 }
 
 // MARK: - Labeled Text (iPad only)

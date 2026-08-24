@@ -29,7 +29,9 @@ struct HamburgerMenuView: View {
 
     private let menuItems = HamburgerMenuItem.allCases
 
-    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
+    private var isPmsIntegrated: Bool {
+        AppStorageManager.shared.isPmsIntegrated || AppStorageManager.shared.isStandalone
+    }
 
     /// Unsynced transactions are a PMS-integration-only concept — disable the row
     /// when PMS integration is off for this account.

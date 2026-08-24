@@ -60,9 +60,11 @@ final class DrugCatalogStore {
                 entity.drug_image = fileName
                 CoreDataManager.shared.save(context: self.context)
                 print("💊 [DrugMasterDAO] IMAGE SAVED — drugId: \(drugId), file: \(fileName)")
-                // Dashboard/history rows read drug_image via the txn's drug relationship —
-                // notify on the txn-change signal they already observe so the row picks up
-                // the image without needing an app relaunch.
+                // Dashboard/history rows read drug_image via the txn's drug relationship.
+                // objectWillChange doesn't propagate through a to-one relationship fault,
+                // so SwiftUI never re-renders the row on this in-place mutation alone —
+                // notify on the txn-change signal they already observe so the row picks
+                // up the image without needing an app relaunch.
                 DispatchQueue.main.async {
                     TransactionStore.shared.transactionsDidChange.send()
                 }

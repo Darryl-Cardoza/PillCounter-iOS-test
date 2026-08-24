@@ -346,6 +346,40 @@ enum MLLP {
         let payload = data[(startIndex + 1)..<endIndex]
         return String(data: payload, encoding: .utf8)
     }
+
+    /// Extracts every complete MLLP frame from a running receive buffer, consuming
+    /// them (and any garbage prefix) from `buffer` in place. Handles TCP fragmentation
+    /// (partial frame stays buffered for the next chunk) and pipelining (multiple
+    /// frames in one chunk) — use this instead of `unwrap(_:)` for any stream where
+    /// more than one `receive` call may be needed to gather a full message.
+    static func extractFrames(from buffer: inout Data) -> [String] {
+        var messages: [String] = []
+
+        while true {
+            guard let startIndex = buffer.firstIndex(of: start) else { return messages }
+            guard let endIndex = buffer.firstIndex(of: end1) else { return messages }
+
+            guard startIndex < endIndex else {
+                // Stray end-block byte before the next start-block — drop the
+                // garbage prefix and resync.
+                buffer.removeSubrange(0...endIndex)
+                continue
+            }
+
+            // Trailing CR (end2) after the FS (end1) is standard MLLP but some
+            // senders (e.g. MicroMerchant/VividProcessor) omit it — don't block
+            // forever waiting for a byte that may never come.
+            let hasTrailingCR = endIndex + 1 < buffer.count && buffer[endIndex + 1] == end2
+            let consumeThrough = hasTrailingCR ? endIndex + 1 : endIndex
+
+            let payload = buffer[(startIndex + 1)..<endIndex]
+            buffer.removeSubrange(0...consumeThrough)
+
+            if let hl7 = String(data: payload, encoding: .utf8) {
+                messages.append(hl7)
+            }
+        }
+    }
 }
 
 
@@ -364,6 +398,7 @@ enum DrugSchedule: String, CaseIterable, Identifiable {
 enum SettingsSubScreen {
     case saveHistory
     case schedule
+    case connectionInfo
 }
 
 /// Session-lock idle timeout — how long the app can sit untouched before the

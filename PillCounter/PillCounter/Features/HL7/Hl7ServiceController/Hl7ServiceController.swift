@@ -66,7 +66,7 @@ final class Hl7ServiceController: ObservableObject {
 
     private var shouldStartService: Bool {
         AppStorageManager.shared.isLoggedIn
-            && AppStorageManager.shared.isPmsIntegrated
+            && (AppStorageManager.shared.isPmsIntegrated || AppStorageManager.shared.isStandalone)
             && !SecurityManager.isDeviceCompromised()
     }
 
@@ -144,13 +144,15 @@ final class Hl7ServiceController: ObservableObject {
 
     func onClientConnected() {
         Log("📡 [HL7] onClientConnected — starting batch + txn queues")
+        batchSyncQueue?.resetParkedState()
+        txnSyncQueue?.resetParkedState()
         batchSyncQueue?.enqueueUnsynced()
         txnSyncQueue?.enqueueUnsynced()
     }
 
     func onAckReceived(messageId: String?, ackCode: String, hl7: String) {
-        batchSyncQueue?.handleAck(hl7)
-        txnSyncQueue?.handleAck(hl7)
+        batchSyncQueue?.handleAck(messageId: messageId, hl7: hl7)
+        txnSyncQueue?.handleAck(messageId: messageId, hl7: hl7)
     }
 
     func onAckTimeout() {
@@ -187,7 +189,7 @@ final class Hl7ServiceController: ObservableObject {
         retryCount += 1
         let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
         currentMessageId = messageId
-        hl7Manager?.sendClientHL7(buildHl7Message(txn: txn))
+        hl7Manager?.sendHL7ToPMS(buildHl7Message(txn: txn), orderId: txn.rx_no ?? "\(txn.txn_id)")
     }
 
     private func handleSendFailure() {

@@ -226,7 +226,8 @@ class UserViewModel: ObservableObject {
                 }
 
                 if let hl7Version = result.data?.settings?.hl7Version
-                    ?? result.data?.user?.settings?.hl7Version {
+                    ?? result.data?.user?.settings?.hl7Version,
+                   !hl7Version.trimmingCharacters(in: .whitespaces).isEmpty {
                     AppStorageManager.shared.hl7Version = hl7Version
                 }
 
@@ -245,6 +246,11 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.isPmsIntegrated = isPmsIntegrated
                 }
 
+                if let isStandalone = result.data?.settings?.isStandalone
+                    ?? result.data?.user?.settings?.isStandalone {
+                    AppStorageManager.shared.isStandalone = isStandalone
+                }
+
                 if let allowLocalStorage = result.data?.settings?.allowLocalStorage
                     ?? result.data?.user?.settings?.allowLocalStorage {
                     AppStorageManager.shared.allowLocalStorage = allowLocalStorage
@@ -260,14 +266,15 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.hl7MessageSpec = Hl7Format.fromSendingApplication(hl7MessageSpec)
                 }
 
-                if let kekResponse = result.data?.kek,
-                   let keyId = kekResponse.keyId,
-                   let version = kekResponse.version,
-                   let keyMaterial = kekResponse.keyMaterial {
-                    DatabaseKeyProvider.shared.rotateKekIfNewer(
-                        KekInfo(keyId: keyId, version: version, keyMaterial: keyMaterial)
-                    )
-                }
+                AppStorageManager.shared.useStaticPMSConnection = result.data?.settings?.useStaticPMSConnection
+                    ?? result.data?.user?.settings?.useStaticPMSConnection
+                    ?? false
+
+                AppStorageManager.shared.pmsIpAddress = result.data?.settings?.pmsIpAddress
+                    ?? result.data?.user?.settings?.pmsIpAddress
+
+                AppStorageManager.shared.pmsPort = result.data?.settings?.pmsPort
+                    ?? result.data?.user?.settings?.pmsPort
 
                 if let kekResponse = result.data?.kek,
                    let keyId = kekResponse.keyId,

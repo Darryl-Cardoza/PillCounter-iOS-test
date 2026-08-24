@@ -20,29 +20,15 @@ final class ImageDeliveryTracker {
     private var deliveredFilenames: Set<String> = []
     private let lock = NSLock()
 
-    func markDelivered(_ filename: String) {
-        lock.lock(); defer { lock.unlock() }
-        deliveredFilenames.insert(filename)
-    }
-
     func markDelivered(_ filenames: [String]) {
         lock.lock(); defer { lock.unlock() }
         deliveredFilenames.formUnion(filenames)
     }
 
-    func isDelivered(_ filename: String) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        return deliveredFilenames.contains(filename)
-    }
-
     /// True when every filename in `filenames` has been confirmed delivered.
     /// An empty list (transaction has no images) is trivially satisfied.
     func allDelivered(_ filenames: [String]) -> Bool {
-        filenames.isEmpty || filenames.allSatisfy { isDelivered($0) }
-    }
-
-    func clear(_ filename: String) {
         lock.lock(); defer { lock.unlock() }
-        deliveredFilenames.remove(filename)
+        return filenames.isEmpty || filenames.allSatisfy { deliveredFilenames.contains($0) }
     }
 }

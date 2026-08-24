@@ -1081,11 +1081,13 @@ extension CameraService {
             // Draw oriented image (no flip needed — CIImage already handled it)
             UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: imageSize))
 
-            // Draw badges at transformed positions. Badge size is fixed (relative to
-            // image width) so every pill marker is the same size regardless of the
-            // detected box, instead of scaling per-pill.
-            let badgeSize = imageSize.width * 0.04
+            // Badge size scales with each pill's own detected box so it never
+            // covers pills bigger/smaller than average, clamped to stay legible.
+            let minBadgeSize = imageSize.width * 0.012
+            let maxBadgeSize = imageSize.width * 0.08
             transformedDetections.enumerated().forEach { index, detection in
+                let pillDiameter = min(detection.rect.width, detection.rect.height)
+                let badgeSize = min(max(pillDiameter * 0.55, minBadgeSize), maxBadgeSize)
                 drawBadge(context: context, index: index, rect: detection.rect, badgeSize: badgeSize)
             }
         }
@@ -1206,7 +1208,7 @@ extension CameraService {
 
         // Stroke circle
         context.setStrokeColor(UIColor.white.cgColor)
-        context.setLineWidth(3)
+        context.setLineWidth(max(1, circleSize * 0.08))
         context.strokeEllipse(in: circleRect)
 
         // Draw count text

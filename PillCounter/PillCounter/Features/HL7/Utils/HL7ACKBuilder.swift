@@ -4,10 +4,13 @@
 //
 //  Created by Bhushan Patil on 16/04/26.
 //
+import Hl7Core
 import Foundation
 
 
-/// Handles building HL7 ACK/NACK responses based on incoming message.
+/// Handles building HL7 ACK/NACK responses based on incoming message, via
+/// Hl7Core's `ack { }` DSL (same builder library used by `HL7CompletionBuilder`)
+/// rather than hand-rolled strings.
 enum HL7ACKBuilder {
 
     enum AckCode: String {
@@ -34,40 +37,74 @@ enum HL7ACKBuilder {
 
         let fields = mshLine.components(separatedBy: "|")
 
-        // Extract required fields safely
-        let sendingApp = fields[safe: 2] ?? "UNKNOWN"
-        let sendingFacility = fields[safe: 3] ?? "UNKNOWN"
-        let _receivingApp = fields[safe: 4] ?? "UNKNOWN"
-        let _receivingFacility = fields[safe: 5] ?? "UNKNOWN"
+        // Receiving side of the ACK = whoever sent the inbound message (MSH-3/4).
+        let inboundSendingApp = fields[safe: 2] ?? "UNKNOWN"
+        let inboundSendingFacility = fields[safe: 3] ?? "UNKNOWN"
         let messageControlId = fields[safe: 9] ?? "UNKNOWN"
 
-        let ackMessageId = UUID().uuidString
-
-        var ack = ""
-
-        // MARK: - MSH
-        ack += "MSH|^~\\&|PillCounter|ROBOT|\(sendingApp)|\(sendingFacility)|\(DateUtils.currentTimestamp())||ACK^R01|\(ackMessageId)|P|2.5\n"
-
-        // MARK: - MSA
-        ack += "MSA|\(code.rawValue)|\(messageControlId)"
-
-        // MARK: - Error segment (optional)
-        if let errorMessage, code != .AA {
-            ack += "\nERR|||0^ERROR|\(errorMessage)"
-        }
-
-        return ack
+        return build(
+            receivingApplication: inboundSendingApp,
+            receivingFacility: inboundSendingFacility,
+            messageControlId: messageControlId,
+            code: code,
+            errorMessage: errorMessage
+        )
     }
 
     // MARK: - Fallback ACK (invalid HL7)
 
     /// Builds fallback ACK when message is completely invalid.
     private static func buildFallbackACK(code: AckCode, error: String) -> String {
-        return """
-        MSH|^~\\&|PillCounter|ROBOT|UNKNOWN|UNKNOWN|\(DateUtils.currentTimestamp())||ACK^R01|\(UUID().uuidString)|P|2.5
-        MSA|\(code.rawValue)|UNKNOWN
-        ERR|||0^ERROR|\(error)
-        """
+        return build(
+            receivingApplication: "UNKNOWN",
+            receivingFacility: "UNKNOWN",
+            messageControlId: "UNKNOWN",
+            code: code,
+            errorMessage: error
+        )
+    }
+
+    /// Shared ACK^R01 construction via `Hl7Core`. MSH-3/4 (sender) are this
+    /// app's identity from `HL7Config` — terminal name / configured HL7 format —
+    /// matching what `HL7CompletionBuilder` sends elsewhere. MSH-5/6 (receiver)
+    /// echo back the inbound sender so the ACK routes to whoever sent it.
+    private static func build(
+        receivingApplication: String,
+        receivingFacility: String,
+        messageControlId: String,
+        code: AckCode,
+        errorMessage: String?
+    ) -> String {
+        let config = HL7Config.current
+        let builder = HL7Builder.companion.builder()
+            .defaultVersion(version: config.versionId)
+            .build()
+
+        let message = builder.ack { scope in
+            scope.msh { msh in
+                msh.sendingApplication = config.sendingApplication
+                msh.sendingFacility = config.sendingFacility
+                msh.receivingApplication = receivingApplication
+                msh.receivingFacility = receivingFacility
+                msh.dateTimeOfMessage = DateUtils.currentTimestamp()
+                msh.messageControlId = UUID().uuidString
+                msh.processingId = "P"
+                msh.versionId = config.versionId
+            }
+
+            scope.msa { msa in
+                msa.acknowledgmentCode = code.rawValue
+                msa.messageControlId = messageControlId
+            }
+
+            if let errorMessage, code != .AA {
+                scope.err { err in
+                    err.errorText = errorMessage
+                }
+            }
+        }
+
+        return message.encode()
     }
 }
 
@@ -172,45 +209,41 @@ struct HL7Validator {
         // INVENTORY → INR^U04
         // =========================
         case ("INR", "U04"):
-            
-            return .valid
 
             // Prefer OBX
-//            let obxSegments = segments.filter { $0.hasPrefix("OBX|") }
-//
-//            if !obxSegments.isEmpty {
-//                for (index, obx) in obxSegments.enumerated() {
-//
-//                    let fields = obx.components(separatedBy: "|")
-//
-//                    // OBX-5 → NDC / value
-//                    let value = fields[safe: 5]?.trimmingCharacters(in: .whitespaces) ?? ""
-//                    if value.isEmpty {
-//                        return .invalid("Missing value in OBX \(index + 1)")
-//                    }
-//                }
-//
-//                return .valid
-//            }
+            let obxSegments = segments.filter { $0.hasPrefix("OBX|") }
+
+            if !obxSegments.isEmpty {
+                for (index, obx) in obxSegments.enumerated() {
+                    let fields = obx.components(separatedBy: "|")
+
+                    // OBX-5 → NDC / value
+                    let value = fields[safe: 5]?.trimmingCharacters(in: .whitespaces) ?? ""
+                    if value.isEmpty {
+                        return .invalid("Missing value in OBX \(index + 1)")
+                    }
+                }
+
+                return .valid
+            }
 
             // Fallback: allow RXE (non-standard PMS)
-//            let rxeSegments = segments.filter { $0.hasPrefix("RXE|") }
-//
-//            if !rxeSegments.isEmpty {
-//                for (index, rxe) in rxeSegments.enumerated() {
-//
-//                    let fields = rxe.components(separatedBy: "|")
-//
-//                    let ndc = fields[safe: 2]?.trimmingCharacters(in: .whitespaces) ?? ""
-//                    if ndc.isEmpty {
-//                        return .invalid("Missing NDC in RXE \(index + 1)")
-//                    }
-//                }
-//
-//                return .valid
-//            }
-//
-//            return .invalid("Missing OBX/RXE segment for INR^U04")
+            let rxeSegments = segments.filter { $0.hasPrefix("RXE|") }
+
+            if !rxeSegments.isEmpty {
+                for (index, rxe) in rxeSegments.enumerated() {
+                    let fields = rxe.components(separatedBy: "|")
+
+                    let ndc = fields[safe: 2]?.trimmingCharacters(in: .whitespaces) ?? ""
+                    if ndc.isEmpty {
+                        return .invalid("Missing NDC in RXE \(index + 1)")
+                    }
+                }
+
+                return .valid
+            }
+
+            return .invalid("Missing OBX/RXE segment for INR^U04")
 
         // =========================
         // Unsupported

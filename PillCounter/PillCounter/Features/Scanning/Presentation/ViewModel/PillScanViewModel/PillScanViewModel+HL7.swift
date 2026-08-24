@@ -321,7 +321,8 @@ extension PillScanViewModel {
             txnId: txnId,
             drugId: resolvedDrugId,
             targetCount: newTargetCount,
-            priority: newPriority
+            priority: newPriority,
+            refillNo: nil
         )
 
         Log("HL7 ORC|XO applied: txnId=\(txnId), rxNo=\(rxNo), drugId=\(resolvedDrugId), targetCount=\(newTargetCount), priority=\(newPriority ?? "nil")")
@@ -463,11 +464,19 @@ extension PillScanViewModel {
                     Log("HL7: Drug created via API → \(lookup)")
                 } else {
                     Log("HL7: API returned empty drug name")
+                    HL7NotificationManager.show(
+                        title: L10n.BarcodeScan.drugNotFound,
+                        body: L10n.BarcodeScan.drugNotFoundMessage
+                    )
                     return
                 }
 
             } catch {
                 Log("HL7: API failed for NDC \(ndc) → \(error.localizedDescription)")
+                HL7NotificationManager.show(
+                    title: L10n.BarcodeScan.drugNotFound,
+                    body: L10n.BarcodeScan.drugNotFoundMessage
+                )
                 return
             }
         }
@@ -491,7 +500,8 @@ extension PillScanViewModel {
                 txnId: existing.txn_id,
                 drugId: drugIdToUse,
                 targetCount: targetCount ?? existing.target_count,
-                priority: priority ?? existing.txn_priority
+                priority: priority ?? existing.txn_priority,
+                refillNo: nil
             )
             TransactionStore.shared.setHl7Identifiers(
                 txnId: existing.txn_id,
@@ -584,7 +594,7 @@ extension PillScanViewModel {
             return
         }
 
-        let targetCount = Int32(zui.orderDispenseQuantity) ?? 0
+        let targetCount = Int32(Double(zui.orderDispenseQuantity) ?? 0)
         let rxNo = zui.orderRxNumber.isEmpty ? nil : zui.orderRxNumber
 
         await processHl7DrugAndCreateTransaction(
@@ -596,7 +606,6 @@ extension PillScanViewModel {
             messageControlId: message.messageControlId,
             transactionOrderId: zui.orderTransactionOrderId.isEmpty ? nil : zui.orderTransactionOrderId
         )
-
         callback?(true)
     }
 
@@ -620,7 +629,7 @@ extension PillScanViewModel {
             return
         }
 
-        let targetCount = Int32(zni.dispenseAmount) ?? 0
+        let targetCount = Int32(Double(zni.dispenseAmount) ?? 0)
         let rxNo = zni.prescriptionNumber.isEmpty ? nil : zni.prescriptionNumber
 
         await processHl7DrugAndCreateTransaction(

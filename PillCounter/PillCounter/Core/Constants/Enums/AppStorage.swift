@@ -97,6 +97,7 @@ final class AppStorageManager {
         static let rememberMe           = "remember_me"
         static let tokenExpiryTimestamp = "token_expiry_timestamp"
         static let isPmsIntegrated      = "is_pms_integrated"
+        static let isStandalone         = "is_standalone"
         static let allowLocalStorage    = "allow_local_storage"
         static let hl7Version           = "hl7_version"
         static let pmsHostName          = "pms_host_name"
@@ -107,6 +108,9 @@ final class AppStorageManager {
         static let hazardousTrayColors  = "hazardous_tray_colors"
         static let bypassSSL            = "bypass_ssl"
         static let hl7MessageSpec       = "hl7_message_spec"
+        static let useStaticPMSConnection = "use_static_pms_connection"
+        static let pmsIpAddress         = "pms_ip_address"
+        static let pmsPort              = "pms_port"
         static let dekWrapped           = "dek_wrapped"
         static let dekKekId             = "dek_kek_id"
         static let dekKekVersion        = "dek_kek_version"
@@ -212,11 +216,50 @@ final class AppStorageManager {
         set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.allowLocalStorage) }
     }
 
+    /// When true, HL7 server runs regardless of `isPmsIntegrated` — server-driven
+    /// (`auth/me` → `settings.is_standalone`).
+    var isStandalone: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.isStandalone) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.isStandalone) }
+    }
+
+    /// Server-driven PMS discovery gate (`auth/me` → `settings.use_static_pms_connection`).
+    /// false → Bonjour discovery (current default). true → connect direct via `pmsIpAddress`/`pmsPort`.
+    /// Defaults to false until `auth/me` returns a value.
+    var useStaticPMSConnection: Bool {
+        get { Keychain.getPassword(for: AppStorageKeys.useStaticPMSConnection) == "true" }
+        set { Keychain.savePassword(newValue ? "true" : "false", for: AppStorageKeys.useStaticPMSConnection) }
+    }
+
+    /// PMS computer's direct IP address, server-provided (`auth/me` → `settings.pms_ip_address`).
+    var pmsIpAddress: String? {
+        get { Keychain.getPassword(for: AppStorageKeys.pmsIpAddress) }
+        set {
+            if let v = newValue { Keychain.savePassword(v, for: AppStorageKeys.pmsIpAddress) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.pmsIpAddress) }
+        }
+    }
+
+    /// PMS computer's direct port, server-provided (`auth/me` → `settings.pms_port`).
+    var pmsPort: Int? {
+        get {
+            guard let s = Keychain.getPassword(for: AppStorageKeys.pmsPort) else { return nil }
+            return Int(s)
+        }
+        set {
+            if let v = newValue { Keychain.savePassword(String(v), for: AppStorageKeys.pmsPort) }
+            else                { Keychain.deletePassword(for: AppStorageKeys.pmsPort) }
+        }
+    }
+
     /// HL7 version the PMS integration should speak, provided by the server
     /// (`auth/me` → `settings.hl7_version`, e.g. "2.3.1"). Falls back to "2.3"
     /// when never set (fresh install / no PMS integration yet).
     var hl7Version: String {
-        get { Keychain.getPassword(for: AppStorageKeys.hl7Version) ?? "2.3" }
+        get {
+            let stored = Keychain.getPassword(for: AppStorageKeys.hl7Version)
+            return (stored?.trimmingCharacters(in: .whitespaces).isEmpty ?? true) ? "2.3" : stored!
+        }
         set { Keychain.savePassword(newValue, for: AppStorageKeys.hl7Version) }
     }
 
@@ -264,6 +307,13 @@ final class AppStorageManager {
         get { Keychain.getPassword(for: AppStorageKeys.pmsHostName) ?? "" }
         set { Keychain.savePassword(newValue, for: AppStorageKeys.pmsHostName) }
     }
+
+    /// Live Bonjour/static-connect service name resolved when the HL7 client
+    /// connects (`Hl7ServiceManager.currentServiceName`). Runtime-only — not
+    /// persisted — since it reflects the currently connected PMS instance,
+    /// not a user-configured setting. Used as MSH-4 (receiving facility) so
+    /// outgoing messages identify the actual connected receiver.
+    var resolvedPMSServiceName: String?
 
     var pillCounterHostName: String {
         get { Keychain.getPassword(for: AppStorageKeys.pillCounterHostName) ?? "" }

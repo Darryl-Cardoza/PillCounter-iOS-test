@@ -152,7 +152,7 @@ struct NotePopupView: View {
                     PillCountingButton(
                         iconName: nil,
                         title: primaryTitle,
-                        textColor: appColors.text,
+                        textColor: .white,
                         backgroundColor: appColors.primary,
                         borderColor: .clear,
                         font: .system(size: 14, weight: .semibold),

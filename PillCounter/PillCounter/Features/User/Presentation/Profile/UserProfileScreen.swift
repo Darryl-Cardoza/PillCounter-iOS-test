@@ -109,6 +109,8 @@ struct UserProfileScreen: View {
                 // finish before reading pharmacyTypeOptions below, or the picker's
                 // default selection misses on this screen's first appear.
                 await userViewModel.fetchPharmacyTypes()
+                await userViewModel.fetchCountries()
+                resolveSelectedCountryAndState()
 
                 let savedCode = AppStorageManager.shared.selectedPharmacyTypeCode
                 selectedPharmacyType = userViewModel.pharmacyTypeOptions.first {
@@ -126,6 +128,7 @@ struct UserProfileScreen: View {
                 let savedStateCode = AppStorageManager.shared.selectedStateCode
                 selectedState = selectedCountry?.states?.first { $0.code == savedStateCode }
             }
+            resolveSelectedCountryAndState()
         }
         .onTapGesture {
             //            hideKeyboard()
@@ -167,6 +170,14 @@ struct UserProfileScreen: View {
         } else {
             router.navigateBack()
         }
+    }
+
+    private func resolveSelectedCountryAndState() {
+        let savedCountryCode = AppStorageManager.shared.selectedCountryCode
+        selectedCountry = userViewModel.countryOptions.first { $0.code == savedCountryCode }
+
+        let savedStateCode = AppStorageManager.shared.selectedStateCode
+        selectedState = selectedCountry?.states?.first { $0.code == savedStateCode }
     }
 
     private var deleteConfirmation: some View {
@@ -509,17 +520,16 @@ struct UserProfileScreen: View {
     private func profileScreenLandscape() -> some View {
         VStack(spacing: 0) {
 
-//            profileHeader
-
             ScrollView {
                 VStack(spacing: 20) {
                     landscapeProfileColums
                 }
                 .padding(.horizontal)
             }
-            
+            .modifier(KeyboardAdaptive())
+
             Spacer()
-            
+
             HStack {
                 Spacer()
                 actionButtons
@@ -530,11 +540,9 @@ struct UserProfileScreen: View {
         .padding(.top, 65 )
         .background(appColors.primaryBackground)
     }
-    
+
     private func profileScreenPotrait() -> some View {
         VStack(spacing: 0) {
-
-//            profileHeader
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -542,9 +550,10 @@ struct UserProfileScreen: View {
                 }
             }
             .padding(.horizontal)
+            .modifier(KeyboardAdaptive())
 
             Spacer()
-            
+
             HStack {
                 Spacer()
                 actionButtons
@@ -554,30 +563,4 @@ struct UserProfileScreen: View {
         }
         .padding(.top, 65)
     }
-    
-//    private var profileHeader: some View {
-//        HStack {
-//            if !isNewUser {
-//                Button {
-//                    router.navigateBack()
-//                } label: {
-//                    HStack {
-//                        Image("back_icon")
-//                            .resizable()
-//                            .scaledToFit()
-//                            .frame(width: 24, height: 24)
-//
-//                        Text(NSLocalizedString("PROFILE", comment: ""))
-//                            .font(.headline)
-//                            .foregroundStyle(appColors.text)
-//                    }
-//                }
-//            }
-//
-//            Spacer()
-//        }
-//        .padding(.horizontal)
-//        .padding(.vertical,10)
-//        .padding(.bottom, 30)
-//    }
 }

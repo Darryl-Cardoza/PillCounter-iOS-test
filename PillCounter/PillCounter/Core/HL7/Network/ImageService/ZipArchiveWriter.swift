@@ -104,6 +104,12 @@ struct ZipArchiveWriter {
         }
     }()
 
+    /// CRC-32 of arbitrary bytes (e.g. a finalized archive's full body), for
+    /// callers that need to report a whole-file checksum alongside the archive.
+    static func crc32(ofWholeFile data: Data) -> UInt32 {
+        crc32(data)
+    }
+
     private static func crc32(_ data: Data) -> UInt32 {
         var crc: UInt32 = 0xFFFFFFFF
         for byte in data {

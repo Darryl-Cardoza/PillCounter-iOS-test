@@ -114,13 +114,12 @@ struct PillCounterApp: App {
                                 }
                             }
                             .task {
-                                userViewModel.loadMobileThemeSettings()
-
-                                // Hydrate the user from auth/me on launch (mirrors
-                                // mobile settings). Forcing remote ensures the profile
-                                // and terminal list are refreshed even when a stale
-                                // local user already exists.
-                                Task { await userViewModel.getUser(forceRemote: true) }
+                                // Single gate: only fetch when a token already
+                                // exists. If logged out at launch, the onChange
+                                // below fires this same call once login succeeds.
+                                if AppStorageManager.shared.isLoggedIn {
+                                    loadLoggedInUserData()
+                                }
 
                                 Task.detached(priority: .background) {
                                     await MainActor.run {
@@ -196,12 +195,30 @@ struct PillCounterApp: App {
             .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhaseChange(newPhase)
             }
+            .onChange(of: loginViewModel.isOtpVerificationSuccess) { _, success in
+                // The root .task only runs once at cold launch. When the app
+                // starts logged-out, this fires the same fetch the moment
+                // login succeeds — single call site, no duplication.
+                if success {
+                    loadLoggedInUserData()
+                }
+            }
         }
     }
 }
 
 // MARK: - SECURITY HANDLING
 extension PillCounterApp {
+
+    /// Single source of truth for all token-gated startup fetches:
+    /// mobile settings, auth/me, and pharmacy types. Called exactly twice —
+    /// once from the launch `.task` when already logged in, and once from
+    /// the login-success `onChange` when starting logged-out.
+    private func loadLoggedInUserData() {
+        userViewModel.loadMobileThemeSettings()
+        Task { await userViewModel.getUser(forceRemote: true) }
+        Task { await userViewModel.fetchPharmacyTypes() }
+    }
 
     private func startSecurityMonitoring() {
         SecurityMonitor.shared.startMonitoring {

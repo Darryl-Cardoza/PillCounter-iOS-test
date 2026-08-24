@@ -10,15 +10,21 @@ import SwiftUI
 
 struct KeyboardAdaptive: ViewModifier {
     @State private var keyboardHeight: CGFloat = 0
-    
+
     func body(content: Content) -> some View {
-        content
-            .padding(.bottom, keyboardHeight)
-            .onReceive(Publishers.keyboardHeight) { height in
-                withAnimation(.easeOut(duration: 0.25)) {
-                    keyboardHeight = height
-                }
+        GeometryReader { proxy in
+            content
+                // The keyboard height notification already includes the home-indicator
+                // safe area at the bottom of the screen; the view's own safe-area inset
+                // covers that same strip, so subtracting it avoids double-counting and
+                // the resulting dead gap between the keyboard and the content above it.
+                .padding(.bottom, max(0, keyboardHeight - proxy.safeAreaInsets.bottom))
+        }
+        .onReceive(Publishers.keyboardHeight) { height in
+            withAnimation(.easeOut(duration: 0.25)) {
+                keyboardHeight = height
             }
+        }
     }
 }
 

@@ -158,6 +158,7 @@ class LoginViewModel: ObservableObject {
                 // All sensitive values written to Keychain via AppStorageManager
                 store.isLoggedIn   = true
                 store.isPmsIntegrated = result.data?.user?.isPmsIntegrated ?? false
+                store.isStandalone = result.data?.user?.isStandalone ?? false
                 store.allowLocalStorage = result.data?.user?.allowLocalStorage ?? false
                 store.accessToken  = result.data?.accessToken ?? ""
                 store.refreshToken = result.data?.refreshToken ?? ""

@@ -75,6 +75,13 @@ extension PillScanViewModel {
                 print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
 
                 guard let existingTxn else {
+                    guard AppStorageManager.shared.isStandalone else {
+                        print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
+                        showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                        rxScanFailed = true
+                        return
+                    }
+
                     print("[RxScan] Rx \(rxNo) not found in DB — showing Rx popup to create new txn")
 
                     scannedRxData = ParsedScanData(
@@ -156,13 +163,6 @@ extension PillScanViewModel {
         }
 
         guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
-            guard !AppStorageManager.shared.isPmsIntegrated else {
-                print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB, PMS integrated, not creating txn")
-                showRxFlowPopup = false
-                showToastMessage(text: L10n.BarcodeScan.rxNotFound)
-                rxScanFailed = true
-                return
-            }
             print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB, creating new txn")
             await createTransactionFromRxScan()
             return
@@ -208,13 +208,12 @@ extension PillScanViewModel {
         }
 
         guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
-            guard !AppStorageManager.shared.isPmsIntegrated else {
-                print("[RxScan] Rx \(rxNo) not found in DB, PMS integrated — not creating txn")
-                showRxFlowPopup = false
+            guard AppStorageManager.shared.isStandalone else {
+                print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
                 showToastMessage(text: L10n.BarcodeScan.rxNotFound)
-                rxScanFailed = true
                 return
             }
+
             print("[RxScan] Rx \(rxNo) not found in DB — creating new txn")
 
             await createTransaction(
@@ -222,7 +221,8 @@ extension PillScanViewModel {
                 isDispense: isDispense,
                 drugName: rxData.drugName,
                 rxNo: rxNo,
-                bucketId: selectedBucket
+                bucketId: selectedBucket,
+                refillNo: rxData.refil
             )
 
             await MainActor.run {
@@ -233,7 +233,8 @@ extension PillScanViewModel {
                         txnId: txnId,
                         drugId: drug.drug_id,
                         targetCount: targetQty,
-                        priority: currentTransaction?.txn_priority
+                        priority: currentTransaction?.txn_priority,
+                        refillNo: rxData.refil
                     )
                     self.currentTransaction = transactionDAO.fetchById(txnId)
                 }
@@ -267,7 +268,8 @@ extension PillScanViewModel {
             txnId: txnId,
             drugId: drug.drug_id,
             targetCount: targetQty,
-            priority: existingTxn.txn_priority
+            priority: existingTxn.txn_priority,
+            refillNo: rxData.refil
         )
 
         await MainActor.run {

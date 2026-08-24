@@ -93,6 +93,8 @@ struct HistoryTransactionDetailView: View {
                                         .scaledToFit()
                                 )
                         }
+                        .padding(.trailing, 10)
+                        
                         
 //                        Button { generateAndSharePDF() } label: {
 //                            Image("pdf")
@@ -245,7 +247,7 @@ extension HistoryTransactionDetailView {
     // MARK: - Collapsible Sections
     private var collapsibleSections: some View {
         Group {
-            if isLandscape && isControlledFlow {
+            if isLandscape {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(spacing: 10) { leftColumnSections }
                     VStack(spacing: 10) { rightColumnSections }
@@ -268,33 +270,24 @@ extension HistoryTransactionDetailView {
         ) {
             substituedInfoList
         }
-
-        HStack(alignment: .top, spacing: 10) {
-            containerQRCodeBox
-            vialBox
-        }
-
-        if let details = historyViewModel.detailsByStep[.containerInitiate],
-           !details.isEmpty
-        {
-            CollapsibleBox(
-                title: L10n.History.initialContainerCount,
-                allowCollapse: false,
-                defaultExpanded: true,
-                bgColor: appColors.secondaryBackground,
-                countText: containerCountText(step: .containerInitiate)
-            ) {
-                collapsableBoxContent(step: .containerInitiate)
-            }
-        }
-
+        
         CollapsibleBox(
             title: drugDetailsTitle,
             bgColor: appColors.secondaryBackground,
             countText: allBottleInfos.count > 1 ? "\(bottlePage + 1) \(L10n.Common.of) \(allBottleInfos.count)" : nil
         ) {
-            detailsInfoList
+            VStack(spacing: 0) {
+                detailsInfoList
+                pageIndicator
+            }
         }
+
+        
+        CollapsibleBox(title: L10n.Common.note, bgColor: appColors.secondaryBackground) {
+            notesContent
+        }
+        
+     
     }
 
     @ViewBuilder
@@ -362,6 +355,27 @@ extension HistoryTransactionDetailView {
     // MARK: - Right Column (pill count / recount / vial / remaining stock / notes)
     @ViewBuilder
     private var rightColumnSections: some View {
+        
+        HStack(alignment: .top, spacing: 10) {
+            containerQRCodeBox
+            vialBox
+        }
+        
+        
+        if let details = historyViewModel.detailsByStep[.containerInitiate],
+           !details.isEmpty
+        {
+            CollapsibleBox(
+                title: L10n.History.initialContainerCount,
+                allowCollapse: false,
+                defaultExpanded: true,
+                bgColor: appColors.secondaryBackground,
+                countText: containerCountText(step: .containerInitiate)
+            ) {
+                collapsableBoxContent(step: .containerInitiate)
+            }
+        }
+        
         if !isControlledFlow {
             CollapsibleBox(
                 title: L10n.History.pillCount,
@@ -404,10 +418,6 @@ extension HistoryTransactionDetailView {
             ) {
                 collapsableBoxContent(step: .containerPending)
             }
-        }
-
-        CollapsibleBox(title: L10n.Common.note, bgColor: appColors.secondaryBackground) {
-            notesContent
         }
     }
 
@@ -487,6 +497,27 @@ extension HistoryTransactionDetailView {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .frame(height: 340)
+    }
+
+    // MARK: - Page Indicator
+    // Sliding window of at most 3 dots; active dot always highlighted regardless of total bottle count.
+    @ViewBuilder
+    private var pageIndicator: some View {
+        let count = allBottleInfos.count
+        if count > 1 {
+            let maxDots = 3
+            let windowSize = min(count, maxDots)
+            let start = min(max(bottlePage - windowSize / 2, 0), count - windowSize)
+
+            HStack(spacing: 6) {
+                ForEach(start..<(start + windowSize), id: \.self) { index in
+                    Circle()
+                        .fill(index == bottlePage ? appColors.primary : appColors.text.opacity(0.2))
+                        .frame(width: index == bottlePage ? 8 : 6, height: index == bottlePage ? 8 : 6)
+                }
+            }
+            .padding(.top, 8)
+        }
     }
 
     private var substituedInfoList: some View {

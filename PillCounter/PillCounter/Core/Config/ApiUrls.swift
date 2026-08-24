@@ -36,7 +36,6 @@ struct APIConstants {
     // MARK: - REFERENCE DATA
     static let countries = "\(baseURL)/reference/countries"
 
-    
     // MARK: - MOBILE
     static let getMobileSettings = "\(baseURL)/mobile/get/settings?platform" // need to add query parameter to send the ios version.
     

@@ -142,6 +142,11 @@ struct UserSettings: Codable {
     let allowLocalStorage: Bool?
     let bypassSSL: Bool?
     let hl7MessageSpec: String?
+    let isStandalone: Bool?
+    let useStaticPMSConnection: Bool?
+    let pmsIpAddress: String?
+    let pmsPort: Int?
+
 
     enum CodingKeys: String, CodingKey {
         case notificationsEnabled = "notifications_enabled"
@@ -157,6 +162,37 @@ struct UserSettings: Codable {
         case allowLocalStorage = "allow_local_storage"
         case bypassSSL = "bypass_ssl"
         case hl7MessageSpec = "hl7_message_spec"
+        case isStandalone = "is_standalone"
+        case useStaticPMSConnection = "use_static_pms_connection"
+        case pmsIpAddress = "pms_ip"
+        case pmsPort = "pms_port"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled)
+        language = try container.decodeIfPresent(String.self, forKey: .language)
+        timezone = try container.decodeIfPresent(String.self, forKey: .timezone)
+        country = try container.decodeIfPresent(String.self, forKey: .country)
+        state = try container.decodeIfPresent(String.self, forKey: .state)
+        hl7Version = try container.decodeIfPresent(String.self, forKey: .hl7Version)
+        fcmToken = try container.decodeIfPresent(String.self, forKey: .fcmToken)
+        terminals = try container.decodeIfPresent([UserTerminal].self, forKey: .terminals)
+        bucket = try container.decodeIfPresent([String].self, forKey: .bucket)
+        isPmsIntegrated = try container.decodeIfPresent(Bool.self, forKey: .isPmsIntegrated)
+        allowLocalStorage = try container.decodeIfPresent(Bool.self, forKey: .allowLocalStorage)
+        bypassSSL = try container.decodeIfPresent(Bool.self, forKey: .bypassSSL)
+        hl7MessageSpec = try container.decodeIfPresent(String.self, forKey: .hl7MessageSpec)
+        isStandalone = try container.decodeIfPresent(Bool.self, forKey: .isStandalone)
+        useStaticPMSConnection = try container.decodeIfPresent(Bool.self, forKey: .useStaticPMSConnection)
+        pmsIpAddress = try container.decodeIfPresent(String.self, forKey: .pmsIpAddress)
+        if let intPort = (try? container.decodeIfPresent(Int.self, forKey: .pmsPort)) ?? nil {
+            pmsPort = intPort
+        } else if let stringPort = (try? container.decodeIfPresent(String.self, forKey: .pmsPort)) ?? nil {
+            pmsPort = Int(stringPort)
+        } else {
+            pmsPort = nil
+        }
     }
 }
 
@@ -183,13 +219,15 @@ struct UserRole: Codable {
 }
 
 // MARK: - Terminal
-struct UserTerminal: Codable {
+struct UserTerminal: Codable, Identifiable, Hashable {
     let terminalId: String?
     let terminalName: String?
     let isActive: Bool?
     let deviceKey: String?
     let createdAt: String?
     let updatedAt: String?
+
+    var id: String { terminalId ?? "" }
 
     enum CodingKeys: String, CodingKey {
         case terminalId = "terminal_id"

@@ -22,7 +22,9 @@ struct DashboardView: View {
     // userId is stored in Keychain via AppStorageManager — @AppStorage reads UserDefaults
     // and would always return "". Read directly from the Keychain-backed store instead.
     private var userId: String { AppStorageManager.shared.userId ?? "" }
-    private var isPmsIntegrated: Bool { AppStorageManager.shared.isPmsIntegrated }
+    private var isPmsIntegrated: Bool {
+        AppStorageManager.shared.isPmsIntegrated || AppStorageManager.shared.isStandalone
+    }
     @AppStorage(AppStorageManager.AppStorageKeys.selectedTerminalName)
     var selectedTerminalName: String = ""
 

@@ -15,6 +15,10 @@ import Network
 final class ImageWebServer {
 
     private var listener: NWListener?
+    /// Plain-HTTP listener on port 80 so PMS can hit the server with a bare IP
+    /// (no port in the URL). Runs alongside the primary listener regardless of
+    /// bypassSSL — port 80 is always plain HTTP.
+    private var portEightyListener: NWListener?
     /// Server-driven (`auth/me` -> `settings.bypass_ssl`, default true): bypass
     /// enabled -> plain HTTP on 8080; disabled -> HTTPS on 8443.
     private var port: NWEndpoint.Port {
@@ -26,6 +30,7 @@ final class ImageWebServer {
     // MARK: - Lifecycle
 
     /// Starts the image server, plain HTTP or HTTPS depending on the bypass setting.
+    /// Also starts a plain-HTTP listener on port 80 for bare-IP requests (no port in URL).
     func start() {
         guard listener == nil else { return }
 
@@ -61,12 +66,48 @@ final class ImageWebServer {
             Log("Failed to start image server: \(error.localizedDescription)")
         }
 
+        startPortEighty()
+    }
+
+    /// Starts the plain-HTTP port-80 listener (bare-IP, no port in URL).
+    private func startPortEighty() {
+        guard portEightyListener == nil else { return }
+
+        do {
+            let parameters: NWParameters = .tcp
+            parameters.allowLocalEndpointReuse = true
+
+            let listener = try NWListener(using: parameters, on: 80)
+
+            listener.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    Log("Image server running on port 80")
+                case .failed(let error):
+                    Log("Image server (port 80) failed: \(error.localizedDescription)")
+                default:
+                    break
+                }
+            }
+
+            listener.newConnectionHandler = { [weak self] connection in
+                self?.handle(connection)
+            }
+
+            listener.start(queue: queue)
+            self.portEightyListener = listener
+
+        } catch {
+            Log("Failed to start image server on port 80: \(error.localizedDescription)")
+        }
     }
 
     /// Stops server.
     func stop() {
         listener?.cancel()
         listener = nil
+        portEightyListener?.cancel()
+        portEightyListener = nil
     }
 
     // MARK: - TLS
@@ -154,6 +195,7 @@ final class ImageWebServer {
     // MARK: - Routing
 
     /// Endpoints — mirrors Android's `ImageNanoServer`:
+    ///   GET /?pic=*&format=zip&orderid=<transactionOrderId>          — zip, PMS root-path format
     ///   GET /images/<filename>                                       — single image, base64 JSON
     ///   GET /images/getbymessagecontrolid/<messageControlId>         — zip, by HL7 message control id
     ///   GET /images/getbysequencenumber/<sequenceNumber>             — zip, by HL7 sequence number
@@ -174,8 +216,31 @@ final class ImageWebServer {
             return (errorResponse(405), [])
         }
 
-        let path = parts[1]
+        let rawPath = parts[1]
+        let path: String
+        let query: [String: String]
+        if let queryIndex = rawPath.firstIndex(of: "?") {
+            path = String(rawPath[rawPath.startIndex..<queryIndex])
+            query = Self.parseQuery(String(rawPath[rawPath.index(after: queryIndex)...]))
+        } else if rawPath.contains("=") {
+            // PMS sends query params with no leading "?", e.g. "/pic=*&format=zip&orderId=...&Last".
+            // Treat everything after the leading "/" as the query string; no separate path segment.
+            path = ""
+            query = Self.parseQuery(String(rawPath.drop(while: { $0 == "/" })))
+        } else {
+            path = rawPath
+            query = [:]
+        }
         let segments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+
+        // GET /images?pic=*&format=zip&orderid=<transactionOrderId>
+        // GET /?pic=*&format=zip&orderid=<transactionOrderId>[&Last]
+        // `pic` accepted but ignored for now (future: select which images; "*" = all).
+        // `Last` (or any other bare flag) is accepted but ignored.
+        if (segments.isEmpty || (segments.count == 1 && segments[0] == "images")),
+           query["format"] == "zip", let orderId = query["orderid"], !orderId.isEmpty {
+            return serveTxnLookup(orderId, zipFileName: "\(orderId).zip", naming: .pmsFileNaming) { TransactionStore.shared.getByTransactionOrderId($0) }
+        }
 
         if segments.count == 3, segments[0] == "images", segments[1] == "getbymessagecontrolid" {
             return serveTxnLookup(decode(segments[2])) { TransactionStore.shared.getByMessageControlId($0) }
@@ -223,8 +288,9 @@ final class ImageWebServer {
         }
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
 
+        let crc = ZipArchiveWriter.crc32(ofWholeFile: decrypted)
         let base64 = decrypted.base64EncodedString(options: [])
-        let json = #"{"success":true,"file":"\#(fileName)","base64":"\#(base64)"}"#
+        let json = #"{"success":true,"file":"\#(fileName)","crc":\#(crc),"base64":"\#(base64)"}"#
         return (httpResponse(json), [fileName])
     }
 
@@ -238,6 +304,7 @@ final class ImageWebServer {
         let pillCount: Int32
         let data: Data
         let fileName: String
+        let createdAt: Int64
     }
 
     /// Looks up a single transaction via `lookup`, collects every image tied to it
@@ -245,6 +312,8 @@ final class ImageWebServer {
     /// the transaction isn't found or has no images.
     private func serveTxnLookup(
         _ key: String,
+        zipFileName: String = "images.zip",
+        naming: ZipNaming = .legacy,
         lookup: (String) -> PillCountTransactionEntity?
     ) -> (Data, [String]) {
         guard !key.isEmpty, let txn = lookup(key) else { return (errorResponse(404), []) }
@@ -257,43 +326,115 @@ final class ImageWebServer {
             .filter { !$0.isEmpty }
         for barcodeImage in bottleBarcodePaths {
             guard let data = PhotoFileManager.shared.loadDecryptedData(from: barcodeImage) else { continue }
-            entries.append(ImageEntry(type: "BARCODE", pillCount: 0, data: data, fileName: barcodeImage))
+            entries.append(ImageEntry(type: "BARCODE", pillCount: 0, data: data, fileName: barcodeImage, createdAt: txn.created_at))
             deliveredFilenames.append(barcodeImage)
         }
 
         for detail in TransactionDetailStore.shared.fetchAll(txnId: txn.txn_id) {
             guard let imagePath = detail.image_path, !imagePath.isEmpty,
                   let data = PhotoFileManager.shared.loadDecryptedData(from: imagePath) else { continue }
-            entries.append(ImageEntry(type: detail.type ?? "IMAGE", pillCount: detail.pill_count, data: data, fileName: imagePath))
+            entries.append(ImageEntry(type: detail.type ?? "IMAGE", pillCount: detail.pill_count, data: data, fileName: imagePath, createdAt: detail.created_at))
             deliveredFilenames.append(imagePath)
         }
 
         guard !entries.isEmpty else { return (errorResponse(404), []) }
 
-        return (zipResponse(entries), deliveredFilenames)
+        return (zipResponse(entries, fileName: zipFileName, naming: naming, rxNo: txn.rx_no ?? "", orderId: txn.transaction_order_id ?? ""), deliveredFilenames)
     }
 
-    /// Builds a zip whose entries are named `${seq}_rx_${label}_${batchNum}B${batchTotal}_qty${pillCount}.$ext`
-    /// — `seq` is the 1-based overall position across all entries, `label` is the
-    /// business-meaning image label (`toImageLabel`), `batchNum`/`batchTotal` are
-    /// this entry's 1-based position/count within entries sharing that label.
-    private func zipResponse(_ entries: [ImageEntry]) -> Data {
-        let labels = entries.map { $0.type.toImageLabel }
-        let batchTotalsByLabel = Dictionary(grouping: labels, by: { $0 }).mapValues { $0.count }
-        var batchCounters: [String: Int] = [:]
+    /// Parses a URL query string (`a=1&b=2`) into a dictionary, percent-decoding
+    /// keys and values. Later duplicate keys win.
+    private static func parseQuery(_ query: String) -> [String: String] {
+        var result: [String: String] = [:]
+        for pair in query.split(separator: "&") {
+            let keyValue = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard let rawKey = keyValue.first else { continue }
+            let key = (String(rawKey).removingPercentEncoding ?? String(rawKey)).lowercased()
+            let rawValue = keyValue.count > 1 ? String(keyValue[1]) : ""
+            result[key] = rawValue.removingPercentEncoding ?? rawValue
+        }
+        return result
+    }
 
+    /// Which zip entry naming scheme to use. `.legacy` is the existing
+    /// `getby*` route naming (unchanged); `.pmsFileNaming` is the PMS-facing
+    /// `Rx_ID_YYYY-MM-DD_HH-MM-SS_TTTT#.jpg` convention (aka Eyecon naming)
+    /// used only by the new orderid/query-string endpoint.
+    private enum ZipNaming {
+        case legacy
+        case pmsFileNaming
+    }
+
+    /// Maps an internal detail/entry type to its PMS (Eyecon) TTTT code.
+    private static func pmsTypeCode(forType type: String) -> String {
+        switch type {
+        case "scan", "BARCODE":        return "CoVL"
+        case "containerInitiate",
+             "targetVerification":     return "BWTP"
+        case "targetReverification":   return "BWDC"
+        case "vial":                   return "CoSS"
+        case "containerPending":       return "BWBC"
+        default:                       return "BWTP"
+        }
+    }
+
+    private static let pmsFileNamingDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        formatter.timeZone = .current
+        return formatter
+    }()
+
+    /// Builds a zip whose entries are named per `naming`:
+    /// `.legacy` — `${seq}_rx_${label}_${batchNum}B${batchTotal}_qty${pillCount}.$ext`
+    /// (`seq` = 1-based overall position, `label` = business-meaning image
+    /// label via `toImageLabel`, `batchNum`/`batchTotal` = this entry's
+    /// 1-based position/count within entries sharing that label).
+    /// `.pmsFileNaming` — `Rx_ID_YYYY-MM-DD_HH-MM-SS_TTTT#.jpg` (PMS/Eyecon
+    /// naming convention; `TTTT#` = PMS type code + 1-based count per code).
+    private func zipResponse(
+        _ entries: [ImageEntry],
+        fileName: String = "images.zip",
+        naming: ZipNaming = .legacy,
+        rxNo: String = "",
+        orderId: String = ""
+    ) -> Data {
         var zip = ZipArchiveWriter()
-        for (index, entry) in entries.enumerated() {
-            let seq = index + 1
-            let label = labels[index]
-            let batchNum = (batchCounters[label] ?? 0) + 1
-            batchCounters[label] = batchNum
-            let batchTotal = batchTotalsByLabel[label] ?? 1
-            let ext = (entry.fileName as NSString).pathExtension.isEmpty ? "jpg" : (entry.fileName as NSString).pathExtension
-            zip.addEntry(name: "\(seq)_rx_\(label)_\(batchNum)B\(batchTotal)_qty\(entry.pillCount).\(ext)", data: entry.data)
+
+        switch naming {
+        case .legacy:
+            let labels = entries.map { $0.type.toImageLabel }
+            let batchTotalsByLabel = Dictionary(grouping: labels, by: { $0 }).mapValues { $0.count }
+            var batchCounters: [String: Int] = [:]
+
+            for (index, entry) in entries.enumerated() {
+                let seq = index + 1
+                let label = labels[index]
+                let batchNum = (batchCounters[label] ?? 0) + 1
+                batchCounters[label] = batchNum
+                let batchTotal = batchTotalsByLabel[label] ?? 1
+                // `entry.fileName` is the on-disk (encrypted, `.enc`) name — the zip
+                // entry holds already-decrypted jpeg bytes, so always name it `.jpg`.
+                zip.addEntry(name: "\(seq)_rx_\(label)_\(batchNum)B\(batchTotal)_qty\(entry.pillCount).jpg", data: entry.data)
+            }
+
+        case .pmsFileNaming:
+            let codes = entries.map { Self.pmsTypeCode(forType: $0.type) }
+            var codeCounters: [String: Int] = [:]
+
+            for (index, entry) in entries.enumerated() {
+                let code = codes[index]
+                let number = (codeCounters[code] ?? 0) + 1
+                codeCounters[code] = number
+                let date = Date(timeIntervalSince1970: TimeInterval(entry.createdAt) / 1000)
+                let timestamp = Self.pmsFileNamingDateFormatter.string(from: date)
+                // `entry.fileName` is the on-disk (encrypted, `.enc`) name — the zip
+                // entry holds already-decrypted jpeg bytes, so always name it `.jpg`.
+                zip.addEntry(name: "\(rxNo)_\(orderId)_\(timestamp)_\(code)\(number).jpg", data: entry.data)
+            }
         }
 
-        return zipResponse(zip.finalize(), fileName: "images.zip")
+        return zipResponse(zip.finalize(), fileName: fileName)
     }
 
     /// Resolves which transaction(s) own the given delivered filenames, so a
@@ -334,11 +475,13 @@ final class ImageWebServer {
 
     /// Builds an HTTP response with a binary (zip) body.
     private func zipResponse(_ bodyData: Data, fileName: String) -> Data {
+        let crc = ZipArchiveWriter.crc32(ofWholeFile: bodyData)
         let header =
             "HTTP/1.1 200 OK\r\n" +
             "Content-Type: application/zip\r\n" +
             "Content-Disposition: attachment; filename=\"\(fileName)\"\r\n" +
             "Content-Length: \(bodyData.count)\r\n" +
+            "CRC: \(crc)\r\n" +
             "Connection: close\r\n" +
             "\r\n"
         var response = Data(header.utf8)

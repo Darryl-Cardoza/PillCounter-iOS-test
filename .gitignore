@@ -79,3 +79,4 @@ SECURITY_DATA_PROTECTION_REPORT.md
 # exclude the claude folder
 *./claude
 ./claude
+plans

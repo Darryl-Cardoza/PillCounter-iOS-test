@@ -21,6 +21,7 @@ class UserViewModel: ObservableObject {
     let batchDAO: BatchDataSource
     let userRepo: UserRepositoryProtocol
     let settingsRepo: SettingsRepositoryProtocol
+    let healthRepo: HealthRepositoryProtocol
 
     init(
         userLocalDB: UserDataSource = UserStore.shared,
@@ -29,7 +30,8 @@ class UserViewModel: ObservableObject {
         drugMasterDAO: DrugCatalogDataSource = DrugCatalogStore.shared,
         batchDAO: BatchDataSource = BatchStore.shared,
         userRepo: UserRepositoryProtocol = UserRepository.shared,
-        settingsRepo: SettingsRepositoryProtocol = SettingsRepository.shared
+        settingsRepo: SettingsRepositoryProtocol = SettingsRepository.shared,
+        healthRepo: HealthRepositoryProtocol = HealthRepository.shared
     ) {
         self.userLocalDB = userLocalDB
         self.transactionDAO = transactionDAO
@@ -38,6 +40,28 @@ class UserViewModel: ObservableObject {
         self.batchDAO = batchDAO
         self.userRepo = userRepo
         self.settingsRepo = settingsRepo
+        self.healthRepo = healthRepo
+    }
+
+    /// Silent, non-blocking server-health probe. Fired from Dashboard's
+    /// startDashboardLoad before auth/me. Returns true only on a healthy 2xx
+    /// `is_healthy: true` response; any failure (after BaseRepository's built-in
+    /// retries) is treated as offline — caller must skip auth/me in that case.
+    /// Never sets `isLoading` — this must not show a spinner.
+    func checkServerHealth() async -> Bool {
+        do {
+            let response = try await healthRepo.checkHealth()
+            let healthy = response.data?.isHealthy ?? false
+            if healthy {
+                OfflineSessionManager.shared.markHealthy(checkedAt: response.data?.checkedAt)
+            } else {
+                OfflineSessionManager.shared.markOffline()
+            }
+            return healthy
+        } catch {
+            OfflineSessionManager.shared.markOffline()
+            return false
+        }
     }
 
     // MARK: - Published UI state
@@ -131,6 +155,12 @@ class UserViewModel: ObservableObject {
                     AppStorageManager.shared.pmsHostName         = response.data?.hl7Config?.pmsHostName ?? ""
                     AppStorageManager.shared.pillCounterHostName = response.data?.hl7Config?.pillCounterHostName ?? ""
                     AppStorageManager.shared.barcodeFormat       = response.data?.hl7Config?.barcodeFormat ?? ""
+
+                    // Never overwrite with nil — must survive sessions since
+                    // /mobile/get/settings may itself be unreachable while offline.
+                    if let threshold = response.data?.offlineSessionThresholdSeconds {
+                        AppStorageManager.shared.cachedOfflineSessionThresholdSeconds = threshold
+                    }
 
                     Log("Barcode format: \(response.data?.hl7Config?.barcodeFormat ?? "")")
 
@@ -313,6 +343,12 @@ class UserViewModel: ObservableObject {
             // terminal dropdown (and profile) stay populated instead of going blank.
             if terminals.isEmpty {
                 hydrateTerminalsFromCache()
+            }
+            // auth/me failing after a healthy /health is also treated as offline.
+            // 401 is deliberately excluded — that's SessionManager's "bad session"
+            // concern, not "server down."
+            if case APIError.serverError = error {
+                OfflineSessionManager.shared.markOffline()
             }
         }
     }

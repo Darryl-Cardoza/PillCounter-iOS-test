@@ -594,6 +594,14 @@ enum L10n {
         static let updateButton = NSLocalizedString("forceUpdate.updateButton", comment: "")
     }
 
+    // MARK: - Offline
+    enum Offline {
+        static let remainingTimeHoursMinutes = NSLocalizedString("offline.remainingTimeHoursMinutes", comment: "")
+        static let remainingTimeMinutesOnly = NSLocalizedString("offline.remainingTimeMinutesOnly", comment: "")
+        static let remainingTimeLessThanMinute = NSLocalizedString("offline.remainingTimeLessThanMinute", comment: "")
+        static let logoutWarning = NSLocalizedString("offline.logoutWarning", comment: "")
+    }
+
     // MARK: - PMS / HL7
     enum PMS {
         static let connected = NSLocalizedString("pms.connected", comment: "")

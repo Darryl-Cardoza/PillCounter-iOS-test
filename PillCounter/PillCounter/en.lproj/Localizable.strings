@@ -562,6 +562,12 @@
 "forceUpdate.message" = "Your current version has expired - time to get a fresh prescription.\nUpdate now for the right dose of features!";
 "forceUpdate.updateButton" = "Update";
 
+// MARK: - OFFLINE
+"offline.remainingTimeHoursMinutes" = "%dh %dm remaining";
+"offline.remainingTimeMinutesOnly" = "%dm remaining";
+"offline.remainingTimeLessThanMinute" = "Less than a minute remaining";
+"offline.logoutWarning" = "Your internet has been disconnected. App will log out in %@";
+
 
 // MARK: - PMS / HL7
 "pms.connected" = "PMS Connected";

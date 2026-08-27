@@ -40,15 +40,20 @@ final class AppStorageManager {
     }
 
     /// Keychain accounts that must survive any blanket wipe (logout,
-    /// fresh-install cleanup) — the wrapped DEK/KEK bookkeeping. Deleting
-    /// these would silently make every already-encrypted CoreData field and
-    /// photo file permanently unreadable, contradicting the explicit "local
-    /// data is preserved" contract those wipes are meant to honor for
-    /// everything else. The Secure Enclave KEK keypair itself is a
-    /// `kSecClassKey` item, not `kSecClassGenericPassword`, so it's already
-    /// untouched by `Keychain.deleteAll` regardless — only the bookkeeping
-    /// strings below (and any server KEK's raw bytes, addressed by alias,
-    /// not by these fixed account names) need explicit preservation here.
+    /// fresh-install cleanup) — the wrapped DEK/KEK bookkeeping plus the
+    /// device key. Deleting the DEK/KEK bookkeeping would silently make every
+    /// already-encrypted CoreData field and photo file permanently unreadable,
+    /// contradicting the explicit "local data is preserved" contract those
+    /// wipes are meant to honor for everything else. The Secure Enclave KEK
+    /// keypair itself is a `kSecClassKey` item, not `kSecClassGenericPassword`,
+    /// so it's already untouched by `Keychain.deleteAll` regardless — only the
+    /// bookkeeping strings below (and any server KEK's raw bytes, addressed by
+    /// alias, not by these fixed account names) need explicit preservation
+    /// here. The device key must survive too — it's the whole point of
+    /// caching it in the Keychain instead of UserDefaults: a fresh-install
+    /// wipe runs on every reinstall (UserDefaults is gone, so
+    /// `hasLaunchedBefore` reads false again), and wiping it here would
+    /// silently regenerate a new device key on every reinstall.
     private static let dekBookkeepingAccounts: Set<String> = [
         AppStorageKeys.dekWrapped,
         AppStorageKeys.dekKekId,
@@ -56,6 +61,7 @@ final class AppStorageManager {
         AppStorageKeys.imageDekWrapped,
         AppStorageKeys.imageDekKekId,
         AppStorageKeys.imageDekKekVersion,
+        DeviceKeyProvider.keychainAccount,
     ]
 
     private func clearKeychainOnFreshInstall() {
@@ -131,7 +137,6 @@ final class AppStorageManager {
         static let selectedSchedules    = "selectedSchedules"
         static let selectedTerminalName = "selected_terminal_name"
         static let storedTerminals      = "stored_terminals"
-        static let deviceKey            = "device_key"
         static let isHarzardousDrugSetting = "hazardous_pill_setting"
         static let deleteCompletedTransactions = "delete_completed_transactions"
         static let pillCountRingOffsetX = "pill_count_ring_offset_x"
@@ -144,6 +149,9 @@ final class AppStorageManager {
         static let selectedCountryCode  = "selected_country_code"
         static let selectedStateCode    = "selected_state_code"
         static let countryOptions       = "country_options"
+        static let lastHealthCheckedAt  = "last_health_checked_at"
+        static let cachedOfflineSessionThresholdSeconds = "cached_offline_session_threshold_seconds"
+        static let isOfflineMode        = "is_offline_mode"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -433,6 +441,31 @@ final class AppStorageManager {
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isBackCountRequired) }
     }
 
+    /// ISO8601 string of the `checked_at` timestamp from the most recent successful
+    /// `/health` call. `nil` until the first successful health check ever completes.
+    var lastHealthCheckedAt: String? {
+        get { defaults.string(forKey: AppStorageKeys.lastHealthCheckedAt) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.lastHealthCheckedAt) }
+    }
+
+    /// Cached `offline_session_threshold_seconds` from `/mobile/get/settings`.
+    /// Persisted (not just in-memory) because the mobile-settings endpoint itself
+    /// may be unreachable while offline. `nil` when never successfully fetched.
+    var cachedOfflineSessionThresholdSeconds: Int? {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.cachedOfflineSessionThresholdSeconds) != nil else { return nil }
+            return defaults.integer(forKey: AppStorageKeys.cachedOfflineSessionThresholdSeconds)
+        }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.cachedOfflineSessionThresholdSeconds) }
+    }
+
+    /// Persisted mirror of `OfflineSessionManager.isOffline`, so a cold relaunch
+    /// while offline can restore the red-border overlay immediately.
+    var isOfflineMode: Bool {
+        get { defaults.bool(forKey: AppStorageKeys.isOfflineMode) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isOfflineMode) }
+    }
+
     var isHapticEnabled: Bool {
         get {
             guard defaults.object(forKey: AppStorageKeys.isHapticEnabled) != nil else { return true }
@@ -494,19 +527,6 @@ final class AppStorageManager {
         }
     }
 
-    /// Stable per-install device identifier (from `identifierForVendor`), used to
-    /// determine which terminal this device currently holds — never infer that
-    /// from a terminal's `isActive` flag, which is account-wide, not per-device.
-    /// Set once by `DeviceKeyProvider`; UserDefaults-backed (not Keychain) so a
-    /// reinstall clears this value along with the rest of UserDefaults. Note this
-    /// is not a hard reinstall guarantee: `identifierForVendor` itself can return
-    /// the same UUID across reinstall if another app from the same vendor is still
-    /// installed — in that case the underlying device key is unchanged regardless
-    /// of where we cache it.
-    var deviceKey: String? {
-        get { defaults.string(forKey: AppStorageKeys.deviceKey) }
-        set { defaults.setValue(newValue, forKey: AppStorageKeys.deviceKey) }
-    }
 
     /// Locally cached terminal list for the current user. Persisted so the
     /// terminal picker still works if /auth/me fails or the device is offline.

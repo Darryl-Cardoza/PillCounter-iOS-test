@@ -31,6 +31,7 @@ struct PillCounterApp: App {
     @StateObject private var historyViewModel = HistoryViewModel()
     @StateObject private var toastManager = ToastManager.shared
     @ObservedObject private var faceSessionManager = FaceSessionManager.shared
+    @ObservedObject private var offlineSessionManager = OfflineSessionManager.shared
 
     private let isCompromised: Bool
 
@@ -43,6 +44,8 @@ struct PillCounterApp: App {
         // left on disk are undecryptable ciphertext. The purge needs the Core
         // Data stack, which only exists from the line above onwards.
         AppStorageManager.shared.purgeFaceEnrollmentsIfKeychainWasWiped()
+
+        Log("🔑 Device key: \(DeviceKeyProvider.shared.getDeviceKey())")
 
         // Cold launch (app was fully closed, now reopened) always requires a
         // fresh face scan — never resume a session from a prior process.
@@ -113,6 +116,23 @@ struct PillCounterApp: App {
                                     sessionManager.reset()
                                 }
                             }
+                            .onAppear {
+                                // Direct callback, not `.onChange` — `.onChange` only
+                                // fires on a false→true transition and can miss it
+                                // under timing races (e.g. expiry detected while this
+                                // view wasn't mounted/was mid-rebuild). This fires
+                                // unconditionally, exactly once, from wherever
+                                // evaluateExpiry() detects the expiry.
+                                offlineSessionManager.onSessionExpired = {
+                                    AppLogoutManager.performLogout(
+                                        userVM: userViewModel,
+                                        pillScanVM: pillScanViewModel,
+                                        loginViewModel: loginViewModel
+                                    )
+                                    router.navigationPath.removeLast(router.navigationPath.count)
+                                    offlineSessionManager.reset()
+                                }
+                            }
                             .task {
                                 // Single gate: only fetch when a token already
                                 // exists. If logged out at launch, the onChange
@@ -160,6 +180,9 @@ struct PillCounterApp: App {
                             }
                             .animation(.easeInOut, value: toastManager.isShowing)
                         }
+
+                        OfflineOverlayView()
+                            .zIndex(999)
 
                         if faceSessionManager.isOverlayVisible {
                             SessionLockOverlay()
@@ -240,6 +263,7 @@ extension PillCounterApp {
                 startSecurityMonitoring()
             }
             Task { await sessionManager.checkTokenOnForeground() }
+            offlineSessionManager.evaluateExpiry()
             // Face unlock is unusable with an empty roster — if the last
             // enrolled user was deleted (or removed while backgrounded), drop
             // the lock instead of stranding the app behind an unpassable scan.

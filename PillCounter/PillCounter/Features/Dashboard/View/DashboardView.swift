@@ -564,6 +564,8 @@ struct DashboardView: View {
     // MARK: - Lifecycle
 
     private func onAppear() {
+        OfflineSessionManager.shared.evaluateExpiry()
+
         if !hasCheckedNewUser {
             hasCheckedNewUser = true
             Task {
@@ -587,11 +589,18 @@ struct DashboardView: View {
 
     private func startDashboardLoad() {
         Task {
-            // Only hit auth/me when the token was actually refreshed; otherwise
-            // serve user data from the local cache to avoid an API call on every visit.
-            let didRefresh = await userViewModel.checkAndRefreshTokenIfNeeded()
-            await userViewModel.getUser(forceRemote: didRefresh)
+            // Silent, non-blocking health probe. Only proceed to auth/me when the
+            // server is reachable; otherwise stay on cached data and offline mode
+            // (red border/hourglass) takes over — see OfflineSessionManager.
+            let isHealthy = await userViewModel.checkServerHealth()
+            if isHealthy {
+                // Only hit auth/me when the token was actually refreshed; otherwise
+                // serve user data from the local cache to avoid an API call on every visit.
+                let didRefresh = await userViewModel.checkAndRefreshTokenIfNeeded()
+                await userViewModel.getUser(forceRemote: didRefresh)
+            }
             // Reload after async user data is ready to ensure queue is populated
+            // (runs regardless of health outcome — cached data still renders offline).
             await MainActor.run { viewModel.loadQueueData(userId: userId) }
         }
 

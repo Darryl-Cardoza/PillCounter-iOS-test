@@ -28,12 +28,14 @@ struct MobileSettingsData: Codable {
     let settings: AppSettings?
     let iosVersion: String?
     let hl7Config:AppHl7Config?
+    let offlineSessionThresholdSeconds: Int?
 
     enum CodingKeys: String, CodingKey {
         case isMaintenanceMode = "is_maintenance_mode"
         case settings
         case iosVersion = "ios_version"
         case hl7Config = "hl7_config"
+        case offlineSessionThresholdSeconds = "offline_session_threshold_seconds"
     }
 }
 

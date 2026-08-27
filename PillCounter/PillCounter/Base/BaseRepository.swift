@@ -129,6 +129,9 @@ extension BaseRepositoryProtocol {
                     case 429:
                         throw APIError.tooManyRequests
                     default:
+                        if httpResponse.statusCode >= 500 {
+                            NotificationCenter.default.post(name: .serverErrorResponseReceived, object: nil)
+                        }
                         throw APIError.serverError(statusCode: httpResponse.statusCode)
                     }
                 }
@@ -143,6 +146,7 @@ extension BaseRepositoryProtocol {
                     attempt += 1
                     continue
                 } else {
+                    NotificationCenter.default.post(name: .serverErrorResponseReceived, object: nil)
                     throw APIError.unknown(error)
                 }
             }

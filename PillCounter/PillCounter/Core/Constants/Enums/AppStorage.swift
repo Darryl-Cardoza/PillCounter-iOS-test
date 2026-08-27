@@ -144,6 +144,9 @@ final class AppStorageManager {
         static let selectedCountryCode  = "selected_country_code"
         static let selectedStateCode    = "selected_state_code"
         static let countryOptions       = "country_options"
+        static let lastHealthCheckedAt  = "last_health_checked_at"
+        static let cachedOfflineSessionThresholdSeconds = "cached_offline_session_threshold_seconds"
+        static let isOfflineMode        = "is_offline_mode"
 
         // Fresh-install sentinel (UserDefaults only — cleared on app deletion)
         static let hasLaunchedBefore    = "has_launched_before"
@@ -431,6 +434,31 @@ final class AppStorageManager {
             return defaults.bool(forKey: AppStorageKeys.isBackCountRequired)
         }
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isBackCountRequired) }
+    }
+
+    /// ISO8601 string of the `checked_at` timestamp from the most recent successful
+    /// `/health` call. `nil` until the first successful health check ever completes.
+    var lastHealthCheckedAt: String? {
+        get { defaults.string(forKey: AppStorageKeys.lastHealthCheckedAt) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.lastHealthCheckedAt) }
+    }
+
+    /// Cached `offline_session_threshold_seconds` from `/mobile/get/settings`.
+    /// Persisted (not just in-memory) because the mobile-settings endpoint itself
+    /// may be unreachable while offline. `nil` when never successfully fetched.
+    var cachedOfflineSessionThresholdSeconds: Int? {
+        get {
+            guard defaults.object(forKey: AppStorageKeys.cachedOfflineSessionThresholdSeconds) != nil else { return nil }
+            return defaults.integer(forKey: AppStorageKeys.cachedOfflineSessionThresholdSeconds)
+        }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.cachedOfflineSessionThresholdSeconds) }
+    }
+
+    /// Persisted mirror of `OfflineSessionManager.isOffline`, so a cold relaunch
+    /// while offline can restore the red-border overlay immediately.
+    var isOfflineMode: Bool {
+        get { defaults.bool(forKey: AppStorageKeys.isOfflineMode) }
+        set { defaults.setValue(newValue, forKey: AppStorageKeys.isOfflineMode) }
     }
 
     var isHapticEnabled: Bool {

@@ -21,6 +21,11 @@ final class AppLogoutManager {
         Task { @MainActor in
             userVM.resetState()
             pillScanVM.resetState()
+            // isLoggedIn is already false by this point (cleared above), so
+            // evaluate() sees shouldStartService == false and tears the HL7
+            // connection down — otherwise it stays connected in the background
+            // after logout.
+            Hl7ServiceController.shared.evaluate()
         }
     }
 }

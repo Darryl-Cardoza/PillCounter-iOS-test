@@ -45,6 +45,8 @@ struct PillCounterApp: App {
         // Data stack, which only exists from the line above onwards.
         AppStorageManager.shared.purgeFaceEnrollmentsIfKeychainWasWiped()
 
+        Log("🔑 Device key: \(DeviceKeyProvider.shared.getDeviceKey())")
+
         // Cold launch (app was fully closed, now reopened) always requires a
         // fresh face scan — never resume a session from a prior process.
         FaceSessionManager.shared.lockOnColdLaunch()

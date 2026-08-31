@@ -67,13 +67,20 @@ struct DashboardStatCard: Identifiable {
 @MainActor
 final class DashboardViewModel: ObservableObject {
 
-    // Loaded data
+    // Loaded data (paginated — grows as the user scrolls; never used for counts)
     @Published private(set) var dispensePartial: [PillCountTransactionEntity] = []
     @Published private(set) var dispenseCompleted: [PillCountTransactionEntity] = []
     @Published private(set) var inventoryPartial: [BatchCountEntity] = []
     @Published private(set) var inventoryCompleted: [BatchCountEntity] = []
     @Published private(set) var pillCounts: [Int64: Int] = [:]
     @Published private(set) var batchNdcCounts: [Int64: Int] = [:]
+
+    /// Full (unpaginated) pending sets, fetched once per `loadQueueData` /
+    /// data-change — used ONLY to compute stable stat-card counts. Kept
+    /// separate from the paginated `dispensePartial`/`inventoryPartial`
+    /// display arrays so the counts don't change as more pages load.
+    private var allPendingDispense: [PillCountTransactionEntity] = []
+    private var allPendingInventory: [BatchCountEntity] = []
 
     // Active stat-card filter (nil == no filter)
     @Published var activeFilterCardId: String? = nil
@@ -222,9 +229,12 @@ final class DashboardViewModel: ObservableObject {
     /// `iconColor` is supplied by the view from the active theme so this type
     /// stays free of any `AppColors` (EnvironmentObject) dependency.
     func statCards(iconColor: Color) -> [DashboardStatCard] {
-        // Counts must match the dispense rows shown in the tabs, which exclude
-        // REGULAR (inventory) transactions — so count against the same slice.
-        let dispensePartialFixed = dispensePartial.filter { !isRegular($0) }
+        // Counts come from the full unpaginated pending set (allPendingDispense/
+        // allPendingInventory), NOT the paginated display arrays — otherwise the
+        // numbers would change as more pages loaded while scrolling. Counts must
+        // match the dispense rows shown in the tabs, which exclude REGULAR
+        // (inventory) transactions — so count against the same slice.
+        let dispensePartialFixed = allPendingDispense.filter { !isRegular($0) }
         return [
             DashboardStatCard(
                 id: "disp-high-priority",
@@ -271,7 +281,7 @@ final class DashboardViewModel: ObservableObject {
                 id: "inv-cycle-count",
                 iconName: "new_rx",
                 iconColor: iconColor,
-                count: inventoryPartial.filter {
+                count: allPendingInventory.filter {
                     !($0.req_id_from_pms ?? "").isEmpty
                 }.count,
                 label: L10n.Dashboard.StatCards.cycleCount,
@@ -281,7 +291,7 @@ final class DashboardViewModel: ObservableObject {
                 id: "inv-pending-batch",
                 iconName: "batch_icon",
                 iconColor: iconColor,
-                count: inventoryPartial.filter {
+                count: allPendingInventory.filter {
                     ($0.req_id_from_pms ?? "").isEmpty
                 }.count,
                 label: L10n.Dashboard.StatCards.pendingBatch,
@@ -314,22 +324,100 @@ final class DashboardViewModel: ObservableObject {
 
     // MARK: - Data loading
 
+    /// Both Dashboard tabs page through all matching data — load more as the
+    /// user scrolls — rather than a hard cap, so a large pending queue or a
+    /// large day's activity is fully browsable instead of silently truncated.
+    let dashboardPageSize = 30
+
+    @Published private(set) var hasMoreQueue = true
+    @Published private(set) var isLoadingMoreQueue = false
+    private var queueFixedOffset = 0
+    private var queueRegularOffset = 0
+    private var queueBatchOffset = 0
+    private var queueFixedExhausted = false
+    private var queueRegularExhausted = false
+    private var queueBatchExhausted = false
+
+    @Published private(set) var hasMoreRecentActivity = true
+    @Published private(set) var isLoadingMoreRecentActivity = false
+    private var recentTxnOffset = 0
+    private var recentBatchOffset = 0
+    private var recentTxnExhausted = false
+    private var recentBatchExhausted = false
+    private var todayStartTs: Int64 = 0
+    private var todayEndTs: Int64 = 0
+
     func loadQueueData(userId: String) {
         guard let user = userStore.fetchByUserId(userId) else { return }
 
-        // Partial (Today's Queue)
-        let fixed = transactionStore.fetchPartial(for: user, isDispense: true)
-        let regular = transactionStore.fetchPartial(for: user, isDispense: false)
-        dispensePartial = (fixed + regular).filter {
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        todayStartTs = Int64(startOfToday.timeIntervalSince1970 * 1000)
+        todayEndTs = Int64(Date().timeIntervalSince1970 * 1000)
+
+        // Stat-card counts: fetched once, unpaginated, independent of the
+        // display lists below — so the counts don't shift as more pages load.
+        let allFixed = transactionStore.fetchPartial(for: user, isDispense: true)
+        let allRegular = transactionStore.fetchPartial(for: user, isDispense: false)
+        allPendingDispense = (allFixed + allRegular).filter {
+            $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue
+        }
+        allPendingInventory = batchStore.fetchAllPartial()
+
+        // Today's Queue — first page of pending dispense + inventory items;
+        // loadMoreQueueIfNeeded fetches the rest.
+        queueFixedOffset = 0
+        queueRegularOffset = 0
+        queueBatchOffset = 0
+        queueFixedExhausted = false
+        queueRegularExhausted = false
+        queueBatchExhausted = false
+        hasMoreQueue = true
+
+        let fixedPage = transactionStore.fetchPartialPage(for: user, isDispense: true, limit: dashboardPageSize, offset: queueFixedOffset)
+        queueFixedOffset += fixedPage.count
+        queueFixedExhausted = fixedPage.count < dashboardPageSize
+
+        let regularPage = transactionStore.fetchPartialPage(for: user, isDispense: false, limit: dashboardPageSize, offset: queueRegularOffset)
+        queueRegularOffset += regularPage.count
+        queueRegularExhausted = regularPage.count < dashboardPageSize
+
+        dispensePartial = (fixedPage + regularPage).filter {
             $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue
         }
         printQueue(dispensePartial)
 
-        // Completed (Recent Activity) — all user transactions filtered to COMPLETED status
-        let allUserTxns = transactionStore.fetchAll(for: user)
-        dispenseCompleted = allUserTxns.filter {
-            $0.status == CountStatus.COMPLETED.rawValue
-        }
+        let batchPage = batchStore.fetchAllPartialPage(limit: dashboardPageSize, offset: queueBatchOffset)
+        queueBatchOffset += batchPage.count
+        queueBatchExhausted = batchPage.count < dashboardPageSize
+        inventoryPartial = batchPage
+
+        hasMoreQueue = !(queueFixedExhausted && queueRegularExhausted && queueBatchExhausted)
+
+        // Recent Activity — first page of today's completed activity;
+        // loadMoreRecentActivityIfNeeded fetches the rest.
+        recentTxnOffset = 0
+        recentBatchOffset = 0
+        recentTxnExhausted = false
+        recentBatchExhausted = false
+        hasMoreRecentActivity = true
+
+        let txnPage = transactionStore.fetchByTimeRangePage(
+            for: user, startTime: todayStartTs, endTime: todayEndTs,
+            limit: dashboardPageSize, offset: recentTxnOffset
+        )
+        recentTxnOffset += txnPage.count
+        recentTxnExhausted = txnPage.count < dashboardPageSize
+        dispenseCompleted = txnPage.filter { $0.status == CountStatus.COMPLETED.rawValue }
+
+        let completedBatchPage = batchStore.fetchByDateRangePage(
+            startTs: todayStartTs, endTs: todayEndTs, limit: dashboardPageSize, offset: recentBatchOffset
+        )
+        recentBatchOffset += completedBatchPage.count
+        recentBatchExhausted = completedBatchPage.count < dashboardPageSize
+        let completedBatches = completedBatchPage.filter { $0.status == CountStatus.COMPLETED.rawValue }
+        inventoryCompleted = completedBatches
+
+        hasMoreRecentActivity = !(recentTxnExhausted && recentBatchExhausted)
 
         var counts: [Int64: Int] = [:]
         for txn in dispensePartial + dispenseCompleted {
@@ -342,19 +430,104 @@ final class DashboardViewModel: ObservableObject {
         }
         pillCounts = counts
 
-        let batches = batchStore.fetchAllPartial()
-        inventoryPartial = batches
-
-        let completedBatches = batchStore.fetchAllCompleted()
-        inventoryCompleted = completedBatches
-
         var ndcCounts: [Int64: Int] = [:]
-        for batch in batches + completedBatches {
+        for batch in batchPage + completedBatches {
             ndcCounts[batch.batch_id] = batchStore.getTransactionCount(
                 for: batch.batch_id
             )
         }
         batchNdcCounts = ndcCounts
+    }
+
+    /// Fetches and appends the next page of Today's Queue (pending dispense
+    /// + inventory items). No-op if a fetch is already running or every
+    /// source is exhausted.
+    func loadMoreQueueIfNeeded() {
+        guard hasMoreQueue, !isLoadingMoreQueue else { return }
+        guard let userId = AppStorageManager.shared.userId,
+              let user = userStore.fetchByUserId(userId) else { return }
+
+        isLoadingMoreQueue = true
+        defer { isLoadingMoreQueue = false }
+
+        var newTxns: [PillCountTransactionEntity] = []
+
+        if !queueFixedExhausted {
+            let page = transactionStore.fetchPartialPage(for: user, isDispense: true, limit: dashboardPageSize, offset: queueFixedOffset)
+            queueFixedOffset += page.count
+            queueFixedExhausted = page.count < dashboardPageSize
+            newTxns += page
+        }
+
+        if !queueRegularExhausted {
+            let page = transactionStore.fetchPartialPage(for: user, isDispense: false, limit: dashboardPageSize, offset: queueRegularOffset)
+            queueRegularOffset += page.count
+            queueRegularExhausted = page.count < dashboardPageSize
+            newTxns += page
+        }
+
+        let filteredNewTxns = newTxns.filter { $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue }
+        dispensePartial += filteredNewTxns
+        for txn in filteredNewTxns {
+            pillCounts[txn.txn_id] = Int(
+                detailStore.totalCountForStep(txnId: txn.txn_id, step: .targetVerification)
+            )
+        }
+
+        if !queueBatchExhausted {
+            let page = batchStore.fetchAllPartialPage(limit: dashboardPageSize, offset: queueBatchOffset)
+            queueBatchOffset += page.count
+            queueBatchExhausted = page.count < dashboardPageSize
+            inventoryPartial += page
+            for batch in page {
+                batchNdcCounts[batch.batch_id] = batchStore.getTransactionCount(for: batch.batch_id)
+            }
+        }
+
+        hasMoreQueue = !(queueFixedExhausted && queueRegularExhausted && queueBatchExhausted)
+    }
+
+    /// Fetches and appends the next page of today's completed activity
+    /// (both transactions and batches). No-op if a fetch is already running
+    /// or both sources are exhausted.
+    func loadMoreRecentActivityIfNeeded() {
+        guard hasMoreRecentActivity, !isLoadingMoreRecentActivity else { return }
+        guard let userId = AppStorageManager.shared.userId,
+              let user = userStore.fetchByUserId(userId) else { return }
+
+        isLoadingMoreRecentActivity = true
+        defer { isLoadingMoreRecentActivity = false }
+
+        if !recentTxnExhausted {
+            let page = transactionStore.fetchByTimeRangePage(
+                for: user, startTime: todayStartTs, endTime: todayEndTs,
+                limit: dashboardPageSize, offset: recentTxnOffset
+            )
+            recentTxnOffset += page.count
+            recentTxnExhausted = page.count < dashboardPageSize
+            let newlyCompleted = page.filter { $0.status == CountStatus.COMPLETED.rawValue }
+            dispenseCompleted += newlyCompleted
+            for txn in newlyCompleted {
+                pillCounts[txn.txn_id] = Int(
+                    detailStore.totalCountForStep(txnId: txn.txn_id, step: .targetVerification)
+                )
+            }
+        }
+
+        if !recentBatchExhausted {
+            let page = batchStore.fetchByDateRangePage(
+                startTs: todayStartTs, endTs: todayEndTs, limit: dashboardPageSize, offset: recentBatchOffset
+            )
+            recentBatchOffset += page.count
+            recentBatchExhausted = page.count < dashboardPageSize
+            let newlyCompleted = page.filter { $0.status == CountStatus.COMPLETED.rawValue }
+            inventoryCompleted += newlyCompleted
+            for batch in newlyCompleted {
+                batchNdcCounts[batch.batch_id] = batchStore.getTransactionCount(for: batch.batch_id)
+            }
+        }
+
+        hasMoreRecentActivity = !(recentTxnExhausted && recentBatchExhausted)
     }
 
     // MARK: - Debug logging

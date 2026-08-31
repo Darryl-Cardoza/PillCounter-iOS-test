@@ -109,6 +109,32 @@ final class TransactionStore {
         return results
     }
 
+    /// Paginated variant of `fetchPartial` — same predicate/sort, bounded to
+    /// `limit` rows starting at `offset`, so a large pending queue can be
+    /// browsed via infinite scroll instead of being silently capped.
+    func fetchPartialPage(
+        for user: UserEntity,
+        isDispense: Bool,
+        limit: Int,
+        offset: Int
+    ) -> [PillCountTransactionEntity] {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        let completedStatuses = [CountStatus.COMPLETED.rawValue]
+        request.predicate = NSPredicate(
+            format: "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == %@ AND NOT (status IN %@)",
+            user, NSNumber(value: isDispense), completedStatuses
+        )
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "is_from_pms", ascending: false),
+            NSSortDescriptor(key: "created_at", ascending: false)
+        ]
+        request.fetchLimit = limit
+        request.fetchOffset = offset
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
+    }
+
     func fetchByTimeRange(
         for user: UserEntity,
         startTime: Int64,
@@ -123,6 +149,30 @@ final class TransactionStore {
         let results = (try? context.fetch(request)) ?? []
         results.forEach { refreshDecrypted($0) }
         logRefillNos(op: "fetchByTimeRange", results: results)
+        return results
+    }
+
+    /// Paginated variant of `fetchByTimeRange` — same predicate/sort, but
+    /// only materializes/decrypts `limit` rows starting at `offset`, so
+    /// browsing a large date range doesn't pull the whole range into memory
+    /// (or decrypt every row) at once.
+    func fetchByTimeRangePage(
+        for user: UserEntity,
+        startTime: Int64,
+        endTime: Int64,
+        limit: Int,
+        offset: Int
+    ) -> [PillCountTransactionEntity] {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "user == %@ AND is_deleted == false AND created_at >= %lld AND created_at <= %lld",
+            user, startTime, endTime
+        )
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        request.fetchLimit = limit
+        request.fetchOffset = offset
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
         return results
     }
 
@@ -337,6 +387,24 @@ final class TransactionStore {
         return fetchCompletedUnsynced(for: user)
     }
 
+    /// Paginated variant — same predicate/sort as `fetchCompletedUnsynced`,
+    /// bounded to `limit` rows starting at `offset` for screens (Unsynced)
+    /// that page through this list instead of loading it all at once.
+    func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [PillCountTransactionEntity] {
+        guard let user = currentUserEntity() else { return [] }
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND is_dispense == %@",
+            user, CountStatus.COMPLETED.rawValue, NSNumber(value: true)
+        )
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
+        request.fetchLimit = limit
+        request.fetchOffset = offset
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
+        return results
+    }
+
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity] {
         let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
         request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
@@ -358,6 +426,21 @@ final class TransactionStore {
                 "\($0.bottle_info_list_json)"
             ]}
         )
+        return results
+    }
+
+    /// Paginated variant of `fetchAll(for:)` — bounded to `limit` rows
+    /// starting at `offset` (sorted newest-first, same as `fetchAll`), so
+    /// callers that only need "the most recent N" don't pull and decrypt
+    /// the user's entire transaction history.
+    func fetchAllPage(for user: UserEntity, limit: Int, offset: Int) -> [PillCountTransactionEntity] {
+        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
+        request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
+        request.fetchLimit = limit
+        request.fetchOffset = offset
+        let results = (try? context.fetch(request)) ?? []
+        results.forEach { refreshDecrypted($0) }
         return results
     }
 
@@ -391,6 +474,41 @@ final class TransactionStore {
         request.predicate = NSPredicate(
             format: "user == %@ AND is_dispense == %@ AND status == %@ AND is_deleted == false",
             user, NSNumber(value: isDispense), status.rawValue
+        )
+        return (try? context.count(for: request)) ?? 0
+    }
+
+    /// True count of dispense transactions in `[startTime, endTime]` for
+    /// `user`, optionally narrowed to a status — independent of any page
+    /// size, so a paginated display list can show an accurate status-filter
+    /// count without fetching/decrypting every row in the range.
+    func countByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64, status: CountStatus?) -> Int {
+        let request = NSFetchRequest<NSNumber>(entityName: "PillCountTransactionEntity")
+        request.resultType = .countResultType
+        if let status {
+            request.predicate = NSPredicate(
+                format: "user == %@ AND is_deleted == false AND created_at >= %lld AND created_at <= %lld AND is_dispense == true AND status == %@",
+                user, startTime, endTime, status.rawValue
+            )
+        } else {
+            request.predicate = NSPredicate(
+                format: "user == %@ AND is_deleted == false AND created_at >= %lld AND created_at <= %lld AND is_dispense == true",
+                user, startTime, endTime
+            )
+        }
+        return (try? context.count(for: request)) ?? 0
+    }
+
+    /// True total matching `fetchCompletedUnsynced`, independent of any page
+    /// size — so a capped/paginated display list can still show an accurate
+    /// "N unsynced" count without fetching/decrypting every matching row.
+    func countCompletedUnsynced() -> Int {
+        guard let user = currentUserEntity() else { return 0 }
+        let request: NSFetchRequest<NSNumber> = NSFetchRequest(entityName: "PillCountTransactionEntity")
+        request.resultType = .countResultType
+        request.predicate = NSPredicate(
+            format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND is_dispense == %@",
+            user, CountStatus.COMPLETED.rawValue, NSNumber(value: true)
         )
         return (try? context.count(for: request)) ?? 0
     }

@@ -86,7 +86,10 @@ struct DashboardView: View {
         // Queue refreshes on any transaction store change (create/update/delete/
         // status), which covers scan completion — so no PillScanViewModel observer
         // is needed here.
-        .onReceive(TransactionStore.shared.transactionsDidChange) {
+        .onReceive(
+            TransactionStore.shared.transactionsDidChange
+                .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+        ) {
             viewModel.loadQueueData(userId: userId)
         }
         .customPopup(isPresented: showSelectBucketIdPopup) {
@@ -491,7 +494,9 @@ struct DashboardView: View {
                 AnyView(
                     queueScrollContent(
                         items: viewModel.filteredQueueItems,
-                        idPrefix: "queue"
+                        idPrefix: "queue",
+                        onNearEnd: { viewModel.loadMoreQueueIfNeeded() },
+                        isLoadingMore: viewModel.isLoadingMoreQueue
                     ) {
                         DashboardTodaysQueueRow(
                             item: $0,
@@ -509,7 +514,9 @@ struct DashboardView: View {
                 AnyView(
                     queueScrollContent(
                         items: viewModel.filteredRecentItems,
-                        idPrefix: "recent"
+                        idPrefix: "recent",
+                        onNearEnd: { viewModel.loadMoreRecentActivityIfNeeded() },
+                        isLoadingMore: viewModel.isLoadingMoreRecentActivity
                     ) {
                         DashboardRecentActivityRow(item: $0, router: router)
                     }
@@ -521,6 +528,8 @@ struct DashboardView: View {
     private func queueScrollContent<Row: View>(
         items: [DashboardQueueItem],
         idPrefix: String,
+        onNearEnd: (() -> Void)? = nil,
+        isLoadingMore: Bool = false,
         @ViewBuilder rowBuilder: @escaping (DashboardQueueItem) -> Row
     ) -> some View {
         GeometryReader { geo in
@@ -534,11 +543,23 @@ struct DashboardView: View {
                         // Each page's list gets its own structural identity via
                         // .id(idPrefix) so the two ForEach trees stay separate and
                         // a row shared by both tabs isn't hidden in one of them.
-                        ForEach(items) { item in
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             rowBuilder(item)
                                 .transition(.opacity)
+                                .onAppear {
+                                    guard let onNearEnd else { return }
+                                    if index == max(0, items.count - 15) {
+                                        onNearEnd()
+                                    }
+                                }
                         }
                         .id(idPrefix)
+
+                        if isLoadingMore {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
                     }
                 }
                 .padding(.horizontal, 16)

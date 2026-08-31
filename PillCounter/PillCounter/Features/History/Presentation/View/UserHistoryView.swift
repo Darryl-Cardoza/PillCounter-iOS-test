@@ -39,6 +39,12 @@ struct UserHistoryView: View {
     @State private var appearedTxnIds: Set<String> = []
     @State private var appearedBatchIds: Set<Int64> = []
 
+    /// Trigger the next page fetch this many rows before the end of what's
+    /// currently loaded, so the next page has time to arrive before the user
+    /// actually scrolls that far (loading exactly at the last row left a
+    /// visible gap when scrolling fast).
+    private let loadMoreLookahead = 15
+
     // MARK: - Body
     var body: some View {
         GeometryReader { geo in
@@ -277,7 +283,7 @@ struct UserHistoryView: View {
             }
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading) {
+                LazyVStack(alignment: .leading) {
                     if activeTypeFilter == .fixed {
                         transactionContent
                     } else {
@@ -327,15 +333,40 @@ struct UserHistoryView: View {
                     .opacity(didAppear ? 1 : 0)
                     .offset(y: didAppear ? 0 : 20)
                     .onAppear {
-                        guard !appearedTxnIds.contains(row.id) else { return }
-                        withAnimation(
-                            .spring(response: 0.42, dampingFraction: 0.78)
-                                .delay(Double(index) * 0.06)
-                        ) {
-                            appearedTxnIds.insert(row.id)
+                        // No index-based delay: with lazy loading a row can be
+                        // scrolled to well after it first mounts, and a delay
+                        // keyed to its absolute index (e.g. ~3s for row 49)
+                        // left it invisible long after it was on screen.
+                        if !appearedTxnIds.contains(row.id) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                appearedTxnIds.insert(row.id)
+                            }
+                        }
+                        if index == max(0, historyViewModel.transactionRows.count - loadMoreLookahead) {
+                            loadMoreTransactions()
                         }
                     }
             }
+            if historyViewModel.isLoadingMoreTransactions {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+        }
+    }
+
+    // MARK: - Load More (infinite scroll)
+    private func loadMoreTransactions() {
+        Task {
+            await historyViewModel.loadMoreTransactionsIfNeeded()
+            historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
+        }
+    }
+
+    private func loadMoreBatches() {
+        Task {
+            await historyViewModel.loadMoreBatchesIfNeeded()
+            historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
         }
     }
 
@@ -366,14 +397,20 @@ struct UserHistoryView: View {
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(y: hasAppeared ? 0 : 20)
                     .onAppear {
-                        guard !appearedBatchIds.contains(row.batchId) else { return }
-                        withAnimation(
-                            .spring(response: 0.42, dampingFraction: 0.78)
-                                .delay(Double(index) * 0.06)
-                        ) {
-                            appearedBatchIds.insert(row.batchId)
+                        if !appearedBatchIds.contains(row.batchId) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                appearedBatchIds.insert(row.batchId)
+                            }
+                        }
+                        if index == max(0, historyViewModel.batchRows.count - loadMoreLookahead) {
+                            loadMoreBatches()
                         }
                     }
+            }
+            if historyViewModel.isLoadingMoreBatches {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
             }
         }
     }

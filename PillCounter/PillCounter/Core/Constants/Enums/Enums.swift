@@ -96,6 +96,9 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
     case UnsyncedTransaction
     case Settings
     case Profile
+    #if LOAD_TEST
+    case LoadTestData
+    #endif
     case Logout
 
     public var id: String { title }
@@ -110,6 +113,9 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
             case .History: return L10n.Menu.history
             case .UnsyncedTransaction: return L10n.Menu.unsync
             case .Settings: return L10n.Menu.settings
+            #if LOAD_TEST
+            case .LoadTestData: return "Load Test Data"
+            #endif
             case .Logout: return L10n.Menu.logout
         }
 
@@ -123,6 +129,9 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
         case .History: return "history_icon"
         case .UnsyncedTransaction: return "unsync_icon"
         case .Settings: return "settings_icon"
+        #if LOAD_TEST
+        case .LoadTestData: return "settings_icon"
+        #endif
         case .Logout: return "logout_icon"
         }
     }

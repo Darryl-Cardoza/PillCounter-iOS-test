@@ -52,7 +52,7 @@ private extension UnsyncedTransactionView {
         let isEmpty = viewModel.batches.isEmpty && viewModel.transactions.isEmpty
 
         return ScrollView(showsIndicators: false) {
-            VStack(spacing: 16) {
+            LazyVStack(spacing: 16) {
                 if isEmpty {
                     VStack {
                         EmptyStateView(
@@ -67,7 +67,7 @@ private extension UnsyncedTransactionView {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else {
-                    VStack(spacing: 20) {
+                    LazyVStack(spacing: 20) {
                         batchesSection
                         transactionsSection
                     }
@@ -100,7 +100,7 @@ private extension UnsyncedTransactionView {
     var batchesSection: some View {
         if !viewModel.batches.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: L10n.Unsync.stocks, count: viewModel.batches.count)
+                sectionHeader(title: L10n.Unsync.stocks, count: viewModel.totalUnsyncedBatchCount)
 
                 ForEach(Array(viewModel.batches.enumerated()), id: \.offset) { index, batch in
                     StockItemRowView(
@@ -128,7 +128,7 @@ private extension UnsyncedTransactionView {
     var transactionsSection: some View {
         if !viewModel.transactions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(title: L10n.Unsync.dispenses, count: viewModel.transactions.count)
+                sectionHeader(title: L10n.Unsync.dispenses, count: viewModel.totalUnsyncedTransactionCount)
 
                 ForEach(Array(viewModel.transactions.enumerated()), id: \.offset) { index, txn in
                     DispenseItemRowView(

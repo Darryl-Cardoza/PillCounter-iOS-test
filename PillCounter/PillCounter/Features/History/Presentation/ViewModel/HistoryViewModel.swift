@@ -67,16 +67,40 @@ class HistoryViewModel: ObservableObject {
     @Published var selectedEndDate: Date? = nil
     @Published var calendarMonthsToShow: [Date] = []
 
+    // MARK: - Pagination state
+    /// Rows fetched per page. Small enough that the first page renders
+    /// near-instantly even when the selected date range holds thousands of
+    /// rows; `loadMoreTransactionsIfNeeded`/`loadMoreBatchesIfNeeded` fetch
+    /// subsequent pages as the user scrolls.
+    let pageSize = 30
+    @Published private(set) var hasMoreTransactions = true
+    @Published private(set) var hasMoreBatches = true
+    @Published private(set) var isLoadingMoreTransactions = false
+    @Published private(set) var isLoadingMoreBatches = false
+    private var transactionPageOffset = 0
+    private var batchPageOffset = 0
+    private var currentStartTs: Int64 = 0
+    private var currentEndTs: Int64 = 0
+    private var currentTypeFilter: HistoryFilterType = .fixed
 
+    // MARK: - Fetch Transactions by Date (first page)
 
-    // MARK: - Fetch Transactions by Date
+    /// Resets pagination and loads the first page for a new date/type
+    /// selection. Call `loadMoreTransactionsIfNeeded` to fetch subsequent
+    /// pages as the user scrolls.
     func getTransactionsByDate(
         startDate: Date,
         endDate: Date,
         filter: HistoryFilterType
     ) async {
+        guard filter != .regular else {
+            filteredTransactionsOfUserByDate = []
+            hasMoreTransactions = false
+            return
+        }
         guard let user = userStore.fetchByUserId(userID) else {
             filteredTransactionsOfUserByDate = []
+            hasMoreTransactions = false
             return
         }
 
@@ -86,29 +110,48 @@ class HistoryViewModel: ObservableObject {
             to: Calendar.current.startOfDay(for: endDate)
         )!
 
-        let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
-        let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        currentStartTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
+        currentEndTs = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        currentTypeFilter = filter
+        transactionPageOffset = 0
+        hasMoreTransactions = true
 
-        let allTransactions = userStore.fetchTransactionsByDateRange(
-            for: user,
-            startDateTs: startTs,
-            endDateTs: endTs
+        // Route through the real predicate-based, indexed fetch instead of
+        // `UserStore.fetchTransactionsByDateRange`, which faulted the
+        // user's ENTIRE transaction history into memory via the relationship
+        // set just to filter by date in Swift — a full-table load disguised
+        // as a date-scoped query.
+        let page = transactionStore.fetchByTimeRangePage(
+            for: user, startTime: currentStartTs, endTime: currentEndTs,
+            limit: pageSize, offset: transactionPageOffset
         )
+        transactionPageOffset += page.count
+        hasMoreTransactions = page.count == pageSize
 
-        let finalTransactions: [PillCountTransactionEntity]
-        switch filter {
-        case .regular:
-            return
-        case .fixed:
-            finalTransactions = allTransactions.filter {
-                $0.is_dispense
-            }
-        }
-
-        filteredTransactionsOfUserByDate = finalTransactions
+        filteredTransactionsOfUserByDate = page.filter { $0.is_dispense }
     }
 
-    // MARK: - Fetch Batches by Date
+    /// Fetches and appends the next page of transactions for the current
+    /// date/type selection. No-op if a fetch is already running or there's
+    /// nothing left to load.
+    func loadMoreTransactionsIfNeeded() async {
+        guard hasMoreTransactions, !isLoadingMoreTransactions else { return }
+        guard let user = userStore.fetchByUserId(userID), currentTypeFilter == .fixed else { return }
+
+        isLoadingMoreTransactions = true
+        defer { isLoadingMoreTransactions = false }
+
+        let page = transactionStore.fetchByTimeRangePage(
+            for: user, startTime: currentStartTs, endTime: currentEndTs,
+            limit: pageSize, offset: transactionPageOffset
+        )
+        transactionPageOffset += page.count
+        hasMoreTransactions = page.count == pageSize
+        filteredTransactionsOfUserByDate += page.filter { $0.is_dispense }
+    }
+
+    // MARK: - Fetch Batches by Date (first page)
+
     func getBatchesByDate(startDate: Date, endDate: Date) async {
         let startOfDay = Calendar.current.startOfDay(for: startDate)
         let endOfDay = Calendar.current.date(
@@ -116,10 +159,33 @@ class HistoryViewModel: ObservableObject {
             to: Calendar.current.startOfDay(for: endDate)
         )!
 
-        let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
-        let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        currentStartTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
+        currentEndTs = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        batchPageOffset = 0
+        hasMoreBatches = true
 
-        filteredBatchesOfUserByDate = batchStore.fetchByDateRange(startTs: startTs, endTs: endTs)
+        let page = batchStore.fetchByDateRangePage(
+            startTs: currentStartTs, endTs: currentEndTs, limit: pageSize, offset: batchPageOffset
+        )
+        batchPageOffset += page.count
+        hasMoreBatches = page.count == pageSize
+        filteredBatchesOfUserByDate = page
+    }
+
+    /// Fetches and appends the next page of batches for the current date
+    /// selection. No-op if a fetch is already running or there's nothing
+    /// left to load.
+    func loadMoreBatchesIfNeeded() async {
+        guard hasMoreBatches, !isLoadingMoreBatches else { return }
+        isLoadingMoreBatches = true
+        defer { isLoadingMoreBatches = false }
+
+        let page = batchStore.fetchByDateRangePage(
+            startTs: currentStartTs, endTs: currentEndTs, limit: pageSize, offset: batchPageOffset
+        )
+        batchPageOffset += page.count
+        hasMoreBatches = page.count == pageSize
+        filteredBatchesOfUserByDate += page
     }
 
     // MARK: - Apply Filters (status + search)
@@ -225,20 +291,24 @@ class HistoryViewModel: ObservableObject {
     }
 
     // MARK: - Status Counts
+    /// True counts for the current date-range selection, independent of how
+    /// many pages have been loaded — querying the loaded array directly (as
+    /// this used to) made the badge change as pagination fetched more pages
+    /// (e.g. showing "50" then "100" while scrolling), which reads as a bug
+    /// since nothing about the underlying data changed.
     func getStatusCounts(for type: HistoryFilterType) -> (all: Int, completed: Int, pending: Int) {
         if type == .fixed {
-            let txns = filteredTransactionsOfUserByDate
+            guard let user = userStore.fetchByUserId(userID) else { return (0, 0, 0) }
             return (
-                all: txns.count,
-                completed: txns.filter { $0.status == CountStatus.COMPLETED.rawValue }.count,
-                pending:   txns.filter { $0.status == CountStatus.PARTIAL.rawValue }.count
+                all: transactionStore.countByTimeRange(for: user, startTime: currentStartTs, endTime: currentEndTs, status: nil),
+                completed: transactionStore.countByTimeRange(for: user, startTime: currentStartTs, endTime: currentEndTs, status: .COMPLETED),
+                pending: transactionStore.countByTimeRange(for: user, startTime: currentStartTs, endTime: currentEndTs, status: .PARTIAL)
             )
         } else {
-            let batches = filteredBatchesOfUserByDate
             return (
-                all: batches.count,
-                completed: batches.filter { $0.status == CountStatus.COMPLETED.rawValue }.count,
-                pending:   batches.filter { $0.status == CountStatus.PARTIAL.rawValue }.count
+                all: batchStore.countByDateRange(startTs: currentStartTs, endTs: currentEndTs, status: nil),
+                completed: batchStore.countByDateRange(startTs: currentStartTs, endTs: currentEndTs, status: .COMPLETED),
+                pending: batchStore.countByDateRange(startTs: currentStartTs, endTs: currentEndTs, status: .PARTIAL)
             )
         }
     }

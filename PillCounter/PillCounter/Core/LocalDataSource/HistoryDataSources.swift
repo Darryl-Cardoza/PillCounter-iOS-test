@@ -19,9 +19,15 @@ protocol BatchDataSource: AnyObject {
 
     func fetchById(_ batchId: Int64) -> BatchCountEntity?
     func fetchByDateRange(startTs: Int64, endTs: Int64) -> [BatchCountEntity]
+    func fetchByDateRangePage(startTs: Int64, endTs: Int64, limit: Int, offset: Int) -> [BatchCountEntity]
     func fetchAllPartial() -> [BatchCountEntity]
     func fetchAllCompleted() -> [BatchCountEntity]
     func fetchCompletedUnsynced() -> [BatchCountEntity]
+    func fetchAllPartialPage(limit: Int, offset: Int) -> [BatchCountEntity]
+    func fetchAllCompletedPage(limit: Int, offset: Int) -> [BatchCountEntity]
+    func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [BatchCountEntity]
+    func countCompletedUnsynced() -> Int
+    func countByDateRange(startTs: Int64, endTs: Int64, status: CountStatus?) -> Int
     func fetchLastCreated() -> BatchCountEntity?
     func getTransactionCount(for batchId: Int64) -> Int
     func create(bucketId: String, requestId: String?) -> BatchCountEntity?
@@ -38,10 +44,16 @@ protocol TransactionDataSource: AnyObject {
     func fetchById(_ txnId: Int64) -> PillCountTransactionEntity?
     func fetchByBatch(batchId: Int64) -> [PillCountTransactionEntity]
     func fetchByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64) -> [PillCountTransactionEntity]
+    func fetchByTimeRangePage(for user: UserEntity, startTime: Int64, endTime: Int64, limit: Int, offset: Int) -> [PillCountTransactionEntity]
     func fetchPartial(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity]
+    func fetchPartialPage(for user: UserEntity, isDispense: Bool, limit: Int, offset: Int) -> [PillCountTransactionEntity]
     func fetchPartialFromPms(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity]
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity]
+    func fetchAllPage(for user: UserEntity, limit: Int, offset: Int) -> [PillCountTransactionEntity]
     func fetchCompletedUnsynced() -> [PillCountTransactionEntity]
+    func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [PillCountTransactionEntity]
+    func countCompletedUnsynced() -> Int
+    func countByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64, status: CountStatus?) -> Int
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity?
     func fetchAllRxNos(for user: UserEntity) -> [String]
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity]

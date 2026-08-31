@@ -87,6 +87,20 @@ final class BatchStore {
         return (try? context.fetch(request)) ?? []
     }
 
+    /// Paginated variant of `fetchAllPartial` — bounded to `limit` rows
+    /// starting at `offset`.
+    func fetchAllPartialPage(limit: Int, offset: Int) -> [BatchCountEntity] {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "user_id == %@ AND is_deleted == false AND status == %@",
+            currentUserId, CountStatus.PARTIAL.rawValue
+        )
+        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
+        request.fetchLimit = limit
+        request.fetchOffset = offset
+        return (try? context.fetch(request)) ?? []
+    }
+
     func fetchAllCompleted() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
@@ -94,6 +108,20 @@ final class BatchStore {
             currentUserId, CountStatus.COMPLETED.rawValue
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
+        return (try? context.fetch(request)) ?? []
+    }
+
+    /// Paginated variant of `fetchAllCompleted` — bounded to `limit` rows
+    /// starting at `offset`.
+    func fetchAllCompletedPage(limit: Int, offset: Int) -> [BatchCountEntity] {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "user_id == %@ AND is_deleted == false AND status == %@",
+            currentUserId, CountStatus.COMPLETED.rawValue
+        )
+        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
+        request.fetchLimit = limit
+        request.fetchOffset = offset
         return (try? context.fetch(request)) ?? []
     }
 
@@ -118,6 +146,21 @@ final class BatchStore {
         return (try? context.fetch(request)) ?? []
     }
 
+    /// Paginated variant of `fetchByDateRange` — bounded to `limit` rows
+    /// starting at `offset`, so browsing a large date range doesn't pull
+    /// every batch in that range into memory at once.
+    func fetchByDateRangePage(startTs: Int64, endTs: Int64, limit: Int, offset: Int) -> [BatchCountEntity] {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
+            currentUserId, startTs, endTs
+        )
+        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
+        request.fetchLimit = limit
+        request.fetchOffset = offset
+        return (try? context.fetch(request)) ?? []
+    }
+
     func fetchCompletedUnsynced() -> [BatchCountEntity] {
         let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
         request.predicate = NSPredicate(
@@ -126,6 +169,54 @@ final class BatchStore {
         )
         request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: true)]
         return (try? context.fetch(request)) ?? []
+    }
+
+    /// Paginated variant of `fetchCompletedUnsynced` — bounded to `limit`
+    /// rows starting at `offset`.
+    func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [BatchCountEntity] {
+        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "user_id == %@ AND is_deleted == false AND status == %@ AND is_synced == false",
+            currentUserId, CountStatus.COMPLETED.rawValue
+        )
+        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: true)]
+        request.fetchLimit = limit
+        request.fetchOffset = offset
+        return (try? context.fetch(request)) ?? []
+    }
+
+    /// True count of batches in `[startTs, endTs]` for the current user,
+    /// optionally narrowed to a status — independent of any page size, so a
+    /// paginated display list can show an accurate status-filter count
+    /// without fetching every row in the range.
+    func countByDateRange(startTs: Int64, endTs: Int64, status: CountStatus?) -> Int {
+        let request = NSFetchRequest<NSNumber>(entityName: "BatchCountEntity")
+        request.resultType = .countResultType
+        if let status {
+            request.predicate = NSPredicate(
+                format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld AND status == %@",
+                currentUserId, startTs, endTs, status.rawValue
+            )
+        } else {
+            request.predicate = NSPredicate(
+                format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
+                currentUserId, startTs, endTs
+            )
+        }
+        return (try? context.count(for: request)) ?? 0
+    }
+
+    /// True total matching `fetchCompletedUnsynced`, independent of any page
+    /// size — so a capped/paginated display list can still show an accurate
+    /// "N unsynced" count without fetching every matching row.
+    func countCompletedUnsynced() -> Int {
+        let request = NSFetchRequest<NSNumber>(entityName: "BatchCountEntity")
+        request.resultType = .countResultType
+        request.predicate = NSPredicate(
+            format: "user_id == %@ AND is_deleted == false AND status == %@ AND is_synced == false",
+            currentUserId, CountStatus.COMPLETED.rawValue
+        )
+        return (try? context.count(for: request)) ?? 0
     }
 
     /// StockTxnEntity already has exactly one row per NDC per batch, so a plain count works

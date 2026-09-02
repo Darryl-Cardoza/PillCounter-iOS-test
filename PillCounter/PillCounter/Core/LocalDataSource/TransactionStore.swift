@@ -76,7 +76,7 @@ final class TransactionStore {
             }
 
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), isDispense: \(isDispense), batchId: \(batchId), isFromPms: \(isFromPms)")
+            StoreLogger.debug("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), isDispense: \(isDispense), batchId: \(batchId), isFromPms: \(isFromPms)")
             transactionsDidChange.send()
             return entity
         }
@@ -402,7 +402,7 @@ final class TransactionStore {
             txn.status = CountStatus.PARTIAL.rawValue
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] RESTORED deleted — txnId: \(txnId)")
+            StoreLogger.debug("📋 [TransactionDAO] RESTORED deleted — txnId: \(txnId)")
         }
         transactionsDidChange.send()
     }
@@ -421,7 +421,7 @@ final class TransactionStore {
             if let sequenceNumber { txn.hl7_sequence_number = sequenceNumber }
             if let transactionOrderId { txn.transaction_order_id = transactionOrderId }
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] SET HL7 identifiers — txnId: \(txnId), messageControlId: \(messageControlId ?? "nil"), sequenceNumber: \(sequenceNumber ?? "nil"), transactionOrderId: \(transactionOrderId ?? "nil")")
+            StoreLogger.debug("📋 [TransactionDAO] SET HL7 identifiers — txnId: \(txnId), messageControlId: \(messageControlId ?? "nil"), sequenceNumber: \(sequenceNumber ?? "nil"), transactionOrderId: \(transactionOrderId ?? "nil")")
         }
     }
 
@@ -431,7 +431,7 @@ final class TransactionStore {
             txn.txn_priority = priority
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED priority — txnId: \(txnId), priority: \(priority ?? "nil")")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED priority — txnId: \(txnId), priority: \(priority ?? "nil")")
         }
     }
 
@@ -447,7 +447,7 @@ final class TransactionStore {
             txn.is_synced = false
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] HL7 EDIT applied — txnId: \(txnId), drugId: \(drugId), targetCount: \(targetCount), priority: \(priority ?? "nil"), refillNo: \(refillNo ?? "nil")")
+            StoreLogger.debug("📋 [TransactionDAO] HL7 EDIT applied — txnId: \(txnId), drugId: \(drugId), targetCount: \(targetCount), priority: \(priority ?? "nil"), refillNo: \(refillNo ?? "nil")")
         }
         transactionsDidChange.send()
     }
@@ -697,7 +697,7 @@ final class TransactionStore {
             txn.drug = drug
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED drug — txnId: \(txnId), drugId: \(drugId)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED drug — txnId: \(txnId), drugId: \(drugId)")
         }
     }
 
@@ -707,7 +707,7 @@ final class TransactionStore {
             txn.target_count = targetCount
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED targetCount — txnId: \(txnId), targetCount: \(targetCount)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED targetCount — txnId: \(txnId), targetCount: \(targetCount)")
         }
     }
 
@@ -717,7 +717,7 @@ final class TransactionStore {
             txn.note = note
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED note — txnId: \(txnId)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED note — txnId: \(txnId)")
         }
     }
 
@@ -727,7 +727,7 @@ final class TransactionStore {
             txn.status = status.rawValue
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED status — txnId: \(txnId), status: \(status.rawValue)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED status — txnId: \(txnId), status: \(status.rawValue)")
         }
         transactionsDidChange.send()
     }
@@ -738,7 +738,7 @@ final class TransactionStore {
             txn.gloves_detected = detected
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED glovesDetected — txnId: \(txnId), detected: \(detected)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED glovesDetected — txnId: \(txnId), detected: \(detected)")
         }
     }
 
@@ -748,7 +748,7 @@ final class TransactionStore {
             txn.hazardous_tray_detected = detected
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED hazardousTrayDetected — txnId: \(txnId), detected: \(detected)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED hazardousTrayDetected — txnId: \(txnId), detected: \(detected)")
         }
     }
 
@@ -758,7 +758,7 @@ final class TransactionStore {
             txn.is_ndc_verfied = verified
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED ndcVerified — txnId: \(txnId), verified: \(verified)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED ndcVerified — txnId: \(txnId), verified: \(verified)")
         }
         transactionsDidChange.send()
     }
@@ -783,7 +783,7 @@ final class TransactionStore {
             txn.bottle_info_list_json = bottles.encodedJson()
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED bottleList — txnId: \(txnId), bottleCount: \(bottles.count), json: \(txn.bottle_info_list_json ?? "nil")")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED bottleList — txnId: \(txnId), bottleCount: \(bottles.count), json: \(txn.bottle_info_list_json ?? "nil")")
         }
     }
 
@@ -810,7 +810,7 @@ final class TransactionStore {
             txn.is_synced = true
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED synced — txnId: \(txnId)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED synced — txnId: \(txnId)")
         }
 
         if attemptHardDeleteIfEligible(txnId: txnId) { return }
@@ -835,7 +835,7 @@ final class TransactionStore {
             txn.is_synced = true
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED synced — txnId: \(txnId)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED synced — txnId: \(txnId)")
         }
 
         if attemptHardDeleteIfEligible(txnId: txnId, in: context) { return }
@@ -945,7 +945,7 @@ final class TransactionStore {
             if let targetCount { txn.target_count = targetCount }
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] UPDATED — txnId: \(txnId), drugId: \(drugId ?? 0), isDispense: \(isDispense), targetCount: \(targetCount ?? 0)")
+            StoreLogger.debug("📋 [TransactionDAO] UPDATED — txnId: \(txnId), drugId: \(drugId ?? 0), isDispense: \(isDispense), targetCount: \(targetCount ?? 0)")
         }
     }
 
@@ -957,7 +957,7 @@ final class TransactionStore {
             txn.is_deleted = true
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] SOFT DELETED — txnId: \(txnId)")
+            StoreLogger.debug("📋 [TransactionDAO] SOFT DELETED — txnId: \(txnId)")
         }
         transactionsDidChange.send()
     }
@@ -970,7 +970,7 @@ final class TransactionStore {
             guard let txn = fetchByIdLocked(txnId) else { return }
             context.delete(txn)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] HARD DELETED — txnId: \(txnId)")
+            StoreLogger.debug("📋 [TransactionDAO] HARD DELETED — txnId: \(txnId)")
         }
         transactionsDidChange.send()
     }
@@ -982,7 +982,7 @@ final class TransactionStore {
             guard let txn = fetchByIdLocked(txnId, in: context) else { return }
             context.delete(txn)
             CoreDataManager.shared.save(context: context)
-            print("📋 [TransactionDAO] HARD DELETED — txnId: \(txnId)")
+            StoreLogger.debug("📋 [TransactionDAO] HARD DELETED — txnId: \(txnId)")
         }
         transactionsDidChange.send()
     }
@@ -1007,7 +1007,7 @@ final class TransactionStore {
             guard let stale = try? context.fetch(request), !stale.isEmpty else { return false }
 
             for txn in stale {
-                print("📋 [TransactionDAO] TTL SWEEP hard-deleting stale synced txn — txnId: \(txn.txn_id), updatedAt: \(txn.updated_at)")
+                StoreLogger.debug("📋 [TransactionDAO] TTL SWEEP hard-deleting stale synced txn — txnId: \(txn.txn_id), updatedAt: \(txn.updated_at)")
                 context.delete(txn)
             }
             CoreDataManager.shared.save(context: context)
@@ -1023,9 +1023,9 @@ final class TransactionStore {
             let request: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionEntity.fetchRequest()
             do {
                 try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-                print("📋 [TransactionDAO] DELETED ALL — all transactions removed")
+                StoreLogger.debug("📋 [TransactionDAO] DELETED ALL — all transactions removed")
             } catch {
-                print("Failed to delete DrugMasterEntity: \(error)")
+                StoreLogger.debug("Failed to delete PillCountTransactionEntity: \(error)")
             }
         }
     }
@@ -1043,7 +1043,7 @@ final class TransactionStore {
 
     private func logRefillNos(op: String, results: [PillCountTransactionEntity]) {
         let rows = results.map { "txnId: \($0.txn_id), rxNo: \($0.rx_no ?? "-"), refillNo: \($0.refill_no ?? "-")" }
-        print("📋 [TransactionDAO] \(op) refillNos — \(rows)")
+        StoreLogger.debug("📋 [TransactionDAO] \(op) refillNos — \(rows)")
     }
 
     /// Resolves the currently logged-in user from CoreData.

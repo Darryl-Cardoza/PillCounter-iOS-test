@@ -37,7 +37,9 @@ enum StoreLogger {
     /// Log a single-row result (e.g. fetchById).
     static func logSingle(dao: String, op: String, columns: [String], row: [String]?) {
         guard let row else {
+            #if DEBUG
             print("[\(dao)] \(op) → (not found)")
+            #endif
             return
         }
         log(dao: dao, op: op, columns: columns, rows: [row])
@@ -46,6 +48,13 @@ enum StoreLogger {
     /// Log a scalar result (e.g. count, total).
     static func logScalar(dao: String, op: String, label: String, value: Any) {
         log(dao: dao, op: op, columns: [label], rows: [["\(value)"]])
+    }
+
+    /// Log a free-form trace message (create/update/delete notices, errors). No-op outside DEBUG builds.
+    static func debug(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        print(message())
+        #endif
     }
 
     // MARK: - Private helpers

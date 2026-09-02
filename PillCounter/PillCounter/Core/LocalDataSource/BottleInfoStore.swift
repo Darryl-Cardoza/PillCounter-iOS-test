@@ -33,7 +33,7 @@ final class BottleInfoStore {
             if let expNo { existing.exp_no = expNo }
             existing.updated_at = nowMs()
             CoreDataManager.shared.save(context: context)
-            print("🧴 [BottleInfoDAO] SET sealed bottle_qty — bottleId: \(existing.bottle_id), stockTxnId: \(stockTxnId), bottleQty: \(bottleQty)")
+            StoreLogger.debug("🧴 [BottleInfoDAO] SET sealed bottle_qty — bottleId: \(existing.bottle_id), stockTxnId: \(stockTxnId), bottleQty: \(bottleQty)")
             bottleInfosDidChange.send()
             return existing
         }
@@ -56,7 +56,7 @@ final class BottleInfoStore {
         entity.updated_at = now
 
         CoreDataManager.shared.save(context: context)
-        print("🧴 [BottleInfoDAO] CREATED sealed row — bottleId: \(entity.bottle_id), stockTxnId: \(stockTxnId), bottleQty: \(bottleQty)")
+        StoreLogger.debug("🧴 [BottleInfoDAO] CREATED sealed row — bottleId: \(entity.bottle_id), stockTxnId: \(stockTxnId), bottleQty: \(bottleQty)")
         bottleInfosDidChange.send()
         return entity
     }
@@ -83,7 +83,7 @@ final class BottleInfoStore {
         entity.updated_at = now
 
         CoreDataManager.shared.save(context: context)
-        print("🧴 [BottleInfoDAO] CREATED opened row — bottleId: \(entity.bottle_id), stockTxnId: \(stockTxnId), looseQty: \(looseQty)")
+        StoreLogger.debug("🧴 [BottleInfoDAO] CREATED opened row — bottleId: \(entity.bottle_id), stockTxnId: \(stockTxnId), looseQty: \(looseQty)")
         bottleInfosDidChange.send()
         return entity
     }
@@ -93,7 +93,7 @@ final class BottleInfoStore {
         bottle.loose_qty = looseQty
         bottle.updated_at = nowMs()
         CoreDataManager.shared.save(context: context)
-        print("🧴 [BottleInfoDAO] SET opened loose_qty — bottleId: \(bottleId), looseQty: \(looseQty)")
+        StoreLogger.debug("🧴 [BottleInfoDAO] SET opened loose_qty — bottleId: \(bottleId), looseQty: \(looseQty)")
         bottleInfosDidChange.send()
     }
 
@@ -144,7 +144,7 @@ final class BottleInfoStore {
         if let looseQty { bottle.loose_qty = looseQty }
         bottle.updated_at = nowMs()
         CoreDataManager.shared.save(context: context)
-        print("🧴 [BottleInfoDAO] SET absolute — bottleId: \(bottleId), bottleQty: \(String(describing: bottleQty)), looseQty: \(String(describing: looseQty))")
+        StoreLogger.debug("🧴 [BottleInfoDAO] SET absolute — bottleId: \(bottleId), bottleQty: \(String(describing: bottleQty)), looseQty: \(String(describing: looseQty))")
         bottleInfosDidChange.send()
     }
 
@@ -155,10 +155,10 @@ final class BottleInfoStore {
         request.predicate = NSPredicate(format: "bottle_id == %lld", bottleId)
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-            print("🧴 [BottleInfoDAO] DELETED — bottleId: \(bottleId)")
+            StoreLogger.debug("🧴 [BottleInfoDAO] DELETED — bottleId: \(bottleId)")
             bottleInfosDidChange.send()
         } catch {
-            print("Failed to delete BottleInfoEntity: \(error)")
+            StoreLogger.debug("Failed to delete BottleInfoEntity: \(error)")
         }
     }
 
@@ -167,9 +167,9 @@ final class BottleInfoStore {
         request.predicate = NSPredicate(format: "stock_txn_id == %lld", stockTxnId)
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-            print("🧴 [BottleInfoDAO] DELETED all rows for stockTxnId: \(stockTxnId)")
+            StoreLogger.debug("🧴 [BottleInfoDAO] DELETED all rows for stockTxnId: \(stockTxnId)")
         } catch {
-            print("Failed to delete BottleInfoEntity for stockTxn: \(error)")
+            StoreLogger.debug("Failed to delete BottleInfoEntity for stockTxn: \(error)")
         }
     }
 
@@ -177,9 +177,9 @@ final class BottleInfoStore {
         let request: NSFetchRequest<NSFetchRequestResult> = BottleInfoEntity.fetchRequest()
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-            print("🧴 [BottleInfoDAO] DELETED ALL — all bottle info removed")
+            StoreLogger.debug("🧴 [BottleInfoDAO] DELETED ALL — all bottle info removed")
         } catch {
-            print("Failed to delete BottleInfoEntity: \(error)")
+            StoreLogger.debug("Failed to delete BottleInfoEntity: \(error)")
         }
     }
 

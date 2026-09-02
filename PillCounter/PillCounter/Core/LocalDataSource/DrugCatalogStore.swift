@@ -44,7 +44,7 @@ final class DrugCatalogStore {
             if let isHazardous { entity.is_hazardous = isHazardous }
             entity.ndc = ndc
             CoreDataManager.shared.save(context: context)
-            print("💊 [DrugMasterDAO] SAVED — ndc: \(ndc), drugId: \(drugId), drugName: \(drugName)")
+            StoreLogger.debug("💊 [DrugMasterDAO] SAVED — ndc: \(ndc), drugId: \(drugId), drugName: \(drugName)")
             return (entity.drug_id, entity.drug_image == nil)
         }
 
@@ -61,7 +61,7 @@ final class DrugCatalogStore {
     private func downloadAndStoreImage(from url: URL, drugId: Int64) {
         URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
             guard let self, let data, error == nil, let image = UIImage(data: data) else {
-                print("❌ [DrugMasterDAO] image download failed for drugId \(drugId): \(String(describing: error))")
+                StoreLogger.debug("❌ [DrugMasterDAO] image download failed for drugId \(drugId): \(String(describing: error))")
                 return
             }
             guard let fileName = PhotoFileManager.shared.saveImage(image) else { return }
@@ -69,7 +69,7 @@ final class DrugCatalogStore {
                 guard let entity = self.fetchByIdLocked(drugId), entity.drug_image == nil else { return }
                 entity.drug_image = fileName
                 CoreDataManager.shared.save(context: self.context)
-                print("💊 [DrugMasterDAO] IMAGE SAVED — drugId: \(drugId), file: \(fileName)")
+                StoreLogger.debug("💊 [DrugMasterDAO] IMAGE SAVED — drugId: \(drugId), file: \(fileName)")
             }
             // Dashboard/history rows read drug_image via the txn's drug relationship.
             // objectWillChange doesn't propagate through a to-one relationship fault,
@@ -143,7 +143,7 @@ final class DrugCatalogStore {
             request.predicate = NSPredicate(format: "gtin == %@", gtin)
             request.fetchLimit = 1
             let result = try? context.fetch(request).first
-            print("Gtin\(String(describing: result))")
+            StoreLogger.debug("💊 [DrugMasterDAO] fetchByGtin — gtin: \(gtin), found: \(result != nil)")
             return result
         }
     }
@@ -203,7 +203,7 @@ final class DrugCatalogStore {
             if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
             if let isHazardous { drug.is_hazardous = isHazardous }
             CoreDataManager.shared.save(context: context)
-            print("💊 [DrugMasterDAO] UPDATED — drugId: \(drugId), drugName: \(drugName ?? "-"), ndc: \(ndc ?? "-"), gtin: \(gtin ?? "-")")
+            StoreLogger.debug("💊 [DrugMasterDAO] UPDATED — drugId: \(drugId), drugName: \(drugName ?? "-"), ndc: \(ndc ?? "-"), gtin: \(gtin ?? "-")")
         }
     }
 
@@ -229,7 +229,7 @@ final class DrugCatalogStore {
                 }
             }
             CoreDataManager.shared.save(context: context)
-            print("💊 [DrugMasterDAO] DEDUPLICATED — removed duplicates, kept \(seen.count) unique NDC entries")
+            StoreLogger.debug("💊 [DrugMasterDAO] DEDUPLICATED — removed duplicates, kept \(seen.count) unique NDC entries")
         }
     }
 
@@ -238,9 +238,9 @@ final class DrugCatalogStore {
             let request: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
             do {
                 try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-                print("💊 [DrugMasterDAO] DELETED ALL — all DrugMaster records removed")
+                StoreLogger.debug("💊 [DrugMasterDAO] DELETED ALL — all DrugMaster records removed")
             } catch {
-                print("Failed to delete DrugMasterEntity: \(error)")
+                StoreLogger.debug("Failed to delete DrugMasterEntity: \(error)")
             }
         }
     }
@@ -266,7 +266,7 @@ final class DrugCatalogStore {
         let entity = DrugMasterEntity(context: context)
         entity.drug_id = drugId
         entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
-        print("💊 [DrugMasterDAO] CREATED — ndc: \(ndc), drugId: \(drugId)")
+        StoreLogger.debug("💊 [DrugMasterDAO] CREATED — ndc: \(ndc), drugId: \(drugId)")
         return entity
     }
 }

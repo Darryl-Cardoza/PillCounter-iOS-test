@@ -35,7 +35,7 @@ final class BatchStore {
     func create(bucketId: String, requestId: String? = nil) -> BatchCountEntity? {
         let userId = currentUserId
         guard !userId.isEmpty else {
-            print("📦 [BatchDAO] CREATE skipped — no logged-in user")
+            StoreLogger.debug("📦 [BatchDAO] CREATE skipped — no logged-in user")
             return nil
         }
         let batch: BatchCountEntity = sync {
@@ -50,7 +50,7 @@ final class BatchStore {
             batch.is_synced = false
             batch.user_id = userId
             CoreDataManager.shared.save(context: context)
-            print("📦 [BatchDAO] CREATED — batchId: \(batchId), bucketId: \(bucketId), userId: \(userId), requestId: \(requestId ?? "-")")
+            StoreLogger.debug("📦 [BatchDAO] CREATED — batchId: \(batchId), bucketId: \(bucketId), userId: \(userId), requestId: \(requestId ?? "-")")
             return batch
         }
         transactionsDidChange.send()
@@ -403,10 +403,10 @@ final class BatchStore {
             }
             do {
                 try context.save()
-                print("📦 [BatchDAO] UPDATED status — batchId: \(batchId), status: \(status.rawValue)")
+                StoreLogger.debug("📦 [BatchDAO] UPDATED status — batchId: \(batchId), status: \(status.rawValue)")
                 return true
             } catch {
-                print("❌ BatchDAO.updateStatus save failed:", error)
+                StoreLogger.debug("❌ BatchDAO.updateStatus save failed: \(error)")
                 return false
             }
         }
@@ -420,7 +420,7 @@ final class BatchStore {
             guard let batch = fetchByIdLocked(batchId) else { return }
             batch.note = note
             CoreDataManager.shared.save(context: context)
-            print("📦 [BatchDAO] UPDATED note — batchId: \(batchId)")
+            StoreLogger.debug("📦 [BatchDAO] UPDATED note — batchId: \(batchId)")
         }
     }
 
@@ -431,7 +431,7 @@ final class BatchStore {
             guard let batch = fetchByIdLocked(batchId) else { return }
             batch.is_synced = true
             try? context.save()
-            print("📦 [BatchDAO] SYNCED — batchId: \(batchId)")
+            StoreLogger.debug("📦 [BatchDAO] SYNCED — batchId: \(batchId)")
         }
         transactionsDidChange.send()
     }
@@ -455,10 +455,10 @@ final class BatchStore {
                 let stockTxns = try context.fetch(stockTxnReq)
                 stockTxns.forEach { $0.is_deleted = true }
                 try context.save()
-                print("📦 [BatchDAO] SOFT DELETED — batchIds: \(ids), batches: \(batches.count), transactions: \(transactions.count), stockTxns: \(stockTxns.count)")
+                StoreLogger.debug("📦 [BatchDAO] SOFT DELETED — batchIds: \(ids), batches: \(batches.count), transactions: \(transactions.count), stockTxns: \(stockTxns.count)")
                 return true
             } catch {
-                print("❌ BatchDAO.softDelete failed:", error)
+                StoreLogger.debug("❌ BatchDAO.softDelete failed: \(error)")
                 return false
             }
         }
@@ -471,9 +471,9 @@ final class BatchStore {
             let request: NSFetchRequest<NSFetchRequestResult> = BatchCountEntity.fetchRequest()
             do {
                 try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-                print("📦 [BatchDAO] DELETED ALL — all batch records removed")
+                StoreLogger.debug("📦 [BatchDAO] DELETED ALL — all batch records removed")
             } catch {
-                print("Failed to delete BatchCountEntity: \(error)")
+                StoreLogger.debug("Failed to delete BatchCountEntity: \(error)")
             }
         }
     }
@@ -508,7 +508,7 @@ final class BatchStore {
             guard let batch = fetchByIdLocked(batchId, in: context) else { return }
             batch.is_synced = true
             try? context.save()
-            print("📦 [BatchDAO] SYNCED — batchId: \(batchId)")
+            StoreLogger.debug("📦 [BatchDAO] SYNCED — batchId: \(batchId)")
         }
         transactionsDidChange.send()
     }

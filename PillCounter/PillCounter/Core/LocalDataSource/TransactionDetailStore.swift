@@ -51,7 +51,7 @@ final class TransactionDetailStore {
             parent.addToPillCountTransactionDetails(detail)
 
             CoreDataManager.shared.save(context: context)
-            print("🔍 [TransactionDetailDAO] CREATED — detailId: \(detail.txn_details_id), txnId: \(txnId), pillCount: \(pillCount), type: \(type ?? "-"), isManual: \(isManual)")
+            StoreLogger.debug("🔍 [TransactionDetailDAO] CREATED — detailId: \(detail.txn_details_id), txnId: \(txnId), pillCount: \(pillCount), type: \(type ?? "-"), isManual: \(isManual)")
             return detail
         }
     }
@@ -234,7 +234,7 @@ final class TransactionDetailStore {
             block(detail)
             detail.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("🔍 [TransactionDetailDAO] UPDATED — detailId: \(detailId), txnId: \(detail.txn_id)")
+            StoreLogger.debug("🔍 [TransactionDetailDAO] UPDATED — detailId: \(detailId), txnId: \(detail.txn_id)")
         }
     }
 
@@ -246,7 +246,7 @@ final class TransactionDetailStore {
             detail.is_deleted = true
             detail.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
-            print("🔍 [TransactionDetailDAO] SOFT DELETED — detailId: \(detailId), txnId: \(detail.txn_id)")
+            StoreLogger.debug("🔍 [TransactionDetailDAO] SOFT DELETED — detailId: \(detailId), txnId: \(detail.txn_id)")
         }
     }
 
@@ -258,7 +258,7 @@ final class TransactionDetailStore {
             let now = Int64(Date().timeIntervalSince1970 * 1000)
             details.forEach { $0.is_deleted = true; $0.updated_at = now }
             CoreDataManager.shared.save(context: context)
-            print("🔍 [TransactionDetailDAO] SOFT DELETED ALL — txnId: \(txnId), count: \(details.count)")
+            StoreLogger.debug("🔍 [TransactionDetailDAO] SOFT DELETED ALL — txnId: \(txnId), count: \(details.count)")
         }
     }
 
@@ -273,9 +273,9 @@ final class TransactionDetailStore {
             let request: NSFetchRequest<NSFetchRequestResult> = PillCountTransactionDetailsEntity.fetchRequest()
             do {
                 try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-                print("🔍 [TransactionDetailDAO] DELETED ALL — all transaction details removed")
+                StoreLogger.debug("🔍 [TransactionDetailDAO] DELETED ALL — all transaction details removed")
             } catch {
-                print("Failed do delete all")
+                StoreLogger.debug("Failed to delete PillCountTransactionDetailsEntity: \(error)")
             }
         }
     }
@@ -313,7 +313,7 @@ final class TransactionDetailStore {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         details.forEach { $0.is_deleted = true; $0.updated_at = now }
         CoreDataManager.shared.save(context: context)
-        print("🔍 [TransactionDetailDAO] SOFT DELETED step — txnId: \(txnId), step: \(step.rawValue), count: \(details.count)")
+        StoreLogger.debug("🔍 [TransactionDetailDAO] SOFT DELETED step — txnId: \(txnId), step: \(step.rawValue), count: \(details.count)")
     }
 
     private func generateUniqueId() -> Int64 {

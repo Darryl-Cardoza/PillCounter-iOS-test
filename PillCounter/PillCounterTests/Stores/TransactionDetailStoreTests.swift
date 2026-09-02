@@ -7,6 +7,7 @@
 //  fixture is uniquely-id'd and torn down at the end of each test.
 //
 
+import CoreData
 import Testing
 @testable import PillCounter
 
@@ -59,5 +60,116 @@ struct TransactionDetailStoreTests {
         let sum = TransactionDetailStore.shared.sumPillCount(detailIds: [d1.txn_details_id, d2.txn_details_id])
         #expect(sum == 12)
         _ = d3
+    }
+
+    @Test func sumPillCountInContextMatchesDefaultContextResult() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+        let d1 = TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 8)!
+
+        let context = CoreDataManager.shared.context
+        let viaContext = TransactionDetailStore.shared.sumPillCount(detailIds: [d1.txn_details_id], in: context)
+        let viaDefault = TransactionDetailStore.shared.sumPillCount(detailIds: [d1.txn_details_id])
+        #expect(viaContext == viaDefault)
+        #expect(viaContext == 8)
+    }
+
+    @Test func sumPillCountInContextReturnsZeroForEmptyIds() {
+        let context = CoreDataManager.shared.context
+        #expect(TransactionDetailStore.shared.sumPillCount(detailIds: [], in: context) == 0)
+    }
+
+    // MARK: - fetchAll(txnId:in:)
+
+    @Test func fetchAllInContextMatchesDefaultContextResult() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+        TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 3)
+        TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 4)
+
+        let context = CoreDataManager.shared.context
+        let viaContext = TransactionDetailStore.shared.fetchAll(txnId: txn.txn_id, in: context)
+        let viaDefault = TransactionDetailStore.shared.fetchAll(txnId: txn.txn_id)
+        #expect(viaContext.count == 2)
+        #expect(Set(viaContext.map { $0.txn_details_id }) == Set(viaDefault.map { $0.txn_details_id }))
+    }
+
+    @Test func fetchAllInContextExcludesSoftDeleted() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+        let kept = TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 3)!
+        let deleted = TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 4)!
+        TransactionDetailStore.shared.softDelete(detailId: deleted.txn_details_id)
+
+        let context = CoreDataManager.shared.context
+        let results = TransactionDetailStore.shared.fetchAll(txnId: txn.txn_id, in: context)
+        let ids = Set(results.map { $0.txn_details_id })
+        #expect(ids.contains(kept.txn_details_id))
+        #expect(!ids.contains(deleted.txn_details_id))
+    }
+
+    @Test func fetchAllInContextReturnsEmptyForUnknownTxn() {
+        let context = CoreDataManager.shared.context
+        #expect(TransactionDetailStore.shared.fetchAll(txnId: -999_999, in: context).isEmpty)
+    }
+
+    // MARK: - totalCountsForSteps
+
+    @Test func totalCountsForStepsSumsPillCountPerTransactionForGivenStep() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn1 = fixture.makeTransaction()
+        let txn2 = fixture.makeTransaction()
+
+        TransactionDetailStore.shared.add(txnId: txn1.txn_id, pillCount: 5, type: ControlledStep.containerInitiate.rawValue)
+        TransactionDetailStore.shared.add(txnId: txn1.txn_id, pillCount: 3, type: ControlledStep.containerInitiate.rawValue)
+        TransactionDetailStore.shared.add(txnId: txn2.txn_id, pillCount: 10, type: ControlledStep.containerInitiate.rawValue)
+        TransactionDetailStore.shared.add(txnId: txn1.txn_id, pillCount: 99, type: ControlledStep.vial.rawValue) // different step, must not count.
+
+        let totals = TransactionDetailStore.shared.totalCountsForSteps(txnIds: [txn1.txn_id, txn2.txn_id], step: .containerInitiate)
+        #expect(totals[txn1.txn_id] == 8)
+        #expect(totals[txn2.txn_id] == 10)
+    }
+
+    @Test func totalCountsForStepsReturnsZeroForTransactionsWithNoMatchingDetails() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+
+        let totals = TransactionDetailStore.shared.totalCountsForSteps(txnIds: [txn.txn_id], step: .containerInitiate)
+        #expect(totals[txn.txn_id] == 0)
+    }
+
+    @Test func totalCountsForStepsExcludesSoftDeletedDetails() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+        let kept = TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 5, type: ControlledStep.containerInitiate.rawValue)!
+        let deleted = TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 20, type: ControlledStep.containerInitiate.rawValue)!
+        TransactionDetailStore.shared.softDelete(detailId: deleted.txn_details_id)
+
+        let totals = TransactionDetailStore.shared.totalCountsForSteps(txnIds: [txn.txn_id], step: .containerInitiate)
+        #expect(totals[txn.txn_id] == 5)
+        _ = kept
+    }
+
+    @Test func totalCountsForStepsReturnsEmptyForEmptyInput() {
+        #expect(TransactionDetailStore.shared.totalCountsForSteps(txnIds: [], step: .containerInitiate).isEmpty)
+    }
+
+    @Test func totalCountsForStepsInContextMatchesDefaultContextResult() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+        TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 6, type: ControlledStep.scan.rawValue)
+
+        let context = CoreDataManager.shared.context
+        let viaContext = TransactionDetailStore.shared.totalCountsForSteps(txnIds: [txn.txn_id], step: .scan, in: context)
+        let viaDefault = TransactionDetailStore.shared.totalCountsForSteps(txnIds: [txn.txn_id], step: .scan)
+        #expect(viaContext == viaDefault)
+        #expect(viaContext[txn.txn_id] == 6)
     }
 }

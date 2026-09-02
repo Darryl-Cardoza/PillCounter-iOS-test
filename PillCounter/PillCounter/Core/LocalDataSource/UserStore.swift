@@ -81,6 +81,21 @@ final class UserStore {
         return result
     }
 
+    /// Same as `fetchByUserId(_:)`, but fetches via an explicit context —
+    /// see `TransactionStore.fetchById(_:in:)`. This store has no `sync`
+    /// helper of its own; `performAndWait` is added explicitly here since
+    /// this overload is for callers on a different queue than `viewContext`.
+    func fetchByUserId(_ userId: String, in context: NSManagedObjectContext) -> UserEntity? {
+        context.performAndWait {
+            let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
+            request.predicate = NSPredicate(format: "user_id == %@", userId)
+            request.fetchLimit = 1
+            guard let result = try? context.fetch(request).first else { return nil }
+            result.decryptEncryptedFieldsInPlace()
+            return result
+        }
+    }
+
     func fetchAll() -> [UserEntity] {
         let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
         let results = (try? context.fetch(request)) ?? []

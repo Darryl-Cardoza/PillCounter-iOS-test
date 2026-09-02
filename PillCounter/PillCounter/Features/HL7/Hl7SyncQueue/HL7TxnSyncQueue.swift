@@ -46,6 +46,16 @@ final class HL7TxnSyncQueue {
     private let ackTimeoutSeconds: TimeInterval = 10
     private let processingQueue = DispatchQueue(label: "hl7.txn.sync.queue", qos: .utility)
 
+    /// Backlog-drain chunking: how many unsynced rows `loadAndEnqueuePending`
+    /// fetches per `performAndWait` hop onto the main `viewContext`, and how
+    /// long it yields the processing queue between chunks. A single unbounded
+    /// fetch decrypts the whole backlog in one continuous hop — with many
+    /// thousands of unsynced rows that held the main queue long enough to
+    /// read as an app freeze while connecting. Chunking trades a slightly
+    /// slower enqueue for regular breathing room on the main queue.
+    private let loadChunkSize = 50
+    private let loadChunkDelay: TimeInterval = 0.05
+
     init(
         hl7Builder: HL7CompletionBuilder,
         hl7Manager: Hl7ServiceManager?
@@ -58,8 +68,7 @@ final class HL7TxnSyncQueue {
 
     func enqueueUnsynced() {
         processingQueue.async { [weak self] in
-            self?.loadAndEnqueuePending()
-            self?.processNext()
+            self?.loadAndEnqueuePending(offset: 0)
         }
     }
 
@@ -80,16 +89,40 @@ final class HL7TxnSyncQueue {
 
     // MARK: - LOAD
 
-    private func loadAndEnqueuePending() {
-        let txns = transactionDAO.fetchCompletedUnsynced()
-        print("📦 [TxnQueue] Found pending txns:", txns.count)
+    /// `enqueueUnsynced()` fires on every `transactionsDidChange` signal —
+    /// up to once per ACK while a large backlog drains — but every prior
+    /// call already queued everything unsynced at the time (deduped below
+    /// against `queue`), so a mid-drain re-fetch only ever turns up items
+    /// already queued. Skipping the fetch while `queue` still has items
+    /// avoids re-fetching and fully AES-decrypting the entire unsynced set
+    /// (potentially thousands of rows) on every single ACK; once the queue
+    /// drains, the next `enqueueUnsynced()` call picks up anything new.
+    ///
+    /// Paged in chunks of `loadChunkSize`, with a `loadChunkDelay` yield
+    /// between chunks — each chunk's fetch is a `performAndWait` hop onto the
+    /// main `viewContext` (see `processNext`), and a single unbounded fetch
+    /// of a large backlog held that hop continuously long enough to read as
+    /// an app freeze. Sync starts as soon as the first chunk lands rather
+    /// than waiting for the whole backlog.
+    private func loadAndEnqueuePending(offset: Int) {
+        if offset == 0 {
+            guard queue.isEmpty else {
+                print("📦 [TxnQueue] Skipping reload — \(queue.count) item(s) still queued")
+                return
+            }
+        }
 
-        for txn in txns {
+        let page = transactionDAO.fetchCompletedUnsyncedPage(limit: loadChunkSize, offset: offset)
+        if offset == 0 {
+            print("📦 [TxnQueue] Loading pending txns from offset 0")
+        }
+
+        for txn in page {
             if txn.is_deleted {
                   print("⛔️ [TxnQueue] Skipping deleted txn:", txn.txn_id)
                   continue
             }
-            
+
             let txnId = txn.txn_id
             let requestId = resolvedRequestId(for: txn)
 
@@ -107,7 +140,20 @@ final class HL7TxnSyncQueue {
             print("✅ [TxnQueue] Enqueued txn:", txnId)
         }
 
-        print("📦 [TxnQueue] Final queue:", queue.map { $0.txnId })
+        // First chunk enqueued (if any) — let sending start without waiting
+        // for the rest of the backlog to page in.
+        if offset == 0 {
+            processNext()
+        }
+
+        guard page.count == loadChunkSize else {
+            print("📦 [TxnQueue] Final queue:", queue.map { $0.txnId })
+            return
+        }
+
+        processingQueue.asyncAfter(deadline: .now() + loadChunkDelay) { [weak self] in
+            self?.loadAndEnqueuePending(offset: offset + page.count)
+        }
     }
 
     // MARK: - PROCESS
@@ -115,23 +161,37 @@ final class HL7TxnSyncQueue {
     private func processNext() {
         guard !isSending, let item = queue.first else { return }
 
-        guard
-            let txn = transactionDAO.fetchById(item.txnId),
-            txn.is_synced == false,
-            txn.status == CountStatus.COMPLETED.rawValue
-        else {
+        // `txn`/`user` and everything `buildCompletionMessage` reads off them
+        // (relationship faults, plus its own nested store calls) must all
+        // stay on ONE context's queue for the duration of the build — mixing
+        // an object from one context with a fetch/fault on another is what
+        // previously surfaced as a SIGABRT inside `pillCountDetails(from:)`
+        // under load. Rather than routing this through `viewContext` (which
+        // would hop this background-queue work onto the main thread for the
+        // whole build), fetch `txn` from a dedicated background context and
+        // hand that same context to the builder, so the entire build runs
+        // off-main. `bgContext` is a fresh `newBackgroundContext()` per call
+        // — cheap, and avoids any shared mutable context state between
+        // concurrent sync-queue sends.
+        let bgContext = CoreDataManager.shared.backgroundContext
+        let builderConfig = hl7Builder.config
+        let hl7: String? = bgContext.performAndWait { () -> String? in
+            guard
+                let txn = transactionDAO.fetchById(item.txnId, in: bgContext),
+                txn.is_synced == false,
+                txn.status == CountStatus.COMPLETED.rawValue,
+                let user = txn.user
+            else { return nil }
+            let message = HL7CompletionBuilder(config: builderConfig, context: bgContext)
+                .buildCompletionMessage(txn: txn, user: user)
+            return message
+        }
+
+        guard let hl7 else {
             queue.removeFirst()
             processNext()
             return
         }
-
-        guard let user = txn.user else {
-            queue.removeFirst()
-            processNext()
-            return
-        }
-
-        let hl7 = hl7Builder.buildCompletionMessage(txn: txn, user: user)
         print("hl7\(hl7)")
         guard let manager = hl7Manager, !hl7.isEmpty else {
             print("❌ [TxnQueue] HL7 invalid or manager nil")
@@ -176,12 +236,22 @@ final class HL7TxnSyncQueue {
         message.contains("|AA|") || message.contains("|AA\r")
     }
 
+    /// Writes the ACK-success sync flag via a background context instead of
+    /// hopping to `viewContext`/main — `TransactionStore.updateSynced`
+    /// (fetch + save, plus a further fetch + possible hard-delete via
+    /// `attemptHardDeleteIfEligible`) previously ran synchronously on main
+    /// once per synced transaction, which under a fast-ACKing PMS was
+    /// frequent enough repeated main-thread work to read as app lag while a
+    /// backlog drained. Runs synchronously on `processingQueue` (this method
+    /// is already called from there via `processAck`), which is fine — it
+    /// only blocks the serialized sync queue, never the UI thread. The write
+    /// merges into `viewContext` automatically (`automaticallyMergesChangesFromParent`
+    /// on `CoreDataManager.backgroundContext`); `transactionsDidChange` still
+    /// reaches UI observers via their own `.receive(on: .main)`.
     private func markCurrentTxnSynced() {
         guard let item = queue.first else { return }
-
-        DispatchQueue.main.async {
-            TransactionStore.shared.updateSynced(txnId: item.txnId)
-        }
+        let bgContext = CoreDataManager.shared.backgroundContext
+        TransactionStore.shared.updateSynced(txnId: item.txnId, in: bgContext)
     }
 
     private func advanceQueue() {

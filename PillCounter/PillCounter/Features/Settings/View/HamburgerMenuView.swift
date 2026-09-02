@@ -129,7 +129,7 @@ struct HamburgerMenuView: View {
                 VStack(spacing: 12) {
                     PillCountingButton(
                         iconName: nil,
-                        title: "Generate 10k Test Data",
+                        title: "Generate 5k Test Data",
                         textColor: Color.white,
                         backgroundColor: appColors.primary,
                         borderColor: .clear,
@@ -184,7 +184,7 @@ struct HamburgerMenuView: View {
                 loadTestIsRunning = false
                 switch result {
                 case .success:
-                    loadTestStatus = "Done — 10,000 transactions generated."
+                    loadTestStatus = "Done — 5,000 transactions generated."
                 case .failure(let error):
                     loadTestStatus = "Failed: \(error.localizedDescription)"
                 }

@@ -55,6 +55,12 @@ final class HL7BatchSyncQueue {
     private let ackTimeoutSeconds: TimeInterval = 10
     private let processingQueue = DispatchQueue(label: "hl7.sync.queue", qos: .utility)
 
+    /// Backlog-drain chunking — see `HL7TxnSyncQueue.loadChunkSize`/`loadChunkDelay`
+    /// for the rationale (a single unbounded fetch held the main `viewContext`
+    /// continuously long enough, with a large backlog, to read as an app freeze).
+    private let loadChunkSize = 50
+    private let loadChunkDelay: TimeInterval = 0.05
+
     // MARK: Init
     init(
         hl7Builder: HL7CompletionBuilder,
@@ -70,8 +76,7 @@ final class HL7BatchSyncQueue {
     /// Safe to call multiple times — deduplicates by requestId.
     func enqueueUnsynced() {
         processingQueue.async { [weak self] in
-            self?.loadAndEnqueuePending()
-            self?.processNext()
+            self?.loadAndEnqueuePending(offset: 0)
         }
     }
 
@@ -95,11 +100,28 @@ final class HL7BatchSyncQueue {
 
     // MARK: - Private: Queue Management
 
-    private func loadAndEnqueuePending() {
-        let batches = batchDAO.fetchCompletedUnsynced()
-        print("📦 [Queue] Found pending batches:", batches.count)
+    /// `enqueueUnsynced()` fires on every `transactionsDidChange` signal —
+    /// up to once per ACK while a large backlog drains — but every prior
+    /// call already queued everything unsynced at the time (deduped below
+    /// against `queue`), so a mid-drain re-fetch only ever turns up items
+    /// already queued. Skipping the fetch while `queue` still has items
+    /// avoids re-fetching the entire unsynced set on every single ACK; once
+    /// the queue drains, the next `enqueueUnsynced()` call picks up
+    /// anything new.
+    /// Paged in chunks of `loadChunkSize`, with a `loadChunkDelay` yield
+    /// between chunks — see `HL7TxnSyncQueue.loadAndEnqueuePending` for why.
+    private func loadAndEnqueuePending(offset: Int) {
+        if offset == 0 {
+            guard queue.isEmpty else {
+                print("📦 [Queue] Skipping reload — \(queue.count) item(s) still queued")
+                return
+            }
+            print("📦 [Queue] Loading pending batches from offset 0")
+        }
 
-        for batch in batches {
+        let page = batchDAO.fetchCompletedUnsyncedPage(limit: loadChunkSize, offset: offset)
+
+        for batch in page {
             let requestId = resolvedRequestId(for: batch)
 
             print("🔍 [Queue] Checking batch:", batch.batch_id,
@@ -121,7 +143,20 @@ final class HL7BatchSyncQueue {
             print("✅ [Queue] Enqueued batch:", batch.batch_id)
         }
 
-        print("📦 [Queue] Final queue:", queue.map { $0.batchId })
+        // First chunk enqueued (if any) — let sending start without waiting
+        // for the rest of the backlog to page in.
+        if offset == 0 {
+            processNext()
+        }
+
+        guard page.count == loadChunkSize else {
+            print("📦 [Queue] Final queue:", queue.map { $0.batchId })
+            return
+        }
+
+        processingQueue.asyncAfter(deadline: .now() + loadChunkDelay) { [weak self] in
+            self?.loadAndEnqueuePending(offset: offset + page.count)
+        }
     }
 
     private func processNext() {
@@ -139,30 +174,44 @@ final class HL7BatchSyncQueue {
         print("🚀 [Queue] Processing batch:", item.batchId,
               "| requestId:", item.requestId)
 
-        guard
-            let batch = batchDAO.fetchById(item.batchId),
-            batch.status == CountStatus.COMPLETED.rawValue,
-            batch.is_synced == false
-        else {
-            print("❌ [Queue] Batch invalid or already synced:", item.batchId)
+        // `batch`/`user`/`stockTxns` and everything `buildInventoryMessage`
+        // reads off them must all stay on ONE context's queue for the
+        // duration of the build (same rationale as `HL7TxnSyncQueue.
+        // processNext` — mixing objects across contexts mid-build is what
+        // caused the original SIGABRT under load). Fetch everything from a
+        // dedicated background context and hand that same context to the
+        // builder, so the whole build runs off-main instead of hopping this
+        // background-queue work onto `viewContext`/the main thread.
+        let bgContext = CoreDataManager.shared.backgroundContext
+        let builderConfig = hl7Builder.config
+        let hl7: String? = bgContext.performAndWait { () -> String? in
+            guard
+                let batch = batchDAO.fetchById(item.batchId, in: bgContext),
+                batch.status == CountStatus.COMPLETED.rawValue,
+                batch.is_synced == false
+            else {
+                print("❌ [Queue] Batch invalid or already synced:", item.batchId)
+                return nil
+            }
+
+            let stockTxns = stockTxnDAO.fetchByBatch(batchId: item.batchId, in: bgContext)
+            print("📊 [Queue] StockTxns count:", stockTxns.count)
+
+            guard !stockTxns.isEmpty, let userId = batch.user_id, let user = userDAO.fetchByUserId(userId, in: bgContext) else {
+                print("❌ [Queue] Missing stock txns or user for batch:", item.batchId)
+                return nil
+            }
+
+            let message = HL7CompletionBuilder(config: builderConfig, context: bgContext)
+                .buildInventoryMessage(batch: batch, user: user)
+            return message
+        }
+
+        guard let hl7 else {
             queue.removeFirst()
             processNext()
             return
         }
-
-        let stockTxns = stockTxnDAO.fetchByBatch(batchId: item.batchId)
-
-        print("📊 [Queue] StockTxns count:", stockTxns.count)
-
-        guard !stockTxns.isEmpty, let userId = batch.user_id, let user = userDAO.fetchByUserId(userId) else {
-            print("❌ [Queue] Missing stock txns or user for batch:", item.batchId)
-            queue.removeFirst()
-            processNext()
-            return
-        }
-
-        
-        let hl7 = hl7Builder.buildInventoryMessage(batch: batch, user: user)
         print("hl7\(hl7)")
         print("📡 [HL7] Sending batch:", item.batchId,
               "| requestId:", item.requestId)
@@ -210,11 +259,15 @@ final class HL7BatchSyncQueue {
         return message.contains("|AA|") || message.contains("|AA\r")
     }
 
+    /// Writes via a background context instead of hopping to `viewContext`/
+    /// main — see `HL7TxnSyncQueue.markCurrentTxnSynced` for the rationale.
+    /// Runs synchronously on `processingQueue` (already the calling queue,
+    /// via `processAck`), which only blocks the serialized sync queue, never
+    /// the UI thread.
     private func markCurrentBatchSynced() {
         guard let item = queue.first else { return }
-        DispatchQueue.main.async {
-            self.batchDAO.markSynced(batchId: item.batchId)
-        }
+        let bgContext = CoreDataManager.shared.backgroundContext
+        batchDAO.markSynced(batchId: item.batchId, in: bgContext)
     }
 
     private func advanceQueue() {

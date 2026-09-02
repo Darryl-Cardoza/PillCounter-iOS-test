@@ -338,11 +338,11 @@ struct UserHistoryView: View {
                         // keyed to its absolute index (e.g. ~3s for row 49)
                         // left it invisible long after it was on screen.
                         if !appearedTxnIds.contains(row.id) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                appearedTxnIds.insert(row.id)
-                            }
+                            appearedTxnIds.insert(row.id)
                         }
-                        if index == max(0, historyViewModel.transactionRows.count - loadMoreLookahead) {
+                        // `>=`, not `==` — see DashboardView's equivalent trigger for why
+                        // an exact-index match is unsafe under a fast scroll.
+                        if index >= max(0, historyViewModel.transactionRows.count - loadMoreLookahead) {
                             loadMoreTransactions()
                         }
                     }
@@ -356,18 +356,17 @@ struct UserHistoryView: View {
     }
 
     // MARK: - Load More (infinite scroll)
+    // Called directly from onAppear, not wrapped in `Task { }` — see
+    // `HistoryViewModel.loadMoreTransactionsIfNeeded`'s doc comment for why
+    // a `Task` wrapper here was the source of a fast-scroll pagination race.
     private func loadMoreTransactions() {
-        Task {
-            await historyViewModel.loadMoreTransactionsIfNeeded()
-            historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
-        }
+        historyViewModel.loadMoreTransactionsIfNeeded()
+        historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
     }
 
     private func loadMoreBatches() {
-        Task {
-            await historyViewModel.loadMoreBatchesIfNeeded()
-            historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
-        }
+        historyViewModel.loadMoreBatchesIfNeeded()
+        historyViewModel.applyFilters(status: activeStatusFilter, search: searchText)
     }
 
     // MARK: - Batch Content
@@ -398,11 +397,10 @@ struct UserHistoryView: View {
                     .offset(y: hasAppeared ? 0 : 20)
                     .onAppear {
                         if !appearedBatchIds.contains(row.batchId) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                appearedBatchIds.insert(row.batchId)
-                            }
+                            appearedBatchIds.insert(row.batchId)
                         }
-                        if index == max(0, historyViewModel.batchRows.count - loadMoreLookahead) {
+                        // `>=`, not `==` — see the transaction list's equivalent trigger.
+                        if index >= max(0, historyViewModel.batchRows.count - loadMoreLookahead) {
                             loadMoreBatches()
                         }
                     }
@@ -456,7 +454,7 @@ struct UserHistoryView: View {
         return HStack(spacing: 8) {
             FilterChip(
                 label: L10n.History.filterAll,
-                count: counts.all,
+                count: nil,
                 value: HistoryStatusFilter.all,
                 selectedValue: activeStatusFilter
             ) { activeStatusFilter = $0 }
@@ -480,8 +478,9 @@ struct UserHistoryView: View {
     }
     // MARK: - Type Filter Chips
     private var txnTypeFilter: some View {
-        let dispenseCount = historyViewModel.filteredTransactionsOfUserByDate.count
-        let stockCount    = historyViewModel.filteredBatchesOfUserByDate.count
+        let typeCounts = historyViewModel.getTypeCounts()
+        let dispenseCount = typeCounts.dispense
+        let stockCount    = typeCounts.stock
 
         return VStack(spacing: 0) {
             HStack(spacing: 0) {

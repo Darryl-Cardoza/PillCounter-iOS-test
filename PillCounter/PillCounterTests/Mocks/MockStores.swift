@@ -52,6 +52,7 @@ final class MockTransactionDataSource: TransactionDataSource {
     func countByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64, status: CountStatus?) -> Int {
         countByTimeRangeResult ?? timeRangeRows.filter { status == nil || $0.status == status?.rawValue }.count
     }
+    func countPendingDispense(for user: UserEntity, facet: TransactionStore.PendingDispenseFacet) -> Int { 0 }
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity? { nil }
     func fetchAllRxNos(for user: UserEntity) -> [String] { [] }
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity] { [] }
@@ -120,6 +121,9 @@ final class MockTransactionDetailDataSource: TransactionDetailDataSource {
     private var nextDetailId: Int64 = 1
 
     func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32 { 0 }
+    func totalCountsForSteps(txnIds: [Int64], step: ControlledStep) -> [Int64: Int32] {
+        Dictionary(uniqueKeysWithValues: txnIds.map { ($0, 0) })
+    }
 
     func totalCount(txnId: Int64) -> Int {
         totals[txnId] ?? 0
@@ -159,8 +163,12 @@ final class MockBatchDataSource: BatchDataSource {
     func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [BatchCountEntity] { [] }
     func countCompletedUnsynced() -> Int { 0 }
     func countByDateRange(startTs: Int64, endTs: Int64, status: CountStatus?) -> Int { 0 }
+    func countPendingInventory(facet: BatchStore.PendingBatchFacet) -> Int { 0 }
     func fetchLastCreated() -> BatchCountEntity? { nil }
     func getTransactionCount(for batchId: Int64) -> Int { 0 }
+    func transactionCounts(for batchIds: [Int64]) -> [Int64: Int] {
+        Dictionary(uniqueKeysWithValues: batchIds.map { ($0, 0) })
+    }
     func create(bucketId: String, requestId: String?) -> BatchCountEntity? { nil }
     func updateStatus(batchId: Int64, status: CountStatus, completion: (() -> Void)?) {}
     func updateNote(batchId: Int64, note: String) {}

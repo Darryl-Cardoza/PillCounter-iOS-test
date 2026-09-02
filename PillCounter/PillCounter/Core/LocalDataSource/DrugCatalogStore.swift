@@ -15,6 +15,12 @@ final class DrugCatalogStore {
         CoreDataManager.shared.context
     }
 
+    /// Confines every Core Data touch to `context`'s owning queue — see
+    /// `TransactionStore.sync` for why this exists.
+    private func sync<T>(_ block: () -> T) -> T {
+        context.performAndWait(block)
+    }
+
     func saveManual(
         ndc: String,
         gtin: String = "",
@@ -27,22 +33,26 @@ final class DrugCatalogStore {
         isHazardous: Bool? = nil,
         imageUrl: String? = nil
     ) {
-        let entity = fetchOrCreate(ndc: ndc, drugId: drugId)
-        if !drugName.isEmpty { entity.drug_name = drugName }
-        if !gtin.isEmpty { entity.gtin = gtin }
-        if let drugType, !drugType.isEmpty { entity.drug_type = drugType }
-        if let strength, !strength.isEmpty { entity.strength = strength }
-        if let dosageForm, !dosageForm.isEmpty { entity.dosage_form = dosageForm }
-        if packageQty > 0 { entity.package_qty = packageQty }
-        if let isHazardous { entity.is_hazardous = isHazardous }
-        entity.ndc = ndc
-        CoreDataManager.shared.save(context: context)
-        print("💊 [DrugMasterDAO] SAVED — ndc: \(ndc), drugId: \(drugId), drugName: \(drugName)")
+        let (resolvedDrugId, shouldDownloadImage): (Int64, Bool) = sync {
+            let entity = fetchOrCreateLocked(ndc: ndc, drugId: drugId)
+            if !drugName.isEmpty { entity.drug_name = drugName }
+            if !gtin.isEmpty { entity.gtin = gtin }
+            if let drugType, !drugType.isEmpty { entity.drug_type = drugType }
+            if let strength, !strength.isEmpty { entity.strength = strength }
+            if let dosageForm, !dosageForm.isEmpty { entity.dosage_form = dosageForm }
+            if packageQty > 0 { entity.package_qty = packageQty }
+            if let isHazardous { entity.is_hazardous = isHazardous }
+            entity.ndc = ndc
+            CoreDataManager.shared.save(context: context)
+            print("💊 [DrugMasterDAO] SAVED — ndc: \(ndc), drugId: \(drugId), drugName: \(drugName)")
+            return (entity.drug_id, entity.drug_image == nil)
+        }
+
         _ = fetchAll()
 
         // Image is downloaded once and cached locally; existing local path is never overwritten.
-        if entity.drug_image == nil, let imageUrl, let url = URL(string: imageUrl) {
-            downloadAndStoreImage(from: url, drugId: entity.drug_id)
+        if shouldDownloadImage, let imageUrl, let url = URL(string: imageUrl) {
+            downloadAndStoreImage(from: url, drugId: resolvedDrugId)
         }
     }
 
@@ -55,19 +65,19 @@ final class DrugCatalogStore {
                 return
             }
             guard let fileName = PhotoFileManager.shared.saveImage(image) else { return }
-            self.context.perform {
-                guard let entity = self.fetchById(drugId), entity.drug_image == nil else { return }
+            self.context.performAndWait {
+                guard let entity = self.fetchByIdLocked(drugId), entity.drug_image == nil else { return }
                 entity.drug_image = fileName
                 CoreDataManager.shared.save(context: self.context)
                 print("💊 [DrugMasterDAO] IMAGE SAVED — drugId: \(drugId), file: \(fileName)")
-                // Dashboard/history rows read drug_image via the txn's drug relationship.
-                // objectWillChange doesn't propagate through a to-one relationship fault,
-                // so SwiftUI never re-renders the row on this in-place mutation alone —
-                // notify on the txn-change signal they already observe so the row picks
-                // up the image without needing an app relaunch.
-                DispatchQueue.main.async {
-                    TransactionStore.shared.transactionsDidChange.send()
-                }
+            }
+            // Dashboard/history rows read drug_image via the txn's drug relationship.
+            // objectWillChange doesn't propagate through a to-one relationship fault,
+            // so SwiftUI never re-renders the row on this in-place mutation alone —
+            // notify on the txn-change signal they already observe so the row picks
+            // up the image without needing an app relaunch.
+            DispatchQueue.main.async {
+                TransactionStore.shared.transactionsDidChange.send()
             }
         }.resume()
     }
@@ -111,57 +121,62 @@ final class DrugCatalogStore {
 
     @discardableResult
     func fetchOrCreate(ndc: String, drugId: Int64) -> DrugMasterEntity {
-        if let existing = fetchByNdc(ndc) { return existing }
-        let entity = DrugMasterEntity(context: context)
-        entity.drug_id = drugId
-        entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
-        print("💊 [DrugMasterDAO] CREATED — ndc: \(ndc), drugId: \(drugId)")
-        return entity
+        sync {
+            fetchOrCreateLocked(ndc: ndc, drugId: drugId)
+        }
     }
 
     // MARK: - Read
 
     func fetchByNdc(_ ndc: String) -> DrugMasterEntity? {
-        let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "ndc == %@", ndc)
-        request.fetchLimit = 1
-        return try? context.fetch(request).first
+        sync {
+            let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
+            request.predicate = NSPredicate(format: "ndc == %@", ndc)
+            request.fetchLimit = 1
+            return try? context.fetch(request).first
+        }
     }
 
     func fetchByGtin(_ gtin: String) -> DrugMasterEntity? {
-        let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "gtin == %@", gtin)
-        request.fetchLimit = 1
-        print("Gtin\(try? context.fetch(request).first)")
-        return try? context.fetch(request).first
+        sync {
+            let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
+            request.predicate = NSPredicate(format: "gtin == %@", gtin)
+            request.fetchLimit = 1
+            let result = try? context.fetch(request).first
+            print("Gtin\(String(describing: result))")
+            return result
+        }
     }
 
     func fetchById(_ drugId: Int64) -> DrugMasterEntity? {
-        let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "drug_id == %lld", drugId)
-        request.fetchLimit = 1
-        return try? context.fetch(request).first
+        sync {
+            fetchByIdLocked(drugId)
+        }
     }
 
     func fetchAll() -> [DrugMasterEntity] {
-        let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
-        let results = (try? context.fetch(request)) ?? []
-        StoreLogger.log(
-            dao: "DrugMasterDAO", op: "fetchAll",
-            columns: ["drug_id", "ndc", "drug_name", "gtin", "drug_type", "pkg_qty", "is_hazardous", "strengh", "dosage_form"],
-            rows: results.map { [
-                "\($0.drug_id)",
-                $0.ndc ?? "-",
-                $0.drug_name ?? "-",
-                $0.gtin ?? "-",
-                $0.drug_type ?? "-",
-                "\($0.package_qty)",
-                "\($0.is_hazardous)",
-                $0.strength ?? "",
-                $0.dosage_form ?? ""
-            ]}
-        )
-        return results
+        sync {
+            let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
+            let results = (try? context.fetch(request)) ?? []
+            #if DEBUG
+            StoreLogger.log(
+                dao: "DrugMasterDAO", op: "fetchAll",
+                columns: ["drug_id", "ndc", "drug_name", "gtin", "drug_type", "pkg_qty", "is_hazardous", "strengh", "dosage_form"],
+                rows: results.map { [
+                    "\($0.drug_id)",
+                    $0.ndc ?? "-",
+                    $0.drug_name ?? "-",
+                    $0.gtin ?? "-",
+                    $0.drug_type ?? "-",
+                    "\($0.package_qty)",
+                    "\($0.is_hazardous)",
+                    $0.strength ?? "",
+                    $0.dosage_form ?? ""
+                ]}
+            )
+            #endif
+            return results
+        }
     }
 
     // MARK: - Update
@@ -177,48 +192,81 @@ final class DrugCatalogStore {
         packageQty: Int32? = nil,
         isHazardous: Bool? = nil
     ) {
-        guard let drug = fetchById(drugId) else { return }
-        if let drugName { drug.drug_name = drugName }
-        if let ndc { drug.ndc = ndc }
-        if let gtin, !gtin.isEmpty { drug.gtin = gtin }
-        if let drugType { drug.drug_type = drugType }
-        if let strength { drug.strength = strength }
-        if let dosageForm { drug.dosage_form = dosageForm }
-        if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
-        if let isHazardous { drug.is_hazardous = isHazardous }
-        CoreDataManager.shared.save(context: context)
-        print("💊 [DrugMasterDAO] UPDATED — drugId: \(drugId), drugName: \(drugName ?? "-"), ndc: \(ndc ?? "-"), gtin: \(gtin ?? "-")")
+        sync {
+            guard let drug = fetchByIdLocked(drugId) else { return }
+            if let drugName { drug.drug_name = drugName }
+            if let ndc { drug.ndc = ndc }
+            if let gtin, !gtin.isEmpty { drug.gtin = gtin }
+            if let drugType { drug.drug_type = drugType }
+            if let strength { drug.strength = strength }
+            if let dosageForm { drug.dosage_form = dosageForm }
+            if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
+            if let isHazardous { drug.is_hazardous = isHazardous }
+            CoreDataManager.shared.save(context: context)
+            print("💊 [DrugMasterDAO] UPDATED — drugId: \(drugId), drugName: \(drugName ?? "-"), ndc: \(ndc ?? "-"), gtin: \(gtin ?? "-")")
+        }
     }
 
     // MARK: - Delete
 
     func deduplicate() {
-        var seen: [String: DrugMasterEntity] = [:]
-        for drug in fetchAll() {
-            let key = drug.ndc ?? ""
-            guard !key.isEmpty else { continue }
-            if let existing = seen[key] {
-                if drug.created_at < existing.created_at {
-                    context.delete(existing)
-                    seen[key] = drug
+        sync {
+            var seen: [String: DrugMasterEntity] = [:]
+            let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
+            let all = (try? context.fetch(request)) ?? []
+            for drug in all {
+                let key = drug.ndc ?? ""
+                guard !key.isEmpty else { continue }
+                if let existing = seen[key] {
+                    if drug.created_at < existing.created_at {
+                        context.delete(existing)
+                        seen[key] = drug
+                    } else {
+                        context.delete(drug)
+                    }
                 } else {
-                    context.delete(drug)
+                    seen[key] = drug
                 }
-            } else {
-                seen[key] = drug
             }
+            CoreDataManager.shared.save(context: context)
+            print("💊 [DrugMasterDAO] DEDUPLICATED — removed duplicates, kept \(seen.count) unique NDC entries")
         }
-        CoreDataManager.shared.save(context: context)
-        print("💊 [DrugMasterDAO] DEDUPLICATED — removed duplicates, kept \(seen.count) unique NDC entries")
     }
 
     func deleteAll() {
-        let request: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
-        do {
-            try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-            print("💊 [DrugMasterDAO] DELETED ALL — all DrugMaster records removed")
-        } catch {
-            print("Failed to delete DrugMasterEntity: \(error)")
+        sync {
+            let request: NSFetchRequest<NSFetchRequestResult> = DrugMasterEntity.fetchRequest()
+            do {
+                try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+                print("💊 [DrugMasterDAO] DELETED ALL — all DrugMaster records removed")
+            } catch {
+                print("Failed to delete DrugMasterEntity: \(error)")
+            }
         }
+    }
+
+    // MARK: - Private
+
+    /// Same lookup as `fetchById`, but assumes the caller is already inside
+    /// a `sync { }` block on this context.
+    private func fetchByIdLocked(_ drugId: Int64) -> DrugMasterEntity? {
+        let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "drug_id == %lld", drugId)
+        request.fetchLimit = 1
+        return try? context.fetch(request).first
+    }
+
+    /// Same lookup/create as `fetchOrCreate`, but assumes the caller is
+    /// already inside a `sync { }` block on this context.
+    private func fetchOrCreateLocked(ndc: String, drugId: Int64) -> DrugMasterEntity {
+        let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "ndc == %@", ndc)
+        request.fetchLimit = 1
+        if let existing = try? context.fetch(request).first { return existing }
+        let entity = DrugMasterEntity(context: context)
+        entity.drug_id = drugId
+        entity.created_at = Int64(Date().timeIntervalSince1970 * 1000)
+        print("💊 [DrugMasterDAO] CREATED — ndc: \(ndc), drugId: \(drugId)")
+        return entity
     }
 }

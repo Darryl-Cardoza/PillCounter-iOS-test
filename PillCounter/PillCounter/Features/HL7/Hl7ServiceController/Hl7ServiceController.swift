@@ -125,16 +125,38 @@ final class Hl7ServiceController: ObservableObject {
 
     // MARK: - Observe Pending Transactions
 
+    /// Background queue the stale-transaction sweep runs on — it's an
+    /// unbounded Core Data fetch (see `sweepStaleSyncedTransactions`), and
+    /// `transactionsDidChange` can fire once per transaction while the HL7
+    /// sync queue drains a large backlog (one ACK = one save = one signal).
+    /// Running it inline on `.sink` (main thread, once per signal) froze the
+    /// UI for the duration of that fetch, up to thousands of times in a row.
+    private let sweepQueue = DispatchQueue(label: "hl7.stale-sweep.queue", qos: .utility)
+
     private func observeTxnChanges() {
         transactionDAO.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 Log("🔄 [TxnObserver] Detected change → enqueue txn sync")
                 self?.txnSyncQueue?.enqueueUnsynced()
+            }
+            .store(in: &cancellables)
+
+        // Sweep is a maintenance backstop (see `sweepStaleSyncedTransactions`
+        // doc comment), not something that needs to run on every single
+        // change — throttled to at most once every `sweepThrottleInterval`
+        // and moved off main, so a fast-draining sync queue (thousands of
+        // ACKs in quick succession) doesn't run thousands of unbounded
+        // fetches, let alone on the main thread.
+        transactionDAO.transactionsDidChange
+            .throttle(for: .seconds(Self.sweepThrottleInterval), scheduler: sweepQueue, latest: true)
+            .sink { [weak self] in
                 self?.transactionDAO.sweepStaleSyncedTransactions(olderThan: Self.retentionMaxAge)
             }
             .store(in: &cancellables)
     }
+
+    private static let sweepThrottleInterval: TimeInterval = 30
 
     /// Backstop TTL for transactions whose PMS image delivery never
     /// completes — see TransactionStore.sweepStaleSyncedTransactions.

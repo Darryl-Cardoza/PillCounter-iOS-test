@@ -9,7 +9,7 @@ import SwiftUI
 
 struct FilterChip<T: Hashable>: View {
     let label: String
-    let count: Int
+    let count: Int?
     let value: T
     let selectedValue: T
     @EnvironmentObject private var appColors: AppColors
@@ -25,7 +25,7 @@ struct FilterChip<T: Hashable>: View {
                 onSelect(value)
             }
         } label: {
-            Text("\(label) (\(count))")
+            Text(count.map { "\(label) (\($0))" } ?? label)
                 .font(.system(size: 14, weight: isActive ? .semibold : .regular))
                 .foregroundColor(isActive ? .white : appColors.text)
                 .padding(.horizontal, 12)

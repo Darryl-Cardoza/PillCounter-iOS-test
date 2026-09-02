@@ -70,7 +70,7 @@ struct HistoryViewModelPaginationTests {
         let (viewModel, _) = makeViewModel(rows: rows)
 
         await viewModel.getTransactionsByDate(startDate: Date(), endDate: Date(), filter: .fixed)
-        await viewModel.loadMoreTransactionsIfNeeded()
+        viewModel.loadMoreTransactionsIfNeeded()
 
         #expect(viewModel.filteredTransactionsOfUserByDate.count == viewModel.pageSize * 2)
         #expect(viewModel.hasMoreTransactions == true)
@@ -86,8 +86,8 @@ struct HistoryViewModelPaginationTests {
         let (viewModel, _) = makeViewModel(rows: rows)
 
         await viewModel.getTransactionsByDate(startDate: Date(), endDate: Date(), filter: .fixed)
-        await viewModel.loadMoreTransactionsIfNeeded()
-        await viewModel.loadMoreTransactionsIfNeeded()
+        viewModel.loadMoreTransactionsIfNeeded()
+        viewModel.loadMoreTransactionsIfNeeded()
 
         #expect(viewModel.filteredTransactionsOfUserByDate.count == 120)
         #expect(viewModel.hasMoreTransactions == false)
@@ -102,7 +102,7 @@ struct HistoryViewModelPaginationTests {
         #expect(viewModel.hasMoreTransactions == false)
 
         let callCountBefore = transactionStore.fetchByTimeRangePageCalls.count
-        await viewModel.loadMoreTransactionsIfNeeded()
+        viewModel.loadMoreTransactionsIfNeeded()
 
         #expect(transactionStore.fetchByTimeRangePageCalls.count == callCountBefore)
         #expect(viewModel.filteredTransactionsOfUserByDate.count == 10)
@@ -114,7 +114,7 @@ struct HistoryViewModelPaginationTests {
         let (viewModel, _) = makeViewModel(rows: rows)
 
         await viewModel.getTransactionsByDate(startDate: Date(), endDate: Date(), filter: .fixed)
-        await viewModel.loadMoreTransactionsIfNeeded()
+        viewModel.loadMoreTransactionsIfNeeded()
         #expect(viewModel.filteredTransactionsOfUserByDate.count == viewModel.pageSize * 2)
 
         // Re-selecting a date range must start a fresh first page, not keep appending.
@@ -134,7 +134,7 @@ struct HistoryViewModelPaginationTests {
         await viewModel.getTransactionsByDate(startDate: Date(), endDate: Date(), filter: .fixed)
         let countAfterFirstPage = viewModel.getStatusCounts(for: .fixed).all
 
-        await viewModel.loadMoreTransactionsIfNeeded()
+        viewModel.loadMoreTransactionsIfNeeded()
         let countAfterSecondPage = viewModel.getStatusCounts(for: .fixed).all
 
         #expect(countAfterFirstPage == 120)

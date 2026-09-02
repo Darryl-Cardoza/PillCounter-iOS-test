@@ -32,7 +32,13 @@ extension PillCountTransactionEntity {
             bucketId: self.bucket_id ?? "",
             drugType: self.drug?.drug_type ?? "",
             strength: self.drug?.strength ?? "",
-            dosageForm: self.drug?.dosage_form ?? ""
+            dosageForm: self.drug?.dosage_form ?? "",
+            txnId: self.txn_id,
+            txnPriority: self.txn_priority,
+            isHazardous: self.drug?.is_hazardous == true,
+            isDispense: self.is_dispense,
+            batchId: self.batch_id,
+            isNdcVerified: self.is_ndc_verfied
         )
     }
 }

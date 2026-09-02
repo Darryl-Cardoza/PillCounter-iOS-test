@@ -40,6 +40,9 @@ struct UnsyncedTransactionView: View {
                 backgroundColor: appColors.primaryBackground
             )
         }
+        .task {
+            await viewModel.loadAll()
+        }
     }
 }
 

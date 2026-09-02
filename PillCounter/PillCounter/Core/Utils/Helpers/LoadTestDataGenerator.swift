@@ -41,12 +41,12 @@ enum LoadTestDataGenerator {
 
     // MARK: - Generate
 
-    /// Bulk-inserts ~10k dispense transactions (proportional detail rows)
+    /// Bulk-inserts ~5k dispense transactions (proportional detail rows)
     /// plus a proportional set of inventory batches/stock counts, all dated
     /// within today, attached to the currently logged-in user. Runs on a
     /// background context, saving in batches so it doesn't block the main thread.
     static func generate(
-        transactionCount: Int = 10_000,
+        transactionCount: Int = 5_000,
         onProgress: @escaping (Progress) -> Void,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {

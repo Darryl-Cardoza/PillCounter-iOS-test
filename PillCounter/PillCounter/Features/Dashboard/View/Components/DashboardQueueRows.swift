@@ -24,8 +24,8 @@ struct DashboardTodaysQueueRow: View {
 
     var body: some View {
         switch item {
-        case .dispense(let txn, let pillCount):
-            DispenseItemRowView(data: txn.toRowData(pillCount: pillCount))
+        case .dispense(let row):
+            DispenseItemRowView(data: row)
                 .onTapGesture {
                     if let onDispenseBlocked {
                         onDispenseBlocked()
@@ -33,21 +33,21 @@ struct DashboardTodaysQueueRow: View {
                     }
                     // Self-describing navigation: pass the txn id + scan type. The
                     // scan screen fetches the txn and sets up the session onAppear.
-                    let scanType: ScanType = txn.is_ndc_verfied ? .resumeCount : .barcode
+                    let scanType: ScanType = row.isNdcVerified ? .resumeCount : .barcode
                     router.navigate(
                         to: .authentication(
-                            .login(.dashboard(.pillCount(.scan(scanType, txnId: txn.txn_id))))
+                            .login(.dashboard(.pillCount(.scan(scanType, txnId: row.txnId))))
                         )
                     )
                 }
 
-        case .inventory(let batch, let ndcCount):
-            StockItemRowView(data: batch.toStockData(ndcCount: ndcCount))
+        case .inventory(let row):
+            StockItemRowView(data: row)
                 .onTapGesture {
                     // Pass the batch id; the scan screen resumes the session onAppear.
                     router.navigate(
                         to: .authentication(
-                            .login(.dashboard(.pillCount(.scan(.stockCount, batchId: batch.batch_id))))
+                            .login(.dashboard(.pillCount(.scan(.stockCount, batchId: row.batchId))))
                         )
                     )
                 }
@@ -66,23 +66,23 @@ struct DashboardRecentActivityRow: View {
 
     var body: some View {
         switch item {
-        case .dispense(let txn, let pillCount):
-            DispenseItemRowView(data: txn.toRowData(pillCount: pillCount))
+        case .dispense(let row):
+            DispenseItemRowView(data: row)
                 .onTapGesture {
                     if let onDispenseBlocked {
                         onDispenseBlocked()
                         return
                     }
                     router.navigate(
-                        to: .authentication(.user(.userSettings(.HistoryTransactionDetail(txn.txn_id))))
+                        to: .authentication(.user(.userSettings(.HistoryTransactionDetail(row.txnId))))
                     )
                 }
 
-        case .inventory(let batch, let ndcCount):
-            StockItemRowView(data: batch.toStockData(ndcCount: ndcCount))
+        case .inventory(let row):
+            StockItemRowView(data: row)
                 .onTapGesture {
                     router.navigate(
-                        to: .authentication(.user(.userSettings(.HistoryBatchDetail(batch.batch_id))))
+                        to: .authentication(.user(.userSettings(.HistoryBatchDetail(row.batchId))))
                     )
                 }
         }

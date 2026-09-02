@@ -36,33 +36,40 @@ struct HistoryTransactionDetailView: View {
     @State private var showDeleteConfirmation: Bool = false
     @State private var bottlePage: Int = 0
     
-    /// Resolved once in .onAppear, kept locally so the view doesn't re-resolve on every render.
-    @State private var transaction: PillCountTransactionEntity? = nil
+    /// Resolved once in .onAppear (off-main — see `HistoryViewModel.
+    /// prepareDetailScreen`), kept locally so the view doesn't re-resolve on
+    /// every render. A plain DTO, not an `NSManagedObject` — see
+    /// `TransactionDetailScreenModel`.
+    @State private var transaction: TransactionDetailScreenModel? = nil
 
     private var allBottleBarcodeImagePaths: [String] {
-        [BottleInfo].decode(from: transaction?.bottle_info_list_json).compactMap(\.barcodeImagePath)
+        [BottleInfo].decode(from: transaction?.bottleInfoListJson).compactMap(\.barcodeImagePath)
     }
 
     private var allBottleInfos: [BottleInfo] {
-        [BottleInfo].decode(from: transaction?.bottle_info_list_json)
+        [BottleInfo].decode(from: transaction?.bottleInfoListJson)
     }
 
     /// Controlled drugs (non-empty drug_type) have extra steps: two-column iPad layout applies.
     /// Normal drugs (empty drug_type) only ever show the pill count section.
     private var isControlledFlow: Bool {
-        guard let type = transaction?.drug?.drug_type else { return false }
+        guard let type = transaction?.drugType else { return false }
         return !type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func details(for step: ControlledStep) -> [TransactionDetailRowUIModel] {
+        transaction?.detailsByStep[step] ?? []
     }
 
     /// Pill count / recount steps compare against the transaction's target count.
     private func countText(step: ControlledStep) -> String {
-        let total = historyViewModel.getTotalCount(step: step)
-        return "\(total)/\(transaction?.target_count ?? 0)"
+        let total = details(for: step).reduce(0) { $0 + Int($1.pillCount) }
+        return "\(total)/\(transaction?.targetCount ?? 0)"
     }
 
     /// Container initial/pending steps have no target — just the counted total.
     private func containerCountText(step: ControlledStep) -> String {
-        let total = transaction.map { historyViewModel.getTotalPillCount(for: $0, step: step) } ?? 0
+        let total = details(for: step).reduce(0) { $0 + Int($1.pillCount) }
         return "\(total)"
     }
 
@@ -109,11 +116,16 @@ struct HistoryTransactionDetailView: View {
                 },
                 showBackButton: true,
                 showHamburgerMenu: false,
-                title: transaction?.drug?.drug_name ?? L10n.History.unknownDrug,
+                title: transaction?.drugName ?? L10n.History.unknownDrug,
                 backgroundColor: appColors.primaryBackground
             )
 
-            if pdfService.isLoading {
+            if historyViewModel.isLoadingDetailScreen {
+                ZStack {
+                    Color.black.opacity(0.5).ignoresSafeArea()
+                    PillCountingLoader()
+                }
+            } else if pdfService.isLoading {
                 ZStack {
                     Color.black.opacity(0.5).ignoresSafeArea()
                     PillCountingLoader()
@@ -131,7 +143,7 @@ struct HistoryTransactionDetailView: View {
                 },
                 onConfirm: {
                     showDeleteConfirmation = false
-                    guard let txnId = transaction?.txn_id else { return }
+                    guard let txnId = transaction?.txnId else { return }
                     Task {
                         await historyViewModel.softDeleteTransaction(txnId: txnId)
                         router.navigateBack()
@@ -151,9 +163,11 @@ struct HistoryTransactionDetailView: View {
                 }
             }
         }
-        .onAppear {
-            // Resolve the entity from the store by id and prepare step details.
-            transaction = historyViewModel.prepareDetails(forTxnId: txnId)
+        .task {
+            // Off-main fetch + decrypt — see `HistoryViewModel.
+            // prepareDetailScreen`. `.task` (not `.onAppear`) so the async
+            // call is structured concurrency tied to the view's lifetime.
+            transaction = await historyViewModel.prepareDetailScreen(forTxnId: txnId)
         }
         .onDisappear {
             transaction = nil
@@ -195,21 +209,21 @@ struct HistoryTransactionDetailView: View {
                let lname    = userViewModel.lastName
                let userName = [fname, lname].filter { !$0.isEmpty }.joined(separator: " ")
 
-               let detailsByStep = historyViewModel.detailsByStep.mapValues { details in
-                   details.map { (count: $0.pill_count, createdAt: $0.created_at) }
+               let detailsByStep = txn.detailsByStep.mapValues { details in
+                   details.map { (count: $0.pillCount, createdAt: $0.createdAt) }
                }
 
                let input = DrugHistoryPDFInput(
-                   drugName:          txn.drug?.drug_name ?? "",
-                   ndc:               txn.drug?.ndc ?? "N/A",
-                   date:              Formatter.getDateString(from: txn.created_at),
-                   time:              Formatter.getTimeString(from: txn.created_at),
+                   drugName:          txn.drugName,
+                   ndc:               txn.ndc.isEmpty ? "N/A" : txn.ndc,
+                   date:              Formatter.getDateString(from: txn.createdAt),
+                   time:              Formatter.getTimeString(from: txn.createdAt),
                    note:              txn.note,
                    userName:          userName.isEmpty ? nil : userName,
-                   targetCount:       txn.target_count,
-                   countType:         txn.is_dispense ? "FIXED" : "REGULAR",
-                   substituteNdc:     txn.substitueDrug?.ndc,
-                   substituteDrugName: txn.substitueDrug?.drug_name,
+                   targetCount:       txn.targetCount,
+                   countType:         txn.isDispense ? "FIXED" : "REGULAR",
+                   substituteNdc:     txn.substituteNdc,
+                   substituteDrugName: txn.substituteDrugName,
                    detailsByStep:     detailsByStep
                )
 
@@ -239,7 +253,7 @@ struct HistoryTransactionDetailView: View {
 extension HistoryTransactionDetailView {
     
     private var drugDetailsTitle: String {
-        transaction?.is_substitute == true
+        transaction?.isSubstitute == true
             ? L10n.History.substitutedDrugDetails
             : L10n.History.dispensedDrugDetails
     }
@@ -304,14 +318,15 @@ extension HistoryTransactionDetailView {
 
     @ViewBuilder
     private var vialBox: some View {
-        if let details = historyViewModel.detailsByStep[.vial], !details.isEmpty {
+        let vialDetails = details(for: .vial)
+        if !vialDetails.isEmpty {
             CollapsibleBox(
                 title: L10n.History.dispensedVial,
                 allowCollapse: false,
                 defaultExpanded: true,
                 bgColor: appColors.secondaryBackground
             ) {
-                thumbnailScrollRow(paths: details.compactMap(\.image_path))
+                thumbnailScrollRow(paths: vialDetails.compactMap(\.imagePath))
             }
         }
     }
@@ -362,9 +377,7 @@ extension HistoryTransactionDetailView {
         }
         
         
-        if let details = historyViewModel.detailsByStep[.containerInitiate],
-           !details.isEmpty
-        {
+        if !details(for: .containerInitiate).isEmpty {
             CollapsibleBox(
                 title: L10n.History.initialContainerCount,
                 allowCollapse: false,
@@ -396,9 +409,7 @@ extension HistoryTransactionDetailView {
             }
         }
 
-        if let details = historyViewModel.detailsByStep[.targetReverification],
-           !details.isEmpty
-        {
+        if !details(for: .targetReverification).isEmpty {
             CollapsibleBox(
                 title: L10n.History.pillRecount,
                 bgColor: appColors.secondaryBackground,
@@ -408,9 +419,7 @@ extension HistoryTransactionDetailView {
             }
         }
 
-        if let details = historyViewModel.detailsByStep[.containerPending],
-           !details.isEmpty
-        {
+        if !details(for: .containerPending).isEmpty {
             CollapsibleBox(
                 title: L10n.History.remainingContainerCount,
                 bgColor: appColors.secondaryBackground,
@@ -422,15 +431,15 @@ extension HistoryTransactionDetailView {
     }
 
     // MARK: - Collapsible Box Content
-    // Shows only this step's own images (from historyViewModel.detailsByStep) via the shared thumbnailScrollRow.
+    // Shows only this step's own images (from the resolved detail screen model) via the shared thumbnailScrollRow.
     private func collapsableBoxContent(step: ControlledStep) -> some View {
-        let details = historyViewModel.detailsByStep[step] ?? []
+        let stepDetails = details(for: step)
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(details, id: \.txn_details_id) { detail in
+                ForEach(stepDetails) { detail in
                     ZStack {
                         ThumbnailImageView(
-                            imagePath: detail.image_path,
+                            imagePath: detail.imagePath,
                             width: 140,
                             height: 100,
                             cornerRadius: 12,
@@ -438,14 +447,14 @@ extension HistoryTransactionDetailView {
                             placeholderSize: CGSize(width: 20, height: 20)
                         )
                         .onTapGesture {
-                            if let path = detail.image_path,
+                            if let path = detail.imagePath,
                                let loaded = PhotoFileManager.shared.loadImage(from: path) {
                                 fullScreenImage = loaded
                             }
                         }
                         .environmentObject(appColors)
 
-                        Text("\(detail.pill_count)")
+                        Text("\(detail.pillCount)")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundStyle(.white)
@@ -467,20 +476,20 @@ extension HistoryTransactionDetailView {
             ForEach(Array(bottles.enumerated()), id: \.offset) { index, bottle in
                 VStack(spacing: 0) {
                     detailRow(
-                        label: transaction?.is_substitute == true ? L10n.History.substitutedDrug : L10n.History.dispensedDrug,
-                        value: transaction?.drug?.drug_name ?? "N/A"
+                        label: transaction?.isSubstitute == true ? L10n.History.substitutedDrug : L10n.History.dispensedDrug,
+                        value: transaction?.drugName.isEmpty == false ? transaction!.drugName : "N/A"
                     )
                     Divider().background(appColors.text.opacity(0.1))
 
                     detailRow(
                         label: L10n.History.ndc,
-                        value: transaction?.drug?.ndc ?? "N/A"
+                        value: transaction?.ndc.isEmpty == false ? transaction!.ndc : "N/A"
                     )
                     Divider().background(appColors.text.opacity(0.1))
 
                     detailRow(
                         label: L10n.Common.dateTime,
-                        value: Formatter.getDateString(from: transaction?.created_at ?? 0) + " " + Formatter.getTimeString(from: transaction?.created_at ?? 0)
+                        value: Formatter.getDateString(from: transaction?.createdAt ?? 0) + " " + Formatter.getTimeString(from: transaction?.createdAt ?? 0)
                     )
                     Divider().background(appColors.text.opacity(0.1))
 
@@ -524,15 +533,13 @@ extension HistoryTransactionDetailView {
         VStack(spacing: 0) {
             detailRow(
                 label: L10n.History.drugName,
-                value: transaction?.substitueDrug?.drug_name ?? "N/A"
-                
-                
+                value: transaction?.substituteDrugName ?? "N/A"
             )
             Divider().background(appColors.text.opacity(0.1))
 
             detailRow(
                 label: L10n.History.ndc,
-                value: transaction?.substitueDrug?.ndc ?? "N/A"
+                value: transaction?.substituteNdc ?? "N/A"
             )
         }
     }

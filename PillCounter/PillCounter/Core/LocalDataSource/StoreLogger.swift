@@ -10,8 +10,11 @@ enum StoreLogger {
 
     // MARK: - Public entry points
 
-    /// Log a query that returned a list of rows.
+    /// Log a query that returned a list of rows. No-op outside DEBUG builds —
+    /// building/printing this table (which scans every row) is pure
+    /// production overhead with no consumer.
     static func log(dao: String, op: String, columns: [String], rows: [[String]]) {
+        #if DEBUG
         guard !rows.isEmpty else {
             print("[\(dao)] \(op) → (0 rows)")
             return
@@ -28,6 +31,7 @@ enum StoreLogger {
             \(body)
             \(divider)
             """)
+        #endif
     }
 
     /// Log a single-row result (e.g. fetchById).

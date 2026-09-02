@@ -6,6 +6,7 @@
 import Hl7Core
 import UIKit
 import Darwin
+import CoreData
 
 struct HL7Config {
     let sendingApplication: String
@@ -43,12 +44,24 @@ final class HL7CompletionBuilder {
     private var versionId: String { config.versionId }
     private let builder: HL7Builder
 
+    /// Every Core Data touch this builder makes (directly, and via the
+    /// TransactionStore/TransactionDetailStore/StockTxnStore/BottleInfoStore
+    /// calls it fans out to) uses this context, not the stores' own default
+    /// `viewContext`. Defaults to `viewContext` so every existing call site
+    /// (main-thread `Hl7ServiceController` paths) is unchanged; HL7 sync
+    /// queue callers pass an explicit background context instead, so the
+    /// whole message-build graph — including `txn`/`batch`'s own relationship
+    /// faults — stays on one background queue for the call's duration rather
+    /// than hopping back to `viewContext` mid-build.
+    private let context: NSManagedObjectContext
+
     /// `config` defaults to values sourced from `AppStorageManager` (terminal
     /// name, PMS host name, HL7 version — the latter from `auth/me` →
     /// `settings.hl7_version`), so built messages always match what the
     /// connected PMS expects.
-    init(config: HL7Config = .current) {
+    init(config: HL7Config = .current, context: NSManagedObjectContext = CoreDataManager.shared.context) {
         self.config = config
+        self.context = context
         self.builder = HL7Builder.companion.builder()
             .defaultVersion(version: config.versionId)
             .build()
@@ -404,7 +417,7 @@ final class HL7CompletionBuilder {
         let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
         let orderId = batch.bucket_id ?? ""
 
-        let stockTxns = StockTxnStore.shared.fetchByBatch(batchId: batch.batch_id)
+        let stockTxns = StockTxnStore.shared.fetchByBatch(batchId: batch.batch_id, in: context)
 
         // MARK: GROUPING
         struct Key: Hashable {
@@ -414,7 +427,7 @@ final class HL7CompletionBuilder {
 
         for stockTxn in stockTxns {
             guard let drug = stockTxn.drug else { continue }
-            let bottles = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+            let bottles = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id, in: context)
             for bottle in bottles {
                 let key = Key(
                     ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
@@ -659,7 +672,7 @@ private extension HL7CompletionBuilder {
         drug: DrugMasterEntity,
         now: String
     ) -> [ZsnRow] {
-        let bottles = TransactionStore.shared.getBottleList(txnId: txn.txn_id)
+        let bottles = TransactionStore.shared.getBottleList(txnId: txn.txn_id, in: context)
 
         guard !bottles.isEmpty else {
             return details.enumerated().map { index, detail in
@@ -682,7 +695,7 @@ private extension HL7CompletionBuilder {
 
         return bottles.enumerated().map { index, bottle in
             let ownedIds = bottle.txnDetailsIds.filter { detailIdSet.contains($0) }
-            let quantity = TransactionDetailStore.shared.sumPillCount(detailIds: ownedIds)
+            let quantity = TransactionDetailStore.shared.sumPillCount(detailIds: ownedIds, in: context)
             return ZsnRow(
                 setId: "\(index + 1)",
                 nationalDrugCode: drug.ndc,

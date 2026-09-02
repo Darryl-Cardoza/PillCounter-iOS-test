@@ -116,6 +116,18 @@ final class BottleInfoStore {
         return results
     }
 
+    /// Same as `fetchByStockTxn(stockTxnId:)`, but fetches via an explicit
+    /// context — see `StockTxnStore.fetchByBatch(batchId:in:)`.
+    func fetchByStockTxn(stockTxnId: Int64, in context: NSManagedObjectContext) -> [BottleInfoEntity] {
+        context.performAndWait {
+            let request: NSFetchRequest<BottleInfoEntity> = BottleInfoEntity.fetchRequest()
+            request.predicate = NSPredicate(format: "stock_txn_id == %lld", stockTxnId)
+            let results = (try? context.fetch(request)) ?? []
+            results.forEach { $0.decryptEncryptedFieldsInPlace() }
+            return results
+        }
+    }
+
     func fetchByBatch(batchId: Int64) -> [BottleInfoEntity] {
         let request: NSFetchRequest<BottleInfoEntity> = BottleInfoEntity.fetchRequest()
         request.predicate = NSPredicate(format: "batch_id == %lld", batchId)

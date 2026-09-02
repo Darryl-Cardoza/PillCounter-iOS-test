@@ -55,10 +55,10 @@ final class UnsyncedViewModel: ObservableObject {
             transactionStore.transactionsDidChange
         )
         .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
-        .sink { [weak self] in self?.loadAll() }
+        .sink { [weak self] in
+            Task { await self?.loadAll() }
+        }
         .store(in: &cancellables)
-
-        loadAll()
     }
 
     // MARK: - Load
@@ -70,7 +70,7 @@ final class UnsyncedViewModel: ObservableObject {
     /// `totalUnsyncedTransactionCount` report the real total separately.
     private let pageLimit = 100
 
-    func loadAll() {
+    func loadAll() async {
         loadBatches()
         loadTransactions()
     }
@@ -79,9 +79,9 @@ final class UnsyncedViewModel: ObservableObject {
         let rawBatches = batchStore.fetchCompletedUnsyncedPage(limit: pageLimit, offset: 0)
         totalUnsyncedBatchCount = batchStore.countCompletedUnsynced()
 
+        let ndcCounts = batchStore.transactionCounts(for: rawBatches.map { $0.batch_id })
         batches = rawBatches.map { batch in
-            let ndcCount = batchStore.getTransactionCount(for: batch.batch_id)
-            return batch.toStockData(ndcCount: ndcCount)
+            batch.toStockData(ndcCount: ndcCounts[batch.batch_id] ?? 0)
         }
     }
 
@@ -89,14 +89,12 @@ final class UnsyncedViewModel: ObservableObject {
         let txns = transactionStore.fetchCompletedUnsyncedPage(limit: pageLimit, offset: 0)
         totalUnsyncedTransactionCount = transactionStore.countCompletedUnsynced()
 
+        let stepTotals = transactionDetailStore.totalCountsForSteps(
+            txnIds: txns.map { $0.txn_id }, step: .targetVerification
+        )
         transactions = txns.map { txn in
-               let counted = transactionDetailStore.totalCountForStep(
-                   txnId: txn.txn_id,
-                   step: .targetVerification
-               )
-               print("Transaction Row \(txn) \(counted)")
-               return txn.toRowData(pillCount: Int(counted))
-           }
+            txn.toRowData(pillCount: Int(stepTotals[txn.txn_id] ?? 0))
+        }
     }
     
  

@@ -976,7 +976,8 @@ class UserViewModel: ObservableObject {
                 ndcCount: Int64(count),
                 status: $0.status ?? "",
                 bucketId: $0.bucket_id ?? "",
-                isFromPms: false
+                isFromPms: false,
+                reqIdFromPms: $0.req_id_from_pms
             )
         }
     }
@@ -991,7 +992,13 @@ class UserViewModel: ObservableObject {
             countType: txn.is_dispense ? "FIXED" : "REGULAR", status: txn.status ?? "",
             note: txn.note, bucketId: "360B", drugType: txn.drug?.drug_type ?? "",
             strength: txn.drug?.strength ?? "",
-            dosageForm: txn.drug?.dosage_form ?? ""
+            dosageForm: txn.drug?.dosage_form ?? "",
+            txnId: txn.txn_id,
+            txnPriority: txn.txn_priority,
+            isHazardous: txn.drug?.is_hazardous == true,
+            isDispense: txn.is_dispense,
+            batchId: txn.batch_id,
+            isNdcVerified: txn.is_ndc_verfied
         )
     }
 

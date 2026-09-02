@@ -73,6 +73,19 @@ final class StockTxnStore {
         return (try? context.fetch(request)) ?? []
     }
 
+    /// Same as `fetchByBatch(batchId:)`, but fetches via an explicit context
+    /// — see `TransactionStore.fetchById(_:in:)`. This store has no `sync`
+    /// helper of its own (every other method here assumes the caller is
+    /// already on `viewContext`'s queue); `performAndWait` is added here
+    /// explicitly since this overload is for callers on a different queue.
+    func fetchByBatch(batchId: Int64, in context: NSManagedObjectContext) -> [StockTxnEntity] {
+        context.performAndWait {
+            let request: NSFetchRequest<StockTxnEntity> = StockTxnEntity.fetchRequest()
+            request.predicate = NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId)
+            return (try? context.fetch(request)) ?? []
+        }
+    }
+
     func fetchByBatchAndNdc(batchId: Int64, ndc: String) -> StockTxnEntity? {
         fetchByBatch(batchId: batchId).first { $0.drug?.ndc == ndc }
     }

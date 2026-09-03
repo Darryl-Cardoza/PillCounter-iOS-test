@@ -46,8 +46,8 @@ struct BarcodeFormatParserTests {
 
     // MARK: mappedData
 
-    @Test func mappedDataExtractsAllFields() throws {
-        let mapped = try BarcodeFormatParser.mappedData(format: format, actualValue: "RX100697|0|05278113375|30|340B")
+    @Test func mappedDataExtractsAllFields() {
+        let mapped = BarcodeFormatParser.mappedData(format: format, actualValue: "RX100697|0|05278113375|30|340B")
         #expect(mapped["RXNO"] == "RX100697")
         #expect(mapped["REFILLNO"] == "0")
         #expect(mapped["NDCNO"] == "05278113375")
@@ -55,30 +55,29 @@ struct BarcodeFormatParserTests {
         #expect(mapped["BUCKET"] == "340B")
     }
 
-    @Test func mappedDataStripsDashesFromNdc() throws {
-        let mapped = try BarcodeFormatParser.mappedData(format: format, actualValue: "RX100697|0|0527-8113-37|30|340B")
+    @Test func mappedDataStripsDashesFromNdc() {
+        let mapped = BarcodeFormatParser.mappedData(format: format, actualValue: "RX100697|0|0527-8113-37|30|340B")
         #expect(mapped["NDCNO"] == "0527811337")
     }
 
-    @Test func mappedDataReturnsEmptyWhenValueDoesNotMatch() throws {
-        let mapped = try BarcodeFormatParser.mappedData(format: format, actualValue: "garbage")
+    @Test func mappedDataReturnsEmptyWhenValueDoesNotMatch() {
+        let mapped = BarcodeFormatParser.mappedData(format: format, actualValue: "garbage")
         #expect(mapped.isEmpty)
     }
 
-    @Test func mappedDataReturnsEmptyForEmptyFormat() throws {
-        let mapped = try BarcodeFormatParser.mappedData(format: "", actualValue: "RX100697|0|05278113375|30|340B")
+    @Test func mappedDataReturnsEmptyForEmptyFormat() {
+        let mapped = BarcodeFormatParser.mappedData(format: "", actualValue: "RX100697|0|05278113375|30|340B")
         #expect(mapped.isEmpty)
     }
 
-    @Test func mappedDataReturnsEmptyForEmptyValue() throws {
-        let mapped = try BarcodeFormatParser.mappedData(format: format, actualValue: "")
+    @Test func mappedDataReturnsEmptyForEmptyValue() {
+        let mapped = BarcodeFormatParser.mappedData(format: format, actualValue: "")
         #expect(mapped.isEmpty)
     }
 
-    @Test func mappedDataThrowsForInvalidRegexFormat() {
-        #expect(throws: (any Error).self) {
-            try BarcodeFormatParser.mappedData(format: "(unclosed", actualValue: "anything")
-        }
+    @Test func mappedDataReturnsEmptyForInvalidRegexFormat() {
+        let mapped = BarcodeFormatParser.mappedData(format: "(unclosed", actualValue: "anything")
+        #expect(mapped.isEmpty)
     }
 
     // MARK: applyDashTolerance

@@ -50,14 +50,11 @@ enum BarcodeFormatParser {
         "bucket":   "BUCKET"
     ]
 
-    /// Keys whose captured value has "-" stripped before use (e.g. NDC `11-1134-33` → `1113433`).
-    static let dashStrippedKeys: Set<String> = ["NDCNO"]
-
     // MARK: Regex Compilation
 
     /// Relaxes the `ndc` group's body to also accept "-" (e.g. scanned `0527-8113-37`),
     /// since the server's pattern (e.g. `\d{11}`) only allows bare digits. The dash is
-    /// stripped from the captured value afterward via `dashStrippedKeys`.
+    /// stripped from the captured NDC value afterward in `mappedData`.
     static func applyDashTolerance(to format: String) -> String {
         guard let regex = try? NSRegularExpression(pattern: "\\(\\?<ndc>([^()]*)\\)") else { return format }
         let range = NSRange(format.startIndex..., in: format)
@@ -68,12 +65,12 @@ enum BarcodeFormatParser {
         var body = String(format[bodyRange]).replacingOccurrences(of: "\\d", with: "[\\d-]")
         // Widen the length quantifier by 2 to allow for up to two "-" separators (e.g. 11-1134-33).
         if let quantifierRegex = try? NSRegularExpression(pattern: "\\{(\\d+)\\}") {
-            let bodyRange = NSRange(body.startIndex..., in: body)
-            if let quantifierMatch = quantifierRegex.firstMatch(in: body, range: bodyRange),
+            let bodySearchRange = NSRange(body.startIndex..., in: body)
+            if let quantifierMatch = quantifierRegex.firstMatch(in: body, range: bodySearchRange),
                let numberRange = Range(quantifierMatch.range(at: 1), in: body),
                let count = Int(body[numberRange]),
-               let matchRange = Range(quantifierMatch.range, in: body) {
-                body.replaceSubrange(matchRange, with: "{\(count),\(count + 2)}")
+               let quantifierMatchRange = Range(quantifierMatch.range, in: body) {
+                body.replaceSubrange(quantifierMatchRange, with: "{\(count),\(count + 2)}")
             }
         }
         var result = format
@@ -87,13 +84,16 @@ enum BarcodeFormatParser {
 
     /// Maps a scanned barcode value against the server-supplied named-group regex format.
     /// Returns `[:]` if the format doesn't compile or the value doesn't match.
-    static func mappedData(format: String, actualValue: String) throws -> [String: String] {
+    static func mappedData(format: String, actualValue: String) -> [String: String] {
         guard !format.isEmpty, !actualValue.isEmpty else {
             print("[BarcodeFormatParser] mappedData: empty format or value — format=\(format) value=\(actualValue)")
             return [:]
         }
 
-        let regex = try compile(format)
+        guard let regex = try? compile(format) else {
+            print("[BarcodeFormatParser] mappedData: format failed to compile — format=\(format)")
+            return [:]
+        }
         let valueRange = NSRange(actualValue.startIndex..., in: actualValue)
         guard let match = regex.firstMatch(in: actualValue, range: valueRange) else {
             print("[BarcodeFormatParser] mappedData: NO MATCH")
@@ -109,7 +109,7 @@ enum BarcodeFormatParser {
                   let range = Range(groupRange, in: actualValue) else { continue }
 
             var value = String(actualValue[range]).trimmingCharacters(in: .whitespaces)
-            if dashStrippedKeys.contains(key) {
+            if key == "NDCNO" {
                 value = value.replacingOccurrences(of: "-", with: "")
             }
             result[key] = value

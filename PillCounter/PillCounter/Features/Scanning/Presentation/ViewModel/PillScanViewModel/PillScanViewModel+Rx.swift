@@ -22,97 +22,65 @@ extension PillScanViewModel {
 
     func parseScanData(actualValue: String) {
         let barcodeFormat = AppStorageManager.shared.barcodeFormat
+        let mappedData = BarcodeFormatParser.mappedData(format: barcodeFormat, actualValue: actualValue)
 
-        do {
-            let mappedData = try BarcodeFormatParser.mappedData(format: barcodeFormat, actualValue: actualValue)
+        guard !mappedData.isEmpty else {
+            scannedRxData   = ParsedScanData()
+            showRxFlowPopup = false
+            return
+        }
 
-            guard !mappedData.isEmpty else {
-                scannedRxData   = ParsedScanData()
-                showRxFlowPopup = false
+        let ndc    = mappedData["NDCNO"] ?? ""
+        let bucket = mappedData["BUCKET"]?.trimmingCharacters(in: .whitespaces).isEmpty == false
+            ? mappedData["BUCKET"]!
+            : "NORMAL"
+
+        self.selectedBucket = bucket
+        print("[RxScan] Bucket: \(selectedBucket)")
+
+        Task {
+            let resolvedDrugName = await resolveDrugName(for: ndc)
+
+            guard let drugName = resolvedDrugName else {
+                showToastMessage(text: L10n.BarcodeScan.invalidNdc)
+                rxScanFailed = true
                 return
             }
 
-            let ndc    = mappedData["NDCNO"] ?? ""
-            let bucket = mappedData["BUCKET"]?.trimmingCharacters(in: .whitespaces).isEmpty == false
-                ? mappedData["BUCKET"]!
-                : "NORMAL"
+            let rawRxNo = mappedData["RXNO"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let rxNo: String? = rawRxNo.isEmpty ? nil : rawRxNo
 
-            self.selectedBucket = bucket
-            print("[RxScan] Bucket: \(selectedBucket)")
+            // Rx must exist in local DB — if not found, abort with a toast
+            guard let rxNo, !rxNo.isEmpty else {
+                print("[RxScan] No RXNO in barcode — cannot proceed")
+                showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                rxScanFailed = true
+                return
+            }
 
-            Task {
-                let resolvedDrugName = await resolveDrugName(for: ndc)
+            let currentUser = userDataLocalStorage.fetchByUserId(userId)
+            guard let currentUser else {
+                print("[RxScan] No current user — cannot look up Rx")
+                rxScanFailed = true
+                return
+            }
 
-                guard let drugName = resolvedDrugName else {
-                    showToastMessage(text: L10n.BarcodeScan.invalidNdc)
+            let allStoredRxNos = transactionDAO.fetchAllRxNos(for: currentUser)
+            print("[RxScan] All rx_no values in DB: \(allStoredRxNos)")
+            print("[RxScan] Looking up rxNo: '\(rxNo)'")
+
+            let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser)
+            print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
+
+            guard let existingTxn else {
+                guard AppStorageManager.shared.isStandalone else {
+                    print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
+                    showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
                     rxScanFailed = true
                     return
                 }
 
-                let rawRxNo = mappedData["RXNO"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let rxNo: String? = rawRxNo.isEmpty ? nil : rawRxNo
-
-                // Rx must exist in local DB — if not found, abort with a toast
-                guard let rxNo, !rxNo.isEmpty else {
-                    print("[RxScan] No RXNO in barcode — cannot proceed")
-                    showToastMessage(text: L10n.BarcodeScan.rxNotFound)
-                    rxScanFailed = true
-                    return
-                }
-
-                let currentUser = userDataLocalStorage.fetchByUserId(userId)
-                guard let currentUser else {
-                    print("[RxScan] No current user — cannot look up Rx")
-                    rxScanFailed = true
-                    return
-                }
-
-                let allStoredRxNos = transactionDAO.fetchAllRxNos(for: currentUser)
-                print("[RxScan] All rx_no values in DB: \(allStoredRxNos)")
-                print("[RxScan] Looking up rxNo: '\(rxNo)'")
-
-                let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser)
-                print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
-
-                guard let existingTxn else {
-                    guard AppStorageManager.shared.isStandalone else {
-                        print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
-                        showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
-                        rxScanFailed = true
-                        return
-                    }
-
-                    print("[RxScan] Rx \(rxNo) not found in DB — showing Rx popup to create new txn")
-
-                    scannedRxData = ParsedScanData(
-                        rxNo:     rxNo,
-                        ndcNo:    ndc.isEmpty ? nil : ndc,
-                        drugName: drugName,
-                        qty:      mappedData["QTY"],
-                        refil:    mappedData["REFILLNO"],
-                        rawMap:   mappedData
-                    )
-                    fetchedRxTransaction = nil
-                    showRxFlowPopup = true
-                    return
-                }
-
-                let scannedRefil = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces) ?? ""
-                let ndcMismatch  = !ndc.isEmpty && ndc != (existingTxn.drug?.ndc ?? "")
-                let refilMismatch = !scannedRefil.isEmpty && scannedRefil != (existingTxn.refill_no ?? "")
-
-                if ndcMismatch || refilMismatch {
-                    print("[RxScan] Rx \(rxNo) mismatch — scanned ndc: \(ndc) vs stored: \(existingTxn.drug?.ndc ?? "nil"), scanned refil: \(scannedRefil) vs stored: \(existingTxn.refill_no ?? "nil")")
-                    showToastMessage(text: L10n.BarcodeScan.rxNdcMismatch)
-                    rxScanFailed = true
-                    return
-                }
-
-                if existingTxn.status == CountStatus.ON_HOLD.rawValue {
-                    print("[RxScan] Rx \(rxNo) is ON HOLD — showing hold popup")
-                    showRxOnHoldPopup = true
-                    return
-                }
+                print("[RxScan] Rx \(rxNo) not found in DB — showing Rx popup to create new txn")
 
                 scannedRxData = ParsedScanData(
                     rxNo:     rxNo,
@@ -122,26 +90,49 @@ extension PillScanViewModel {
                     refil:    mappedData["REFILLNO"],
                     rawMap:   mappedData
                 )
-                fetchedRxTransaction = existingTxn
-
-                if existingTxn.is_ndc_verfied {
-                    print("[RxScan] Rx \(rxNo) is_ndc_verfied=true — resuming inline")
-                    self.selectedTransaction  = existingTxn
-                    self.currentTransaction   = existingTxn
-                    self.fetchedRxTransaction = nil
-                    self.rxResumeInline       = true
-                } else {
-                    print("[RxScan] Rx popup → rxNo: \(scannedRxData?.rxNo ?? "nil"), ndc: \(scannedRxData?.ndcNo ?? "nil"), drug: \(scannedRxData?.drugName ?? "UNKNOWN"), qty: \(scannedRxData?.qty ?? "nil")")
-                    showRxFlowPopup = true
-                }
-                
-                
+                fetchedRxTransaction = nil
+                showRxFlowPopup = true
+                return
             }
 
-        } catch {
-            print("[RxScan] Error parsing scan data: \(error.localizedDescription)")
-            scannedRxData   = ParsedScanData()
-            showRxFlowPopup = false
+            let scannedRefil = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces) ?? ""
+            let ndcMismatch  = !ndc.isEmpty && ndc != (existingTxn.drug?.ndc ?? "")
+            let refilMismatch = !scannedRefil.isEmpty && scannedRefil != (existingTxn.refill_no ?? "")
+
+            if ndcMismatch || refilMismatch {
+                print("[RxScan] Rx \(rxNo) mismatch — scanned ndc: \(ndc) vs stored: \(existingTxn.drug?.ndc ?? "nil"), scanned refil: \(scannedRefil) vs stored: \(existingTxn.refill_no ?? "nil")")
+                let mismatchMessage = ndcMismatch ? L10n.BarcodeScan.rxNdcMismatch : L10n.BarcodeScan.rxRefillMismatch
+                showToastMessage(text: mismatchMessage)
+                rxScanFailed = true
+                return
+            }
+
+            if existingTxn.status == CountStatus.ON_HOLD.rawValue {
+                print("[RxScan] Rx \(rxNo) is ON HOLD — showing hold popup")
+                showRxOnHoldPopup = true
+                return
+            }
+
+            scannedRxData = ParsedScanData(
+                rxNo:     rxNo,
+                ndcNo:    ndc.isEmpty ? nil : ndc,
+                drugName: drugName,
+                qty:      mappedData["QTY"],
+                refil:    mappedData["REFILLNO"],
+                rawMap:   mappedData
+            )
+            fetchedRxTransaction = existingTxn
+
+            if existingTxn.is_ndc_verfied {
+                print("[RxScan] Rx \(rxNo) is_ndc_verfied=true — resuming inline")
+                self.selectedTransaction  = existingTxn
+                self.currentTransaction   = existingTxn
+                self.fetchedRxTransaction = nil
+                self.rxResumeInline       = true
+            } else {
+                print("[RxScan] Rx popup → rxNo: \(scannedRxData?.rxNo ?? "nil"), ndc: \(scannedRxData?.ndcNo ?? "nil"), drug: \(scannedRxData?.drugName ?? "UNKNOWN"), qty: \(scannedRxData?.qty ?? "nil")")
+                showRxFlowPopup = true
+            }
         }
     }
 
@@ -310,8 +301,8 @@ extension PillScanViewModel {
     /// Returns nil if the value doesn't match the format or has no RXNO field.
     func extractRxNo(from value: String) -> String? {
         let barcodeFormat = AppStorageManager.shared.barcodeFormat
-        guard let mapped = try? BarcodeFormatParser.mappedData(format: barcodeFormat, actualValue: value),
-              !mapped.isEmpty else { return nil }
+        let mapped = BarcodeFormatParser.mappedData(format: barcodeFormat, actualValue: value)
+        guard !mapped.isEmpty else { return nil }
 
         let rxNo = mapped["RXNO"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return rxNo.isEmpty ? nil : rxNo

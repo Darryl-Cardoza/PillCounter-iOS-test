@@ -6,27 +6,15 @@
 import CoreData
 import Combine
 
-final class TransactionStore {
+final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
 
     static let shared = TransactionStore()
-    private init() {}
+    private override init() {}
 
     let transactionsDidChange = PassthroughSubject<Void, Never>()
 
-    private var context: NSManagedObjectContext {
-        CoreDataManager.shared.context
-    }
-
-    /// Confines every Core Data touch to `context`'s owning queue (the main
-    /// queue for `viewContext`). Background callers — HL7 sync queues, the
-    /// image web server — previously called straight into `context.fetch`/
-    /// `save` from their own DispatchQueue with no hop, racing main-thread
-    /// ViewModel fetches on the same context and objects. `performAndWait`
-    /// is safe to call re-entrantly when already on the right queue (runs
-    /// the block immediately), so nested Store calls on the main thread are
-    /// unaffected.
-    private func sync<T>(_ block: () -> T) -> T {
-        context.performAndWait(block)
+    override func postFetch(_ entity: PillCountTransactionEntity) {
+        entity.decryptEncryptedFieldsInPlace()
     }
 
     // MARK: - Create
@@ -54,7 +42,7 @@ final class TransactionStore {
             entity.batch_id = batchId
             entity.rx_no = rxNo
             entity.refill_no = refillNo
-            entity.txn_priority = priority
+            entity.txn_priority = Self.normalizedPriority(priority)
             entity.is_dispense = isDispense
             entity.status = CountStatus.PARTIAL.rawValue
             entity.is_deleted = false
@@ -86,12 +74,7 @@ final class TransactionStore {
 
     func fetchById(_ txnId: Int64) -> PillCountTransactionEntity? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "txn_id == %lld", txnId)
-            request.fetchLimit = 1
-            guard let result = try? context.fetch(request).first else { return nil }
-            refreshDecrypted(result)
-            return result
+            fetchOne(predicate: NSPredicate(format: "txn_id == %lld", txnId), sort: nil, in: context)
         }
     }
 
@@ -103,24 +86,17 @@ final class TransactionStore {
     /// back to `viewContext` mid-operation.
     func fetchById(_ txnId: Int64, in context: NSManagedObjectContext) -> PillCountTransactionEntity? {
         context.performAndWait {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "txn_id == %lld", txnId)
-            request.fetchLimit = 1
-            guard let result = try? context.fetch(request).first else { return nil }
-            refreshDecrypted(result)
-            return result
+            fetchOne(predicate: NSPredicate(format: "txn_id == %lld", txnId), sort: nil, in: context)
         }
     }
 
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "user == %@", user)
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            request.fetchLimit = 1
-            guard let result = try? context.fetch(request).first else { return nil }
-            refreshDecrypted(result)
-            return result
+            fetchOne(
+                predicate: NSPredicate(format: "user == %@", user),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                in: context
+            )
         }
     }
 
@@ -129,18 +105,18 @@ final class TransactionStore {
         isDispense: Bool
     ) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
             let completedStatuses = [CountStatus.COMPLETED.rawValue]
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == %@ AND NOT (status IN %@)",
-                user, NSNumber(value: isDispense), completedStatuses
+            let results = fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == %@ AND NOT (status IN %@)",
+                    user, NSNumber(value: isDispense), completedStatuses
+                ),
+                sort: [
+                    NSSortDescriptor(key: "is_from_pms", ascending: false),
+                    NSSortDescriptor(key: "created_at", ascending: false)
+                ],
+                in: context
             )
-            request.sortDescriptors = [
-                NSSortDescriptor(key: "is_from_pms", ascending: false),
-                NSSortDescriptor(key: "created_at", ascending: false)
-            ]
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
             logRefillNos(op: "fetchPartial", results: results)
             return results
         }
@@ -155,19 +131,18 @@ final class TransactionStore {
         in context: NSManagedObjectContext
     ) -> [PillCountTransactionEntity] {
         context.performAndWait {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
             let completedStatuses = [CountStatus.COMPLETED.rawValue]
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == %@ AND NOT (status IN %@)",
-                user, NSNumber(value: isDispense), completedStatuses
+            return fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == %@ AND NOT (status IN %@)",
+                    user, NSNumber(value: isDispense), completedStatuses
+                ),
+                sort: [
+                    NSSortDescriptor(key: "is_from_pms", ascending: false),
+                    NSSortDescriptor(key: "created_at", ascending: false)
+                ],
+                in: context
             )
-            request.sortDescriptors = [
-                NSSortDescriptor(key: "is_from_pms", ascending: false),
-                NSSortDescriptor(key: "created_at", ascending: false)
-            ]
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
-            return results
         }
     }
 
@@ -181,21 +156,20 @@ final class TransactionStore {
         offset: Int
     ) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
             let completedStatuses = [CountStatus.COMPLETED.rawValue]
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == %@ AND NOT (status IN %@)",
-                user, NSNumber(value: isDispense), completedStatuses
+            return fetchPage(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == %@ AND NOT (status IN %@)",
+                    user, NSNumber(value: isDispense), completedStatuses
+                ),
+                sort: [
+                    NSSortDescriptor(key: "is_from_pms", ascending: false),
+                    NSSortDescriptor(key: "created_at", ascending: false)
+                ],
+                limit: limit,
+                offset: offset,
+                in: context
             )
-            request.sortDescriptors = [
-                NSSortDescriptor(key: "is_from_pms", ascending: false),
-                NSSortDescriptor(key: "created_at", ascending: false)
-            ]
-            request.fetchLimit = limit
-            request.fetchOffset = offset
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
-            return results
         }
     }
 
@@ -205,14 +179,14 @@ final class TransactionStore {
         endTime: Int64
     ) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND created_at >= %lld AND created_at <= %lld",
-                user, startTime, endTime
+            let results = fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND created_at >= %lld AND created_at <= %lld",
+                    user, startTime, endTime
+                ),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                in: context
             )
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
             logRefillNos(op: "fetchByTimeRange", results: results)
             return results
         }
@@ -227,15 +201,14 @@ final class TransactionStore {
         in context: NSManagedObjectContext
     ) -> [PillCountTransactionEntity] {
         context.performAndWait {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND created_at >= %lld AND created_at <= %lld",
-                user, startTime, endTime
+            fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND created_at >= %lld AND created_at <= %lld",
+                    user, startTime, endTime
+                ),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                in: context
             )
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
-            return results
         }
     }
 
@@ -251,42 +224,43 @@ final class TransactionStore {
         offset: Int
     ) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND created_at >= %lld AND created_at <= %lld",
-                user, startTime, endTime
+            fetchPage(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND is_dispense == true AND created_at >= %lld AND created_at <= %lld",
+                    user, startTime, endTime
+                ),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                limit: limit,
+                offset: offset,
+                in: context
             )
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            request.fetchLimit = limit
-            request.fetchOffset = offset
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
-            return results
         }
     }
 
     func fetchAllRxNos(for user: UserEntity) -> [String] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND status != %@",
-                user, CountStatus.COMPLETED.rawValue
+            let results = fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND status != %@",
+                    user, CountStatus.COMPLETED.rawValue
+                ),
+                sort: nil,
+                in: context
             )
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
             return results.compactMap { $0.rx_no }.filter { !$0.isEmpty }
         }
     }
 
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND status != %@",
-                user, CountStatus.COMPLETED.rawValue
+            let results = fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND status != %@",
+                    user, CountStatus.COMPLETED.rawValue
+                ),
+                sort: nil,
+                in: context
             )
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
             return results.filter { $0.rx_no == rxNo }
         }
     }
@@ -304,37 +278,31 @@ final class TransactionStore {
 
     func getByMessageControlId(_ messageControlId: String) -> PillCountTransactionEntity? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "hl7_message_control_id == %@ AND is_deleted == false", messageControlId)
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            request.fetchLimit = 1
-            guard let result = try? context.fetch(request).first else { return nil }
-            refreshDecrypted(result)
-            return result
+            fetchOne(
+                predicate: NSPredicate(format: "hl7_message_control_id == %@ AND is_deleted == false", messageControlId),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                in: context
+            )
         }
     }
 
     func getBySequenceNumber(_ sequenceNumber: String) -> PillCountTransactionEntity? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "hl7_sequence_number == %@ AND is_deleted == false", sequenceNumber)
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            request.fetchLimit = 1
-            guard let result = try? context.fetch(request).first else { return nil }
-            refreshDecrypted(result)
-            return result
+            fetchOne(
+                predicate: NSPredicate(format: "hl7_sequence_number == %@ AND is_deleted == false", sequenceNumber),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                in: context
+            )
         }
     }
 
     func getByTransactionOrderId(_ transactionOrderId: String) -> PillCountTransactionEntity? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "transaction_order_id == %@ AND is_deleted == false", transactionOrderId)
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            request.fetchLimit = 1
-            guard let result = try? context.fetch(request).first else { return nil }
-            refreshDecrypted(result)
-            return result
+            fetchOne(
+                predicate: NSPredicate(format: "transaction_order_id == %@ AND is_deleted == false", transactionOrderId),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                in: context
+            )
         }
     }
 
@@ -342,10 +310,7 @@ final class TransactionStore {
     /// than via NSPredicate (which would compare against ciphertext).
     func getByRxNoAndFillNo(_ rxNo: String, fillNo: String) -> PillCountTransactionEntity? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "is_deleted == false")
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
+            let results = fetchAllMatching(predicate: NSPredicate(format: "is_deleted == false"), sort: nil, in: context)
             return results
                 .filter { $0.rx_no == rxNo && $0.refill_no == fillNo }
                 .sorted { $0.created_at > $1.created_at }
@@ -355,10 +320,7 @@ final class TransactionStore {
 
     func getMostRecentByRxNo(_ rxNo: String) -> PillCountTransactionEntity? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "is_deleted == false")
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
+            let results = fetchAllMatching(predicate: NSPredicate(format: "is_deleted == false"), sort: nil, in: context)
             return results
                 .filter { $0.rx_no == rxNo }
                 .sorted { $0.created_at > $1.created_at }
@@ -373,9 +335,7 @@ final class TransactionStore {
     /// like other lookups here for consistency.
     func txnId(forBarcodeImage filename: String) -> Int64? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            guard let results = try? context.fetch(request) else { return nil }
-            results.forEach { refreshDecrypted($0) }
+            let results = fetchAllMatching(predicate: NSPredicate(value: true), sort: nil, in: context)
             return results.first { txn in
                 [BottleInfo].decode(from: txn.bottle_info_list_json).contains { $0.barcodeImagePath == filename }
             }?.txn_id
@@ -384,10 +344,11 @@ final class TransactionStore {
 
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "user == %@ AND is_deleted == true", user)
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
+            let results = fetchAllMatching(
+                predicate: NSPredicate(format: "user == %@ AND is_deleted == true", user),
+                sort: nil,
+                in: context
+            )
             return results
                 .filter { $0.rx_no == rxNo }
                 .sorted { $0.updated_at > $1.updated_at }
@@ -397,7 +358,7 @@ final class TransactionStore {
 
     func restoreDeleted(txnId: Int64) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.is_deleted = false
             txn.status = CountStatus.PARTIAL.rawValue
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
@@ -416,7 +377,7 @@ final class TransactionStore {
         transactionOrderId: String? = nil
     ) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             if let messageControlId { txn.hl7_message_control_id = messageControlId }
             if let sequenceNumber { txn.hl7_sequence_number = sequenceNumber }
             if let transactionOrderId { txn.transaction_order_id = transactionOrderId }
@@ -427,8 +388,8 @@ final class TransactionStore {
 
     func updatePriority(txnId: Int64, priority: String?) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
-            txn.txn_priority = priority
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
+            txn.txn_priority = Self.normalizedPriority(priority)
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
             StoreLogger.debug("📋 [TransactionDAO] UPDATED priority — txnId: \(txnId), priority: \(priority ?? "nil")")
@@ -437,12 +398,12 @@ final class TransactionStore {
 
     func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?, refillNo: String? = nil) {
         sync {
-            guard let txn = fetchByIdLocked(txnId),
+            guard let txn = fetchByIdNoWrap(txnId),
                   let drug = DrugCatalogStore.shared.fetchById(drugId) else { return }
             txn.drug_id = drugId
             txn.drug = drug
             txn.target_count = targetCount
-            txn.txn_priority = priority
+            txn.txn_priority = Self.normalizedPriority(priority)
             if let refillNo { txn.refill_no = refillNo }
             txn.is_synced = false
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
@@ -455,14 +416,14 @@ final class TransactionStore {
     func fetchByBatch(batchId: Int64) -> [PillCountTransactionEntity] {
         guard let user = currentUserEntity() else { return [] }
         return sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND batch_id == %lld AND is_deleted == false",
-                user, batchId
+            let results = fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND batch_id == %lld AND is_deleted == false",
+                    user, batchId
+                ),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                in: context
             )
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
             logRefillNos(op: "fetchByBatch", results: results)
             return results
         }
@@ -470,17 +431,17 @@ final class TransactionStore {
 
     func fetchPartialFromPms(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND is_dispense == %@ AND status == %@ AND is_from_pms == true",
-                user, NSNumber(value: isDispense), CountStatus.PARTIAL.rawValue
+            let results = fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND is_dispense == %@ AND status == %@ AND is_from_pms == true",
+                    user, NSNumber(value: isDispense), CountStatus.PARTIAL.rawValue
+                ),
+                sort: [
+                    NSSortDescriptor(key: "is_from_pms", ascending: false),
+                    NSSortDescriptor(key: "created_at", ascending: false)
+                ],
+                in: context
             )
-            request.sortDescriptors = [
-                NSSortDescriptor(key: "is_from_pms", ascending: false),
-                NSSortDescriptor(key: "created_at", ascending: false)
-            ]
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
             logRefillNos(op: "fetchPartialFromPms", results: results)
             return results
         }
@@ -488,14 +449,14 @@ final class TransactionStore {
 
     func fetchCompletedUnsynced(for user: UserEntity) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND is_dispense == %@",
-                user, CountStatus.COMPLETED.rawValue, NSNumber(value: true)
+            let results = fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND is_dispense == %@",
+                    user, CountStatus.COMPLETED.rawValue, NSNumber(value: true)
+                ),
+                sort: [NSSortDescriptor(key: "created_at", ascending: true)],
+                in: context
             )
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
             logRefillNos(op: "fetchCompletedUnsynced", results: results)
             return results
         }
@@ -511,30 +472,65 @@ final class TransactionStore {
     /// Paginated variant — same predicate/sort as `fetchCompletedUnsynced`,
     /// bounded to `limit` rows starting at `offset` for screens (Unsynced)
     /// that page through this list instead of loading it all at once.
+    ///
+    /// NOT safe for a drain loop that mutates `is_synced` between page
+    /// fetches (e.g. the HL7 sync queues) — a row leaving the `is_synced ==
+    /// false` result set mid-drain shifts every later row's `OFFSET`
+    /// position back by one, silently skipping a row for that pass. Use
+    /// `fetchCompletedUnsyncedPage(after:limit:)` for that case instead.
     func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [PillCountTransactionEntity] {
         guard let user = currentUserEntity() else { return [] }
         return sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(
-                format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND is_dispense == %@",
-                user, CountStatus.COMPLETED.rawValue, NSNumber(value: true)
+            fetchPage(
+                predicate: NSPredicate(
+                    format: "user == %@ AND is_deleted == false AND is_synced == false AND status == %@ AND is_dispense == %@",
+                    user, CountStatus.COMPLETED.rawValue, NSNumber(value: true)
+                ),
+                sort: [NSSortDescriptor(key: "created_at", ascending: true)],
+                limit: limit,
+                offset: offset,
+                in: context
             )
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
-            request.fetchLimit = limit
-            request.fetchOffset = offset
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
-            return results
+        }
+    }
+
+    /// Keyset-paginated variant of `fetchCompletedUnsyncedPage` — anchors on
+    /// `created_at` instead of a row-position `OFFSET`, so it stays correct
+    /// even when rows leave the `is_synced == false` result set between page
+    /// fetches (an `OFFSET`-based page would silently skip a row shifted
+    /// into the gap — see `fetchCompletedUnsyncedPage(limit:offset:)`'s doc
+    /// comment). Pass `after: nil` for the first page, then the last
+    /// returned row's `created_at` for each subsequent page.
+    func fetchCompletedUnsyncedPage(after createdAt: Int64?, limit: Int) -> [PillCountTransactionEntity] {
+        guard let user = currentUserEntity() else { return [] }
+        return sync {
+            var predicates: [NSPredicate] = [
+                NSPredicate(format: "user == %@", user),
+                NSPredicate(format: "is_deleted == false"),
+                NSPredicate(format: "is_synced == false"),
+                NSPredicate(format: "status == %@", CountStatus.COMPLETED.rawValue),
+                NSPredicate(format: "is_dispense == %@", NSNumber(value: true))
+            ]
+            if let createdAt {
+                predicates.append(NSPredicate(format: "created_at > %lld", createdAt))
+            }
+            return fetchPage(
+                predicate: NSCompoundPredicate(andPredicateWithSubpredicates: predicates),
+                sort: [NSSortDescriptor(key: "created_at", ascending: true)],
+                limit: limit,
+                offset: 0,
+                in: context
+            )
         }
     }
 
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
+            let results = fetchAllMatching(
+                predicate: NSPredicate(format: "user == %@ AND is_deleted == false", user),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                in: context
+            )
             #if DEBUG
             StoreLogger.log(
                 dao: "TransactionDAO", op: "fetchAll",
@@ -562,14 +558,13 @@ final class TransactionStore {
     /// the user's entire transaction history.
     func fetchAllPage(for user: UserEntity, limit: Int, offset: Int) -> [PillCountTransactionEntity] {
         sync {
-            let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-            request.predicate = NSPredicate(format: "user == %@ AND is_deleted == false", user)
-            request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: false)]
-            request.fetchLimit = limit
-            request.fetchOffset = offset
-            let results = (try? context.fetch(request)) ?? []
-            results.forEach { refreshDecrypted($0) }
-            return results
+            fetchPage(
+                predicate: NSPredicate(format: "user == %@ AND is_deleted == false", user),
+                sort: [NSSortDescriptor(key: "created_at", ascending: false)],
+                limit: limit,
+                offset: offset,
+                in: context
+            )
         }
     }
 
@@ -585,7 +580,7 @@ final class TransactionStore {
 
     func updateWorkflowStep(txnId: Int64, step: ControlledStep) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.workflow_step = step.rawValue
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -652,21 +647,26 @@ final class TransactionStore {
         sync {
             let request = NSFetchRequest<NSNumber>(entityName: "PillCountTransactionEntity")
             request.resultType = .countResultType
-            var format = "user == %@ AND is_deleted == false AND batch_id == 0 AND is_dispense == true AND NOT (status IN %@) AND status != %@"
-            var args: [Any] = [user, [CountStatus.COMPLETED.rawValue], CountStatus.ON_HOLD.rawValue]
+
+            var predicates: [NSPredicate] = [
+                NSPredicate(format: "user == %@", user),
+                NSPredicate(format: "is_deleted == false"),
+                NSPredicate(format: "batch_id == 0"),
+                NSPredicate(format: "is_dispense == true"),
+                NSPredicate(format: "NOT (status IN %@)", [CountStatus.COMPLETED.rawValue]),
+                NSPredicate(format: "status != %@", CountStatus.ON_HOLD.rawValue)
+            ]
             switch facet {
             case .all:
                 break
             case .highPriority:
-                format += " AND txn_priority ==[c] %@"
-                args.append("high")
+                predicates.append(NSPredicate(format: "txn_priority ==[c] %@", "high"))
             case .hazardous:
-                format += " AND drug.is_hazardous == true"
+                predicates.append(NSPredicate(format: "drug.is_hazardous == true"))
             case .controlled:
-                format += " AND drug.drug_type != nil AND drug.drug_type != %@"
-                args.append("")
+                predicates.append(NSPredicate(format: "drug.drug_type != nil AND drug.drug_type != %@", ""))
             }
-            request.predicate = NSPredicate(format: format, argumentArray: args)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
             return (try? context.count(for: request)) ?? 0
         }
     }
@@ -691,7 +691,7 @@ final class TransactionStore {
 
     func updateDrug(txnId: Int64, drugId: Int64) {
         sync {
-            guard let txn = fetchByIdLocked(txnId),
+            guard let txn = fetchByIdNoWrap(txnId),
                   let drug = DrugCatalogStore.shared.fetchById(drugId) else { return }
             txn.drug_id = drugId
             txn.drug = drug
@@ -703,7 +703,7 @@ final class TransactionStore {
 
     func updateTargetCount(txnId: Int64, targetCount: Int32) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.target_count = targetCount
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -713,7 +713,7 @@ final class TransactionStore {
 
     func updateNote(txnId: Int64, note: String) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.note = note
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -723,7 +723,7 @@ final class TransactionStore {
 
     func updateStatus(txnId: Int64, status: CountStatus) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.status = status.rawValue
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -734,7 +734,7 @@ final class TransactionStore {
 
     func updateGlovesDetected(txnId: Int64, detected: Bool) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.gloves_detected = detected
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -744,7 +744,7 @@ final class TransactionStore {
 
     func updateHazardousTrayDetected(txnId: Int64, detected: Bool) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.hazardous_tray_detected = detected
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -754,7 +754,7 @@ final class TransactionStore {
 
     func updateNdcVerified(txnId: Int64, verified: Bool) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.is_ndc_verfied = verified
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -779,7 +779,7 @@ final class TransactionStore {
 
     func setBottleList(txnId: Int64, _ bottles: [BottleInfo]) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.bottle_info_list_json = bottles.encodedJson()
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -806,7 +806,7 @@ final class TransactionStore {
 
     func updateSynced(txnId: Int64) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.is_synced = true
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -831,7 +831,7 @@ final class TransactionStore {
     /// main, which every one of them already does via `.receive(on: .main)`.
     func updateSynced(txnId: Int64, in context: NSManagedObjectContext) {
         context.performAndWait {
-            guard let txn = fetchByIdLocked(txnId, in: context) else { return }
+            guard let txn = fetchByIdNoWrap(txnId, in: context) else { return }
             txn.is_synced = true
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -926,7 +926,7 @@ final class TransactionStore {
         isSubstitue: Bool = false
     ) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             if let drugId, let drug = DrugCatalogStore.shared.fetchById(drugId) {
                 txn.drug_id = drugId
                 txn.drug = drug
@@ -953,7 +953,7 @@ final class TransactionStore {
 
     func softDelete(txnId: Int64) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             txn.is_deleted = true
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -967,7 +967,7 @@ final class TransactionStore {
     /// `pillCountTransactionDetails`.
     func hardDelete(txnId: Int64) {
         sync {
-            guard let txn = fetchByIdLocked(txnId) else { return }
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
             context.delete(txn)
             CoreDataManager.shared.save(context: context)
             StoreLogger.debug("📋 [TransactionDAO] HARD DELETED — txnId: \(txnId)")
@@ -979,7 +979,7 @@ final class TransactionStore {
     /// see `updateSynced(txnId:in:)`.
     func hardDelete(txnId: Int64, in context: NSManagedObjectContext) {
         context.performAndWait {
-            guard let txn = fetchByIdLocked(txnId, in: context) else { return }
+            guard let txn = fetchByIdNoWrap(txnId, in: context) else { return }
             context.delete(txn)
             CoreDataManager.shared.save(context: context)
             StoreLogger.debug("📋 [TransactionDAO] HARD DELETED — txnId: \(txnId)")
@@ -997,21 +997,23 @@ final class TransactionStore {
     func sweepStaleSyncedTransactions(olderThan maxAge: TimeInterval) {
         guard !AppStorageManager.shared.allowLocalStorage else { return }
 
-        let deletedAny: Bool = sync {
+        let bgContext = CoreDataManager.shared.backgroundContext
+        var deletedAny = false
+        bgContext.performAndWait {
             let cutoff = Int64(Date().timeIntervalSince1970 * 1000) - Int64(maxAge * 1000)
             let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
             request.predicate = NSPredicate(
                 format: "is_deleted == false AND is_synced == true AND is_dispense == %@ AND (status == %@ OR status == %@) AND updated_at <= %lld",
                 NSNumber(value: true), CountStatus.COMPLETED.rawValue, CountStatus.FORCE_COMPLETED.rawValue, cutoff
             )
-            guard let stale = try? context.fetch(request), !stale.isEmpty else { return false }
+            guard let stale = try? bgContext.fetch(request), !stale.isEmpty else { return }
 
             for txn in stale {
                 StoreLogger.debug("📋 [TransactionDAO] TTL SWEEP hard-deleting stale synced txn — txnId: \(txn.txn_id), updatedAt: \(txn.updated_at)")
-                context.delete(txn)
+                bgContext.delete(txn)
             }
-            CoreDataManager.shared.save(context: context)
-            return true
+            CoreDataManager.shared.save(context: bgContext)
+            deletedAny = true
         }
         if deletedAny {
             transactionsDidChange.send()
@@ -1032,15 +1034,6 @@ final class TransactionStore {
 
     // MARK: - Private
 
-    /// Deterministically decrypts the object's encrypted fields in place
-    /// (e.g. rx_no, note). Replaces the old
-    /// context.refresh(_, mergeChanges: false) refault, which did NOT reliably
-    /// re-run awakeFromFetch and could surface ciphertext written by willSave
-    /// in the same session.
-    private func refreshDecrypted(_ object: NSManagedObject) {
-        object.decryptEncryptedFieldsInPlace()
-    }
-
     private func logRefillNos(op: String, results: [PillCountTransactionEntity]) {
         let rows = results.map { "txnId: \($0.txn_id), rxNo: \($0.rx_no ?? "-"), refillNo: \($0.refill_no ?? "-")" }
         StoreLogger.debug("📋 [TransactionDAO] \(op) refillNos — \(rows)")
@@ -1056,25 +1049,18 @@ final class TransactionStore {
     /// Same lookup as `fetchById`, but assumes the caller is already inside
     /// a `sync { }` block on this context — calling the public `fetchById`
     /// instead would re-enter `performAndWait`, which is safe but redundant.
-    private func fetchByIdLocked(_ txnId: Int64) -> PillCountTransactionEntity? {
-        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "txn_id == %lld", txnId)
-        request.fetchLimit = 1
-        guard let result = try? context.fetch(request).first else { return nil }
-        refreshDecrypted(result)
-        return result
+    /// "NoWrap" because nothing here is locking anything: it's the opposite
+    /// — the sync{} wrapping already happened at the call site, so this
+    /// variant skips wrapping again.
+    private func fetchByIdNoWrap(_ txnId: Int64) -> PillCountTransactionEntity? {
+        fetchOne(predicate: NSPredicate(format: "txn_id == %lld", txnId), sort: nil, in: context)
     }
 
-    /// Same as `fetchByIdLocked(_:)`, but against an explicit context —
+    /// Same as `fetchByIdNoWrap(_:)`, but against an explicit context —
     /// assumes the caller is already inside that context's
-    /// `performAndWait`, same convention as `fetchByIdLocked(_:)` itself.
-    private func fetchByIdLocked(_ txnId: Int64, in context: NSManagedObjectContext) -> PillCountTransactionEntity? {
-        let request: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "txn_id == %lld", txnId)
-        request.fetchLimit = 1
-        guard let result = try? context.fetch(request).first else { return nil }
-        refreshDecrypted(result)
-        return result
+    /// `performAndWait`, same convention as `fetchByIdNoWrap(_:)` itself.
+    private func fetchByIdNoWrap(_ txnId: Int64, in context: NSManagedObjectContext) -> PillCountTransactionEntity? {
+        fetchOne(predicate: NSPredicate(format: "txn_id == %lld", txnId), sort: nil, in: context)
     }
 
     private func generateUniqueId() -> Int64 {
@@ -1083,5 +1069,18 @@ final class TransactionStore {
         let newId = current + 1
         UserDefaults.standard.set(newId, forKey: key)
         return Int64(newId)
+    }
+
+    /// Trims/lowercases `txn_priority` at write time so every reader — the
+    /// `countPendingDispense(facet: .highPriority)` DB predicate and
+    /// `DashboardQueueItem.isHighPriority`'s in-memory check alike — can
+    /// compare against a plain `"high"` and agree. Server-sourced values
+    /// (the HL7/PMS `priority` field) aren't guaranteed pre-normalized, and
+    /// the two read sites previously trimmed/cased differently, so a stray
+    /// `" High "` from the PMS could count as high-priority in one place but
+    /// not the other.
+    private static func normalizedPriority(_ priority: String?) -> String? {
+        guard let priority else { return nil }
+        return priority.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }

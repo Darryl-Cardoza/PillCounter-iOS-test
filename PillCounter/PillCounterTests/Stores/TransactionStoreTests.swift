@@ -314,6 +314,86 @@ struct TransactionStoreTests {
         #expect(TransactionStore.shared.fetchCompletedUnsyncedPage(limit: 10, offset: 0).isEmpty)
     }
 
+    // MARK: - fetchCompletedUnsyncedPage(after:limit:) — keyset pagination
+
+    @Test func fetchCompletedUnsyncedPageAfterReturnsFirstPageWhenCursorNil() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let ids = (0..<3).map { _ -> Int64 in
+            let txn = fixture.makeTransaction(isDispense: true)
+            TransactionStore.shared.updateStatus(txnId: txn.txn_id, status: .COMPLETED)
+            return txn.txn_id
+        }
+
+        sharedCoreDataLock.lock()
+        let previousUserId = AppStorageManager.shared.userId
+        AppStorageManager.shared.userId = fixture.userId
+        defer {
+            AppStorageManager.shared.userId = previousUserId
+            sharedCoreDataLock.unlock()
+        }
+
+        let page = TransactionStore.shared.fetchCompletedUnsyncedPage(after: nil, limit: 2)
+        #expect(page.count == 2)
+        #expect(page.map { $0.txn_id } == [ids[0], ids[1]])
+    }
+
+    @Test func fetchCompletedUnsyncedPageAfterContinuesFromCursor() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let ids = (0..<3).map { _ -> Int64 in
+            let txn = fixture.makeTransaction(isDispense: true)
+            TransactionStore.shared.updateStatus(txnId: txn.txn_id, status: .COMPLETED)
+            return txn.txn_id
+        }
+
+        sharedCoreDataLock.lock()
+        let previousUserId = AppStorageManager.shared.userId
+        AppStorageManager.shared.userId = fixture.userId
+        defer {
+            AppStorageManager.shared.userId = previousUserId
+            sharedCoreDataLock.unlock()
+        }
+
+        let firstPage = TransactionStore.shared.fetchCompletedUnsyncedPage(after: nil, limit: 2)
+        let secondPage = TransactionStore.shared.fetchCompletedUnsyncedPage(after: firstPage.last!.created_at, limit: 2)
+        #expect(secondPage.map { $0.txn_id } == [ids[2]])
+    }
+
+    /// The bug this method exists to fix: with OFFSET-based paging, marking
+    /// a row synced BETWEEN page fetches shifts every later row's position
+    /// back by one, so the next OFFSET-anchored page silently skips a row.
+    /// Keyset pagination (anchored on `created_at`, which never changes)
+    /// must not exhibit this — every originally-unsynced row must still be
+    /// reachable after one mid-drain sync.
+    @Test func fetchCompletedUnsyncedPageAfterDoesNotSkipRowsSyncedMidDrain() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let ids = (0..<4).map { _ -> Int64 in
+            let txn = fixture.makeTransaction(isDispense: true)
+            TransactionStore.shared.updateStatus(txnId: txn.txn_id, status: .COMPLETED)
+            return txn.txn_id
+        }
+
+        sharedCoreDataLock.lock()
+        let previousUserId = AppStorageManager.shared.userId
+        AppStorageManager.shared.userId = fixture.userId
+        defer {
+            AppStorageManager.shared.userId = previousUserId
+            sharedCoreDataLock.unlock()
+        }
+
+        // Simulate a drain with page size 2: fetch page 1, then mark its
+        // first row synced (as an ACK would mid-drain) before fetching page 2.
+        let firstPage = TransactionStore.shared.fetchCompletedUnsyncedPage(after: nil, limit: 2)
+        #expect(firstPage.map { $0.txn_id } == [ids[0], ids[1]])
+
+        TransactionStore.shared.updateSynced(txnId: ids[0])
+
+        let secondPage = TransactionStore.shared.fetchCompletedUnsyncedPage(after: firstPage.last!.created_at, limit: 2)
+        #expect(secondPage.map { $0.txn_id } == [ids[2], ids[3]])
+    }
+
     // MARK: - fetchAllPage
 
     @Test func fetchAllPageRespectsLimitAndOffsetNewestFirst() {

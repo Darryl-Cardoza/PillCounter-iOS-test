@@ -34,10 +34,13 @@ final class DrugCatalogStore {
         imageUrl: String? = nil
     ) {
         let (resolvedDrugId, shouldDownloadImage): (Int64, Bool) = sync {
-            let entity = fetchOrCreateLocked(ndc: ndc, drugId: drugId)
+            let entity = fetchOrCreateNoWrap(ndc: ndc, drugId: drugId)
             if !drugName.isEmpty { entity.drug_name = drugName }
             if !gtin.isEmpty { entity.gtin = gtin }
-            if let drugType, !drugType.isEmpty { entity.drug_type = drugType }
+            if let drugType {
+                let trimmed = drugType.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { entity.drug_type = trimmed }
+            }
             if let strength, !strength.isEmpty { entity.strength = strength }
             if let dosageForm, !dosageForm.isEmpty { entity.dosage_form = dosageForm }
             if packageQty > 0 { entity.package_qty = packageQty }
@@ -66,7 +69,7 @@ final class DrugCatalogStore {
             }
             guard let fileName = PhotoFileManager.shared.saveImage(image) else { return }
             self.context.performAndWait {
-                guard let entity = self.fetchByIdLocked(drugId), entity.drug_image == nil else { return }
+                guard let entity = self.fetchByIdNoWrap(drugId), entity.drug_image == nil else { return }
                 entity.drug_image = fileName
                 CoreDataManager.shared.save(context: self.context)
                 StoreLogger.debug("💊 [DrugMasterDAO] IMAGE SAVED — drugId: \(drugId), file: \(fileName)")
@@ -122,7 +125,7 @@ final class DrugCatalogStore {
     @discardableResult
     func fetchOrCreate(ndc: String, drugId: Int64) -> DrugMasterEntity {
         sync {
-            fetchOrCreateLocked(ndc: ndc, drugId: drugId)
+            fetchOrCreateNoWrap(ndc: ndc, drugId: drugId)
         }
     }
 
@@ -150,7 +153,7 @@ final class DrugCatalogStore {
 
     func fetchById(_ drugId: Int64) -> DrugMasterEntity? {
         sync {
-            fetchByIdLocked(drugId)
+            fetchByIdNoWrap(drugId)
         }
     }
 
@@ -193,11 +196,11 @@ final class DrugCatalogStore {
         isHazardous: Bool? = nil
     ) {
         sync {
-            guard let drug = fetchByIdLocked(drugId) else { return }
+            guard let drug = fetchByIdNoWrap(drugId) else { return }
             if let drugName { drug.drug_name = drugName }
             if let ndc { drug.ndc = ndc }
             if let gtin, !gtin.isEmpty { drug.gtin = gtin }
-            if let drugType { drug.drug_type = drugType }
+            if let drugType { drug.drug_type = drugType.trimmingCharacters(in: .whitespacesAndNewlines) }
             if let strength { drug.strength = strength }
             if let dosageForm { drug.dosage_form = dosageForm }
             if let packageQty, packageQty > 0 { drug.package_qty = packageQty }
@@ -248,8 +251,10 @@ final class DrugCatalogStore {
     // MARK: - Private
 
     /// Same lookup as `fetchById`, but assumes the caller is already inside
-    /// a `sync { }` block on this context.
-    private func fetchByIdLocked(_ drugId: Int64) -> DrugMasterEntity? {
+    /// a `sync { }` block on this context — "NoWrap" because nothing here is
+    /// locking anything: the sync{} wrapping already happened at the call
+    /// site, so this variant skips wrapping again.
+    private func fetchByIdNoWrap(_ drugId: Int64) -> DrugMasterEntity? {
         let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
         request.predicate = NSPredicate(format: "drug_id == %lld", drugId)
         request.fetchLimit = 1
@@ -258,7 +263,7 @@ final class DrugCatalogStore {
 
     /// Same lookup/create as `fetchOrCreate`, but assumes the caller is
     /// already inside a `sync { }` block on this context.
-    private func fetchOrCreateLocked(ndc: String, drugId: Int64) -> DrugMasterEntity {
+    private func fetchOrCreateNoWrap(ndc: String, drugId: Int64) -> DrugMasterEntity {
         let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()
         request.predicate = NSPredicate(format: "ndc == %@", ndc)
         request.fetchLimit = 1

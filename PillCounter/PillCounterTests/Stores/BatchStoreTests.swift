@@ -249,6 +249,36 @@ struct BatchStoreTests {
         #expect(page2.count == 1)
     }
 
+    // MARK: - fetchCompletedUnsyncedPage(after:limit:) — keyset pagination
+
+    @Test func fetchCompletedUnsyncedPageAfterReturnsFirstPageWhenCursorNil() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batches = (0..<3).map { fixture.makeBatch(status: .COMPLETED, startTs: Int64($0 * 1000), isSynced: false) }
+
+        let page = BatchStore.shared.fetchCompletedUnsyncedPage(after: nil, limit: 2)
+        #expect(page.map { $0.batch_id } == [batches[0].batch_id, batches[1].batch_id])
+    }
+
+    /// The bug this method exists to fix: with OFFSET-based paging, marking
+    /// a row synced BETWEEN page fetches shifts every later row's position
+    /// back by one, so the next OFFSET-anchored page silently skips a row.
+    /// Keyset pagination (anchored on `start_date_time`, which never
+    /// changes) must not exhibit this.
+    @Test func fetchCompletedUnsyncedPageAfterDoesNotSkipRowsSyncedMidDrain() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batches = (0..<4).map { fixture.makeBatch(status: .COMPLETED, startTs: Int64($0 * 1000), isSynced: false) }
+
+        let firstPage = BatchStore.shared.fetchCompletedUnsyncedPage(after: nil, limit: 2)
+        #expect(firstPage.map { $0.batch_id } == [batches[0].batch_id, batches[1].batch_id])
+
+        BatchStore.shared.markSynced(batchId: batches[0].batch_id)
+
+        let secondPage = BatchStore.shared.fetchCompletedUnsyncedPage(after: firstPage.last!.start_date_time, limit: 2)
+        #expect(secondPage.map { $0.batch_id } == [batches[2].batch_id, batches[3].batch_id])
+    }
+
     // MARK: - countByDateRange
 
     @Test func countByDateRangeMatchesFetchCount() {
@@ -274,14 +304,15 @@ struct BatchStoreTests {
 
     // MARK: - countPendingInventory
 
-    @Test func countPendingInventoryAllCountsAllPartialRegardlessOfFacet() {
+    @Test func countPendingInventoryFacetsPartitionAllPartial() {
         let fixture = BatchTrackingFixture()
         defer { fixture.cleanUp() }
         fixture.makeBatch(status: .PARTIAL, requestId: "req-1")
         fixture.makeBatch(status: .PARTIAL, requestId: nil)
 
-        let count = BatchStore.shared.countPendingInventory(facet: .all)
-        #expect(count == 2)
+        let cycleCount = BatchStore.shared.countPendingInventory(facet: .cycleCount)
+        let pendingBatch = BatchStore.shared.countPendingInventory(facet: .pendingBatch)
+        #expect(cycleCount + pendingBatch == 2)
     }
 
     @Test func countPendingInventoryCycleCountFacetRequiresNonEmptyRequestId() {
@@ -310,8 +341,10 @@ struct BatchStoreTests {
         fixture.makeBatch(status: .COMPLETED)
         fixture.makeBatch(status: .PARTIAL, isDeleted: true)
 
-        let count = BatchStore.shared.countPendingInventory(facet: .all)
-        #expect(count == 0)
+        let cycleCount = BatchStore.shared.countPendingInventory(facet: .cycleCount)
+        let pendingBatch = BatchStore.shared.countPendingInventory(facet: .pendingBatch)
+        #expect(cycleCount == 0)
+        #expect(pendingBatch == 0)
     }
 
     // MARK: - countCompletedUnsynced

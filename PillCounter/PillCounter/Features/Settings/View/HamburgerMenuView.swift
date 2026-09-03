@@ -129,7 +129,7 @@ struct HamburgerMenuView: View {
                 VStack(spacing: 12) {
                     PillCountingButton(
                         iconName: nil,
-                        title: "Generate 5k Test Data",
+                        title: "Generate 10k Test Data",
                         textColor: Color.white,
                         backgroundColor: appColors.primary,
                         borderColor: .clear,

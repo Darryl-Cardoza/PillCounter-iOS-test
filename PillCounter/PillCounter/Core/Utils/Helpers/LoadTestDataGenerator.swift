@@ -9,9 +9,6 @@
 //  an id from a reserved high range (see TestIds) so `clearAll()` can find
 //  and remove exactly what this generator created, and nothing else.
 //
-//  Remove this file, the LOAD_TEST scheme, and the hamburger menu entry once
-//  load testing and any resulting fixes are complete — none of it ships.
-//
 
 #if LOAD_TEST
 import CoreData
@@ -41,12 +38,12 @@ enum LoadTestDataGenerator {
 
     // MARK: - Generate
 
-    /// Bulk-inserts ~5k dispense transactions (proportional detail rows)
+    /// Bulk-inserts ~10k dispense transactions (proportional detail rows)
     /// plus a proportional set of inventory batches/stock counts, all dated
     /// within today, attached to the currently logged-in user. Runs on a
     /// background context, saving in batches so it doesn't block the main thread.
     static func generate(
-        transactionCount: Int = 5_000,
+        transactionCount: Int = 10_000,
         onProgress: @escaping (Progress) -> Void,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {

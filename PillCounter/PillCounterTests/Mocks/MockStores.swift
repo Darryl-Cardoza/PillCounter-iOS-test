@@ -33,14 +33,17 @@ final class MockTransactionDataSource: TransactionDataSource {
     private(set) var fetchByTimeRangePageCalls: [(limit: Int, offset: Int)] = []
 
     func fetchById(_ txnId: Int64) -> PillCountTransactionEntity? { transactions[txnId] }
+    func fetchById(_ txnId: Int64, in context: NSManagedObjectContext) -> PillCountTransactionEntity? { transactions[txnId] }
     func fetchByBatch(batchId: Int64) -> [PillCountTransactionEntity] { [] }
     func fetchByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64) -> [PillCountTransactionEntity] { timeRangeRows }
+    func fetchByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64, in context: NSManagedObjectContext) -> [PillCountTransactionEntity] { timeRangeRows }
     func fetchByTimeRangePage(for user: UserEntity, startTime: Int64, endTime: Int64, limit: Int, offset: Int) -> [PillCountTransactionEntity] {
         fetchByTimeRangePageCalls.append((limit, offset))
         guard offset < timeRangeRows.count else { return [] }
         return Array(timeRangeRows[offset..<min(offset + limit, timeRangeRows.count)])
     }
     func fetchPartial(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity] { [] }
+    func fetchPartial(for user: UserEntity, isDispense: Bool, in context: NSManagedObjectContext) -> [PillCountTransactionEntity] { [] }
     func fetchPartialPage(for user: UserEntity, isDispense: Bool, limit: Int, offset: Int) -> [PillCountTransactionEntity] { [] }
     func fetchPartialFromPms(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity] { [] }
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity] { [] }
@@ -124,6 +127,9 @@ final class MockTransactionDetailDataSource: TransactionDetailDataSource {
     func totalCountsForSteps(txnIds: [Int64], step: ControlledStep) -> [Int64: Int32] {
         Dictionary(uniqueKeysWithValues: txnIds.map { ($0, 0) })
     }
+    func totalCountsForSteps(txnIds: [Int64], step: ControlledStep, in context: NSManagedObjectContext) -> [Int64: Int32] {
+        Dictionary(uniqueKeysWithValues: txnIds.map { ($0, 0) })
+    }
 
     func totalCount(txnId: Int64) -> Int {
         totals[txnId] ?? 0
@@ -138,6 +144,8 @@ final class MockTransactionDetailDataSource: TransactionDetailDataSource {
 
     func addOrReplaceVial(txnId: Int64, imagePath: String?) {}
     func fetchForStep(txnId: Int64, step: ControlledStep) -> [PillCountTransactionDetailsEntity] { [] }
+    func fetchAll(txnId: Int64) -> [PillCountTransactionDetailsEntity] { [] }
+    func fetchAll(txnId: Int64, in context: NSManagedObjectContext) -> [PillCountTransactionDetailsEntity] { [] }
     func lastCompletedStep(txnId: Int64) -> ControlledStep? { nil }
     func softDeleteForStep(txnId: Int64, step: ControlledStep) {}
     func update(detailId: Int64, block: (PillCountTransactionDetailsEntity) -> Void) {}
@@ -154,8 +162,10 @@ final class MockBatchDataSource: BatchDataSource {
     var transactionsDidChange = PassthroughSubject<Void, Never>()
     func fetchById(_ batchId: Int64) -> BatchCountEntity? { nil }
     func fetchByDateRange(startTs: Int64, endTs: Int64) -> [BatchCountEntity] { [] }
+    func fetchByDateRange(startTs: Int64, endTs: Int64, in context: NSManagedObjectContext) -> [BatchCountEntity] { [] }
     func fetchByDateRangePage(startTs: Int64, endTs: Int64, limit: Int, offset: Int) -> [BatchCountEntity] { [] }
     func fetchAllPartial() -> [BatchCountEntity] { [] }
+    func fetchAllPartial(in context: NSManagedObjectContext) -> [BatchCountEntity] { [] }
     func fetchAllCompleted() -> [BatchCountEntity] { [] }
     func fetchCompletedUnsynced() -> [BatchCountEntity] { [] }
     func fetchAllPartialPage(limit: Int, offset: Int) -> [BatchCountEntity] { [] }
@@ -167,6 +177,9 @@ final class MockBatchDataSource: BatchDataSource {
     func fetchLastCreated() -> BatchCountEntity? { nil }
     func getTransactionCount(for batchId: Int64) -> Int { 0 }
     func transactionCounts(for batchIds: [Int64]) -> [Int64: Int] {
+        Dictionary(uniqueKeysWithValues: batchIds.map { ($0, 0) })
+    }
+    func transactionCounts(for batchIds: [Int64], in context: NSManagedObjectContext) -> [Int64: Int] {
         Dictionary(uniqueKeysWithValues: batchIds.map { ($0, 0) })
     }
     func create(bucketId: String, requestId: String?) -> BatchCountEntity? { nil }

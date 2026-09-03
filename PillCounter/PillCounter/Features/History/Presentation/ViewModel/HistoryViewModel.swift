@@ -138,7 +138,7 @@ class HistoryViewModel: ObservableObject {
         transactionPageOffset += page.count
         hasMoreTransactions = page.count == pageSize
 
-        filteredTransactionsOfUserByDate = page.filter { $0.is_dispense }
+        filteredTransactionsOfUserByDate = page
     }
 
     /// Fetches and appends the next page of transactions for the current
@@ -171,7 +171,7 @@ class HistoryViewModel: ObservableObject {
         )
         transactionPageOffset += page.count
         hasMoreTransactions = page.count == pageSize
-        filteredTransactionsOfUserByDate += page.filter { $0.is_dispense }
+        filteredTransactionsOfUserByDate += page
     }
 
     // MARK: - Fetch Batches by Date (first page)
@@ -320,10 +320,16 @@ class HistoryViewModel: ObservableObject {
     // MARK: - Soft Delete Single Transaction (used from detail view)
     func softDeleteTransaction(txnId: Int64) async {
         transactionStore.softDelete(txnId: txnId)
+        filteredTransactionsOfUserByDate.removeAll { $0.txn_id == txnId }
+        transactionRowCache.removeValue(forKey: txnId)
+        transactionRows.removeAll { Int64($0.id) == txnId }
     }
-    
+
     func softDeleteBatch(batchId: Int64) async {
         batchStore.softDelete(ids: [batchId])
+        filteredBatchesOfUserByDate.removeAll { $0.batch_id == batchId }
+        batchRowCache.removeValue(forKey: batchId)
+        batchRows.removeAll { $0.batchId == batchId }
     }
 
     // MARK: - Status Counts
@@ -403,14 +409,24 @@ class HistoryViewModel: ObservableObject {
         isLoadingDetailScreen = true
         defer { isLoadingDetailScreen = false }
 
+        // Captured as locals before entering Task.detached — `self` is
+        // @MainActor-isolated, so its stored `transactionStore`/
+        // `transactionDetailStore` (non-Sendable protocol types) cannot be
+        // captured directly into a detached closure. The stores themselves
+        // are safe to call from any thread (every call is confined via their
+        // own `sync`/explicit-context `performAndWait`), so capturing the
+        // references (not `self`) is sufficient.
+        let transactionStore = self.transactionStore
+        let transactionDetailStore = self.transactionDetailStore
+
         let model = await Task.detached(priority: .userInitiated) { () -> TransactionDetailScreenModel? in
             let bgContext = CoreDataManager.shared.backgroundContext
             return bgContext.performAndWait { () -> TransactionDetailScreenModel? in
-                guard let txn = TransactionStore.shared.fetchById(txnId, in: bgContext) else {
+                guard let txn = transactionStore.fetchById(txnId, in: bgContext) else {
                     return nil
                 }
 
-                let allDetails = TransactionDetailStore.shared.fetchAll(txnId: txnId, in: bgContext)
+                let allDetails = transactionDetailStore.fetchAll(txnId: txnId, in: bgContext)
                 let grouped = Dictionary(grouping: allDetails.filter { !$0.is_deleted }) { detail in
                     ControlledStep(rawValue: detail.type ?? "") ?? .containerInitiate
                 }

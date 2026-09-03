@@ -23,12 +23,10 @@ extension Hl7ServiceController {
 
     func setupBatchSyncQueue() {
         let queue = HL7BatchSyncQueue(
-            hl7Builder: HL7CompletionBuilder(),
             hl7Manager: hl7Manager
         )
         self.batchSyncQueue = queue
         observeStorageChanges()
-        print("🔧 [HL7] BatchSyncQueue setup complete, queue:", queue)  // temp
     }
 
 

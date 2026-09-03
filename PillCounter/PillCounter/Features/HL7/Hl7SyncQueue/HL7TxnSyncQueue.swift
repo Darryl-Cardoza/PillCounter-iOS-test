@@ -14,151 +14,60 @@ import Combine
 
 // MARK: - Queue Item
 
-private struct TxnSyncQueueItem {
+struct TxnSyncQueueItem: HL7QueueItem {
     let txnId: Int64
     let requestId: String
+    let cursor: Int64
 }
 
 // MARK: - HL7TxnSyncQueue
-final class HL7TxnSyncQueue {
+final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
 
     private let transactionDAO = TransactionStore.shared
-    private let hl7Builder: HL7CompletionBuilder
+    /// Only the config is needed here — the actual `HL7CompletionBuilder`
+    /// (and its underlying `HL7Builder` message engine) is constructed fresh
+    /// per send, scoped to the background context the send runs on (see
+    /// `processNext`), so this queue never builds/holds a real builder.
+    private let hl7Config: HL7Config
     private weak var hl7Manager: Hl7ServiceManager?
 
-    private var queue: [TxnSyncQueueItem] = []
-    private var isSending = false
-    private var pendingRequestId: String?
-    /// MSH-10 (messageControlId) of the in-flight HL7 message — this is what the PMS
-    /// echoes back in MSA-2, NOT `pendingRequestId` (an internal `"TXN_<id>"` dedup
-    /// key). ACKs must be matched against this, or every real ACK is misread as
-    /// "not mine" and every send times out even when the PMS answered correctly.
-    private var pendingAckMessageId: String?
-    private var ackTimeoutWork: DispatchWorkItem?
-
-    /// requestIds that failed (NACK or ACK timeout) in the current connection session.
-    /// Parked items are skipped by `loadAndEnqueuePending` until `resetParkedState()`
-    /// runs — one retry attempt per connection, no continuous resend hammering the
-    /// PMS. Cleared on reconnect (`Hl7ServiceController.onClientConnected`) or an
-    /// explicit user-initiated retry.
-    private var parkedRequestIds: Set<String> = []
-
-    private let ackTimeoutSeconds: TimeInterval = 10
-    private let processingQueue = DispatchQueue(label: "hl7.txn.sync.queue", qos: .utility)
-
-    /// Backlog-drain chunking: how many unsynced rows `loadAndEnqueuePending`
-    /// fetches per `performAndWait` hop onto the main `viewContext`, and how
-    /// long it yields the processing queue between chunks. A single unbounded
-    /// fetch decrypts the whole backlog in one continuous hop — with many
-    /// thousands of unsynced rows that held the main queue long enough to
-    /// read as an app freeze while connecting. Chunking trades a slightly
-    /// slower enqueue for regular breathing room on the main queue.
-    private let loadChunkSize = 50
-    private let loadChunkDelay: TimeInterval = 0.05
-
     init(
-        hl7Builder: HL7CompletionBuilder,
+        hl7Config: HL7Config = .current,
         hl7Manager: Hl7ServiceManager?
     ) {
-        self.hl7Builder  = hl7Builder
-        self.hl7Manager  = hl7Manager
+        self.hl7Config = hl7Config
+        self.hl7Manager = hl7Manager
+        super.init(processingQueueLabel: "hl7.txn.sync.queue")
     }
 
     // MARK: - PUBLIC
 
-    func enqueueUnsynced() {
-        processingQueue.async { [weak self] in
-            self?.loadAndEnqueuePending(offset: 0)
-        }
-    }
-
-    /// Clears parked (failed-attempt) state so previously-failed txns are eligible
-    /// for one more send attempt. Call on reconnect and on user-initiated manual retry.
-    func resetParkedState() {
-        processingQueue.async { [weak self] in
-            self?.parkedRequestIds.removeAll()
-        }
-    }
-
-    func handleAck(messageId: String?, hl7 ackMessage: String) {
-        processingQueue.async { [weak self] in
-            guard let self, self.pendingAckMessageId != nil, messageId == self.pendingAckMessageId else { return }
-            self.processAck(ackMessage)
-        }
-    }
-
-    // MARK: - LOAD
-
     /// `enqueueUnsynced()` fires on every `transactionsDidChange` signal —
     /// up to once per ACK while a large backlog drains — but every prior
-    /// call already queued everything unsynced at the time (deduped below
-    /// against `queue`), so a mid-drain re-fetch only ever turns up items
-    /// already queued. Skipping the fetch while `queue` still has items
-    /// avoids re-fetching and fully AES-decrypting the entire unsynced set
-    /// (potentially thousands of rows) on every single ACK; once the queue
-    /// drains, the next `enqueueUnsynced()` call picks up anything new.
-    ///
-    /// Paged in chunks of `loadChunkSize`, with a `loadChunkDelay` yield
-    /// between chunks — each chunk's fetch is a `performAndWait` hop onto the
-    /// main `viewContext` (see `processNext`), and a single unbounded fetch
-    /// of a large backlog held that hop continuously long enough to read as
-    /// an app freeze. Sync starts as soon as the first chunk lands rather
-    /// than waiting for the whole backlog.
-    private func loadAndEnqueuePending(offset: Int) {
-        if offset == 0 {
-            guard queue.isEmpty else {
-                print("📦 [TxnQueue] Skipping reload — \(queue.count) item(s) still queued")
-                return
-            }
-        }
-
-        let page = transactionDAO.fetchCompletedUnsyncedPage(limit: loadChunkSize, offset: offset)
-        if offset == 0 {
-            print("📦 [TxnQueue] Loading pending txns from offset 0")
-        }
-
-        for txn in page {
-            if txn.is_deleted {
-                  print("⛔️ [TxnQueue] Skipping deleted txn:", txn.txn_id)
-                  continue
-            }
-
-            let txnId = txn.txn_id
-            let requestId = resolvedRequestId(for: txn)
-
-            guard !parkedRequestIds.contains(requestId) else {
-                print("⏸️ [TxnQueue] Skipping parked (already failed this session):", requestId)
-                continue
-            }
-
-            guard !queue.contains(where: { $0.requestId == requestId }) else {
-                print("⚠️ [TxnQueue] Duplicate requestId:", requestId)
-                continue
-            }
-
-            queue.append(TxnSyncQueueItem(txnId: txnId, requestId: requestId))
-            print("✅ [TxnQueue] Enqueued txn:", txnId)
-        }
-
-        // First chunk enqueued (if any) — let sending start without waiting
-        // for the rest of the backlog to page in.
-        if offset == 0 {
-            processNext()
-        }
-
-        guard page.count == loadChunkSize else {
-            print("📦 [TxnQueue] Final queue:", queue.map { $0.txnId })
-            return
-        }
-
-        processingQueue.asyncAfter(deadline: .now() + loadChunkDelay) { [weak self] in
-            self?.loadAndEnqueuePending(offset: offset + page.count)
+    /// call already queued everything unsynced at the time (deduped in the
+    /// base class against `queue`), so a mid-drain re-fetch only ever turns
+    /// up items already queued. Skipping the fetch while `queue` still has
+    /// items avoids re-fetching and fully AES-decrypting the entire unsynced
+    /// set (potentially thousands of rows) on every single ACK; once the
+    /// queue drains, the next `enqueueUnsynced()` call picks up anything new.
+    func enqueueUnsynced() {
+        processingQueue.async { [weak self] in
+            guard let self else { return }
+            self.loadAndEnqueuePending(
+                after: nil,
+                fetchPage: { cursor, limit in
+                    self.transactionDAO.fetchCompletedUnsyncedPage(after: cursor, limit: limit)
+                        .filter { !$0.is_deleted }
+                        .map { TxnSyncQueueItem(txnId: $0.txn_id, requestId: self.resolvedRequestId(for: $0), cursor: $0.created_at) }
+                },
+                onFirstChunk: { self.processNext() }
+            )
         }
     }
 
     // MARK: - PROCESS
 
-    private func processNext() {
+    override func processNext() {
         guard !isSending, let item = queue.first else { return }
 
         // `txn`/`user` and everything `buildCompletionMessage` reads off them
@@ -174,7 +83,7 @@ final class HL7TxnSyncQueue {
         // — cheap, and avoids any shared mutable context state between
         // concurrent sync-queue sends.
         let bgContext = CoreDataManager.shared.backgroundContext
-        let builderConfig = hl7Builder.config
+        let builderConfig = hl7Config
         let hl7: String? = bgContext.performAndWait { () -> String? in
             guard
                 let txn = transactionDAO.fetchById(item.txnId, in: bgContext),
@@ -188,19 +97,17 @@ final class HL7TxnSyncQueue {
         }
 
         guard let hl7 else {
-            queue.removeFirst()
+            removeFirstQueueItem()
             processNext()
             return
         }
-        print("hl7\(hl7)")
+        StoreLogger.debug("📡 [HL7] Built txn message for \(item.txnId):\n\(hl7)")
         guard let manager = hl7Manager, !hl7.isEmpty else {
-            print("❌ [TxnQueue] HL7 invalid or manager nil")
             return
         }
 
         guard let ackMessageId = Self.extractMessageControlId(from: hl7) else {
-            print("❌ [TxnQueue] Could not read MSH-10 from built message — cannot correlate ACK, skipping send")
-            queue.removeFirst()
+            removeFirstQueueItem()
             processNext()
             return
         }
@@ -216,25 +123,7 @@ final class HL7TxnSyncQueue {
         scheduleAckTimeout(for: item.requestId)
     }
 
-    // MARK: - ACK
-
-    private func processAck(_ message: String) {
-        cancelAckTimeout()
-
-        guard let requestId = pendingRequestId else { return }
-
-        if isPositiveAck(message) {
-            markCurrentTxnSynced()
-        } else {
-            print("❌ [TxnQueue] Negative/invalid ACK — parking txn until next connect/retry:", requestId)
-            parkedRequestIds.insert(requestId)
-        }
-        advanceQueue()
-    }
-
-    private func isPositiveAck(_ message: String) -> Bool {
-        message.contains("|AA|") || message.contains("|AA\r")
-    }
+    // MARK: - Overrides
 
     /// Writes the ACK-success sync flag via a background context instead of
     /// hopping to `viewContext`/main — `TransactionStore.updateSynced`
@@ -248,42 +137,20 @@ final class HL7TxnSyncQueue {
     /// merges into `viewContext` automatically (`automaticallyMergesChangesFromParent`
     /// on `CoreDataManager.backgroundContext`); `transactionsDidChange` still
     /// reaches UI observers via their own `.receive(on: .main)`.
-    private func markCurrentTxnSynced() {
+    override func markCurrentItemSynced() {
         guard let item = queue.first else { return }
         let bgContext = CoreDataManager.shared.backgroundContext
         TransactionStore.shared.updateSynced(txnId: item.txnId, in: bgContext)
     }
 
-    private func advanceQueue() {
-        isSending = false
-        pendingRequestId = nil
-        pendingAckMessageId = nil
-        queue.removeFirst()
-        processNext()
-    }
-
-    // MARK: - TIMEOUT
-
-    private func scheduleAckTimeout(for requestId: String) {
-        let work = DispatchWorkItem { [weak self] in
-            self?.processingQueue.async {
-                guard let self, self.pendingRequestId == requestId else { return }
-                print("⏰ [TxnQueue] ACK timeout — parking txn until next connect/retry:", requestId)
-                self.parkedRequestIds.insert(requestId)
-                self.advanceQueue()
-            }
-        }
-        ackTimeoutWork = work
-        DispatchQueue.global().asyncAfter(
-            deadline: .now() + ackTimeoutSeconds,
-            execute: work
-        )
-    }
-
-    private func cancelAckTimeout() {
-        ackTimeoutWork?.cancel()
-        ackTimeoutWork = nil
-    }
+    // Note: `removeFirstQueueItem` is left at the base default (unconditional
+    // `queue.removeFirst()`), preserving this queue's existing crash-risk
+    // behavior on an empty queue — deliberately not fixed as a side effect
+    // of this refactor. `shouldSkipItem`/`handleNilPendingRequestId` are
+    // also left at base defaults: the soft-delete skip happens in
+    // `enqueueUnsynced`'s fetchPage closure above (before `Item` is even
+    // constructed), and this queue's `processAck` nil-`pendingRequestId`
+    // branch has always just returned.
 
     // MARK: - HELPERS
 

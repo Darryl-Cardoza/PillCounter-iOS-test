@@ -47,12 +47,6 @@ final class Hl7ServiceController: ObservableObject {
 
     // MARK: - Entry Point
     func evaluate() {
-        print("===== HL7 Service Evaluation =====")
-        print("isLoggedIn: \(AppStorageManager.shared.isLoggedIn)")
-        print("isPmsIntegrated: \(AppStorageManager.shared.isPmsIntegrated)")
-        print("isDeviceCompromised: \(SecurityManager.isDeviceCompromised())")
-        print("shouldStartService: \(shouldStartService)")
-        print("=================================")
         guard shouldStartService else {
             stopService()
             return
@@ -184,11 +178,7 @@ final class Hl7ServiceController: ObservableObject {
     // MARK: - Legacy Queue Logic
 
     private func resendPendingHl7Transactions() {
-        print("🔄 [HL7] Resend Pending Transactions START")
-
         let pending = transactionDAO.fetchCompletedUnsynced()
-        print("📦 [HL7] Pending Count:", pending.count)
-        print("📦 [HL7] Pending Txns:", pending.map { $0.txn_id })
 
         guard !pending.isEmpty else {
             Log("⚠️ [HL7] No pending transactions found")

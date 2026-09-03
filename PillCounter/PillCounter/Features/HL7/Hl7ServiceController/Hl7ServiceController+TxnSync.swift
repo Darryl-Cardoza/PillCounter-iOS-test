@@ -15,15 +15,12 @@ extension Hl7ServiceController {
 
     func setupTxnSyncQueue() {
         guard txnSyncQueue == nil else {
-            print("⚠️ [TxnSync] Already set up — skipping")
             return
         }
         let queue = HL7TxnSyncQueue(
-            hl7Builder: HL7CompletionBuilder(),
             hl7Manager: hl7Manager
         )
         self.txnSyncQueue = queue
-        print("🔧 [HL7] TxnSyncQueue setup complete")
         // ⚠️ Storage observation is centralised in setupStorageObserver()
         // in Hl7ServiceController.swift — do NOT add another subscriber here.
     }
@@ -31,7 +28,6 @@ extension Hl7ServiceController {
     // MARK: - Called by socket layer when client connects / reconnects
 
     func onClientConnectedTxn() {
-        print("📡 [TxnSync] onClientConnected — enqueuing pending txns")
         txnSyncQueue?.enqueueUnsynced()
     }
 

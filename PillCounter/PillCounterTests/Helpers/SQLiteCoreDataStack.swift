@@ -129,11 +129,11 @@ final class BottleTrackingFixture {
     /// user row this fixture created, and releases `sharedCoreDataLock`. Call
     /// at the end of every test.
     func cleanUp() {
+        defer { sharedCoreDataLock.unlock() }
         for txnId in txnIds {
             TransactionStore.shared.hardDelete(txnId: txnId)
         }
         UserStore.shared.delete(userId: userId)
-        sharedCoreDataLock.unlock()
     }
 }
 
@@ -204,6 +204,10 @@ final class BatchTrackingFixture {
     /// then restores the previous logged-in user id and releases
     /// `sharedCoreDataLock`. Call at the end of every test using this fixture.
     func cleanUp() {
+        defer {
+            AppStorageManager.shared.userId = previousUserId
+            sharedCoreDataLock.unlock()
+        }
         let context = CoreDataManager.shared.context
         context.performAndWait {
             for batchId in batchIds {
@@ -230,7 +234,5 @@ final class BatchTrackingFixture {
             }
             CoreDataManager.shared.save(context: context)
         }
-        AppStorageManager.shared.userId = previousUserId
-        sharedCoreDataLock.unlock()
     }
 }

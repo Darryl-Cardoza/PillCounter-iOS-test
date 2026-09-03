@@ -79,6 +79,14 @@ final class CoreDataManager {
             }
             #endif
         }
+
+        // Background contexts (see `backgroundContext` below) save directly to
+        // the persistent store coordinator, as siblings of `viewContext`, not
+        // as its children — a background save only reaches `viewContext` via
+        // this merge notification. Without it, `viewContext` keeps serving
+        // stale snapshots (e.g. `is_synced`) and stale references to objects
+        // a background context deleted.
+        container.viewContext.automaticallyMergesChangesFromParent = true
     }
 
     /// In-memory initializer for unit tests. Each instance gets an isolated
@@ -106,6 +114,8 @@ final class CoreDataManager {
                 fatalError("Failed to load in-memory Core Data: \(error.localizedDescription)")
             }
         }
+
+        container.viewContext.automaticallyMergesChangesFromParent = true
     }
     
     // core data context
@@ -114,9 +124,7 @@ final class CoreDataManager {
     }
     
     var backgroundContext: NSManagedObjectContext {
-        let ctx = container.newBackgroundContext()
-        ctx.automaticallyMergesChangesFromParent = true
-        return ctx
+        container.newBackgroundContext()
     }
 
     func save(context: NSManagedObjectContext) {

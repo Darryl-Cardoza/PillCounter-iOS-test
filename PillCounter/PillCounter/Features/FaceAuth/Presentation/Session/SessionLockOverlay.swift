@@ -62,7 +62,7 @@ struct SessionLockOverlay: View {
         SessionStatusScreen(
             iconName: "icon_session_lock",
             title: L10n.FaceAuth.sessionLockedTitle,
-            subtitle: sessionManager.idleDurationText ?? L10n.FaceAuth.sessionLockedSubtitle
+            subtitle: L10n.FaceAuth.sessionLockedSubtitle
         ) {
             PillCountingButton(
                 title: L10n.FaceAuth.sessionLockedUnlockButton,

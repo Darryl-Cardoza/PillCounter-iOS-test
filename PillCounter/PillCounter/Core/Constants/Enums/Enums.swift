@@ -413,6 +413,7 @@ enum SettingsSubScreen {
 /// Session-lock idle timeout — how long the app can sit untouched before the
 /// face-lock overlay appears (spec: "configurable timeout (e.g. 60s)").
 enum FaceSessionTimeoutOption: Int, CaseIterable, Identifiable {
+    case tenSeconds = 10
     case oneMinute = 60
     case twoMinutes = 120
     case fiveMinutes = 300
@@ -424,6 +425,7 @@ enum FaceSessionTimeoutOption: Int, CaseIterable, Identifiable {
 
     var displayText: String {
         switch self {
+        case .tenSeconds: return L10n.Settings.faceSessionTimeout10s
         case .oneMinute: return L10n.Settings.faceSessionTimeout1m
         case .twoMinutes: return L10n.Settings.faceSessionTimeout2m
         case .fiveMinutes: return L10n.Settings.faceSessionTimeout5m

@@ -256,6 +256,7 @@ enum L10n {
         static let quickAccess = NSLocalizedString("settings.quickAccess", comment: "")
         static let timeLimit = NSLocalizedString("settings.timeLimit", comment: "")
         static let timeLimitScreenTitle = NSLocalizedString("settings.timeLimitScreenTitle", comment: "")
+        static let faceSessionTimeout10s = NSLocalizedString("settings.faceSessionTimeout10s", comment: "")
         static let faceSessionTimeout1m = NSLocalizedString("settings.faceSessionTimeout1m", comment: "")
         static let faceSessionTimeout2m = NSLocalizedString("settings.faceSessionTimeout2m", comment: "")
         static let faceSessionTimeout5m = NSLocalizedString("settings.faceSessionTimeout5m", comment: "")

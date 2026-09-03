@@ -131,7 +131,6 @@ struct PillScanDetailGridScreen: View {
                 }
             }
         }
-
         .customPopup(isPresented: $showDeleteConfirm) {
             deleteConfirmationDialog
         }

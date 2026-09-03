@@ -213,6 +213,7 @@
 "settings.quickAccess" = "Quick Access";
 "settings.timeLimit" = "Time Limit";
 "settings.timeLimitScreenTitle" = "Session Lock Timeout";
+"settings.faceSessionTimeout10s" = "10 Seconds";
 "settings.faceSessionTimeout1m" = "1 Minute";
 "settings.faceSessionTimeout2m" = "2 Minutes (Default)";
 "settings.faceSessionTimeout5m" = "5 Minutes";

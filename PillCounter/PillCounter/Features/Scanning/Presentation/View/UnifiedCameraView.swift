@@ -181,12 +181,12 @@ struct UnifiedCameraView: View {
                 .environmentObject(pillScanViewModel)
             }
         // Commented for now
-//            .overlay {
-//                if showSuccessAnimation {
-//                    SuccessAnimationView(count: lastAddedCount, color: appColors.secondary)
-//                        .allowsHitTesting(false)
-//                }
-//            }
+            .overlay {
+                if showSuccessAnimation {
+                    SuccessAnimationView(count: lastAddedCount, color: appColors.secondary)
+                        .allowsHitTesting(false)
+                }
+            }
     }
 
     var pillCountSheetHeight: CGFloat {

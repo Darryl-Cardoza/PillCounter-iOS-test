@@ -49,6 +49,18 @@ final class FaceSessionManager: ObservableObject {
     /// mid-animation. `dismissOverlay()` ends this window.
     @Published private(set) var isOverlayVisible: Bool = true
 
+    /// True once the cold-launch lock has been dismissed at least once. The
+    /// app's root view uses this to switch presentation mechanisms: the
+    /// very first lock renders in the same first frame as the dashboard (see
+    /// `lockOnColdLaunch`, called from `init()` before any view exists), so
+    /// a same-layer ZStack overlay is correct there — nothing is presented
+    /// over the dashboard yet to hide behind. Every lock after that can
+    /// happen while a sheet/fullScreenCover is already up (e.g. the camera
+    /// grid), which no zIndex can beat, so those need a separate top-level
+    /// UIWindow instead. Showing both at once would run two independent
+    /// camera sessions simultaneously, so exactly one is ever active.
+    @Published private(set) var hasCompletedFirstUnlock: Bool = false
+
     private var lastActiveAt: Date = Date()
     private var idleTimer: Timer?
 
@@ -116,7 +128,9 @@ final class FaceSessionManager: ObservableObject {
             releaseLockIfNoUsersEnrolled()
             return
         }
-        idleDurationAtLock = isLocked ? idleDurationAtLock : Date().timeIntervalSince(lastActiveAt)
+        // Not an idle-timeout lock, so don't show "Idle for X min" — that
+        // text should only describe lockDueToInactivity.
+        idleDurationAtLock = isLocked ? idleDurationAtLock : nil
         lockState = .locked
         isOverlayVisible = true
         stopIdleTimer()
@@ -178,6 +192,7 @@ final class FaceSessionManager: ObservableObject {
     /// after the brief auto-dismiss delay on the unlocked screen.
     func dismissOverlay() {
         isOverlayVisible = false
+        hasCompletedFirstUnlock = true
     }
 
     // MARK: - Activity tracking
@@ -207,19 +222,5 @@ final class FaceSessionManager: ObservableObject {
     private func stopIdleTimer() {
         idleTimer?.invalidate()
         idleTimer = nil
-    }
-
-    /// "Idle for 2 min" / "Idle for 45 sec" style text for the locked
-    /// screen's subtitle. Always reflects the configured auto-lock timeout
-    /// (Settings > Face Recognition > Time Limit), not the measured idle
-    /// duration. `nil` when there's nothing to report (cold launch).
-    var idleDurationText: String? {
-        guard idleDurationAtLock != nil else { return nil }
-        let seconds = inactivityTimeout
-        if seconds >= 60 {
-            let minutes = Int((seconds / 60).rounded())
-            return String(format: L10n.FaceAuth.sessionIdleMinutes, minutes)
-        }
-        return String(format: L10n.FaceAuth.sessionIdleSeconds, Int(seconds.rounded()))
     }
 }

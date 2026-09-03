@@ -184,7 +184,20 @@ struct PillCounterApp: App {
                         OfflineOverlayView()
                             .zIndex(999)
 
-                        if faceSessionManager.isOverlayVisible {
+                        // Zero-gap cold-launch guarantee: isOverlayVisible is
+                        // already true (see lockOnColdLaunch, called from
+                        // init()) before this body ever renders its first
+                        // frame, so this ZStack branch and the dashboard
+                        // appear together — nothing is presented over the
+                        // dashboard yet at launch, so zIndex alone is
+                        // correct here. Only ever shown pre-first-unlock —
+                        // SessionLockWindowController takes over exclusively
+                        // afterwards (see hasCompletedFirstUnlock), since a
+                        // later lock can happen while a sheet/fullScreenCover
+                        // is already up, which no zIndex can reach above.
+                        // Never both at once: each would run its own
+                        // FaceAuthenticationViewModel/camera session.
+                        if !faceSessionManager.hasCompletedFirstUnlock && faceSessionManager.isOverlayVisible {
                             SessionLockOverlay()
                                 .environmentObject(appColors)
                                 .transition(.opacity)
@@ -214,6 +227,26 @@ struct PillCounterApp: App {
                     userViewModel: userViewModel
                 )
                 Hl7ServiceController.shared.evaluate()
+
+                SessionLockWindowController.shared.attach(
+                    appColors: appColors,
+                    // Cold launch is always handled by the ZStack overlay
+                    // (hasCompletedFirstUnlock is false here) — never
+                    // initially visible, so there's never a moment where
+                    // both are showing.
+                    initiallyVisible: false
+                )
+            }
+            .onChange(of: faceSessionManager.isOverlayVisible) { _, visible in
+                guard faceSessionManager.hasCompletedFirstUnlock else { return }
+                SessionLockWindowController.shared.setVisible(visible)
+            }
+            .onChange(of: faceSessionManager.hasCompletedFirstUnlock) { _, completed in
+                // The instant the cold-launch ZStack overlay is dismissed,
+                // hand off to the window for every lock from now on.
+                if completed {
+                    SessionLockWindowController.shared.setVisible(faceSessionManager.isOverlayVisible)
+                }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhaseChange(newPhase)
@@ -255,6 +288,19 @@ extension PillCounterApp {
     private func handleScenePhaseChange(_ phase: ScenePhase) {
         switch phase {
         case .active:
+            // Second call site for the same idempotent attach() as
+            // .onAppear — whichever fires first (scene connection timing
+            // varies) creates the window immediately instead of leaving the
+            // lock screen to wait for whichever one happens to lose the race.
+            SessionLockWindowController.shared.attach(
+                appColors: appColors,
+                // Always false: cold launch is always handled by the ZStack
+                // overlay (see the .onAppear call site) — the window must
+                // never be initially visible, or it would show alongside
+                // the ZStack overlay and run a second camera session.
+                initiallyVisible: false
+            )
+
             //Remove the overlay once the app is visible again.
             isObscured = false
             if SecurityManager.isDeviceCompromised() {

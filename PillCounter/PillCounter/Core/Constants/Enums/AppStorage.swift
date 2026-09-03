@@ -672,13 +672,11 @@ final class AppStorageManager {
     /// would silently make every encrypted row/photo permanently unreadable
     /// on next login, contradicting that intent.
     func logout() {
+        // dekBookkeepingAccounts keeps the field-encryption key intact across
+        // this wipe, so enrolled face rows stay decryptable — unlike the
+        // fresh-install wipe, logout must not purge FaceEmbeddingStore/
+        // FaceUserStore.
         Keychain.deleteAll(preservedAccounts: Self.dekBookkeepingAccounts)
-        // Same reason as on a fresh install: the wipe above destroys the
-        // field-encryption key, so the face rows it wrote can never be read
-        // again. Flag first, then purge — if the purge is interrupted, the
-        // flag survives and the next launch finishes the job.
-        faceEnrollmentPurgePending = true
-        purgeFaceEnrollmentsIfKeychainWasWiped()
 
         defaults.removeObject(forKey: AppStorageKeys.isNewUser)
         clearTerminalCache()

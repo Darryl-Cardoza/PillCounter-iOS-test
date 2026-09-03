@@ -11,7 +11,7 @@ import SwiftUI
 final class CameraService: NSObject, ObservableObject {
 
     // MARK: - CONSTANTS
-    private let inactivityTimeout: TimeInterval = 10
+    private let inactivityTimeout: TimeInterval = 100
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
 
     // MARK: - CAMERA CORE

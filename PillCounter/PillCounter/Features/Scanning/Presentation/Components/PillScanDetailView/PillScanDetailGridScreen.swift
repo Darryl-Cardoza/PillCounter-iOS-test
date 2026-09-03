@@ -42,10 +42,6 @@ struct PillScanDetailGridScreen: View {
         Int(pillScanViewModel.currentTransaction?.target_count ?? 0)
     }
 
-    private var isDispenseCount: Bool {
-        pillScanViewModel.currentTransaction?.is_dispense ?? true
-    }
-
     @State private var isFixed: Bool = false
 
 
@@ -66,8 +62,7 @@ struct PillScanDetailGridScreen: View {
                 onBack: { dismiss() },
             )
             .onAppear {
-                if isDispenseCount { return }
-                isFixed = (details.first?.type != ControlledStep.containerInitiate.rawValue)
+                isFixed = (details.first?.type == ControlledStep.containerInitiate.rawValue)
             }
             // MARK: - Edit mode bottom bar
             if isEditing {

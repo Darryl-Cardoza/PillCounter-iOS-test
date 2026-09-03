@@ -353,6 +353,8 @@
 "barcodeScan.rxOnHoldTitle" = "Rx On Hold";
 "barcodeScan.rxOnHoldMessage" = "This Rx has been placed on hold by PMS. Scanning is not allowed until the hold is released.";
 "barcodeScan.rxNotSentByPms" = "Rx not found on this device. Please wait for PMS to send it.";
+"barcodeScan.rxNdcMismatch" = "Rx/NDC mismatch. Verify with pharmacy system.";
+"barcodeScan.invalidNdc" = "Invalid NDC. Verify with pharmacy system.";
 "barcodeScan.rxInProgressTitle" = "Rx Already In Progress";
 "barcodeScan.rxInProgressMessage" = "Pill counting for this Rx has already started. Do you want to continue from where you left off?";
 "barcodeScan.hazardousNdcDetected" = "Hazardous NDC detected.";

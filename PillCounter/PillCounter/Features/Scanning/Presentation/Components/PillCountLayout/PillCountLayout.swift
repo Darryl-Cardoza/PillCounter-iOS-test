@@ -127,6 +127,7 @@ struct PillCountLayout: View {
                 onAdd: onAdd,
                 onAllDone: onAllDone
             )
+            .zIndex(10000)
 
             // ── Top + bottom bars ──────────────────────────────────────────
             VStack(spacing: 0) {

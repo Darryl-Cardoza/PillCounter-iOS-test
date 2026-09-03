@@ -298,6 +298,17 @@ struct UnifiedCameraView: View {
                     .ignoresSafeArea()
                 }
             }
+            // The pill-count overlay (movable Add/Done ring, etc.) is a sibling
+            // subtree over UnifiedCameraLayout, so its own drags never reach the
+            // screen-wide activity gesture defined there — reset here too so
+            // dragging the ring still counts as activity.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !cameraService.isPausedDueToInactivity else { return }
+                        cameraService.resetInactivityTimer()
+                    }
+            )
     }
 
     private var rootWithBarcodePopups: some View {
@@ -549,7 +560,6 @@ struct UnifiedCameraView: View {
             switch phase {
             case .active:
                 cameraService.start()
-                cameraService.cancelInactivityTimer()
                 if !showPillCountPanel { cameraService.enableBarcodeScanning() }
                 if currentScanType == .stockCount && !isOpenPillScanMode {
                     cameraService.pauseCounting()
@@ -798,16 +808,16 @@ extension UnifiedCameraView {
             }
             // Start directly — start() runs on the session queue (serialized) and
             // re-attaches the preview itself, so the extra main-queue hop is unneeded
-            // and only delayed the first frame.
+            // and only delayed the first frame. start() also arms the inactivity timer,
+            // which must keep running from here so pure idle (no taps) still triggers
+            // the resume overlay.
             cameraService.start()
-            cameraService.cancelInactivityTimer()
             initializeTransaction()
             if pillScanViewModel.currentControlledStep != .vial {
                 cameraService.resumeCounting()
             }
         } else {
             cameraService.start()
-            cameraService.cancelInactivityTimer()
             cameraService.enableBarcodeScanning()
             if currentScanType == .stockCount {
                 // Stock count only needs barcode scanning; pill detection must stay off.
@@ -1668,7 +1678,6 @@ extension UnifiedCameraView {
 
         cameraService.pauseCounting()
         cameraService.start()
-        cameraService.cancelInactivityTimer()
         cameraService.resetBarcodeScanState()
         cameraService.enableBarcodeScanning()
         showStockCountPanel = true

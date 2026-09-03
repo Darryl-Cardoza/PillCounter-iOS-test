@@ -44,7 +44,7 @@ extension PillScanViewModel {
                 let resolvedDrugName = await resolveDrugName(for: ndc)
 
                 guard let drugName = resolvedDrugName else {
-                    showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                    showToastMessage(text: L10n.BarcodeScan.invalidNdc)
                     rxScanFailed = true
                     return
                 }
@@ -77,7 +77,7 @@ extension PillScanViewModel {
                 guard let existingTxn else {
                     guard AppStorageManager.shared.isStandalone else {
                         print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
-                        showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                        showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
                         rxScanFailed = true
                         return
                     }
@@ -94,6 +94,17 @@ extension PillScanViewModel {
                     )
                     fetchedRxTransaction = nil
                     showRxFlowPopup = true
+                    return
+                }
+
+                let scannedRefil = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces) ?? ""
+                let ndcMismatch  = !ndc.isEmpty && ndc != (existingTxn.drug?.ndc ?? "")
+                let refilMismatch = !scannedRefil.isEmpty && scannedRefil != (existingTxn.refill_no ?? "")
+
+                if ndcMismatch || refilMismatch {
+                    print("[RxScan] Rx \(rxNo) mismatch — scanned ndc: \(ndc) vs stored: \(existingTxn.drug?.ndc ?? "nil"), scanned refil: \(scannedRefil) vs stored: \(existingTxn.refill_no ?? "nil")")
+                    showToastMessage(text: L10n.BarcodeScan.rxNdcMismatch)
+                    rxScanFailed = true
                     return
                 }
 
@@ -190,7 +201,7 @@ extension PillScanViewModel {
 
         guard let drug = drugMasterDAO.fetchByNdc(ndc) else {
             print("[RxScan] Drug not found in local DB — cannot proceed")
-            showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+            showToastMessage(text: L10n.BarcodeScan.invalidNdc)
             return
         }
 
@@ -210,7 +221,7 @@ extension PillScanViewModel {
         guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
             guard AppStorageManager.shared.isStandalone else {
                 print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
-                showToastMessage(text: L10n.BarcodeScan.rxNotFound)
+                showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
                 return
             }
 

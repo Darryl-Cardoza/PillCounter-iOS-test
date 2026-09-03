@@ -100,6 +100,13 @@ struct MovablePillCountRing: View {
                     x: resting.width + dragOffset.width,
                     y: resting.height + dragOffset.height
                 )
+                // Long-press to drag (one finger) and pinch to resize (two fingers)
+                // run simultaneously. A plain tap counts as Add. Attached here, on
+                // ringContent itself (which is contentShape-clipped to the visible
+                // circle) rather than after the maxWidth/maxHeight frame below —
+                // otherwise the gesture's hit area would be the full-screen frame
+                // and steal touches meant for the top/bottom bars.
+                .gesture(dragGesture(in: geo.size).simultaneously(with: pinchGesture(in: geo.size)))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 // Seed the resting position from the last-saved offset (once).
                 .onAppear {
@@ -109,9 +116,6 @@ struct MovablePillCountRing: View {
                         committedOffset = clamp(saved, in: geo.size)
                     }
                 }
-                // Long-press to drag (one finger) and pinch to resize (two fingers)
-                // run simultaneously. A plain tap counts as Add.
-                .gesture(dragGesture(in: geo.size).simultaneously(with: pinchGesture(in: geo.size)))
         }
     }
 

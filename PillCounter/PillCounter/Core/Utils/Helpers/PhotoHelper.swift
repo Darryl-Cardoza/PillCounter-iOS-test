@@ -106,6 +106,10 @@ struct PhotoFileManager {
 
     static let shared = PhotoFileManager()
     private let fileManager = FileManager.default
+    // Decrypted-image cache. Thumbnails would otherwise re-decrypt from disk
+    // on every SwiftUI body evaluation (scroll, filter change, re-render) —
+    // the in-memory copy makes repeat loads of the same file free.
+    private let decryptedImageCache = NSCache<NSString, UIImage>()
     private init() {}
 
     // Encrypted extension so plain .jpg files can't be opened by Files app
@@ -149,11 +153,17 @@ struct PhotoFileManager {
         return Image(uiImage: ui)
     }
 
-    // MARK: - Load as UIImage (decrypt)
+    // MARK: - Load as UIImage (decrypt, cached)
     func loadUIImage(from fileName: String) -> UIImage? {
+        let key = fileName as NSString
+        if let cached = decryptedImageCache.object(forKey: key) {
+            return cached
+        }
         guard var data = loadDecryptedData(from: fileName) else { return nil }
         defer { data.resetBytes(in: 0..<data.count) }
-        return UIImage(data: data)
+        guard let image = UIImage(data: data) else { return nil }
+        decryptedImageCache.setObject(image, forKey: key)
+        return image
     }
 
     // MARK: - Load decrypted raw bytes (for network serving — never written to disk)
@@ -172,6 +182,7 @@ struct PhotoFileManager {
 
     // MARK: - Delete
     func deleteImage(fileName: String) {
+        decryptedImageCache.removeObject(forKey: fileName as NSString)
         guard let url = try? fileURL(for: fileName),
               fileManager.fileExists(atPath: url.path)
         else { return }

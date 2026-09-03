@@ -185,6 +185,17 @@ final class AppStorageManager {
         }
     }
 
+    /// Same keychain slot as `DeviceKeyProvider.shared.getDeviceKey()` — exposed
+    /// here too so callers that already hold `AppStorageManager.shared` (and
+    /// tests) can read/reset it without pulling in `DeviceKeyProvider`.
+    var deviceKey: String? {
+        get { Keychain.getPassword(for: DeviceKeyProvider.keychainAccount) }
+        set {
+            if let v = newValue { Keychain.savePassword(v, for: DeviceKeyProvider.keychainAccount) }
+            else                { Keychain.deletePassword(for: DeviceKeyProvider.keychainAccount) }
+        }
+    }
+
     var userEmail: String? {
         get { Keychain.getPassword(for: AppStorageKeys.userEmail) }
         set {

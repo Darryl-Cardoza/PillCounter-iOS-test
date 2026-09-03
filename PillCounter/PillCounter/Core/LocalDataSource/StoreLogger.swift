@@ -10,8 +10,11 @@ enum StoreLogger {
 
     // MARK: - Public entry points
 
-    /// Log a query that returned a list of rows.
+    /// Log a query that returned a list of rows. No-op outside DEBUG builds —
+    /// building/printing this table (which scans every row) is pure
+    /// production overhead with no consumer.
     static func log(dao: String, op: String, columns: [String], rows: [[String]]) {
+        #if DEBUG
         guard !rows.isEmpty else {
             print("[\(dao)] \(op) → (0 rows)")
             return
@@ -28,12 +31,15 @@ enum StoreLogger {
             \(body)
             \(divider)
             """)
+        #endif
     }
 
     /// Log a single-row result (e.g. fetchById).
     static func logSingle(dao: String, op: String, columns: [String], row: [String]?) {
         guard let row else {
+            #if DEBUG
             print("[\(dao)] \(op) → (not found)")
+            #endif
             return
         }
         log(dao: dao, op: op, columns: columns, rows: [row])
@@ -42,6 +48,13 @@ enum StoreLogger {
     /// Log a scalar result (e.g. count, total).
     static func logScalar(dao: String, op: String, label: String, value: Any) {
         log(dao: dao, op: op, columns: [label], rows: [["\(value)"]])
+    }
+
+    /// Log a free-form trace message (create/update/delete notices, errors). No-op outside DEBUG builds.
+    static func debug(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        print(message())
+        #endif
     }
 
     // MARK: - Private helpers

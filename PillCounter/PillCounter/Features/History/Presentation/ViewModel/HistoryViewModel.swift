@@ -67,16 +67,49 @@ class HistoryViewModel: ObservableObject {
     @Published var selectedEndDate: Date? = nil
     @Published var calendarMonthsToShow: [Date] = []
 
+    // MARK: - Pagination state
+    /// Rows fetched per page. Small enough that the first page renders
+    /// near-instantly even when the selected date range holds thousands of
+    /// rows; `loadMoreTransactionsIfNeeded`/`loadMoreBatchesIfNeeded` fetch
+    /// subsequent pages as the user scrolls.
+    let pageSize = 30
+    @Published private(set) var hasMoreTransactions = true
+    @Published private(set) var hasMoreBatches = true
+    @Published private(set) var isLoadingMoreTransactions = false
+    @Published private(set) var isLoadingMoreBatches = false
+    private var transactionPageOffset = 0
+    private var batchPageOffset = 0
+    private var currentStartTs: Int64 = 0
+    private var currentEndTs: Int64 = 0
+    private var currentTypeFilter: HistoryFilterType = .fixed
 
+    /// Row-data cache keyed by id, reused across `applyFilters` calls so a
+    /// page load mid-fast-scroll only computes `TransactionRowData`/
+    /// `StockData` (each involving a Core Data count query) for rows not
+    /// already mapped, instead of re-querying and re-mapping every previously
+    /// loaded row on every call. Cleared whenever the underlying loaded set
+    /// is reset (new date range/type filter, delete, logout).
+    private var transactionRowCache: [Int64: TransactionRowData] = [:]
+    private var batchRowCache: [Int64: StockData] = [:]
 
-    // MARK: - Fetch Transactions by Date
+    // MARK: - Fetch Transactions by Date (first page)
+
+    /// Resets pagination and loads the first page for a new date/type
+    /// selection. Call `loadMoreTransactionsIfNeeded` to fetch subsequent
+    /// pages as the user scrolls.
     func getTransactionsByDate(
         startDate: Date,
         endDate: Date,
         filter: HistoryFilterType
     ) async {
+        guard filter != .regular else {
+            filteredTransactionsOfUserByDate = []
+            hasMoreTransactions = false
+            return
+        }
         guard let user = userStore.fetchByUserId(userID) else {
             filteredTransactionsOfUserByDate = []
+            hasMoreTransactions = false
             return
         }
 
@@ -86,29 +119,63 @@ class HistoryViewModel: ObservableObject {
             to: Calendar.current.startOfDay(for: endDate)
         )!
 
-        let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
-        let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        currentStartTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
+        currentEndTs = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        currentTypeFilter = filter
+        transactionPageOffset = 0
+        hasMoreTransactions = true
+        transactionRowCache.removeAll()
 
-        let allTransactions = userStore.fetchTransactionsByDateRange(
-            for: user,
-            startDateTs: startTs,
-            endDateTs: endTs
+        // Route through the real predicate-based, indexed fetch instead of
+        // `UserStore.fetchTransactionsByDateRange`, which faulted the
+        // user's ENTIRE transaction history into memory via the relationship
+        // set just to filter by date in Swift — a full-table load disguised
+        // as a date-scoped query.
+        let page = transactionStore.fetchByTimeRangePage(
+            for: user, startTime: currentStartTs, endTime: currentEndTs,
+            limit: pageSize, offset: transactionPageOffset
         )
+        transactionPageOffset += page.count
+        hasMoreTransactions = page.count == pageSize
 
-        let finalTransactions: [PillCountTransactionEntity]
-        switch filter {
-        case .regular:
-            return
-        case .fixed:
-            finalTransactions = allTransactions.filter {
-                $0.is_dispense
-            }
-        }
-
-        filteredTransactionsOfUserByDate = finalTransactions
+        filteredTransactionsOfUserByDate = page
     }
 
-    // MARK: - Fetch Batches by Date
+    /// Fetches and appends the next page of transactions for the current
+    /// date/type selection. No-op if a fetch is already running or there's
+    /// nothing left to load.
+    ///
+    /// Deliberately NOT `async` — the underlying fetch is synchronous
+    /// (`performAndWait`), so there was never a real suspension point inside.
+    /// Marking it `async` only meant the view had to wrap each call in a
+    /// fresh `Task { }`, and `Task` creation merely schedules work rather
+    /// than running it — during a fast scroll, several `onAppear` triggers
+    /// could each spawn a Task before any of them actually started running
+    /// (and thus before `isLoadingMoreTransactions` had a chance to flip
+    /// `true`), letting redundant fetches through the reentrancy guard and
+    /// occasionally corrupting `hasMoreTransactions`. Calling this directly,
+    /// synchronously, from `onAppear` — like Dashboard's equivalent loader —
+    /// closes that gap entirely: the guard check and flag-set happen in the
+    /// same uninterrupted call, so no second call can observe the flag as
+    /// `false` while the first is still running.
+    func loadMoreTransactionsIfNeeded() {
+        guard hasMoreTransactions, !isLoadingMoreTransactions else { return }
+        guard let user = userStore.fetchByUserId(userID), currentTypeFilter == .fixed else { return }
+
+        isLoadingMoreTransactions = true
+        defer { isLoadingMoreTransactions = false }
+
+        let page = transactionStore.fetchByTimeRangePage(
+            for: user, startTime: currentStartTs, endTime: currentEndTs,
+            limit: pageSize, offset: transactionPageOffset
+        )
+        transactionPageOffset += page.count
+        hasMoreTransactions = page.count == pageSize
+        filteredTransactionsOfUserByDate += page
+    }
+
+    // MARK: - Fetch Batches by Date (first page)
+
     func getBatchesByDate(startDate: Date, endDate: Date) async {
         let startOfDay = Calendar.current.startOfDay(for: startDate)
         let endOfDay = Calendar.current.date(
@@ -116,10 +183,35 @@ class HistoryViewModel: ObservableObject {
             to: Calendar.current.startOfDay(for: endDate)
         )!
 
-        let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
-        let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        currentStartTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
+        currentEndTs = Int64(endOfDay.timeIntervalSince1970 * 1000)
+        batchPageOffset = 0
+        hasMoreBatches = true
+        batchRowCache.removeAll()
 
-        filteredBatchesOfUserByDate = batchStore.fetchByDateRange(startTs: startTs, endTs: endTs)
+        let page = batchStore.fetchByDateRangePage(
+            startTs: currentStartTs, endTs: currentEndTs, limit: pageSize, offset: batchPageOffset
+        )
+        batchPageOffset += page.count
+        hasMoreBatches = page.count == pageSize
+        filteredBatchesOfUserByDate = page
+    }
+
+    /// Fetches and appends the next page of batches for the current date
+    /// selection. No-op if a fetch is already running or there's nothing
+    /// left to load. Deliberately NOT `async` — see
+    /// `loadMoreTransactionsIfNeeded` for why.
+    func loadMoreBatchesIfNeeded() {
+        guard hasMoreBatches, !isLoadingMoreBatches else { return }
+        isLoadingMoreBatches = true
+        defer { isLoadingMoreBatches = false }
+
+        let page = batchStore.fetchByDateRangePage(
+            startTs: currentStartTs, endTs: currentEndTs, limit: pageSize, offset: batchPageOffset
+        )
+        batchPageOffset += page.count
+        hasMoreBatches = page.count == pageSize
+        filteredBatchesOfUserByDate += page
     }
 
     // MARK: - Apply Filters (status + search)
@@ -146,11 +238,16 @@ class HistoryViewModel: ObservableObject {
         txns.sort { $0.created_at > $1.created_at }
 
         transactionRows = txns.map { txn in
+            if let cached = transactionRowCache[txn.txn_id] {
+                return cached
+            }
             let counted = transactionDetailStore.totalCountForStep(
                 txnId: txn.txn_id,
                 step: .targetVerification
             )
-            return txn.toRowData(pillCount: Int(counted))
+            let row = txn.toRowData(pillCount: Int(counted))
+            transactionRowCache[txn.txn_id] = row
+            return row
         }
 
         // --- Batches ---
@@ -174,8 +271,13 @@ class HistoryViewModel: ObservableObject {
         batches.sort { $0.start_date_time > $1.start_date_time }
 
         batchRows = batches.map { batch in
+            if let cached = batchRowCache[batch.batch_id] {
+                return cached
+            }
             let count = batchStore.getTransactionCount(for: batch.batch_id)
-            return batch.toStockData(ndcCount: count)
+            let row = batch.toStockData(ndcCount: count)
+            batchRowCache[batch.batch_id] = row
+            return row
         }
     }
 
@@ -218,29 +320,52 @@ class HistoryViewModel: ObservableObject {
     // MARK: - Soft Delete Single Transaction (used from detail view)
     func softDeleteTransaction(txnId: Int64) async {
         transactionStore.softDelete(txnId: txnId)
+        filteredTransactionsOfUserByDate.removeAll { $0.txn_id == txnId }
+        transactionRowCache.removeValue(forKey: txnId)
+        transactionRows.removeAll { Int64($0.id) == txnId }
     }
-    
+
     func softDeleteBatch(batchId: Int64) async {
         batchStore.softDelete(ids: [batchId])
+        filteredBatchesOfUserByDate.removeAll { $0.batch_id == batchId }
+        batchRowCache.removeValue(forKey: batchId)
+        batchRows.removeAll { $0.batchId == batchId }
     }
 
     // MARK: - Status Counts
+    /// True counts for the current date-range selection, independent of how
+    /// many pages have been loaded — querying the loaded array directly (as
+    /// this used to) made the badge change as pagination fetched more pages
+    /// (e.g. showing "50" then "100" while scrolling), which reads as a bug
+    /// since nothing about the underlying data changed.
     func getStatusCounts(for type: HistoryFilterType) -> (all: Int, completed: Int, pending: Int) {
         if type == .fixed {
-            let txns = filteredTransactionsOfUserByDate
+            guard let user = userStore.fetchByUserId(userID) else { return (0, 0, 0) }
             return (
-                all: txns.count,
-                completed: txns.filter { $0.status == CountStatus.COMPLETED.rawValue }.count,
-                pending:   txns.filter { $0.status == CountStatus.PARTIAL.rawValue }.count
+                all: transactionStore.countByTimeRange(for: user, startTime: currentStartTs, endTime: currentEndTs, status: nil),
+                completed: transactionStore.countByTimeRange(for: user, startTime: currentStartTs, endTime: currentEndTs, status: .COMPLETED),
+                pending: transactionStore.countByTimeRange(for: user, startTime: currentStartTs, endTime: currentEndTs, status: .PARTIAL)
             )
         } else {
-            let batches = filteredBatchesOfUserByDate
             return (
-                all: batches.count,
-                completed: batches.filter { $0.status == CountStatus.COMPLETED.rawValue }.count,
-                pending:   batches.filter { $0.status == CountStatus.PARTIAL.rawValue }.count
+                all: batchStore.countByDateRange(startTs: currentStartTs, endTs: currentEndTs, status: nil),
+                completed: batchStore.countByDateRange(startTs: currentStartTs, endTs: currentEndTs, status: .COMPLETED),
+                pending: batchStore.countByDateRange(startTs: currentStartTs, endTs: currentEndTs, status: .PARTIAL)
             )
         }
+    }
+
+    // MARK: - Type Tab Counts
+    /// True dispense/stock totals for the current date-range selection,
+    /// independent of how many pages have been loaded (same rationale as
+    /// `getStatusCounts`). Used by the Dispensed/Stock Count tab labels so
+    /// they don't grow as pagination fetches more pages.
+    func getTypeCounts() -> (dispense: Int, stock: Int) {
+        guard let user = userStore.fetchByUserId(userID) else { return (0, 0) }
+        return (
+            dispense: transactionStore.countByTimeRange(for: user, startTime: currentStartTs, endTime: currentEndTs, status: nil),
+            stock: batchStore.countByDateRange(startTs: currentStartTs, endTs: currentEndTs, status: nil)
+        )
     }
 
     // MARK: - Detail: Resolve + prepare by id
@@ -257,6 +382,84 @@ class HistoryViewModel: ObservableObject {
         }
         prepareDetails(for: txn)
         return txn
+    }
+
+    // MARK: - Detail Screen: background-context fetch + decrypt
+
+    /// Published while `prepareDetailScreen` is in flight, so
+    /// `HistoryTransactionDetailView` can show a loading state instead of an
+    /// empty/frozen-looking screen during the fetch.
+    @Published var isLoadingDetailScreen: Bool = false
+
+    /// Resolves everything `HistoryTransactionDetailView` needs for one
+    /// transaction, entirely off the main thread.
+    ///
+    /// The transaction's full detail-row relationship (every count-step
+    /// row, each individually AES-decrypted via the `NSManagedObject`
+    /// encryption swizzle on fetch) was previously faulted in and decrypted
+    /// synchronously on `viewContext` inside the view's `onAppear` — for a
+    /// transaction with many detail/image rows this was slow enough to read
+    /// as the screen freezing, with nothing shown while it ran. The fetch,
+    /// every relationship read, and every row's decrypt now happen inside
+    /// one background context's `performAndWait`; only the plain
+    /// `TransactionDetailScreenModel` result (no `NSManagedObject`) crosses
+    /// back to the main actor.
+    func prepareDetailScreen(forTxnId txnId: Int64) async -> TransactionDetailScreenModel? {
+        selectedTransactionId = txnId
+        isLoadingDetailScreen = true
+        defer { isLoadingDetailScreen = false }
+
+        // Captured as locals before entering Task.detached — `self` is
+        // @MainActor-isolated, so its stored `transactionStore`/
+        // `transactionDetailStore` (non-Sendable protocol types) cannot be
+        // captured directly into a detached closure. The stores themselves
+        // are safe to call from any thread (every call is confined via their
+        // own `sync`/explicit-context `performAndWait`), so capturing the
+        // references (not `self`) is sufficient.
+        let transactionStore = self.transactionStore
+        let transactionDetailStore = self.transactionDetailStore
+
+        let model = await Task.detached(priority: .userInitiated) { () -> TransactionDetailScreenModel? in
+            let bgContext = CoreDataManager.shared.backgroundContext
+            return bgContext.performAndWait { () -> TransactionDetailScreenModel? in
+                guard let txn = transactionStore.fetchById(txnId, in: bgContext) else {
+                    return nil
+                }
+
+                let allDetails = transactionDetailStore.fetchAll(txnId: txnId, in: bgContext)
+                let grouped = Dictionary(grouping: allDetails.filter { !$0.is_deleted }) { detail in
+                    ControlledStep(rawValue: detail.type ?? "") ?? .containerInitiate
+                }
+                let detailsByStep = grouped.mapValues { rows in
+                    rows.map {
+                        TransactionDetailRowUIModel(
+                            id: $0.txn_details_id,
+                            imagePath: $0.image_path,
+                            pillCount: $0.pill_count,
+                            createdAt: $0.created_at
+                        )
+                    }
+                }
+
+                return TransactionDetailScreenModel(
+                    txnId: txn.txn_id,
+                    drugName: txn.drug?.drug_name ?? "",
+                    ndc: txn.drug?.ndc ?? "",
+                    drugType: txn.drug?.drug_type ?? "",
+                    note: txn.note,
+                    targetCount: txn.target_count,
+                    createdAt: txn.created_at,
+                    isDispense: txn.is_dispense,
+                    isSubstitute: txn.is_substitute,
+                    substituteDrugName: txn.substitueDrug?.drug_name,
+                    substituteNdc: txn.substitueDrug?.ndc,
+                    bottleInfoListJson: txn.bottle_info_list_json,
+                    detailsByStep: detailsByStep
+                )
+            }
+        }.value
+
+        return model
     }
 
     // MARK: - Detail: Prepare step-grouped details
@@ -380,6 +583,8 @@ class HistoryViewModel: ObservableObject {
         filteredBatchesOfUserByDate = []
         transactionRows = []
         batchRows = []
+        transactionRowCache.removeAll()
+        batchRowCache.removeAll()
         selectedTransactionId = nil
         detailsByStep = [:]
         selectedBatchId = nil

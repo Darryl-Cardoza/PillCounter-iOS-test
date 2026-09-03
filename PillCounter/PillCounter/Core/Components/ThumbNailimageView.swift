@@ -40,8 +40,26 @@ struct ThumbnailImageView: View {
     // MARK: - ENVIRONMENT
     @EnvironmentObject private var appColors: AppColors
 
+    // Decrypting + reading the image file is expensive (AES-GCM + disk I/O).
+    // Loaded asynchronously off the main thread so scrolling/filtering a list
+    // of these views never blocks on it; PhotoFileManager's in-memory cache
+    // makes repeat loads (re-render, scroll back) effectively free.
+    @State private var resolvedImage: Image?
+    @State private var loadedPath: String?
+
     private var showsDosageForm: Bool {
         dosageForm != nil
+    }
+
+    /// Whichever path actually determines what's shown, per the same
+    /// priority as the body's branching (drug image wins over the regular
+    /// image). nil when this row shows the dosage-form view or a placeholder
+    /// — nothing to load.
+    private var pathToLoad: String? {
+        if let drugPath = drugImagePath, !drugPath.isEmpty { return drugPath }
+        if showsDosageForm { return nil }
+        if let path = imagePath, !path.isEmpty { return path }
+        return nil
     }
 
     // MARK: - INIT
@@ -82,10 +100,7 @@ struct ThumbnailImageView: View {
     // MARK: - BODY
     var body: some View {
         ZStack {
-            if let drugPath = drugImagePath,
-                !drugPath.isEmpty,
-                let drugImage = PhotoFileManager.shared.loadImage(from: drugPath)
-            {
+            if let drugPath = drugImagePath, !drugPath.isEmpty, let drugImage = resolvedImage {
                 // Catalog image is a rectangular photo (pill inside) — scaledToFit so
                 // it's never cropped/distorted, on a background fill so the box still
                 // reads as a filled square/rect like the other thumbnail states.
@@ -105,10 +120,7 @@ struct ThumbnailImageView: View {
                 )
             } else if showsDosageForm {
                 dosageFormView
-            } else if let path = imagePath,
-                !path.isEmpty,
-                let loadedImage = PhotoFileManager.shared.loadImage(from: path)
-            {
+            } else if let path = imagePath, !path.isEmpty, let loadedImage = resolvedImage {
                 loadedImage
                     .resizable()
                     .scaledToFill()
@@ -119,6 +131,12 @@ struct ThumbnailImageView: View {
                             .stroke(borderColor, lineWidth: borderWidth)
                     )
 
+            } else if pathToLoad != nil {
+                // Path exists but decrypt/load hasn't resolved yet — neutral
+                // placeholder box instead of a blank flash while `.task` loads it.
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(showImageBackground ?? appColors.secondaryBackground)
+                    .frame(width: width, height: height)
             } else {
                 if isFromPms {
                     RoundedRectangle(cornerRadius: cornerRadius)
@@ -148,6 +166,28 @@ struct ThumbnailImageView: View {
                 }
             }
         }
+        .task(id: pathToLoad) {
+            await loadImageIfNeeded()
+        }
+    }
+
+    // MARK: - Async image loading
+
+    private func loadImageIfNeeded() async {
+        guard let path = pathToLoad else {
+            resolvedImage = nil
+            loadedPath = nil
+            return
+        }
+        guard path != loadedPath else { return }
+
+        let uiImage = await Task.detached(priority: .userInitiated) {
+            PhotoFileManager.shared.loadUIImage(from: path)
+        }.value
+
+        guard !Task.isCancelled else { return }
+        loadedPath = path
+        resolvedImage = uiImage.map { Image(uiImage: $0) }
     }
 
     // MARK: - Dosage form layout (fixed-count flow)

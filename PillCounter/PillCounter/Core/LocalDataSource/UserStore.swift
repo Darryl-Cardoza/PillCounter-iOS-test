@@ -67,7 +67,7 @@ final class UserStore {
         // didSave restores plaintext in memory (see NSManagedObject+Encryption),
         // so reading entity fields below / by callers without re-fetching is safe.
         let action = isNew ? "CREATED" : "UPDATED"
-        print("👤 [UserDAO] \(action) — userId: \(userId), email: \(entity.email ?? "-"), name: \((entity.fname ?? "") + " " + (entity.lname ?? ""))")
+        StoreLogger.debug("👤 [UserDAO] \(action) — userId: \(userId), email: \(entity.email ?? "-"), name: \((entity.fname ?? "") + " " + (entity.lname ?? ""))")
     }
 
     // MARK: - Read
@@ -79,6 +79,21 @@ final class UserStore {
         guard let result = try? context.fetch(request).first else { return nil }
         result.decryptEncryptedFieldsInPlace()
         return result
+    }
+
+    /// Same as `fetchByUserId(_:)`, but fetches via an explicit context —
+    /// see `TransactionStore.fetchById(_:in:)`. This store has no `sync`
+    /// helper of its own; `performAndWait` is added explicitly here since
+    /// this overload is for callers on a different queue than `viewContext`.
+    func fetchByUserId(_ userId: String, in context: NSManagedObjectContext) -> UserEntity? {
+        context.performAndWait {
+            let request: NSFetchRequest<UserEntity> = UserEntity.fetchRequest()
+            request.predicate = NSPredicate(format: "user_id == %@", userId)
+            request.fetchLimit = 1
+            guard let result = try? context.fetch(request).first else { return nil }
+            result.decryptEncryptedFieldsInPlace()
+            return result
+        }
     }
 
     func fetchAll() -> [UserEntity] {
@@ -105,14 +120,14 @@ final class UserStore {
         guard let user = fetchByUserId(userId) else { return }
         user.setValue(value, forKey: field.rawValue)
         CoreDataManager.shared.save(context: context)
-        print("👤 [UserDAO] UPDATED — userId: \(userId), field: \(field.rawValue), value: \(value ?? "nil")")
+        StoreLogger.debug("👤 [UserDAO] UPDATED — userId: \(userId), field: \(field.rawValue), value: \(value ?? "nil")")
     }
 
     func updateField(_ field: String, value: Any, for userId: String) {
         guard let user = fetchByUserId(userId) else { return }
         user.setValue(value, forKey: field)
         CoreDataManager.shared.save(context: context)
-        print("👤 [UserDAO] UPDATED field — userId: \(userId), field: \(field), value: \(value)")
+        StoreLogger.debug("👤 [UserDAO] UPDATED field — userId: \(userId), field: \(field), value: \(value)")
     }
 
     // MARK: - Delete
@@ -121,16 +136,16 @@ final class UserStore {
         guard let user = fetchByUserId(userId) else { return }
         context.delete(user)
         CoreDataManager.shared.save(context: context)
-        print("👤 [UserDAO] DELETED — userId: \(userId)")
+        StoreLogger.debug("👤 [UserDAO] DELETED — userId: \(userId)")
     }
 
     func deleteAll() {
         let request: NSFetchRequest<NSFetchRequestResult> = UserEntity.fetchRequest()
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-            print("👤 [UserDAO] DELETED ALL — all user records removed")
+            StoreLogger.debug("👤 [UserDAO] DELETED ALL — all user records removed")
         } catch {
-            print("Failed to delete all")
+            StoreLogger.debug("Failed to delete all")
         }
     }
 }

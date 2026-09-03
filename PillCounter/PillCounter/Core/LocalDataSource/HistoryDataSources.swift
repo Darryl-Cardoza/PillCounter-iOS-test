@@ -11,6 +11,7 @@
 
 import Foundation
 import Combine
+import CoreData
 
 // MARK: - Batch store seam
 
@@ -19,11 +20,27 @@ protocol BatchDataSource: AnyObject {
 
     func fetchById(_ batchId: Int64) -> BatchCountEntity?
     func fetchByDateRange(startTs: Int64, endTs: Int64) -> [BatchCountEntity]
+    /// Explicit-context variant — used by callers (e.g. DashboardViewModel's
+    /// off-main queue load) that must keep every fetch in the pass on one
+    /// background context instead of `viewContext`.
+    func fetchByDateRange(startTs: Int64, endTs: Int64, in context: NSManagedObjectContext) -> [BatchCountEntity]
+    func fetchByDateRangePage(startTs: Int64, endTs: Int64, limit: Int, offset: Int) -> [BatchCountEntity]
     func fetchAllPartial() -> [BatchCountEntity]
+    /// Explicit-context variant — see `fetchByDateRange(startTs:endTs:in:)`.
+    func fetchAllPartial(in context: NSManagedObjectContext) -> [BatchCountEntity]
     func fetchAllCompleted() -> [BatchCountEntity]
     func fetchCompletedUnsynced() -> [BatchCountEntity]
+    func fetchAllPartialPage(limit: Int, offset: Int) -> [BatchCountEntity]
+    func fetchAllCompletedPage(limit: Int, offset: Int) -> [BatchCountEntity]
+    func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [BatchCountEntity]
+    func countCompletedUnsynced() -> Int
+    func countByDateRange(startTs: Int64, endTs: Int64, status: CountStatus?) -> Int
+    func countPendingInventory(facet: BatchStore.PendingBatchFacet) -> Int
     func fetchLastCreated() -> BatchCountEntity?
     func getTransactionCount(for batchId: Int64) -> Int
+    func transactionCounts(for batchIds: [Int64]) -> [Int64: Int]
+    /// Explicit-context variant — see `fetchByDateRange(startTs:endTs:in:)`.
+    func transactionCounts(for batchIds: [Int64], in context: NSManagedObjectContext) -> [Int64: Int]
     func create(bucketId: String, requestId: String?) -> BatchCountEntity?
     func updateStatus(batchId: Int64, status: CountStatus, completion: (() -> Void)?)
     func updateNote(batchId: Int64, note: String)
@@ -36,12 +53,25 @@ protocol TransactionDataSource: AnyObject {
     var transactionsDidChange: PassthroughSubject<Void, Never> { get }
 
     func fetchById(_ txnId: Int64) -> PillCountTransactionEntity?
+    /// Explicit-context variant — see `BatchDataSource.fetchByDateRange(startTs:endTs:in:)`.
+    func fetchById(_ txnId: Int64, in context: NSManagedObjectContext) -> PillCountTransactionEntity?
     func fetchByBatch(batchId: Int64) -> [PillCountTransactionEntity]
     func fetchByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64) -> [PillCountTransactionEntity]
+    /// Explicit-context variant — see `BatchDataSource.fetchByDateRange(startTs:endTs:in:)`.
+    func fetchByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64, in context: NSManagedObjectContext) -> [PillCountTransactionEntity]
+    func fetchByTimeRangePage(for user: UserEntity, startTime: Int64, endTime: Int64, limit: Int, offset: Int) -> [PillCountTransactionEntity]
     func fetchPartial(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity]
+    /// Explicit-context variant — see `BatchDataSource.fetchByDateRange(startTs:endTs:in:)`.
+    func fetchPartial(for user: UserEntity, isDispense: Bool, in context: NSManagedObjectContext) -> [PillCountTransactionEntity]
+    func fetchPartialPage(for user: UserEntity, isDispense: Bool, limit: Int, offset: Int) -> [PillCountTransactionEntity]
     func fetchPartialFromPms(for user: UserEntity, isDispense: Bool) -> [PillCountTransactionEntity]
     func fetchAll(for user: UserEntity) -> [PillCountTransactionEntity]
+    func fetchAllPage(for user: UserEntity, limit: Int, offset: Int) -> [PillCountTransactionEntity]
     func fetchCompletedUnsynced() -> [PillCountTransactionEntity]
+    func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [PillCountTransactionEntity]
+    func countCompletedUnsynced() -> Int
+    func countByTimeRange(for user: UserEntity, startTime: Int64, endTime: Int64, status: CountStatus?) -> Int
+    func countPendingDispense(for user: UserEntity, facet: TransactionStore.PendingDispenseFacet) -> Int
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity?
     func fetchAllRxNos(for user: UserEntity) -> [String]
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity]
@@ -111,11 +141,17 @@ protocol BottleInfoDataSource: AnyObject {
 
 protocol TransactionDetailDataSource: AnyObject {
     func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32
+    func totalCountsForSteps(txnIds: [Int64], step: ControlledStep) -> [Int64: Int32]
+    /// Explicit-context variant — see `BatchDataSource.fetchByDateRange(startTs:endTs:in:)`.
+    func totalCountsForSteps(txnIds: [Int64], step: ControlledStep, in context: NSManagedObjectContext) -> [Int64: Int32]
     func totalCount(txnId: Int64) -> Int
     @discardableResult
     func add(txnId: Int64, pillCount: Int32, imagePath: String?, type: String?, isManual: Bool) -> PillCountTransactionDetailsEntity?
     func addOrReplaceVial(txnId: Int64, imagePath: String?)
     func fetchForStep(txnId: Int64, step: ControlledStep) -> [PillCountTransactionDetailsEntity]
+    func fetchAll(txnId: Int64) -> [PillCountTransactionDetailsEntity]
+    /// Explicit-context variant — see `BatchDataSource.fetchByDateRange(startTs:endTs:in:)`.
+    func fetchAll(txnId: Int64, in context: NSManagedObjectContext) -> [PillCountTransactionDetailsEntity]
     func lastCompletedStep(txnId: Int64) -> ControlledStep?
     func softDeleteForStep(txnId: Int64, step: ControlledStep)
     func update(detailId: Int64, block: (PillCountTransactionDetailsEntity) -> Void)

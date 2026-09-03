@@ -16,9 +16,9 @@ enum HL7NotificationManager {
 
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error {
-                print("[NOTIFICATION] Permission error:", error)
+                StoreLogger.debug("[NOTIFICATION] Permission error: \(error)")
             } else {
-                print("[NOTIFICATION] Permission granted =", granted)
+                StoreLogger.debug("[NOTIFICATION] Permission granted = \(granted)")
             }
         }
     }

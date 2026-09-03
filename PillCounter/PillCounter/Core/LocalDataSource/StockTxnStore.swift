@@ -53,7 +53,7 @@ final class StockTxnStore {
         }
 
         CoreDataManager.shared.save(context: context)
-        print("📦 [StockTxnDAO] CREATED — stockTxnId: \(entity.stock_txn_id), batchId: \(batch.batch_id), drugId: \(drugId)")
+        StoreLogger.debug("📦 [StockTxnDAO] CREATED — stockTxnId: \(entity.stock_txn_id), batchId: \(batch.batch_id), drugId: \(drugId)")
         stockTxnsDidChange.send()
         return entity
     }
@@ -73,6 +73,19 @@ final class StockTxnStore {
         return (try? context.fetch(request)) ?? []
     }
 
+    /// Same as `fetchByBatch(batchId:)`, but fetches via an explicit context
+    /// — see `TransactionStore.fetchById(_:in:)`. This store has no `sync`
+    /// helper of its own (every other method here assumes the caller is
+    /// already on `viewContext`'s queue); `performAndWait` is added here
+    /// explicitly since this overload is for callers on a different queue.
+    func fetchByBatch(batchId: Int64, in context: NSManagedObjectContext) -> [StockTxnEntity] {
+        context.performAndWait {
+            let request: NSFetchRequest<StockTxnEntity> = StockTxnEntity.fetchRequest()
+            request.predicate = NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId)
+            return (try? context.fetch(request)) ?? []
+        }
+    }
+
     func fetchByBatchAndNdc(batchId: Int64, ndc: String) -> StockTxnEntity? {
         fetchByBatch(batchId: batchId).first { $0.drug?.ndc == ndc }
     }
@@ -84,7 +97,7 @@ final class StockTxnStore {
         stockTxn.status = status.rawValue
         stockTxn.updated_at = isoFormatter.string(from: Date())
         CoreDataManager.shared.save(context: context)
-        print("📦 [StockTxnDAO] UPDATED status — stockTxnId: \(stockTxnId), status: \(status.rawValue)")
+        StoreLogger.debug("📦 [StockTxnDAO] UPDATED status — stockTxnId: \(stockTxnId), status: \(status.rawValue)")
         stockTxnsDidChange.send()
     }
 
@@ -96,7 +109,7 @@ final class StockTxnStore {
         stockTxn.updated_at = isoFormatter.string(from: Date())
         BottleInfoStore.shared.softDeleteByStockTxn(stockTxnId: stockTxnId)
         CoreDataManager.shared.save(context: context)
-        print("📦 [StockTxnDAO] SOFT DELETED — stockTxnId: \(stockTxnId)")
+        StoreLogger.debug("📦 [StockTxnDAO] SOFT DELETED — stockTxnId: \(stockTxnId)")
         stockTxnsDidChange.send()
     }
 
@@ -104,9 +117,9 @@ final class StockTxnStore {
         let request: NSFetchRequest<NSFetchRequestResult> = StockTxnEntity.fetchRequest()
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-            print("📦 [StockTxnDAO] DELETED ALL — all stock txns removed")
+            StoreLogger.debug("📦 [StockTxnDAO] DELETED ALL — all stock txns removed")
         } catch {
-            print("Failed to delete StockTxnEntity: \(error)")
+            StoreLogger.debug("Failed to delete StockTxnEntity: \(error)")
         }
     }
 

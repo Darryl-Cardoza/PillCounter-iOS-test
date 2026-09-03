@@ -14,7 +14,8 @@ extension BatchCountEntity {
             ndcCount: Int64(ndcCount),
             status: self.status ?? "",
             bucketId: self.bucket_id ?? "",
-            isFromPms: self.req_id_from_pms != nil
+            isFromPms: self.req_id_from_pms != nil,
+            reqIdFromPms: self.req_id_from_pms
         )
     }
 }

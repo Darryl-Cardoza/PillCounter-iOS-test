@@ -14,6 +14,32 @@
         <attribute name="user_id" optional="YES" attributeType="String"/>
         <attribute name="user_name" optional="YES" attributeType="String"/>
         <relationship name="stockTxns" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="StockTxnEntity" inverseName="batch" inverseEntity="StockTxnEntity"/>
+        <fetchIndex name="byUserIdIndex">
+            <fetchIndexElement property="user_id" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byIsDeletedIndex">
+            <fetchIndexElement property="is_deleted" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byStatusIndex">
+            <fetchIndexElement property="status" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byIsSyncedIndex">
+            <fetchIndexElement property="is_synced" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byStartDateTimeIndex">
+            <fetchIndexElement property="start_date_time" type="Binary" order="descending"/>
+        </fetchIndex>
+        <fetchIndex name="byUserDeletedStatusSyncedIndex">
+            <fetchIndexElement property="user_id" type="Binary" order="ascending"/>
+            <fetchIndexElement property="is_deleted" type="Binary" order="ascending"/>
+            <fetchIndexElement property="status" type="Binary" order="ascending"/>
+            <fetchIndexElement property="is_synced" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byUserDeletedStatusIndex">
+            <fetchIndexElement property="user_id" type="Binary" order="ascending"/>
+            <fetchIndexElement property="is_deleted" type="Binary" order="ascending"/>
+            <fetchIndexElement property="status" type="Binary" order="ascending"/>
+        </fetchIndex>
     </entity>
     <entity name="BottleInfoEntity" representedClassName="BottleInfoEntity" syncable="YES" codeGenerationType="class">
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -108,6 +134,31 @@
         <relationship name="pillCountTransactionDetails" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PillCountTransactionDetailsEntity" inverseName="pillCountTransaction" inverseEntity="PillCountTransactionDetailsEntity"/>
         <relationship name="substitueDrug" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DrugMasterEntity" inverseName="transactions" inverseEntity="DrugMasterEntity"/>
         <relationship name="user" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserEntity" inverseName="transactions" inverseEntity="UserEntity"/>
+        <fetchIndex name="byCreatedAtIndex">
+            <fetchIndexElement property="created_at" type="Binary" order="descending"/>
+        </fetchIndex>
+        <fetchIndex name="byIsDeletedIndex">
+            <fetchIndexElement property="is_deleted" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byIsSyncedIndex">
+            <fetchIndexElement property="is_synced" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byStatusIndex">
+            <fetchIndexElement property="status" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byUserDeletedSyncedStatusIndex">
+            <fetchIndexElement property="user" type="Binary" order="ascending"/>
+            <fetchIndexElement property="is_deleted" type="Binary" order="ascending"/>
+            <fetchIndexElement property="is_synced" type="Binary" order="ascending"/>
+            <fetchIndexElement property="status" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byUserDeletedBatchDispenseStatusIndex">
+            <fetchIndexElement property="user" type="Binary" order="ascending"/>
+            <fetchIndexElement property="is_deleted" type="Binary" order="ascending"/>
+            <fetchIndexElement property="batch_id" type="Binary" order="ascending"/>
+            <fetchIndexElement property="is_dispense" type="Binary" order="ascending"/>
+            <fetchIndexElement property="status" type="Binary" order="ascending"/>
+        </fetchIndex>
     </entity>
     <entity name="StockTxnEntity" representedClassName="StockTxnEntity" syncable="YES" codeGenerationType="class">
         <attribute name="batch_id" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>

@@ -6,14 +6,10 @@
 import CoreData
 import Combine
 
-final class BatchStore {
+final class BatchStore: BaseDataStore<BatchCountEntity> {
 
     static let shared = BatchStore()
-    private init() {}
-
-    private var context: NSManagedObjectContext {
-        CoreDataManager.shared.context
-    }
+    private override init() {}
 
     // Fired after every write that affects batches. Subscribers reload derived state automatically.
     let transactionsDidChange = PassthroughSubject<Void, Never>()
@@ -28,186 +24,511 @@ final class BatchStore {
     func create(bucketId: String, requestId: String? = nil) -> BatchCountEntity? {
         let userId = currentUserId
         guard !userId.isEmpty else {
-            print("📦 [BatchDAO] CREATE skipped — no logged-in user")
+            StoreLogger.debug("📦 [BatchDAO] CREATE skipped — no logged-in user")
             return nil
         }
-        let batchId = Int64(Date().timeIntervalSince1970 * 1000)
-        let batch = BatchCountEntity(context: context)
-        batch.batch_id = batchId
-        batch.start_date_time = batchId
-        batch.status = CountStatus.PARTIAL.rawValue
-        batch.is_deleted = false
-        batch.bucket_id = bucketId
-        batch.req_id_from_pms = requestId
-        batch.is_synced = false
-        batch.user_id = userId
-        CoreDataManager.shared.save(context: context)
+        let batch: BatchCountEntity = sync {
+            let batchId = Int64(Date().timeIntervalSince1970 * 1000)
+            let batch = BatchCountEntity(context: context)
+            batch.batch_id = batchId
+            batch.start_date_time = batchId
+            batch.status = CountStatus.PARTIAL.rawValue
+            batch.is_deleted = false
+            batch.bucket_id = bucketId
+            batch.req_id_from_pms = requestId
+            batch.is_synced = false
+            batch.user_id = userId
+            CoreDataManager.shared.save(context: context)
+            StoreLogger.debug("📦 [BatchDAO] CREATED — batchId: \(batchId), bucketId: \(bucketId), userId: \(userId), requestId: \(requestId ?? "-")")
+            return batch
+        }
         transactionsDidChange.send()
-        print("📦 [BatchDAO] CREATED — batchId: \(batchId), bucketId: \(bucketId), userId: \(userId), requestId: \(requestId ?? "-")")
         return batch
     }
 
     // MARK: - Read
 
     func fetchById(_ batchId: Int64) -> BatchCountEntity? {
-        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId)
-        request.fetchLimit = 1
-        return try? context.fetch(request).first
+        sync {
+            fetchOne(predicate: NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId), sort: nil, in: context)
+        }
+    }
+
+    /// Same as `fetchById(_:)`, but fetches via an explicit context — see
+    /// `TransactionStore.fetchById(_:in:)`.
+    func fetchById(_ batchId: Int64, in context: NSManagedObjectContext) -> BatchCountEntity? {
+        context.performAndWait {
+            fetchOne(predicate: NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId), sort: nil, in: context)
+        }
     }
 
     func fetchAll() -> [BatchCountEntity] {
-        let userId = currentUserId
-        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "user_id == %@", userId)
-        let results = (try? context.fetch(request)) ?? []
-        StoreLogger.log(
-            dao: "BatchDAO", op: "fetchAll",
-            columns: ["batch_id", "bucket_id", "status", "is_synced", "is_deleted", "start_date_time", "end_date_time"],
-            rows: results.map { [
-                "\($0.batch_id)",
-                $0.bucket_id ?? "-",
-                $0.status ?? "-",
-                "\($0.is_synced)",
-                "\($0.is_deleted)",
-                "\($0.start_date_time)",
-                "\($0.end_date_time)"
-            ]}
-        )
-        return results
+        sync {
+            let userId = currentUserId
+            let results = fetchAllMatching(predicate: NSPredicate(format: "user_id == %@", userId), sort: nil, in: context)
+            #if DEBUG
+            StoreLogger.log(
+                dao: "BatchDAO", op: "fetchAll",
+                columns: ["batch_id", "bucket_id", "status", "is_synced", "is_deleted", "start_date_time", "end_date_time"],
+                rows: results.map { [
+                    "\($0.batch_id)",
+                    $0.bucket_id ?? "-",
+                    $0.status ?? "-",
+                    "\($0.is_synced)",
+                    "\($0.is_deleted)",
+                    "\($0.start_date_time)",
+                    "\($0.end_date_time)"
+                ]}
+            )
+            #endif
+            return results
+        }
     }
 
     func fetchAllPartial() -> [BatchCountEntity] {
-        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "user_id == %@ AND is_deleted == false AND status == %@",
-            currentUserId, CountStatus.PARTIAL.rawValue
-        )
-        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
-        return (try? context.fetch(request)) ?? []
+        sync {
+            fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND status == %@",
+                    currentUserId, CountStatus.PARTIAL.rawValue
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                in: context
+            )
+        }
+    }
+
+    /// Same as `fetchAllPartial()`, but fetches via an explicit context —
+    /// see `TransactionStore.fetchPartial(for:isDispense:in:)`.
+    func fetchAllPartial(in context: NSManagedObjectContext) -> [BatchCountEntity] {
+        context.performAndWait {
+            fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND status == %@",
+                    currentUserId, CountStatus.PARTIAL.rawValue
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                in: context
+            )
+        }
+    }
+
+    /// Paginated variant of `fetchAllPartial` — bounded to `limit` rows
+    /// starting at `offset`.
+    func fetchAllPartialPage(limit: Int, offset: Int) -> [BatchCountEntity] {
+        sync {
+            fetchPage(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND status == %@",
+                    currentUserId, CountStatus.PARTIAL.rawValue
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                limit: limit,
+                offset: offset,
+                in: context
+            )
+        }
     }
 
     func fetchAllCompleted() -> [BatchCountEntity] {
-        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "user_id == %@ AND is_deleted == false AND status == %@",
-            currentUserId, CountStatus.COMPLETED.rawValue
-        )
-        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
-        return (try? context.fetch(request)) ?? []
+        sync {
+            fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND status == %@",
+                    currentUserId, CountStatus.COMPLETED.rawValue
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                in: context
+            )
+        }
+    }
+
+    /// Paginated variant of `fetchAllCompleted` — bounded to `limit` rows
+    /// starting at `offset`.
+    func fetchAllCompletedPage(limit: Int, offset: Int) -> [BatchCountEntity] {
+        sync {
+            fetchPage(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND status == %@",
+                    currentUserId, CountStatus.COMPLETED.rawValue
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                limit: limit,
+                offset: offset,
+                in: context
+            )
+        }
     }
 
     func fetchLastCreated() -> BatchCountEntity? {
-        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "user_id == %@ AND is_deleted == false AND status == %@",
-            currentUserId, CountStatus.PARTIAL.rawValue
-        )
-        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
-        request.fetchLimit = 1
-        return try? context.fetch(request).first
+        sync {
+            fetchOne(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND status == %@",
+                    currentUserId, CountStatus.PARTIAL.rawValue
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                in: context
+            )
+        }
     }
 
     func fetchByDateRange(startTs: Int64, endTs: Int64) -> [BatchCountEntity] {
-        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
-            currentUserId, startTs, endTs
-        )
-        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: false)]
-        return (try? context.fetch(request)) ?? []
+        sync {
+            fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
+                    currentUserId, startTs, endTs
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                in: context
+            )
+        }
+    }
+
+    /// Same as `fetchByDateRange(startTs:endTs:)`, but fetches via an
+    /// explicit context — see `TransactionStore.fetchPartial(for:isDispense:in:)`.
+    func fetchByDateRange(startTs: Int64, endTs: Int64, in context: NSManagedObjectContext) -> [BatchCountEntity] {
+        context.performAndWait {
+            fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
+                    currentUserId, startTs, endTs
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                in: context
+            )
+        }
+    }
+
+    /// Paginated variant of `fetchByDateRange` — bounded to `limit` rows
+    /// starting at `offset`, so browsing a large date range doesn't pull
+    /// every batch in that range into memory at once.
+    func fetchByDateRangePage(startTs: Int64, endTs: Int64, limit: Int, offset: Int) -> [BatchCountEntity] {
+        sync {
+            fetchPage(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
+                    currentUserId, startTs, endTs
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: false)],
+                limit: limit,
+                offset: offset,
+                in: context
+            )
+        }
     }
 
     func fetchCompletedUnsynced() -> [BatchCountEntity] {
-        let request: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "user_id == %@ AND is_deleted == false AND status == %@ AND is_synced == false",
-            currentUserId, CountStatus.COMPLETED.rawValue
-        )
-        request.sortDescriptors = [NSSortDescriptor(key: "start_date_time", ascending: true)]
-        return (try? context.fetch(request)) ?? []
+        sync {
+            fetchAllMatching(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND status == %@ AND is_synced == false",
+                    currentUserId, CountStatus.COMPLETED.rawValue
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: true)],
+                in: context
+            )
+        }
+    }
+
+    /// Paginated variant of `fetchCompletedUnsynced` — bounded to `limit`
+    /// rows starting at `offset`.
+    ///
+    /// NOT safe for a drain loop that mutates `is_synced` between page
+    /// fetches (e.g. the HL7 batch sync queue) — a row leaving the
+    /// `is_synced == false` result set mid-drain shifts every later row's
+    /// `OFFSET` position back by one, silently skipping a row for that pass.
+    /// Use `fetchCompletedUnsyncedPage(after:limit:)` for that case instead.
+    func fetchCompletedUnsyncedPage(limit: Int, offset: Int) -> [BatchCountEntity] {
+        sync {
+            fetchPage(
+                predicate: NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND status == %@ AND is_synced == false",
+                    currentUserId, CountStatus.COMPLETED.rawValue
+                ),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: true)],
+                limit: limit,
+                offset: offset,
+                in: context
+            )
+        }
+    }
+
+    /// Keyset-paginated variant of `fetchCompletedUnsyncedPage` — anchors on
+    /// `start_date_time` instead of a row-position `OFFSET`, so it stays
+    /// correct even when rows leave the `is_synced == false` result set
+    /// between page fetches (see `fetchCompletedUnsyncedPage(limit:offset:)`'s
+    /// doc comment). Pass `after: nil` for the first page, then the last
+    /// returned row's `start_date_time` for each subsequent page.
+    func fetchCompletedUnsyncedPage(after startDateTime: Int64?, limit: Int) -> [BatchCountEntity] {
+        sync {
+            var predicates: [NSPredicate] = [
+                NSPredicate(format: "user_id == %@", currentUserId),
+                NSPredicate(format: "is_deleted == false"),
+                NSPredicate(format: "status == %@", CountStatus.COMPLETED.rawValue),
+                NSPredicate(format: "is_synced == false")
+            ]
+            if let startDateTime {
+                predicates.append(NSPredicate(format: "start_date_time > %lld", startDateTime))
+            }
+            return fetchPage(
+                predicate: NSCompoundPredicate(andPredicateWithSubpredicates: predicates),
+                sort: [NSSortDescriptor(key: "start_date_time", ascending: true)],
+                limit: limit,
+                offset: 0,
+                in: context
+            )
+        }
+    }
+
+    /// True count of batches in `[startTs, endTs]` for the current user,
+    /// optionally narrowed to a status — independent of any page size, so a
+    /// paginated display list can show an accurate status-filter count
+    /// without fetching every row in the range.
+    func countByDateRange(startTs: Int64, endTs: Int64, status: CountStatus?) -> Int {
+        sync {
+            let request = NSFetchRequest<NSNumber>(entityName: "BatchCountEntity")
+            request.resultType = .countResultType
+            if let status {
+                request.predicate = NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld AND status == %@",
+                    currentUserId, startTs, endTs, status.rawValue
+                )
+            } else {
+                request.predicate = NSPredicate(
+                    format: "user_id == %@ AND is_deleted == false AND start_date_time >= %lld AND start_date_time <= %lld",
+                    currentUserId, startTs, endTs
+                )
+            }
+            return (try? context.count(for: request)) ?? 0
+        }
+    }
+
+    /// True count of pending (PARTIAL, not deleted) batches for the current
+    /// user, matching the same base predicate as `fetchAllPartial`/the
+    /// dashboard's `allPendingInventory`, optionally narrowed to whether the
+    /// batch originated from a PMS cycle-count request — independent of row
+    /// count, so the dashboard's stat cards don't need to fetch every
+    /// pending batch just to report how many match each facet.
+    enum PendingBatchFacet {
+        /// Has a non-empty `req_id_from_pms` — a PMS-initiated cycle count.
+        case cycleCount
+        /// Empty `req_id_from_pms` — a manually started pending batch.
+        case pendingBatch
+    }
+
+    func countPendingInventory(facet: PendingBatchFacet) -> Int {
+        sync {
+            let request = NSFetchRequest<NSNumber>(entityName: "BatchCountEntity")
+            request.resultType = .countResultType
+
+            var predicates: [NSPredicate] = [
+                NSPredicate(format: "user_id == %@", currentUserId),
+                NSPredicate(format: "is_deleted == false"),
+                NSPredicate(format: "status == %@", CountStatus.PARTIAL.rawValue)
+            ]
+            switch facet {
+            case .cycleCount:
+                predicates.append(NSPredicate(format: "req_id_from_pms != nil AND req_id_from_pms != %@", ""))
+            case .pendingBatch:
+                predicates.append(NSPredicate(format: "req_id_from_pms == nil OR req_id_from_pms == %@", ""))
+            }
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+            return (try? context.count(for: request)) ?? 0
+        }
+    }
+
+    /// True total matching `fetchCompletedUnsynced`, independent of any page
+    /// size — so a capped/paginated display list can still show an accurate
+    /// "N unsynced" count without fetching every matching row.
+    func countCompletedUnsynced() -> Int {
+        sync {
+            let request = NSFetchRequest<NSNumber>(entityName: "BatchCountEntity")
+            request.resultType = .countResultType
+            request.predicate = NSPredicate(
+                format: "user_id == %@ AND is_deleted == false AND status == %@ AND is_synced == false",
+                currentUserId, CountStatus.COMPLETED.rawValue
+            )
+            return (try? context.count(for: request)) ?? 0
+        }
     }
 
     /// StockTxnEntity already has exactly one row per NDC per batch, so a plain count works
     /// (no distinct-query needed, unlike the legacy PillCountTransactionEntity model).
     func getTransactionCount(for batchId: Int64) -> Int {
-        let request = NSFetchRequest<NSNumber>(entityName: "StockTxnEntity")
-        request.resultType = .countResultType
-        request.predicate = NSPredicate(
-            format: "batch_id == %lld AND is_deleted == false AND drug.ndc != nil",
-            batchId
-        )
-        return (try? context.count(for: request)) ?? 0
+        sync {
+            let request = NSFetchRequest<NSNumber>(entityName: "StockTxnEntity")
+            request.resultType = .countResultType
+            request.predicate = NSPredicate(
+                format: "batch_id == %lld AND is_deleted == false AND drug.ndc != nil",
+                batchId
+            )
+            return (try? context.count(for: request)) ?? 0
+        }
+    }
+
+    /// Batched variant of `getTransactionCount(for:)` — one query for every
+    /// id in `batchIds` instead of one query per batch, so a screen listing
+    /// N batches doesn't issue N synchronous Core Data round trips just to
+    /// show each batch's item count.
+    func transactionCounts(for batchIds: [Int64]) -> [Int64: Int] {
+        guard !batchIds.isEmpty else { return [:] }
+        return sync {
+            let request = NSFetchRequest<NSDictionary>(entityName: "StockTxnEntity")
+            request.predicate = NSPredicate(
+                format: "batch_id IN %@ AND is_deleted == false AND drug.ndc != nil",
+                batchIds
+            )
+            request.propertiesToFetch = ["batch_id"]
+            request.resultType = .dictionaryResultType
+            let rows = (try? context.fetch(request)) ?? []
+            var counts: [Int64: Int] = Dictionary(uniqueKeysWithValues: batchIds.map { ($0, 0) })
+            for row in rows {
+                guard let batchIdNumber = row["batch_id"] as? NSNumber else { continue }
+                counts[batchIdNumber.int64Value, default: 0] += 1
+            }
+            return counts
+        }
+    }
+
+    /// Same as `transactionCounts(for:)`, but queries via an explicit
+    /// context — see `TransactionStore.fetchPartial(for:isDispense:in:)`.
+    func transactionCounts(for batchIds: [Int64], in context: NSManagedObjectContext) -> [Int64: Int] {
+        guard !batchIds.isEmpty else { return [:] }
+        return context.performAndWait {
+            let request = NSFetchRequest<NSDictionary>(entityName: "StockTxnEntity")
+            request.predicate = NSPredicate(
+                format: "batch_id IN %@ AND is_deleted == false AND drug.ndc != nil",
+                batchIds
+            )
+            request.propertiesToFetch = ["batch_id"]
+            request.resultType = .dictionaryResultType
+            let rows = (try? context.fetch(request)) ?? []
+            var counts: [Int64: Int] = Dictionary(uniqueKeysWithValues: batchIds.map { ($0, 0) })
+            for row in rows {
+                guard let batchIdNumber = row["batch_id"] as? NSNumber else { continue }
+                counts[batchIdNumber.int64Value, default: 0] += 1
+            }
+            return counts
+        }
     }
 
     // MARK: - Update
 
     func updateStatus(batchId: Int64, status: CountStatus, completion: (() -> Void)? = nil) {
-        guard let batch = fetchById(batchId) else { return }
-        batch.status = status.rawValue
-        batch.is_synced = false
-        if status == .COMPLETED {
-            batch.end_date_time = Int64(Date().timeIntervalSince1970 * 1000)
+        let saved: Bool = sync {
+            guard let batch = fetchByIdNoWrap(batchId) else { return false }
+            batch.status = status.rawValue
+            batch.is_synced = false
+            if status == .COMPLETED {
+                batch.end_date_time = Int64(Date().timeIntervalSince1970 * 1000)
+            }
+            do {
+                try context.save()
+                StoreLogger.debug("📦 [BatchDAO] UPDATED status — batchId: \(batchId), status: \(status.rawValue)")
+                return true
+            } catch {
+                StoreLogger.debug("❌ BatchDAO.updateStatus save failed: \(error)")
+                return false
+            }
         }
-        do {
-            try context.save()
-            transactionsDidChange.send()
-            print("📦 [BatchDAO] UPDATED status — batchId: \(batchId), status: \(status.rawValue)")
-            completion?()
-        } catch {
-            print("❌ BatchDAO.updateStatus save failed:", error)
-        }
+        guard saved else { return }
+        transactionsDidChange.send()
+        completion?()
     }
 
     func updateNote(batchId: Int64, note: String) {
-        guard let batch = fetchById(batchId) else { return }
-        batch.note = note
-        CoreDataManager.shared.save(context: context)
-        print("📦 [BatchDAO] UPDATED note — batchId: \(batchId)")
+        sync {
+            guard let batch = fetchByIdNoWrap(batchId) else { return }
+            batch.note = note
+            CoreDataManager.shared.save(context: context)
+            StoreLogger.debug("📦 [BatchDAO] UPDATED note — batchId: \(batchId)")
+        }
     }
 
     // MARK: - Delete
 
     func markSynced(batchId: Int64) {
-        guard let batch = fetchById(batchId) else { return }
-        batch.is_synced = true
-        try? context.save()
+        sync {
+            guard let batch = fetchByIdNoWrap(batchId) else { return }
+            batch.is_synced = true
+            try? context.save()
+            StoreLogger.debug("📦 [BatchDAO] SYNCED — batchId: \(batchId)")
+        }
         transactionsDidChange.send()
-        print("📦 [BatchDAO] SYNCED — batchId: \(batchId)")
     }
 
     func softDelete(ids: Set<Int64>) {
-        let batchReq: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
-        batchReq.predicate = NSPredicate(format: "batch_id IN %@", ids)
+        let succeeded: Bool = sync {
+            let batchReq: NSFetchRequest<BatchCountEntity> = BatchCountEntity.fetchRequest()
+            batchReq.predicate = NSPredicate(format: "batch_id IN %@", ids)
 
-        let txnReq: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
-        txnReq.predicate = NSPredicate(format: "batch_id IN %@", ids)
+            let txnReq: NSFetchRequest<PillCountTransactionEntity> = PillCountTransactionEntity.fetchRequest()
+            txnReq.predicate = NSPredicate(format: "batch_id IN %@", ids)
 
-        let stockTxnReq: NSFetchRequest<StockTxnEntity> = StockTxnEntity.fetchRequest()
-        stockTxnReq.predicate = NSPredicate(format: "batch_id IN %@", ids)
+            let stockTxnReq: NSFetchRequest<StockTxnEntity> = StockTxnEntity.fetchRequest()
+            stockTxnReq.predicate = NSPredicate(format: "batch_id IN %@", ids)
 
-        do {
-            let batches = try context.fetch(batchReq)
-            batches.forEach { $0.is_deleted = true }
-            let transactions = try context.fetch(txnReq)
-            transactions.forEach { $0.is_deleted = true }
-            let stockTxns = try context.fetch(stockTxnReq)
-            stockTxns.forEach { $0.is_deleted = true }
-            try context.save()
-            transactionsDidChange.send()
-            print("📦 [BatchDAO] SOFT DELETED — batchIds: \(ids), batches: \(batches.count), transactions: \(transactions.count), stockTxns: \(stockTxns.count)")
-        } catch {
-            print("❌ BatchDAO.softDelete failed:", error)
+            do {
+                let batches = try context.fetch(batchReq)
+                batches.forEach { $0.is_deleted = true }
+                let transactions = try context.fetch(txnReq)
+                transactions.forEach { $0.is_deleted = true }
+                let stockTxns = try context.fetch(stockTxnReq)
+                stockTxns.forEach { $0.is_deleted = true }
+                try context.save()
+                StoreLogger.debug("📦 [BatchDAO] SOFT DELETED — batchIds: \(ids), batches: \(batches.count), transactions: \(transactions.count), stockTxns: \(stockTxns.count)")
+                return true
+            } catch {
+                StoreLogger.debug("❌ BatchDAO.softDelete failed: \(error)")
+                return false
+            }
         }
+        guard succeeded else { return }
+        transactionsDidChange.send()
     }
 
     func deleteAll() {
-        let request: NSFetchRequest<NSFetchRequestResult> = BatchCountEntity.fetchRequest()
-        do {
-            try context.execute(NSBatchDeleteRequest(fetchRequest: request))
-            print("📦 [BatchDAO] DELETED ALL — all batch records removed")
-        } catch {
-            print("Failed to delete BatchCountEntity: \(error)")
+        sync {
+            let request: NSFetchRequest<NSFetchRequestResult> = BatchCountEntity.fetchRequest()
+            do {
+                try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+                StoreLogger.debug("📦 [BatchDAO] DELETED ALL — all batch records removed")
+            } catch {
+                StoreLogger.debug("Failed to delete BatchCountEntity: \(error)")
+            }
         }
+    }
+
+    // MARK: - Private
+
+    /// Same lookup as `fetchById`, but assumes the caller is already inside
+    /// a `sync { }` block on this context — "NoWrap" because nothing here is
+    /// locking anything: the sync{} wrapping already happened at the call
+    /// site, so this variant skips wrapping again.
+    private func fetchByIdNoWrap(_ batchId: Int64) -> BatchCountEntity? {
+        fetchOne(predicate: NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId), sort: nil, in: context)
+    }
+
+    /// Same as `fetchByIdNoWrap(_:)`, but against an explicit context — see
+    /// `TransactionStore.fetchByIdNoWrap(_:in:)`.
+    private func fetchByIdNoWrap(_ batchId: Int64, in context: NSManagedObjectContext) -> BatchCountEntity? {
+        fetchOne(predicate: NSPredicate(format: "batch_id == %lld AND is_deleted == false", batchId), sort: nil, in: context)
+    }
+
+    /// Same as `markSynced(batchId:)`, but writes via an explicit context —
+    /// for the HL7 batch sync queue's ACK-success write, which previously
+    /// hopped to `viewContext`/the main thread per synced batch. See
+    /// `TransactionStore.updateSynced(txnId:in:)` for the equivalent
+    /// transaction-side fix and its rationale.
+    func markSynced(batchId: Int64, in context: NSManagedObjectContext) {
+        context.performAndWait {
+            guard let batch = fetchByIdNoWrap(batchId, in: context) else { return }
+            batch.is_synced = true
+            try? context.save()
+            StoreLogger.debug("📦 [BatchDAO] SYNCED — batchId: \(batchId)")
+        }
+        transactionsDidChange.send()
     }
 }

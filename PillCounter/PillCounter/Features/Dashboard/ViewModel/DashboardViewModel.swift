@@ -12,28 +12,34 @@ import SwiftUI
 
 // MARK: - Unified queue item model
 
+/// Wraps a plain DTO (`TransactionRowData`/`StockData`), never a live
+/// `NSManagedObject` — the entire Today's Queue / Recent Activity dataset is
+/// fetched, decrypted, and mapped to these DTOs once, off-main, in
+/// `loadQueueData` (see its doc comment). Navigation reads only the id
+/// fields (`txnId`/`batchId`) and re-fetches on the destination screen, so
+/// nothing here needs a live managed object.
 enum DashboardQueueItem: Identifiable {
-    case dispense(PillCountTransactionEntity, pillCount: Int)
-    case inventory(BatchCountEntity, ndcCount: Int)
+    case dispense(TransactionRowData)
+    case inventory(StockData)
 
     var id: String {
         switch self {
-        case .dispense(let txn, _): return "d-\(txn.txn_id)"
-        case .inventory(let batch, _): return "i-\(batch.batch_id)"
+        case .dispense(let row): return "d-\(row.txnId)"
+        case .inventory(let row): return "i-\(row.batchId)"
         }
     }
 
     var sortDate: Int64 {
         switch self {
-        case .dispense(let txn, _): return txn.created_at
-        case .inventory(let batch, _): return batch.start_date_time
+        case .dispense(let row): return row.createdAt
+        case .inventory(let row): return row.createdAt
         }
     }
 
     var isHighPriority: Bool {
         switch self {
-        case .dispense(let txn, _):
-            return txn.txn_priority?
+        case .dispense(let row):
+            return row.txnPriority?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .lowercased() == "high"
         case .inventory:
@@ -53,6 +59,20 @@ enum StatCardFilter {
     case pendingBatch
 }
 
+/// Stat-card counts, fetched once per `loadQueueData` / data-change via true
+/// COUNT queries (no row materialization) — kept separate from the paginated
+/// `dispensePartial`/`inventoryPartial` display arrays so the numbers don't
+/// change as more pages load, and so a large pending queue doesn't have to
+/// be fetched/decrypted in full just to count it.
+struct DashboardStatCounts {
+    var pendingDispense = 0
+    var highPriority = 0
+    var controlled = 0
+    var hazardous = 0
+    var cycleCount = 0
+    var pendingBatch = 0
+}
+
 struct DashboardStatCard: Identifiable {
     let id: String
     let iconName: String
@@ -67,13 +87,14 @@ struct DashboardStatCard: Identifiable {
 @MainActor
 final class DashboardViewModel: ObservableObject {
 
-    // Loaded data
-    @Published private(set) var dispensePartial: [PillCountTransactionEntity] = []
-    @Published private(set) var dispenseCompleted: [PillCountTransactionEntity] = []
-    @Published private(set) var inventoryPartial: [BatchCountEntity] = []
-    @Published private(set) var inventoryCompleted: [BatchCountEntity] = []
-    @Published private(set) var pillCounts: [Int64: Int] = [:]
-    @Published private(set) var batchNdcCounts: [Int64: Int] = [:]
+    // Loaded data — the full Today's Queue / Recent Activity dataset,
+    // fetched entirely by `loadQueueData` (no further paging).
+    @Published private(set) var dispensePartial: [TransactionRowData] = []
+    @Published private(set) var dispenseCompleted: [TransactionRowData] = []
+    @Published private(set) var inventoryPartial: [StockData] = []
+    @Published private(set) var inventoryCompleted: [StockData] = []
+
+    private var statCounts = DashboardStatCounts()
 
     // Active stat-card filter (nil == no filter)
     @Published var activeFilterCardId: String? = nil
@@ -103,8 +124,8 @@ final class DashboardViewModel: ObservableObject {
     /// batch rows — they must never appear as dispense rows in either dashboard tab,
     /// under any stat-card filter. Excluded at the merge source so both the lists and
     /// the filtered views drop them.
-    private func isRegular(_ txn: PillCountTransactionEntity) -> Bool {
-        !txn.is_dispense
+    private func isRegular(_ row: TransactionRowData) -> Bool {
+        !row.isDispense
     }
 
     // MARK: - Merged queues
@@ -112,18 +133,8 @@ final class DashboardViewModel: ObservableObject {
     private var mergedQueueItems: [DashboardQueueItem] {
         let dispenseItems = dispensePartial
             .filter { !isRegular($0) }
-            .map {
-                DashboardQueueItem.dispense(
-                    $0,
-                    pillCount: pillCounts[$0.txn_id] ?? 0
-                )
-            }
-        let inventoryItems = inventoryPartial.map {
-            DashboardQueueItem.inventory(
-                $0,
-                ndcCount: batchNdcCounts[$0.batch_id] ?? 0
-            )
-        }
+            .map { DashboardQueueItem.dispense($0) }
+        let inventoryItems = inventoryPartial.map { DashboardQueueItem.inventory($0) }
         return (dispenseItems + inventoryItems).sorted {
             if $0.isHighPriority != $1.isHighPriority { return $0.isHighPriority }
             return $0.sortDate < $1.sortDate
@@ -133,18 +144,8 @@ final class DashboardViewModel: ObservableObject {
     private var mergedRecentItems: [DashboardQueueItem] {
         let dispenseItems = dispenseCompleted
             .filter { !isRegular($0) }
-            .map {
-                DashboardQueueItem.dispense(
-                    $0,
-                    pillCount: pillCounts[$0.txn_id] ?? 0
-                )
-            }
-        let inventoryItems = inventoryCompleted.map {
-            DashboardQueueItem.inventory(
-                $0,
-                ndcCount: batchNdcCounts[$0.batch_id] ?? 0
-            )
-        }
+            .map { DashboardQueueItem.dispense($0) }
+        let inventoryItems = inventoryCompleted.map { DashboardQueueItem.inventory($0) }
         return (dispenseItems + inventoryItems).sorted {
             $0.sortDate > $1.sortDate
         }
@@ -166,23 +167,25 @@ final class DashboardViewModel: ObservableObject {
     ) -> [DashboardQueueItem] {
         items.filter { item in
             switch (item, filter) {
-            case (.dispense(let txn, _), .highPriority):
-                return txn.txn_priority?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .lowercased() == "high"
-            case (.dispense(let txn, _), .hazardous):
-                return txn.drug?.is_hazardous == true
-            case (.dispense(let txn, _), .controlled):
-                let t =
-                    txn.drug?.drug_type?.trimmingCharacters(in: .whitespaces)
-                    ?? ""
-                return !t.isEmpty
+            case (.dispense(let row), .highPriority):
+                // Matches TransactionStore.countPendingDispense's DB predicate
+                // (`txn_priority ==[c] "high"`) exactly — case-insensitive,
+                // no trimming, so card counts and list rows agree.
+                return row.txnPriority?.lowercased() == "high"
+            case (.dispense(let row), .hazardous):
+                return row.isHazardous
+            case (.dispense(let row), .controlled):
+                // Matches TransactionStore.countPendingDispense's DB predicate
+                // (`drug.drug_type != nil AND drug.drug_type != ""`) exactly —
+                // no trimming, so card counts and list rows agree even on a
+                // whitespace-only drug_type.
+                return !row.drugType.isEmpty
             case (.dispense, .dispPending):
                 return true
-            case (.inventory(let batch, _), .cycleCount):
-                return !((batch.req_id_from_pms ?? "").isEmpty)
-            case (.inventory(let batch, _), .pendingBatch):
-                return (batch.req_id_from_pms ?? "").isEmpty
+            case (.inventory(let row), .cycleCount):
+                return !((row.reqIdFromPms ?? "").isEmpty)
+            case (.inventory(let row), .pendingBatch):
+                return (row.reqIdFromPms ?? "").isEmpty
             default:
                 return false
             }
@@ -222,18 +225,12 @@ final class DashboardViewModel: ObservableObject {
     /// `iconColor` is supplied by the view from the active theme so this type
     /// stays free of any `AppColors` (EnvironmentObject) dependency.
     func statCards(iconColor: Color) -> [DashboardStatCard] {
-        // Counts must match the dispense rows shown in the tabs, which exclude
-        // REGULAR (inventory) transactions — so count against the same slice.
-        let dispensePartialFixed = dispensePartial.filter { !isRegular($0) }
-        return [
+        [
             DashboardStatCard(
                 id: "disp-high-priority",
                 iconName: "icon_priority",
                 iconColor: iconColor,
-                count: dispensePartialFixed.filter {
-                    $0.txn_priority?.trimmingCharacters(in: .whitespaces)
-                        .lowercased() == "high"
-                }.count,
+                count: statCounts.highPriority,
                 label: L10n.Dashboard.StatCards.highPriority,
                 filter: .highPriority
             ),
@@ -241,7 +238,7 @@ final class DashboardViewModel: ObservableObject {
                 id: "disp-pending",
                 iconName: "partial",
                 iconColor: iconColor,
-                count: dispensePartialFixed.count,
+                count: statCounts.pendingDispense,
                 label: L10n.Dashboard.StatCards.dispensePending,
                 filter: .dispPending
             ),
@@ -249,12 +246,7 @@ final class DashboardViewModel: ObservableObject {
                 id: "disp-cont-drugs",
                 iconName: "icon_controlled",
                 iconColor: iconColor,
-                count: dispensePartialFixed.filter {
-                    let t =
-                        $0.drug?.drug_type?.trimmingCharacters(in: .whitespaces)
-                        ?? ""
-                    return !t.isEmpty
-                }.count,
+                count: statCounts.controlled,
                 label: L10n.Dashboard.StatCards.controlledDrug,
                 filter: .controlled
             ),
@@ -262,8 +254,7 @@ final class DashboardViewModel: ObservableObject {
                 id: "disp-hazardous",
                 iconName: "icon_hazardous",
                 iconColor: iconColor,
-                count: dispensePartialFixed.filter { $0.drug?.is_hazardous == true }
-                    .count,
+                count: statCounts.hazardous,
                 label: L10n.Dashboard.StatCards.hazardous,
                 filter: .hazardous
             ),
@@ -271,9 +262,7 @@ final class DashboardViewModel: ObservableObject {
                 id: "inv-cycle-count",
                 iconName: "new_rx",
                 iconColor: iconColor,
-                count: inventoryPartial.filter {
-                    !($0.req_id_from_pms ?? "").isEmpty
-                }.count,
+                count: statCounts.cycleCount,
                 label: L10n.Dashboard.StatCards.cycleCount,
                 filter: .cycleCount
             ),
@@ -281,9 +270,7 @@ final class DashboardViewModel: ObservableObject {
                 id: "inv-pending-batch",
                 iconName: "batch_icon",
                 iconColor: iconColor,
-                count: inventoryPartial.filter {
-                    ($0.req_id_from_pms ?? "").isEmpty
-                }.count,
+                count: statCounts.pendingBatch,
                 label: L10n.Dashboard.StatCards.pendingBatch,
                 filter: .pendingBatch
             ),
@@ -314,63 +301,129 @@ final class DashboardViewModel: ObservableObject {
 
     // MARK: - Data loading
 
-    func loadQueueData(userId: String) {
+    /// True only while the FIRST `loadQueueData` call of this view model's
+    /// lifetime is in flight — a large dataset makes that fetch (stat
+    /// counts, the full Today's Queue/Recent Activity dataset, batched
+    /// pill/ndc counts) take long enough to read as a frozen screen rather
+    /// than a loading one. Later calls (the transactionsDidChange refresh,
+    /// or `startDashboardLoad`'s second call after user data settles) update
+    /// the lists silently — the screen already has data on screen by then,
+    /// so re-showing the overlay would just be a needless flash.
+    @Published var isInitialLoading = true
+    private var hasLoadedOnce = false
+
+    /// Loads the ENTIRE Today's Queue (all pending dispense + inventory
+    /// items) and ENTIRE Recent Activity (today's completed items) in one
+    /// pass — no further paging. Previously this loaded in `dashboardPageSize`
+    /// chunks as the user scrolled; because the merged list is globally
+    /// re-sorted (`mergedQueueItems`/`mergedRecentItems`) on every access,
+    /// each new page landing could shift already-visible rows to a new
+    /// position (a newly-fetched high-priority or earlier-dated item sorting
+    /// ahead of what was already on screen), which — combined with the
+    /// order-sensitive `.animation` on the list — made rows visibly reshuffle
+    /// mid-scroll, reading as items randomly appearing/disappearing. Fetching
+    /// everything once, sorted once, removes that entirely.
+    ///
+    /// The fetch, every relationship read (`.drug`), and every row's decrypt
+    /// happen inside one background context's `performAndWait` — mirroring
+    /// the History detail screen's fix — so a large dataset (thousands of
+    /// rows) doesn't block the main thread. Only the mapped `TransactionRowData`/
+    /// `StockData` arrays (already carrying their own `pillCount`/`ndcCount`)
+    /// cross back to the main actor; no `NSManagedObject` from that context
+    /// is retained.
+    func loadQueueData(userId: String) async {
+        let isFirstLoad = !hasLoadedOnce
+        if isFirstLoad { isInitialLoading = true }
+        defer {
+            hasLoadedOnce = true
+            if isFirstLoad { isInitialLoading = false }
+        }
+
         guard let user = userStore.fetchByUserId(userId) else { return }
+        let userObjectId = user.objectID
 
-        // Partial (Today's Queue)
-        let fixed = transactionStore.fetchPartial(for: user, isDispense: true)
-        let regular = transactionStore.fetchPartial(for: user, isDispense: false)
-        dispensePartial = (fixed + regular).filter {
-            $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue
-        }
-        printQueue(dispensePartial)
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let todayStartTs = Int64(startOfToday.timeIntervalSince1970 * 1000)
+        let todayEndTs = Int64(Date().timeIntervalSince1970 * 1000)
 
-        // Completed (Recent Activity) — all user transactions filtered to COMPLETED status
-        let allUserTxns = transactionStore.fetchAll(for: user)
-        dispenseCompleted = allUserTxns.filter {
-            $0.status == CountStatus.COMPLETED.rawValue
-        }
+        // Stat-card counts: true COUNT queries, independent of the display
+        // lists below — cheap, no row materialization, so these stay on the
+        // main-thread stores as before.
+        statCounts = DashboardStatCounts(
+            pendingDispense: transactionStore.countPendingDispense(for: user, facet: .all),
+            highPriority: transactionStore.countPendingDispense(for: user, facet: .highPriority),
+            controlled: transactionStore.countPendingDispense(for: user, facet: .controlled),
+            hazardous: transactionStore.countPendingDispense(for: user, facet: .hazardous),
+            cycleCount: batchStore.countPendingInventory(facet: .cycleCount),
+            pendingBatch: batchStore.countPendingInventory(facet: .pendingBatch)
+        )
 
-        var counts: [Int64: Int] = [:]
-        for txn in dispensePartial + dispenseCompleted {
-            counts[txn.txn_id] = Int(
-                detailStore.totalCountForStep(
-                    txnId: txn.txn_id,
-                    step: .targetVerification
+        // Captured as locals before entering Task.detached — `self` is
+        // @MainActor-isolated, so its stored `transactionStore`/`batchStore`/
+        // `detailStore` (non-Sendable protocol types) cannot be captured
+        // directly into a detached closure. The stores themselves are safe to
+        // call from any thread (every call is confined via their own
+        // `sync`/explicit-context `performAndWait`), so capturing the
+        // references (not `self`) is sufficient.
+        let transactionStore = self.transactionStore
+        let batchStore = self.batchStore
+        let detailStore = self.detailStore
+
+        let result = await Task.detached(priority: .userInitiated) { () -> QueueLoadResult in
+            let bgContext = CoreDataManager.shared.backgroundContext
+            return bgContext.performAndWait { () -> QueueLoadResult in
+                guard let bgUser = try? bgContext.existingObject(with: userObjectId) as? UserEntity else {
+                    return QueueLoadResult.empty
+                }
+
+                let fixedTxns = transactionStore.fetchPartial(for: bgUser, isDispense: true, in: bgContext)
+                let regularTxns = transactionStore.fetchPartial(for: bgUser, isDispense: false, in: bgContext)
+                let pendingDispense = (fixedTxns + regularTxns).filter {
+                    $0.batch_id == 0 && $0.status != CountStatus.ON_HOLD.rawValue
+                }
+                let pendingInventory = batchStore.fetchAllPartial(in: bgContext)
+
+                let completedTxns = transactionStore.fetchByTimeRange(
+                    for: bgUser, startTime: todayStartTs, endTime: todayEndTs, in: bgContext
+                ).filter { $0.status == CountStatus.COMPLETED.rawValue }
+                let completedBatches = batchStore.fetchByDateRange(
+                    startTs: todayStartTs, endTs: todayEndTs, in: bgContext
+                ).filter { $0.status == CountStatus.COMPLETED.rawValue }
+
+                let allTxnIds = (pendingDispense + completedTxns).map { $0.txn_id }
+                let stepTotals = detailStore.totalCountsForSteps(
+                    txnIds: allTxnIds, step: .targetVerification, in: bgContext
                 )
-            )
-        }
-        pillCounts = counts
+                let pillCounts = stepTotals.mapValues { Int($0) }
 
-        let batches = batchStore.fetchAllPartial()
-        inventoryPartial = batches
+                let allBatchIds = (pendingInventory + completedBatches).map { $0.batch_id }
+                let batchNdcCounts = batchStore.transactionCounts(for: allBatchIds, in: bgContext)
 
-        let completedBatches = batchStore.fetchAllCompleted()
-        inventoryCompleted = completedBatches
+                return QueueLoadResult(
+                    dispensePartial: pendingDispense.map { $0.toRowData(pillCount: pillCounts[$0.txn_id] ?? 0) },
+                    dispenseCompleted: completedTxns.map { $0.toRowData(pillCount: pillCounts[$0.txn_id] ?? 0) },
+                    inventoryPartial: pendingInventory.map { $0.toStockData(ndcCount: batchNdcCounts[$0.batch_id] ?? 0) },
+                    inventoryCompleted: completedBatches.map { $0.toStockData(ndcCount: batchNdcCounts[$0.batch_id] ?? 0) }
+                )
+            }
+        }.value
 
-        var ndcCounts: [Int64: Int] = [:]
-        for batch in batches + completedBatches {
-            ndcCounts[batch.batch_id] = batchStore.getTransactionCount(
-                for: batch.batch_id
-            )
-        }
-        batchNdcCounts = ndcCounts
+        dispensePartial = result.dispensePartial
+        dispenseCompleted = result.dispenseCompleted
+        inventoryPartial = result.inventoryPartial
+        inventoryCompleted = result.inventoryCompleted
     }
+}
 
-    // MARK: - Debug logging
+/// Plain result of one `loadQueueData` background fetch — crosses the
+/// context boundary as DTOs only (see that method's doc comment).
+private struct QueueLoadResult {
+    let dispensePartial: [TransactionRowData]
+    let dispenseCompleted: [TransactionRowData]
+    let inventoryPartial: [StockData]
+    let inventoryCompleted: [StockData]
 
-    /// Compact one-line-per-transaction dump of the queue. DEBUG only.
-    /// (The previous 40-field dump was removed — inspect a transaction in the
-    /// debugger when you need every field.)
-    private func printQueue(_ transactions: [PillCountTransactionEntity]) {
-        #if DEBUG
-        print("📋 TODAY'S QUEUE — \(transactions.count) transaction(s)")
-        for (i, t) in transactions.enumerated() {
-            print("  [\(i + 1)] txn=\(t.txn_id) drug=\(t.drug?.drug_name ?? "-") "
-                + "isDispense=\(t.is_dispense) status=\(t.status ?? "-") "
-                + "priority=\(t.txn_priority ?? "-") batch=\(t.batch_id) "
-                + "ndcVerified=\(t.is_ndc_verfied)")
-        }
-        #endif
-    }
+    static let empty = QueueLoadResult(
+        dispensePartial: [], dispenseCompleted: [], inventoryPartial: [], inventoryCompleted: []
+    )
 }

@@ -80,14 +80,23 @@ struct DashboardView: View {
                 portraitBody
             }
 
+            if viewModel.isInitialLoading {
+                ZStack {
+                    Color.black.opacity(0.5).ignoresSafeArea()
+                    PillCountingLoader()
+                }
+            }
         }
         .ignoresSafeArea(edges: .top)
         .onAppear(perform: onAppear)
         // Queue refreshes on any transaction store change (create/update/delete/
         // status), which covers scan completion — so no PillScanViewModel observer
         // is needed here.
-        .onReceive(TransactionStore.shared.transactionsDidChange) {
-            viewModel.loadQueueData(userId: userId)
+        .onReceive(
+            TransactionStore.shared.transactionsDidChange
+                .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+        ) {
+            Task { await viewModel.loadQueueData(userId: userId) }
         }
         .customPopup(isPresented: showSelectBucketIdPopup) {
             selectBucketPopUp
@@ -531,12 +540,14 @@ struct DashboardView: View {
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: geo.size.height)
                     } else {
-                        // Each page's list gets its own structural identity via
+                        // The full dataset is loaded once (see `DashboardViewModel.
+                        // loadQueueData`) and sorted once — no more incremental
+                        // paging, so no scroll-position trigger is needed here.
+                        // Each tab's list gets its own structural identity via
                         // .id(idPrefix) so the two ForEach trees stay separate and
                         // a row shared by both tabs isn't hidden in one of them.
                         ForEach(items) { item in
                             rowBuilder(item)
-                                .transition(.opacity)
                         }
                         .id(idPrefix)
                     }
@@ -545,8 +556,6 @@ struct DashboardView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 32)
             }
-            // Animate filtered-data changes; just show the data, no per-row stagger.
-            .animation(.easeInOut(duration: 0.25), value: items.map(\.id))
         }
     }
 
@@ -589,6 +598,15 @@ struct DashboardView: View {
 
     private func startDashboardLoad() {
         Task {
+            // Load local data first — the initial-load overlay only needs to
+            // cover this off-main fetch, not the network chain below.
+            // Waiting on checkServerHealth/token-refresh/getUser first left
+            // the overlay up for a full round trip (or longer, if
+            // unreachable), which read as a frozen screen instead of a
+            // loading one. `loadQueueData` manages `isInitialLoading` itself
+            // (true for its own duration).
+            await viewModel.loadQueueData(userId: userId)
+
             // Silent, non-blocking health probe. Only proceed to auth/me when the
             // server is reachable; otherwise stay on cached data and offline mode
             // (red border/hourglass) takes over — see OfflineSessionManager.
@@ -599,16 +617,13 @@ struct DashboardView: View {
                 let didRefresh = await userViewModel.checkAndRefreshTokenIfNeeded()
                 await userViewModel.getUser(forceRemote: didRefresh)
             }
-            // Reload after async user data is ready to ensure queue is populated
-            // (runs regardless of health outcome — cached data still renders offline).
-            await MainActor.run { viewModel.loadQueueData(userId: userId) }
+            // Reload once async user data settles, in case it changed anything
+            // queue-relevant (e.g. terminal/bucket data affecting filters).
+            await viewModel.loadQueueData(userId: userId)
         }
 
         locationService.requestPermission()
         locationService.startUpdating()
-        viewModel.loadQueueData(userId: userId)
-
-        DrugCatalogStore.shared.fetchAll()
     }
 
     // MARK: - Select-bucket popup

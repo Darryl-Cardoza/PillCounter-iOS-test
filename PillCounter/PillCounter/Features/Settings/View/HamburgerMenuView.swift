@@ -27,6 +27,12 @@ struct HamburgerMenuView: View {
     @State private var showSelectBucketIdPopup: Bool = false
     @State private var selectedStockCountOption: StockCountOption = .newBatch
 
+    #if LOAD_TEST
+    @State private var showLoadTestPopup: Bool = false
+    @State private var loadTestStatus: String = ""
+    @State private var loadTestIsRunning: Bool = false
+    #endif
+
     private let menuItems = HamburgerMenuItem.allCases
 
     private var isPmsIntegrated: Bool {
@@ -65,6 +71,11 @@ struct HamburgerMenuView: View {
         .customPopup(isPresented: $showSelectBucketIdPopup) {
             selectBucketPopUp
         }
+        #if LOAD_TEST
+        .customPopup(isPresented: $showLoadTestPopup) {
+            loadTestPopUp
+        }
+        #endif
         .onAppear {
             Task {
                 userViewModel.getAllTransactionsAndFilterByCountType()
@@ -96,6 +107,105 @@ struct HamburgerMenuView: View {
             }
         }
     }
+
+    #if LOAD_TEST
+    // MARK: - LOAD TEST POPUP
+    private var loadTestPopUp: some View {
+        VStack(spacing: 24) {
+            Text("Load Test Data")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(appColors.text)
+
+            if !loadTestStatus.isEmpty {
+                Text(loadTestStatus)
+                    .font(.system(size: 14))
+                    .foregroundStyle(appColors.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            if loadTestIsRunning {
+                ProgressView()
+            } else {
+                VStack(spacing: 12) {
+                    PillCountingButton(
+                        iconName: nil,
+                        title: "Generate 10k Test Data",
+                        textColor: Color.white,
+                        backgroundColor: appColors.primary,
+                        borderColor: .clear,
+                        font: .system(size: 14, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 24,
+                        verticalPadding: 16,
+                        iconSize: 0,
+                        action: runLoadTestGenerate
+                    )
+                    PillCountingButton(
+                        iconName: nil,
+                        title: "Clear Test Data",
+                        textColor: appColors.text,
+                        backgroundColor: .clear,
+                        borderColor: appColors.primary,
+                        font: .system(size: 14, weight: .semibold),
+                        cornerRadius: 30,
+                        horizontalPadding: 24,
+                        verticalPadding: 16,
+                        iconSize: 0,
+                        action: runLoadTestClear
+                    )
+                    PillCountingButton(
+                        iconName: nil,
+                        title: L10n.Common.cancel,
+                        textColor: appColors.text,
+                        backgroundColor: .clear,
+                        borderColor: .clear,
+                        font: .system(size: 14, weight: .regular),
+                        cornerRadius: 30,
+                        horizontalPadding: 24,
+                        verticalPadding: 8,
+                        iconSize: 0,
+                        action: { showLoadTestPopup = false }
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
+    }
+
+    private func runLoadTestGenerate() {
+        loadTestIsRunning = true
+        loadTestStatus = "Generating…"
+        LoadTestDataGenerator.generate(
+            onProgress: { progress in
+                loadTestStatus = "Generating… \(progress.created)/\(progress.total)"
+            },
+            completion: { result in
+                loadTestIsRunning = false
+                switch result {
+                case .success:
+                    loadTestStatus = "Done — 5,000 transactions generated."
+                case .failure(let error):
+                    loadTestStatus = "Failed: \(error.localizedDescription)"
+                }
+            }
+        )
+    }
+
+    private func runLoadTestClear() {
+        loadTestIsRunning = true
+        loadTestStatus = "Clearing…"
+        LoadTestDataGenerator.clearAll { result in
+            loadTestIsRunning = false
+            switch result {
+            case .success:
+                loadTestStatus = "Done — test data cleared."
+            case .failure(let error):
+                loadTestStatus = "Failed: \(error.localizedDescription)"
+            }
+        }
+    }
+    #endif
 
     // MARK: - MENU CONTENT
     private var menuContent: some View {
@@ -504,6 +614,12 @@ struct HamburgerMenuView: View {
 
         case .Profile:
             router.navigate(to: .authentication(.user(.userSettings(.profile(mustSelectTerminal: false)))))
+
+        #if LOAD_TEST
+        case .LoadTestData:
+            loadTestStatus = ""
+            showLoadTestPopup = true
+        #endif
 
         case .History:
             router.navigate(to: .authentication(.user(.userSettings(.History(.fixed, .all)))))

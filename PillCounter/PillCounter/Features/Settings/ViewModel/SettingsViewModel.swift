@@ -96,10 +96,12 @@ final class SettingsViewModel: ObservableObject {
         self.saveHistoryOption            = store.saveHistoryOption
         self.faceSessionTimeoutOption     = store.faceSessionTimeoutOption
 
-        // Keep the unsynced count live for the menu badge.
+        // Keep the unsynced count live for the menu badge. Debounced so a
+        // burst of writes (bulk generation, sync catching up) triggers one
+        // refresh instead of one per write.
         batchStore.transactionsDidChange
             .merge(with: transactionStore.transactionsDidChange)
-            .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
             .sink { [weak self] in self?.refreshUnsyncedCount() }
             .store(in: &cancellables)
 
@@ -200,7 +202,7 @@ final class SettingsViewModel: ObservableObject {
     // MARK: - Unsynced count (menu badge)
 
     private func refreshUnsyncedCount() {
-        unsyncedCount = batchStore.fetchCompletedUnsynced().count
-            + transactionStore.fetchCompletedUnsynced().count
+        unsyncedCount = batchStore.countCompletedUnsynced()
+            + transactionStore.countCompletedUnsynced()
     }
 }

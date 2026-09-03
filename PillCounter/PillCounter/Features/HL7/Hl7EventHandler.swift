@@ -37,7 +37,7 @@ final class Hl7EventHandler: Hl7EventListener {
                 message: message,
                 rawHl7: rawHl7
             ) { _ in
-                print("onMessageReceived -> message : \(message)")
+                StoreLogger.debug("📥 [HL7] onMessageReceived: \(message)")
                 self.userViewModel.getAllTransactionsAndFilterByCountType()
             }
         }

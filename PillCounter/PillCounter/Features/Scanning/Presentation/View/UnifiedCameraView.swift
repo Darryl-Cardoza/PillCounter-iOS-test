@@ -115,7 +115,7 @@ struct UnifiedCameraView: View {
     @State var showTransactionHistory: Bool = true
     @State var isPaused: Bool = false
     @State var errorMessageOfNote: String?
-    @State var addNoteSettings: Bool = AppStorageManager.shared.isPillCountingEnabled
+    @AppStorage(AppStorageManager.AppStorageKeys.isPillCountingEnabled) var addNoteSettings: Bool = false
     @State var showDetailGrid: Bool = false
 
     @State var scanTimeoutTask: Task<Void, Never>?
@@ -1258,8 +1258,7 @@ extension UnifiedCameraView {
         }
 
         if nextStep == nil {
-            if pillScanViewModel.currentTransaction?.is_from_pms != true
-                && pillScanViewModel.currentTransaction?.is_dispense == true {
+            if pillScanViewModel.currentTransaction?.is_dispense == true {
                 showNoteOption = true
             } else {
                 showConfirmCompletionPopup = true
@@ -1276,14 +1275,12 @@ extension UnifiedCameraView {
             cameraService.resetInactivityTimer()
         }
         pillScanViewModel.handleStepCompletion()
-//        showStepCompletionPopup = true
     }
 
     func handleVialDone() {
-        let isPmsTxn = pillScanViewModel.currentTransaction?.is_from_pms ?? false
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
-        if addNoteSettings && !isPmsTxn {
+        if addNoteSettings && nextStep == nil {
             showNoteOption = true
         } else if nextStep == nil {
             showConfirmCompletionPopup = true

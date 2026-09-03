@@ -32,14 +32,13 @@ extension UnifiedCameraView {
                     await MainActor.run { showConfirmCompletionPopup = true }
                 }
             },
-            secondaryTitle: pillScanViewModel.currentTransaction?.is_from_pms == false ? L10n.Common.skip : nil,
-            secondaryAction: pillScanViewModel.currentTransaction?.is_from_pms == false ? {
+            secondaryTitle:  L10n.Common.skip,
+            secondaryAction:{
                 showNoteOption = false
                 pillScanViewModel.note = ""
                 Task(priority: .background) {
                     await MainActor.run { showConfirmCompletionPopup = true }
-                }
-            } : {},
+                }} ,
             onClose: {
                 showNoteOption = false
                 showConfirmCompletionPopup = false

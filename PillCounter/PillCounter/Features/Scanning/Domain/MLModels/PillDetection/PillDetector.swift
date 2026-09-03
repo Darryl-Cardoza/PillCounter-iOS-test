@@ -4,7 +4,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MODEL:  pills_detector_fp16.mlpackage
 // ARCH:   PP-YOLOE+s (anchor-free FPN with DFL box regression)
-//         Trained on a single class: "pill"
+//         3 underlying classes; app takes max score across them and treats
+//         every detection as "pill" (no per-class distinction downstream)
 // INPUT:  ImageType — 640×640 RGB
 //         CoreML accepts the CVPixelBuffer directly (any colour format — BGRA,
 //         RGB, etc.) and converts it internally to match the model's RGB

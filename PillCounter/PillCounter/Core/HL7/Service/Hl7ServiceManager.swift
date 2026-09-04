@@ -412,8 +412,8 @@ final class Hl7ServiceManager {
             try server.start(
                 serviceName: serviceName,
                 serviceType: serviceType,
-                onMessage: { [weak self] raw -> (ack: String, controlId: String) in
-                    guard let self else { return (ack: "", controlId: "") }
+                onMessage: { [weak self] raw -> (ack: String, controlId: String)? in
+                    guard let self else { return nil }
                     print("Raw message -> \(raw)")
 
                     let result = self.hl7.parse(raw: raw)

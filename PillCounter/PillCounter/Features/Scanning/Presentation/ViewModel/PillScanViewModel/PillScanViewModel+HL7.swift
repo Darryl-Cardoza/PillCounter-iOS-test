@@ -446,20 +446,32 @@ extension PillScanViewModel {
                    !lookup.isEmpty {
 
                     let newId = generateUniqueDrugId()
-
-                    drugIdToUse = newId
                     resolvedName = lookup
 
                     // Use the original HL7 ndc as the key so subsequent getPillByNdc
                     // lookups (which also use the HL7 ndc) find this record.
                     // packageNdc from the API may differ, which would orphan the saved
                     // drug and break the transaction's drug relationship.
-                    drugMasterDAO.upsertFromApi(
+                    //
+                    // upsertFromApi/fetchOrCreateNoWrap returns the EXISTING row's
+                    // drug_id when ndc was already saved by a prior request — newId is
+                    // only used when the row is newly created. Must read back the id
+                    // actually persisted, or the transaction points at an id nothing
+                    // holds (see PillScanViewModel+Stock.swift for the same fix).
+                    guard let persisted = drugMasterDAO.upsertFromApi(
                         ndc:    ndc,
                         drugId: newId,
                         drug:   scannedNdc
-                    )
+                    ) else {
+                        Log("HL7: API returned empty drug name")
+                        HL7NotificationManager.show(
+                            title: L10n.BarcodeScan.drugNotFound,
+                            body: L10n.BarcodeScan.drugNotFoundMessage
+                        )
+                        return
+                    }
 
+                    drugIdToUse = persisted.drug_id
                     drugType = scannedNdc.scheduleType
 
                     Log("HL7: Drug created via API → \(lookup)")

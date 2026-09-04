@@ -22,7 +22,7 @@ final class HL7TLSServer {
     /// send back, plus the message's control ID (empty if undetermined).
     /// Validation now lives entirely in `Hl7ServiceManager` (via Hl7Core) —
     /// `HL7Server` just frames, forwards, and sends whatever it's given.
-    private var onMessage: ((String) -> (ack: String, controlId: String))?
+    private var onMessage: ((String) -> (ack: String, controlId: String)?)?
     private var onAckSent: ((String) -> Void)?
 
     init(port: UInt16) {
@@ -37,7 +37,7 @@ final class HL7TLSServer {
     func start(
         serviceName: String,
         serviceType: String,
-        onMessage: @escaping (String) -> (ack: String, controlId: String),
+        onMessage: @escaping (String) -> (ack: String, controlId: String)?,
         onAckSent: @escaping (String) -> Void
     ) throws {
         self.onMessage = onMessage

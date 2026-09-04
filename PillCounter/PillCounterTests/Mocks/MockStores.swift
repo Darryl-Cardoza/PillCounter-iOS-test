@@ -239,9 +239,9 @@ final class MockDrugCatalogDataSource: DrugCatalogDataSource {
     func fetchByGtin(_ gtin: String) -> DrugMasterEntity? { drugsByGtin[gtin] }
     func fetchByNdc(_ ndc: String) -> DrugMasterEntity? { drugsByNdc[ndc] }
     func fetchByNdcDigitsOnly(_ ndc: String) -> DrugMasterEntity? {
-        let target = ndc.filter(\.isNumber)
+        let target = ndc.ndcNormalized
         guard !target.isEmpty else { return nil }
-        return drugsByNdc.first { ($0.value.ndc ?? "").filter(\.isNumber) == target }?.value
+        return drugsByNdc.first { ($0.value.ndc ?? "").ndcNormalized == target }?.value
     }
 
     func saveManual(

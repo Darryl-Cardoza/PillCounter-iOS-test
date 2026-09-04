@@ -408,14 +408,12 @@ final class HL7CompletionBuilder {
 
     // MARK: - Inventory Response (INU^U05 — standard segments only, no Z-segments)
     //
-    // Per plans/inventory-message/inu-u05-field-spec.md. `InuU05Scope`'s DSL
-    // has no `obx` block and `INVBuilder`'s fields (substanceCode/substanceName/
-    // lotNumber/expirationDate/inventoryOnHandQuantity) don't match this spec's
-    // INV-2 composite (NDC^Name^L^Serial^GTIN) or its INV-3/4/7/8/9/10/12/15
-    // layout — same class of gap as the Controlled/Hazardous OBX rows and the
-    // Vivid ZUI-8 image field elsewhere in this file. DSL builds MSH+ORC only;
-    // NTE, the two operator OBX rows, and every INV+its child OBX rows are
-    // raw-spliced pipe-delimited text, inserted after ORC.
+    // Built entirely through Hl7Core's `InuU05Scope` DSL — `invCount` for each
+    // INV row (the library's standard-first count-result layout: itemCode/
+    // statusCode/typeCode/quantityOnHand/../lotNumber map straight onto
+    // INV-1/2/3/7/8/9/16 per the official HL7 spec), `nte` for the batch-summary
+    // note, and `obx` for the operator-identification and per-INV SEALED_QTY/
+    // OPEN_QTY rows (OBX-4 subId links each pair back to its INV's setId).
     //
     // No serial number / GTIN sent (not tracked by BottleInfoEntity/DrugMasterEntity
     // today — grouping stays keyed on ndc+name+lot+expiry, same as before).
@@ -464,6 +462,23 @@ final class HL7CompletionBuilder {
             }
         }
 
+        let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
+        var setId = 1
+
+        // Message-level OBX row (OBX-4 blank) — operator identification. Name is
+        // whoever last authenticated via face scan (the physical operator right
+        // now), not the logged-in account — falls back to the account name only
+        // when no face session is active. OPERATOR_ID intentionally omitted.
+        let accountName = [user?.fname, user?.lname]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let faceSessionName = AppStorageManager.shared.faceLockCurrentUserName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let operatorName = (faceSessionName?.isEmpty == false) ? faceSessionName! : accountName
+
+        let noteComment = self.buildCommonNotes(batch: batch, totalCount: ndcCount).first?.comment ?? ""
+
         let message = builder.inuU05 { scope in
             scope.msh { msh in
                 msh.sendingApplication = self.config.sendingApplication
@@ -482,77 +497,74 @@ final class HL7CompletionBuilder {
                 // MSH-10 when this response is answering one (spec §3).
                 orc.placerOrderNumber = "\(batch.batch_id)^\(requestId)"
             }
-        }
 
-        var encoded = message.encode()
+            scope.nte { nte in
+                nte.setId = "1"
+                nte.sourceOfComment = "L"
+                nte.comment = noteComment
+                nte.commentType = "INFO"
+            }
 
-        let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
-        var segments: [String] = []
-        var setId = 1
-
-        // NTE — batch summary.
-        let noteComment = self.buildCommonNotes(batch: batch, totalCount: ndcCount).first?.comment ?? ""
-        segments.append("NTE|1|L|\(noteComment)|INFO")
-
-        // Message-level OBX row (OBX-4 blank) — operator identification. Name is
-        // whoever last authenticated via face scan (the physical operator right
-        // now), not the logged-in account — falls back to the account name only
-        // when no face session is active. OPERATOR_ID intentionally omitted.
-        let accountName = [user?.fname, user?.lname]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-        let faceSessionName = AppStorageManager.shared.faceLockCurrentUserName?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let operatorName = (faceSessionName?.isEmpty == false) ? faceSessionName! : accountName
-        segments.append(self.rawInuObxSegment(setId: setId, valueType: "ST", observationId: "OPERATOR_NAME", subId: nil, value: operatorName))
-        setId += 1
-
-        // One INV per group, immediately followed by its SEALED_QTY/OPEN_QTY OBX rows.
-        var invSetId = 1
-        for (key, value) in grouped {
-            let total = value.opened + value.sealed
-
-            // INV-2: NDC^Name^L (serial/GTIN omitted — not tracked today).
-            let itemIdentifier = "\(key.ndc)^\(key.name)^L"
-            var invFields = Array(repeating: "", count: 15)
-            invFields[0] = "\(invSetId)"                              // INV-1 Set ID
-            invFields[1] = itemIdentifier                             // INV-2 Item Identifier
-            invFields[2] = "A^Active^HL70383"                          // INV-3 Status
-            invFields[3] = "DRUG^Drug^HL70384"                         // INV-4 Item Type
-            invFields[6] = "\(total)"                                  // INV-7 Quantity On Hand
-            invFields[7] = "\(total)"                                  // INV-8 Quantity Available
-            invFields[8] = "\(total)"                                  // INV-9 Quantity Expected
-            invFields[9] = "TAB^Tablets^UCUM"                          // INV-10 Units
-            invFields[11] = key.expiry                                 // INV-12 Expiration Date
-            invFields[14] = key.lot                                    // INV-15 Lot Number
-            segments.append("INV|" + invFields.joined(separator: "|"))
-
-            segments.append(self.rawInuObxSegment(setId: setId, valueType: "NM", observationId: "SEALED_QTY", subId: invSetId, value: "\(value.sealed)"))
-            setId += 1
-            segments.append(self.rawInuObxSegment(setId: setId, valueType: "NM", observationId: "OPEN_QTY", subId: invSetId, value: "\(value.opened)"))
+            scope.obx { obx in
+                obx.setId = "\(setId)"
+                obx.valueType = "ST"
+                obx.observationId = "OPERATOR_NAME"
+                obx.observationValue = operatorName
+                obx.resultStatus = "F"
+            }
             setId += 1
 
-            invSetId += 1
+            // One INV per group, immediately followed by its SEALED_QTY/OPEN_QTY OBX rows.
+            var invSetId = 1
+            for (key, value) in grouped {
+                let total = value.opened + value.sealed
+
+                scope.invCount { inv in
+                    inv.setId = "\(invSetId)"
+                    inv.itemCode = key.ndc                             // INV-1 Substance Identifier
+                    inv.itemName = key.name
+                    inv.codingSystem = "L"
+                    inv.statusCode = "A"                               // INV-2 Substance Status
+                    inv.statusTable = "HL70383"
+                    inv.statusText = "Active"
+                    inv.typeCode = "DRUG"                              // INV-3 Substance Type
+                    inv.typeTable = "HL70384"
+                    inv.typeText = "Drug"
+                    inv.quantityOnHand = "\(total)"                    // INV-7
+                    inv.quantityAvailable = "\(total)"                 // INV-8
+                    inv.quantityExpected = "\(total)"                  // INV-9
+                    inv.unitsCode = "TAB"                              // INV-11
+                    inv.unitsText = "Tablets"
+                    inv.unitsCodeSystem = "UCUM"
+                    inv.expirationDate = key.expiry                    // INV-12
+                    inv.lotNumber = key.lot                            // INV-16
+                }
+
+                scope.obx { obx in
+                    obx.setId = "\(setId)"
+                    obx.valueType = "NM"
+                    obx.observationId = "SEALED_QTY"
+                    obx.subId = "\(invSetId)"
+                    obx.observationValue = "\(value.sealed)"
+                    obx.resultStatus = "F"
+                }
+                setId += 1
+
+                scope.obx { obx in
+                    obx.setId = "\(setId)"
+                    obx.valueType = "NM"
+                    obx.observationId = "OPEN_QTY"
+                    obx.subId = "\(invSetId)"
+                    obx.observationValue = "\(value.opened)"
+                    obx.resultStatus = "F"
+                }
+                setId += 1
+
+                invSetId += 1
+            }
         }
 
-        encoded = self.insertSegments(segments, afterLastPrefixIn: encoded, prefix: "ORC")
-
-        return encoded
-    }
-
-    /// One OBX row per the INU^U05 spec's shared layout: `OBX|<setId>|<valueType>|
-    /// <observationId>|<subId>|<value>||||||F`. `subId` (OBX-4) links a per-bottle
-    /// row back to its INV's Set-ID — nil for the message-level operator rows.
-    private func rawInuObxSegment(setId: Int, valueType: String, observationId: String, subId: Int?, value: String) -> String {
-        var fields = Array(repeating: "", count: 11)
-        fields[0] = "\(setId)"
-        fields[1] = valueType
-        fields[2] = observationId
-        fields[3] = subId.map { "\($0)" } ?? ""
-        fields[4] = value
-        fields[10] = "F"
-        return "OBX|" + fields.joined(separator: "|")
+        return message.encode()
     }
 }
 

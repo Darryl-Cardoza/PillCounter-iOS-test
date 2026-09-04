@@ -274,6 +274,10 @@ class PillScanViewModel: ObservableObject {
             workFlowStep: workFlowStep,
             refillNo: refillNo
         ) else {
+            // Clear rather than leave whatever transaction was current before
+            // this call — a caller reading currentTransaction after a failed
+            // create must see "no transaction", not a stale prior one.
+            self.currentTransaction = nil
             return
         }
 

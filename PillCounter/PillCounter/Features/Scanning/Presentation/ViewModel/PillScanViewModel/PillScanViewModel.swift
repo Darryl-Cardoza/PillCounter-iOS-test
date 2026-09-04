@@ -259,7 +259,7 @@ class PillScanViewModel: ObservableObject {
 
         // step 2: we have got all, user id, drugId, count type.
         // we now call the db function to create the transaction.
-        transactionDAO.create(
+        guard let created = transactionDAO.create(
             for: user,
             drugId: drugId,
             isDispense: isDispense,
@@ -273,13 +273,16 @@ class PillScanViewModel: ObservableObject {
             priority: priority,
             workFlowStep: workFlowStep,
             refillNo: refillNo
-        )
-
-
-        // step 3: set the latest transaction as current transaction.
-        if let latest = transactionDAO.fetchLatest(for: user) {
-            self.currentTransaction = latest
+        ) else {
+            // Clear rather than leave whatever transaction was current before
+            // this call — a caller reading currentTransaction after a failed
+            // create must see "no transaction", not a stale prior one.
+            self.currentTransaction = nil
+            return
         }
+
+        // step 3: set the newly created transaction as current transaction.
+        self.currentTransaction = created
     }
     
     func updaetTransaction(

@@ -406,7 +406,20 @@ final class HL7CompletionBuilder {
         return "OBX|" + fields.joined(separator: "|")
     }
 
-    // MARK: - Inventory Response (INR U06, INV + ZAD)
+    // MARK: - Inventory Response (INU^U05 — standard segments only, no Z-segments)
+    //
+    // Built entirely through Hl7Core's `InuU05Scope` DSL — `invCount` for each
+    // INV row (the library's standard-first count-result layout: itemCode/
+    // statusCode/typeCode/quantityOnHand/../lotNumber map straight onto
+    // INV-1/2/3/7/8/9/16 per the official HL7 spec), `nte` for the batch-summary
+    // note, and `obx` for the operator-identification and per-INV SEALED_QTY/
+    // OPEN_QTY rows (OBX-4 subId links each pair back to its INV's setId).
+    //
+    // No serial number / GTIN sent (not tracked by BottleInfoEntity/DrugMasterEntity
+    // today — grouping stays keyed on ndc+name+lot+expiry, same as before).
+    // No IMG_REF (no image capture exists for stock-count bottles). No adjustment
+    // breakdown (no expected-on-hand value is tracked anywhere in this app's
+    // inventory flow — every response is a plain count, spec §9 Scenarios 1-4).
     func buildInventoryMessage(
         batch: BatchCountEntity,
         user: UserEntity?
@@ -415,7 +428,6 @@ final class HL7CompletionBuilder {
         let now = DateUtils.currentTimestamp()
         let messageId = "RES\(Int(Date().timeIntervalSince1970))"
         let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
-        let orderId = batch.bucket_id ?? ""
 
         let stockTxns = StockTxnStore.shared.fetchByBatch(batchId: batch.batch_id, in: context)
 
@@ -434,13 +446,40 @@ final class HL7CompletionBuilder {
                     lot: bottle.lot_no ?? "", expiry: bottle.exp_no ?? ""
                 )
                 var e = grouped[key] ?? (0, 0)
-                e.opened += bottle.loose_qty
-                e.sealed += bottle.bottle_qty * drug.package_qty
+                // BottleInfoStore.addOpenedBottle always sets bottle_qty=1 on an
+                // opened row (a fixed constant, not a real sealed-bottle count) —
+                // multiplying it by package_qty here double-counted every opened
+                // row as an extra sealed bottle. Same sealed/opened discriminator
+                // BottleInfoStore.fetchSealedRow already uses: loose_qty == 0 means
+                // this row is a sealed bottle; otherwise it's an opened one and
+                // bottle_qty is not meaningful.
+                if bottle.loose_qty == 0 {
+                    e.sealed += bottle.bottle_qty * drug.package_qty
+                } else {
+                    e.opened += bottle.loose_qty
+                }
                 grouped[key] = e
             }
         }
 
-        let message = builder.inrU06 { scope in
+        let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
+        var setId = 1
+
+        // Message-level OBX row (OBX-4 blank) — operator identification. Name is
+        // whoever last authenticated via face scan (the physical operator right
+        // now), not the logged-in account — falls back to the account name only
+        // when no face session is active. OPERATOR_ID intentionally omitted.
+        let accountName = [user?.fname, user?.lname]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let faceSessionName = AppStorageManager.shared.faceLockCurrentUserName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let operatorName = (faceSessionName?.isEmpty == false) ? faceSessionName! : accountName
+
+        let noteComment = self.buildCommonNotes(batch: batch, totalCount: ndcCount).first?.comment ?? ""
+
+        let message = builder.inuU05 { scope in
             scope.msh { msh in
                 msh.sendingApplication = self.config.sendingApplication
                 msh.sendingFacility = self.config.sendingFacility
@@ -454,75 +493,76 @@ final class HL7CompletionBuilder {
 
             scope.orc { orc in
                 orc.orderControl = "RE"
-                orc.placerOrderNumber = orderId
+                // ORC-2: this batch's own id, correlated to the inbound request's
+                // MSH-10 when this response is answering one (spec §3).
+                orc.placerOrderNumber = "\(batch.batch_id)^\(requestId)"
             }
 
-            let grandTotal = grouped.values.reduce(Int32(0)) { $0 + $1.opened + $1.sealed }
-            let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
-            for note in self.buildCommonNotes(batch: batch, totalCount: ndcCount) {
-                scope.nte { nte in
-                    nte.setId = note.setId
-                    nte.sourceOfComment = note.sourceOfComment
-                    nte.comment = note.comment
-                    nte.commentType = note.commentType
-                }
+            scope.nte { nte in
+                nte.setId = "1"
+                nte.sourceOfComment = "L"
+                nte.comment = noteComment
+                nte.commentType = "INFO"
             }
 
-            var zinSetId: Int32 = 1
+            scope.obx { obx in
+                obx.setId = "\(setId)"
+                obx.valueType = "ST"
+                obx.observationId = "OPERATOR_NAME"
+                obx.observationValue = operatorName
+                obx.resultStatus = "F"
+            }
+            setId += 1
+
+            // One INV per group, immediately followed by its SEALED_QTY/OPEN_QTY OBX rows.
+            var invSetId = 1
             for (key, value) in grouped {
                 let total = value.opened + value.sealed
 
-                scope.inv { inv in
-                    // INV-2.1 (substance code / NDC) has no dedicated property on the
-                    // current INVBuilder — reusing inventoryLocationIdentifier as a
-                    // stopgap until the library exposes a proper substanceCode field.
-                    inv.substanceCode = key.ndc
-                    inv.substanceCodeSystem = "NDC"
-                    inv.substanceName = key.name.isEmpty ? nil : key.name
-                    inv.inventoryOnHandQuantity = "\(total)"
-                    inv.lotNumber = key.lot.isEmpty ? nil : key.lot
-                    inv.expirationDate = key.expiry.isEmpty ? nil : key.expiry
+                scope.invCount { inv in
+                    inv.setId = "\(invSetId)"
+                    inv.itemCode = key.ndc                             // INV-1 Substance Identifier
+                    inv.itemName = key.name
+                    inv.codingSystem = "L"
+                    inv.statusCode = "A"                               // INV-2 Substance Status
+                    inv.statusTable = "HL70383"
+                    inv.statusText = "Active"
+                    inv.typeCode = "DRUG"                              // INV-3 Substance Type
+                    inv.typeTable = "HL70384"
+                    inv.typeText = "Drug"
+                    inv.quantityOnHand = "\(total)"                    // INV-7
+                    inv.quantityAvailable = "\(total)"                 // INV-8
+                    inv.quantityExpected = "\(total)"                  // INV-9
+                    inv.unitsCode = "TAB"                              // INV-11
+                    inv.unitsText = "Tablets"
+                    inv.unitsCodeSystem = "UCUM"
+                    inv.expirationDate = key.expiry                    // INV-12
+                    inv.lotNumber = key.lot                            // INV-16
                 }
 
-                // ZIN — per-NDC/lot opened vs sealed bottle breakdown (custom segment,
-                // see HL7Message+Segments.swift). One row per non-zero bucket.
-                if value.opened > 0 {
-                    scope.zin { zin in
-                        zin.setId = "\(zinSetId)"
-                        zin.dispenseType = "OPENED"
-                        zin.quantity = "\(value.opened)"
-                        zin.lotNumber = key.lot.isEmpty ? nil : key.lot
-                        zin.expiry = key.expiry.isEmpty ? nil : key.expiry
-                    }
-                    zinSetId += 1
+                scope.obx { obx in
+                    obx.setId = "\(setId)"
+                    obx.valueType = "NM"
+                    obx.observationId = "SEALED_QTY"
+                    obx.subId = "\(invSetId)"
+                    obx.observationValue = "\(value.sealed)"
+                    obx.resultStatus = "F"
                 }
-                if value.sealed > 0 {
-                    scope.zin { zin in
-                        zin.setId = "\(zinSetId)"
-                        zin.dispenseType = "SEALED"
-                        zin.quantity = "\(value.sealed)"
-                        zin.lotNumber = key.lot.isEmpty ? nil : key.lot
-                        zin.expiry = key.expiry.isEmpty ? nil : key.expiry
-                    }
-                    zinSetId += 1
-                }
-            }
+                setId += 1
 
-            // One ZAD per message (batch-level adjustment record), not per INV line.
-            scope.zad { zad in
-                zad.setId = "1"
-                zad.adjustmentType = "CYCLE_COUNT"
-                zad.adjustmentQuantity = "\(grandTotal)"
-                zad.adjustmentReason = ZadReasonCode.shared.CYCLE_COUNT
-                zad.adjustmentDateTime = now
-                zad.approvedBy = user?.fname ?? "Unknown"
+                scope.obx { obx in
+                    obx.setId = "\(setId)"
+                    obx.valueType = "NM"
+                    obx.observationId = "OPEN_QTY"
+                    obx.subId = "\(invSetId)"
+                    obx.observationValue = "\(value.opened)"
+                    obx.resultStatus = "F"
+                }
+                setId += 1
+
+                invSetId += 1
             }
         }
-
-        // The ACK for the originating request (MSA-2 = requestId) is a separate
-        // message from this INR^U06 response; build/send it via `HL7.ack(message:)`
-        // or `HL7Builder().ack { ... }` where the inbound request is parsed, not here.
-        _ = requestId
 
         return message.encode()
     }

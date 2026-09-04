@@ -43,9 +43,21 @@ final class Hl7ServiceManager {
     ///   the library itself.
     private let hl7 = HL7(
         version: AppStorageManager.shared.hl7Version,
-        strictMode: false,	
+        strictMode: false,
         validationConfig: .companion.DEFAULT,
         extraSegments: []
+    )
+
+    /// Builds the reject ACK for a message so malformed it produced no
+    /// parseable MSH at all (no `HL7Message`, not even a `partialMessage`, to
+    /// swap sender/receiver from) — the one case `self.hl7.ack(message:)`
+    /// can't handle, since that needs a parsed `HL7Message` to begin with.
+    /// Every other ACK/NACK, including all validation rejects, goes through
+    /// `self.hl7.ack(message:)` directly in `startServerIfNeeded`'s `onMessage`.
+    private lazy var ackBuilder = AckBuilder(
+        builder: HL7Builder.companion.builder()
+            .defaultVersion(version: AppStorageManager.shared.hl7Version)
+            .build()
     )
 
     var imageServer: ImageWebServer?
@@ -400,8 +412,8 @@ final class Hl7ServiceManager {
             try server.start(
                 serviceName: serviceName,
                 serviceType: serviceType,
-                onMessage: { [weak self] raw, messageId in
-                    guard let self else { return }
+                onMessage: { [weak self] raw -> (ack: String, controlId: String)? in
+                    guard let self else { return nil }
                     print("Raw message -> \(raw)")
 
                     let result = self.hl7.parse(raw: raw)
@@ -410,13 +422,40 @@ final class Hl7ServiceManager {
                         let reasons = failure?.errors.map { $0.message }.joined(separator: "; ") ?? "unknown parse failure"
                         print("[HL7][SERVER] Failed to parse incoming message: \(reasons)")
                         self.listener?.onError(source: "Hl7ServiceManager.parse", error: Hl7ParseFailureError(reason: reasons))
-                        return
+
+                        // Even an unparseable message may carry a readable MSH via
+                        // partialMessage — build the reject ACK from it (echoing its
+                        // control ID into MSA-2) the same way a validation reject does.
+                        // Only fall back to a header-less rejection if the parser
+                        // couldn't recover even that much.
+                        let rejectIssue = ValidationIssue(
+                            severity: .reject,
+                            errorText: "Malformed HL7 message: \(reasons)",
+                            segmentId: nil, fieldPosition: nil, errorCode: nil
+                        )
+                        let rejectResult = ValidationResult(issues: [rejectIssue])
+
+                        if let partial = failure?.partialMessage {
+                            let ackMessage = self.ackBuilder.build(inbound: partial, result: rejectResult)
+                            return (ack: ackMessage.encode(), controlId: partial.messageControlId)
+                        }
+
+                        return (ack: HL7ACKBuilder.buildFallbackRejectACK(reason: reasons), controlId: "")
                     }
 
-                    self.listener?.onMessageReceived(
-                        message: success.message,
-                        rawHl7: raw
-                    )
+                    let message = success.message
+                    let controlId = message.messageControlId
+                    let validation = self.hl7.validate(message: message)
+                    let ack = self.hl7.ack(message: message)
+
+                    if validation.worst == .accept {
+                        self.listener?.onMessageReceived(message: message, rawHl7: raw)
+                    } else {
+                        let reasons = validation.issues.map { $0.errorText }.joined(separator: "; ")
+                        print("[HL7][SERVER] Rejected message controlId=\(controlId): \(reasons)")
+                    }
+
+                    return (ack: ack, controlId: controlId)
                 },
                 onAckSent: { [weak self] messageId in
                     self?.listener?.onAckSent(messageId: messageId)
@@ -644,22 +683,24 @@ final class Hl7ServiceManager {
     }
 
     private func handleIncomingHL7(_ hl7: String) {
-        let segments = hl7.components(separatedBy: "\r")
-        guard let msa = segments.first(where: { $0.hasPrefix("MSA|") }) else {
+        let result = self.hl7.parse(raw: hl7)
+        guard let success = result as? HL7ParseResult.Success else {
+            print("[HL7][CLIENT] Failed to parse incoming ACK")
+            return
+        }
+
+        guard let msa = success.message.msaSegment else {
             print("[HL7][CLIENT] Not an ACK (no MSA segment)")
             return
         }
 
-        let fields  = msa.components(separatedBy: "|")
-        guard fields.count >= 2 else { print("[HL7][CLIENT] Invalid MSA"); return }
+        let ackCode = msa.acknowledgmentCode
+        let messageId = msa.messageControlId.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let ackCode   = fields[safe: 1] ?? ""
-        let messageId = fields[safe: 2]?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        print("[HL7][CLIENT] ACK received code=\(ackCode) messageId=\(messageId ?? "nil")")
+        print("[HL7][CLIENT] ACK received code=\(ackCode) messageId=\(messageId)")
 
         listener?.onAckReceived(
-            messageId: messageId?.isEmpty == true ? nil : messageId,
+            messageId: messageId.isEmpty ? nil : messageId,
             ackCode: ackCode,
             hl7: hl7
         )

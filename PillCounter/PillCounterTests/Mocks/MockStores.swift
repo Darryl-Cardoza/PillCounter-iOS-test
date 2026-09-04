@@ -102,7 +102,7 @@ final class MockTransactionDataSource: TransactionDataSource {
         isFromPms: Bool, drugName: String?, targetCount: Int32,
         isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
         workFlowStep: String?, refillNo: String?
-    ) -> PillCountTransactionEntity {
+    ) -> PillCountTransactionEntity? {
         fatalError("not needed for bottle-rescan tests")
     }
 
@@ -238,6 +238,11 @@ final class MockDrugCatalogDataSource: DrugCatalogDataSource {
 
     func fetchByGtin(_ gtin: String) -> DrugMasterEntity? { drugsByGtin[gtin] }
     func fetchByNdc(_ ndc: String) -> DrugMasterEntity? { drugsByNdc[ndc] }
+    func fetchByNdcDigitsOnly(_ ndc: String) -> DrugMasterEntity? {
+        let target = ndc.ndcNormalized
+        guard !target.isEmpty else { return nil }
+        return drugsByNdc.first { ($0.value.ndc ?? "").ndcNormalized == target }?.value
+    }
 
     func saveManual(
         ndc: String, gtin: String, drugId: Int64, drugName: String, drugType: String?,

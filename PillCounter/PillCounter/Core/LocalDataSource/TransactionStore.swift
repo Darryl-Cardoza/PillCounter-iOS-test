@@ -33,12 +33,17 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
         priority: String? = nil,
         workFlowStep: String? = nil,
         refillNo: String? = nil
-    ) -> PillCountTransactionEntity {
+    ) -> PillCountTransactionEntity? {
         sync {
+            guard let drugId, let drug = DrugCatalogStore.shared.fetchById(drugId) else {
+                StoreLogger.debug("📋 [TransactionDAO] REJECTED — unresolved drugId: \(drugId ?? -1), no transaction created")
+                return nil
+            }
+
             let entity = PillCountTransactionEntity(context: context)
             entity.txn_id = generateUniqueId()
             entity.local_id = Int64(AppStorageManager.shared.userId ?? "") ?? 0
-            entity.drug_id = drugId ?? 0
+            entity.drug_id = drugId
             entity.batch_id = batchId
             entity.rx_no = rxNo
             entity.refill_no = refillNo
@@ -58,10 +63,8 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
             entity.created_at = now
             entity.updated_at = now
 
-            if let drugId, let drug = DrugCatalogStore.shared.fetchById(drugId) {
-                entity.drug = drug
-                drug.addToTransactions(entity)
-            }
+            entity.drug = drug
+            drug.addToTransactions(entity)
 
             CoreDataManager.shared.save(context: context)
             StoreLogger.debug("📋 [TransactionDAO] CREATED — txnId: \(entity.txn_id), drugId: \(entity.drug_id), isDispense: \(isDispense), batchId: \(batchId), isFromPms: \(isFromPms)")

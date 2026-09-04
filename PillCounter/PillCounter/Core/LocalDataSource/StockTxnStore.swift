@@ -86,8 +86,19 @@ final class StockTxnStore {
         }
     }
 
+    /// HIPAA-normalized (11-digit 5-4-2) match — a freshly-scanned barcode NDC
+    /// and the NDC a StockTxn's drug was originally created/stored under (e.g.
+    /// via a PMS inventory request, API-normalized) can differ in hyphenation,
+    /// FDA segment layout, or digit count for the same physical drug. Exact-
+    /// string match missed these, causing a second StockTxnEntity (and a
+    /// second HL7 INV group) to be created for a drug already tracked in this
+    /// batch.
     func fetchByBatchAndNdc(batchId: Int64, ndc: String) -> StockTxnEntity? {
-        fetchByBatch(batchId: batchId).first { $0.drug?.ndc == ndc }
+        let target = ndc.ndcNormalized
+        guard !target.isEmpty else { return nil }
+        return fetchByBatch(batchId: batchId).first {
+            ($0.drug?.ndc ?? "").ndcNormalized == target
+        }
     }
 
     // MARK: - Update

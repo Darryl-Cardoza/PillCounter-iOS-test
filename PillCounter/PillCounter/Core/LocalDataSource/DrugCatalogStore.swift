@@ -140,6 +140,18 @@ final class DrugCatalogStore {
         }
     }
 
+    /// Same lookup as `fetchByNdc`, but compares HIPAA-normalized (11-digit
+    /// 5-4-2) NDCs so a PMS-sent NDC — in whatever format that PMS run happens
+    /// to use (with or without hyphens, any of the three FDA 10-digit layouts)
+    /// — still matches a row stored under the API's own normalized format. An
+    /// exact-string `fetchByNdc` misses these and forces a redundant API call
+    /// for an already-known drug.
+    func fetchByNdcDigitsOnly(_ ndc: String) -> DrugMasterEntity? {
+        let target = ndc.ndcNormalized
+        guard !target.isEmpty else { return nil }
+        return fetchAll().first { ($0.ndc ?? "").ndcNormalized == target }
+    }
+
     func fetchByGtin(_ gtin: String) -> DrugMasterEntity? {
         sync {
             let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()

@@ -101,7 +101,7 @@ final class BottleTrackingFixture {
         priority: String? = nil,
         refillNo: String? = nil
     ) -> PillCountTransactionEntity {
-        let txn = TransactionStore.shared.create(
+        guard let txn = TransactionStore.shared.create(
             for: user,
             drugId: drugId,
             isDispense: isDispense,
@@ -112,7 +112,9 @@ final class BottleTrackingFixture {
             bucketId: bucketId,
             priority: priority,
             refillNo: refillNo
-        )
+        ) else {
+            fatalError("makeTransaction: drugId \(drugId) did not resolve — fixture must save the drug first")
+        }
         txnIds.append(txn.txn_id)
 
         let context = CoreDataManager.shared.context

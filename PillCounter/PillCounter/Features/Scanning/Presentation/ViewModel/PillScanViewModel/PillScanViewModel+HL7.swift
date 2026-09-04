@@ -104,10 +104,11 @@ extension PillScanViewModel {
             return .zniDispenseResult
         }
 
-        // Inventory Request
+        // Inventory Request — INR^U06 carries INV segments (NDC/name/status/
+        // type/location), not RXE.
         if message.messageType == "INR",
-           message.triggerEvent == "U04",
-           !message.medications.isEmpty {
+           message.triggerEvent == "U06",
+           !message.invSegments.isEmpty {
             return .inventoryRequest
         }
 
@@ -195,12 +196,12 @@ extension PillScanViewModel {
         callback: HL7SimpleCallback? = nil
     ) async {
         await createBatchAndTxnsFromHL7Request(
-            medications: message.medications,
+            inventoryItems: message.invSegments,
             requestId: message.messageControlId,
             bucketId: ""
         )
 
-        let medCount = message.medications.count
+        let medCount = message.invSegments.count
         HL7NotificationManager.show(
             title: L10n.Hl7Notification.inventoryRequestTitle,
             body: medCount == 1
@@ -445,20 +446,32 @@ extension PillScanViewModel {
                    !lookup.isEmpty {
 
                     let newId = generateUniqueDrugId()
-
-                    drugIdToUse = newId
                     resolvedName = lookup
 
                     // Use the original HL7 ndc as the key so subsequent getPillByNdc
                     // lookups (which also use the HL7 ndc) find this record.
                     // packageNdc from the API may differ, which would orphan the saved
                     // drug and break the transaction's drug relationship.
-                    drugMasterDAO.upsertFromApi(
+                    //
+                    // upsertFromApi/fetchOrCreateNoWrap returns the EXISTING row's
+                    // drug_id when ndc was already saved by a prior request — newId is
+                    // only used when the row is newly created. Must read back the id
+                    // actually persisted, or the transaction points at an id nothing
+                    // holds (see PillScanViewModel+Stock.swift for the same fix).
+                    guard let persisted = drugMasterDAO.upsertFromApi(
                         ndc:    ndc,
                         drugId: newId,
                         drug:   scannedNdc
-                    )
+                    ) else {
+                        Log("HL7: API returned empty drug name")
+                        HL7NotificationManager.show(
+                            title: L10n.BarcodeScan.drugNotFound,
+                            body: L10n.BarcodeScan.drugNotFoundMessage
+                        )
+                        return
+                    }
 
+                    drugIdToUse = persisted.drug_id
                     drugType = scannedNdc.scheduleType
 
                     Log("HL7: Drug created via API → \(lookup)")
@@ -511,6 +524,8 @@ extension PillScanViewModel {
             self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
             Log("HL7: Rx \(rxNo) already exists (txnId=\(existing.txn_id)) — updated in place, no new txn created")
         } else {
+            self.currentTransaction = nil
+
             await createTransaction(
                 drugId: drugIdToUse,
                 isDispense: isDispense,
@@ -522,6 +537,15 @@ extension PillScanViewModel {
                 priority: priority,
                 workFlowStep: initialWorkFlowStep
             )
+
+            guard currentTransaction != nil else {
+                Log("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)")
+                HL7NotificationManager.show(
+                    title: L10n.BarcodeScan.drugNotFound,
+                    body: L10n.BarcodeScan.drugNotFoundMessage
+                )
+                return
+            }
 
             if let txnId = currentTransaction?.txn_id {
                 TransactionStore.shared.setHl7Identifiers(

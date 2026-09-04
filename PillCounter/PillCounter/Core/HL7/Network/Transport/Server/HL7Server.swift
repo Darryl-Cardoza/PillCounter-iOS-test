@@ -18,7 +18,11 @@ final class HL7TLSServer {
     // multiple TCP reads, or several to a read; keyed alongside activeConnections.
     private var receiveBuffers: [ObjectIdentifier: Data] = [:]
 
-    private var onMessage: ((String, String) -> Void)?
+    /// Parses/validates a raw HL7 message and returns the ACK/NACK string to
+    /// send back, plus the message's control ID (empty if undetermined).
+    /// Validation now lives entirely in `Hl7ServiceManager` (via Hl7Core) —
+    /// `HL7Server` just frames, forwards, and sends whatever it's given.
+    private var onMessage: ((String) -> (ack: String, controlId: String)?)?
     private var onAckSent: ((String) -> Void)?
 
     init(port: UInt16) {
@@ -33,7 +37,7 @@ final class HL7TLSServer {
     func start(
         serviceName: String,
         serviceType: String,
-        onMessage: @escaping (String, String) -> Void,
+        onMessage: @escaping (String) -> (ack: String, controlId: String)?,
         onAckSent: @escaping (String) -> Void
     ) throws {
         self.onMessage = onMessage
@@ -201,30 +205,10 @@ final class HL7TLSServer {
     }
 
     private func handleFrame(_ hl7: String, on connection: NWConnection) {
-        let messageId = UUID().uuidString
-        let validation = HL7Validator.validate(hl7)
+        guard let result = onMessage?(hl7) else { return }
 
-        switch validation {
-
-        case .invalid(let reason):
-            Log("HL7 invalid message: \(reason)")
-            let ack = HL7ACKBuilder.buildResponse(from: hl7, code: .AR, errorMessage: reason)
-            send(MLLP.frame(ack), on: connection)
-            onMessage?(hl7, messageId)
-
-        case .unsupported(let reason):
-            Log("HL7 unsupported message: \(reason)")
-            let ack = HL7ACKBuilder.buildResponse(from: hl7, code: .AR, errorMessage: reason)
-            send(MLLP.frame(ack), on: connection)
-            onMessage?(hl7, messageId)
-
-        case .valid:
-            Log("HL7 valid message received")
-            onMessage?(hl7, messageId)
-            let ack = HL7ACKBuilder.buildResponse(from: hl7, code: .AA, errorMessage: nil)
-            send(MLLP.frame(ack), on: connection) { [weak self] in
-                self?.onAckSent?(messageId)
-            }
+        send(MLLP.frame(result.ack), on: connection) { [weak self] in
+            self?.onAckSent?(result.controlId)
         }
     }
 

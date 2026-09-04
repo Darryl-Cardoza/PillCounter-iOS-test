@@ -308,20 +308,26 @@ extension PillScanViewModel {
     func updatePmsTxnCount(
         stockTxn: StockTxnEntity,
         containerStatus: StockCountOptionContainerStatus,
-        scannedQty: Int
+        scannedQty: Int,
+        lotNo: String? = nil,
+        expNo: String? = nil
     ) {
         switch containerStatus {
         case .sealed:
-            // additive-by-one: sealed row's bottle_qty += 1
+            // Fetch-or-create by the scanned lot+exp, same key every other sealed write
+            // site uses — no PMS-specific single-row exception.
             let existingQty = bottleInfoDAO
                 .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
-                .first { $0.bottle_qty > 0 && $0.loose_qty == 0 }?
+                .first {
+                    $0.bottle_qty > 0 && $0.loose_qty == 0 &&
+                    ($0.lot_no ?? "") == (lotNo ?? "") && ($0.exp_no ?? "") == (expNo ?? "")
+                }?
                 .bottle_qty ?? 0
             self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
                 stockTxnId: stockTxn.stock_txn_id,
                 bottleQty: existingQty + 1,
-                lotNo: nil,
-                expNo: nil
+                lotNo: lotNo,
+                expNo: expNo
             )
             handlePostScanUI(containerStatus: containerStatus)
 
@@ -330,8 +336,8 @@ extension PillScanViewModel {
             self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
                 stockTxnId: stockTxn.stock_txn_id,
                 looseQty: Int32(scannedQty),
-                lotNo: nil,
-                expNo: nil,
+                lotNo: lotNo,
+                expNo: expNo,
                 serialNo: nil
             )
             handlePostScanUI(containerStatus: containerStatus)

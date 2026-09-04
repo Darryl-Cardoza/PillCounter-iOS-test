@@ -18,19 +18,25 @@ final class BottleInfoStore {
     }
 
     // MARK: - Sealed row lookup (heuristic: sealed row has bottle_qty > 0 and loose_qty == 0)
+    // Identity key is (stock_txn_id, lot_no, exp_no) — exact match on all three is the
+    // same row; any lot OR exp difference is a distinct sealed row. Empty lot/exp ("", "")
+    // is itself a valid key, so repeated no-lot-info scans pool into the same row.
 
-    private func fetchSealedRow(stockTxnId: Int64) -> BottleInfoEntity? {
-        fetchByStockTxn(stockTxnId: stockTxnId).first { $0.bottle_qty > 0 && $0.loose_qty == 0 }
+    private func fetchSealedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
+        let targetLot = lotNo ?? ""
+        let targetExp = expNo ?? ""
+        return fetchByStockTxn(stockTxnId: stockTxnId).first {
+            $0.bottle_qty > 0 && $0.loose_qty == 0 &&
+            ($0.lot_no ?? "") == targetLot && ($0.exp_no ?? "") == targetExp
+        }
     }
 
-    // MARK: - Sealed bottle writes (single row per StockTxn, absolute set)
+    // MARK: - Sealed bottle writes (one row per stock_txn_id + lot_no + exp_no, absolute set)
 
     @discardableResult
     func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
-        if let existing = fetchSealedRow(stockTxnId: stockTxnId) {
+        if let existing = fetchSealedRow(stockTxnId: stockTxnId, lotNo: lotNo, expNo: expNo) {
             existing.bottle_qty = bottleQty
-            if let lotNo { existing.lot_no = lotNo }
-            if let expNo { existing.exp_no = expNo }
             existing.updated_at = nowMs()
             CoreDataManager.shared.save(context: context)
             StoreLogger.debug("🧴 [BottleInfoDAO] SET sealed bottle_qty — bottleId: \(existing.bottle_id), stockTxnId: \(stockTxnId), bottleQty: \(bottleQty)")

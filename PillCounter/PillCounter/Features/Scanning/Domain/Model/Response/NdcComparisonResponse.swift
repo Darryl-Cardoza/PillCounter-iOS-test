@@ -58,12 +58,21 @@ struct NdcPackage: Codable {
     let description: String?
     let sizes: [String]?
     let levels: [PackageLevel]?
+    let stockQty: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case description
+        case sizes
+        case levels
+        case stockQty = "stock_qty"
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         description = try? c.decodeIfPresent(String.self,         forKey: .description)
         sizes       = try? c.decodeIfPresent([String].self,       forKey: .sizes)
         levels      = try? c.decodeIfPresent([PackageLevel].self, forKey: .levels)
+        stockQty    = try? c.decodeIfPresent(Int.self,             forKey: .stockQty)
     }
 }
 

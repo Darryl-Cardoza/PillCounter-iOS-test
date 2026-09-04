@@ -121,7 +121,9 @@ extension UnifiedCameraView {
                             pillScanViewModel.updatePmsTxnCount(
                                 stockTxn: stockTxn,
                                 containerStatus: scannedBottleContainerStatus,
-                                scannedQty: Int(stockCountViewModel.scannedDrugData?.quantity ?? 0)
+                                scannedQty: Int(stockCountViewModel.scannedDrugData?.quantity ?? 0),
+                                lotNo: stockCountViewModel.scannedDrugData?.lotNumber,
+                                expNo: stockCountViewModel.scannedDrugData?.expiry
                             )
                         } else {
                             handleStockCountAdd()

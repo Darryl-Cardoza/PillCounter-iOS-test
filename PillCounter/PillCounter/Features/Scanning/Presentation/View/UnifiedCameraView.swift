@@ -109,13 +109,12 @@ struct UnifiedCameraView: View {
     @State var showStockNoteOptions:   Bool = false
     @State var stockNoteError: String?
     @State var showDeleteAllTransactionDetailsPopup: Bool = false
-    @State var showStepCompletionPopup: Bool = false
     @State var showCountMismatchPopup: Bool = false
     @State var selectedTransactionDetail: PillCountTransactionDetailsEntity?
     @State var showTransactionHistory: Bool = true
     @State var isPaused: Bool = false
     @State var errorMessageOfNote: String?
-    @State var addNoteSettings: Bool = AppStorageManager.shared.isPillCountingEnabled
+    @AppStorage(AppStorageManager.AppStorageKeys.isPillCountingEnabled) var addNoteSettings: Bool = false
     @State var showDetailGrid: Bool = false
 
     @State var scanTimeoutTask: Task<Void, Never>?
@@ -155,7 +154,6 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
             .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
-//            .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
             .customPopup(isPresented: $showHl7UnavailablePopup, dismissOnBackgroundTap: false) { hl7UnavailablePopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
@@ -1286,19 +1284,16 @@ extension UnifiedCameraView {
             cameraService.resetInactivityTimer()
         }
         pillScanViewModel.handleStepCompletion()
-//        showStepCompletionPopup = true
     }
 
     func handleVialDone() {
-        let isPmsTxn = pillScanViewModel.currentTransaction?.is_from_pms ?? false
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
-        if addNoteSettings && !isPmsTxn {
+        if addNoteSettings && nextStep == nil {
             showNoteOption = true
         } else if nextStep == nil {
             showConfirmCompletionPopup = true
         } else {
-//            showStepCompletionPopup = true
             // Newly added to skip completion popup.
             // Clearing capturedVialImage removes the full-screen vial still overlay and
             // reveals the live feed. The session was never stopped (vial only freezes

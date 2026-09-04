@@ -32,14 +32,14 @@ extension UnifiedCameraView {
                     await MainActor.run { showConfirmCompletionPopup = true }
                 }
             },
-            secondaryTitle: pillScanViewModel.currentTransaction?.is_from_pms == false ? L10n.Common.skip : nil,
-            secondaryAction: pillScanViewModel.currentTransaction?.is_from_pms == false ? {
+            secondaryTitle: L10n.Common.skip,
+            secondaryAction: {
                 showNoteOption = false
                 pillScanViewModel.note = ""
                 Task(priority: .background) {
                     await MainActor.run { showConfirmCompletionPopup = true }
                 }
-            } : {},
+            },
             onClose: {
                 showNoteOption = false
                 showConfirmCompletionPopup = false
@@ -151,28 +151,6 @@ extension UnifiedCameraView {
                 )
             }
         }
-    }
-
-    var showStepCompletion: some View {
-        ConfirmationDialogue(
-            title: L10n.PillCount.confirmStepCompletionTitle,
-            message: L10n.PillCount.confirmStepCompletionMessage,
-            cancelButtonText: L10n.Common.cancel,
-            confirmButtonText: L10n.Common.ok,
-            onCancel: { showStepCompletionPopup = false },
-            onConfirm: {
-                showStepCompletionPopup = false
-                // Clearing capturedVialImage removes the full-screen vial still overlay
-                // and reveals the live feed. The session was never stopped (vial only
-                // freezes counting), so no start()/rebind is needed.
-                if pillScanViewModel.capturedVialImage != nil {
-                    pillScanViewModel.capturedVialImage = nil
-                    pillScanViewModel.vialCapturedImagePath = nil
-                    cameraService.resetInactivityTimer()
-                }
-                pillScanViewModel.handleStepCompletion()
-            }
-        )
     }
 
     var countMismatchDialog: some View {

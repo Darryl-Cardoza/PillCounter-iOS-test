@@ -10,7 +10,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MODEL ARCHITECTURE — pills_detector_fp16.mlpackage
 // ─────────────────────────────────────────────────────────────────────────────
-// PP-YOLOE+s is an anchor-free single-class detector built on:
+// PP-YOLOE+s is an anchor-free detector (3 underlying classes, collapsed to a
+// single pill/no-pill decision by this app) built on:
 //   • PAN-FPN backbone — features extracted at three strides (8 / 16 / 32)
 //   • HardSwish activations throughout the backbone
 //   • DFL (Distribution Focal Loss) box head — instead of directly regressing
@@ -29,9 +30,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // OUTPUTS — 6 MLMultiArrays (CHANNEL-LAST layout: [1, H, W, C])
 // ─────────────────────────────────────────────────────────────────────────────
-//   Identity   → [1, 80, 80,  1] — stride-8  cls score   (POST-SIGMOID, already [0,1])
-//   Identity_1 → [1, 40, 40,  1] — stride-16 cls score   (post-sigmoid)
-//   Identity_2 → [1, 20, 20,  1] — stride-32 cls score   (post-sigmoid)
+//   Identity   → [1, 80, 80,  3] — stride-8  cls scores  (POST-SIGMOID, already [0,1])
+//   Identity_1 → [1, 40, 40,  3] — stride-16 cls scores  (post-sigmoid)
+//   Identity_2 → [1, 20, 20,  3] — stride-32 cls scores  (post-sigmoid)
+//
+//   The 3 cls channels are per-class scores from the underlying detector, but
+//   this app only counts pills — we take the max across the 3 channels as the
+//   anchor's pill confidence and discard the class identity.
 //   Identity_3 → [1, 80, 80, 68] — stride-8  DFL box distribution (raw logits, needs softmax)
 //   Identity_4 → [1, 40, 40, 68] — stride-16 DFL box distribution
 //   Identity_5 → [1, 20, 20, 68] — stride-32 DFL box distribution
@@ -269,12 +274,14 @@ final class PillDetectionService {
         let gridW = cls.shape[2].intValue  // width  of this FPN grid
 
         // Strides for channel-last indexing:
-        //   flat_index = batch * s0 + row * sH + col * sW + channel * 1
-        // cls shape:  [1, H, W, 1]  → strides [H*W*1, W*1, 1, 1]
+        //   flat_index = batch * s0 + row * sH + col * sW + channel * sC
+        // cls shape:  [1, H, W, 3]  → strides [H*W*3, W*3, 3, 1]
         // box shape:  [1, H, W, 68] → strides [H*W*68, W*68, 68, 1]
         let clsS0 = cls.strides[0].intValue
         let clsSH = cls.strides[1].intValue
         let clsSW = cls.strides[2].intValue
+        let clsSC = cls.strides[3].intValue
+        let clsNumClasses = cls.shape[3].intValue
 
         let boxS0 = box.strides[0].intValue
         let boxSH = box.strides[1].intValue
@@ -301,15 +308,20 @@ final class PillDetectionService {
             for col in 0..<gridW {
 
                 // ── Classification score ───────────────────────────────────
-                // Tensor layout [1, H, W, 1]: single value per anchor.
+                // Tensor layout [1, H, W, 3]: 3 per-class scores per anchor.
+                // We only count pills (no class distinction downstream), so take
+                // the max across the class channels as this anchor's confidence.
                 // IMPORTANT: pills_detector_fp16 bakes sigmoid into the model's
                 // final layer — the cls output is already a probability in [0, 1].
                 // Do NOT apply sigmoid() again; that would double-compress scores
                 // (e.g. a background cell with true score 0.3 becomes sigmoid(0.3)=0.57,
                 // which passes any reasonable threshold and causes all 8400 cells to
                 // appear as candidates).
-                let clsIdx = 0 * clsS0 + row * clsSH + col * clsSW
-                let score  = readF32(clsRaw, at: clsIdx, elem: clsElem)
+                let clsBase = 0 * clsS0 + row * clsSH + col * clsSW
+                var score: Float = readF32(clsRaw, at: clsBase, elem: clsElem)
+                for c in 1..<clsNumClasses {
+                    score = Swift.max(score, readF32(clsRaw, at: clsBase + c * clsSC, elem: clsElem))
+                }
 
                 // Pre-filter: reject anchors below the lower STAY threshold.
                 // Proper ENTER/STAY gating happens in applyHysteresis().

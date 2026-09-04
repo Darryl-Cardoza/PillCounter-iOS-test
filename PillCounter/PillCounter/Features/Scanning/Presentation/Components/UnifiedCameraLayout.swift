@@ -190,6 +190,15 @@ struct UnifiedCameraLayout: View {
         .onTapGesture {
             if cameraService.isPausedDueToInactivity { onResume() }
         }
+        // Any touch on the screen counts as activity — reset the idle clock without
+        // consuming the touch, so buttons/gestures underneath still work normally.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !cameraService.isPausedDueToInactivity else { return }
+                    cameraService.resetInactivityTimer()
+                }
+        )
     }
 
     // MARK: - Sub-views

@@ -34,98 +34,111 @@ struct ParsedScanData {
 
 // MARK: - BarcodeFormatParser
 
-/// Parses `{KEY}`-templated barcode formats (e.g. `{RXNO}|{NDCNO}|{QTY}|{BUCKET}`)
-/// against a scanned pipe-delimited value. Reusable across any feature that
-/// needs to decode a configurable barcode layout, not just Rx scanning.
+/// Parses barcode formats supplied as a raw named-group regex
+/// (e.g. `^(?<rxnumber>[^|]{1,32})\|(?<refillno>\d{1,3})\|(?<ndc>\d{11})\|(?<qty>[\d.]{1,10})\|(?<bucket>[^|]{1,16})$`)
+/// against a scanned pipe-delimited value. The server's pattern is trusted and matched exactly —
+/// optionality of any field (refillno, bucket, etc.) is whatever the server's regex encodes,
+/// never overridden here.
 enum BarcodeFormatParser {
 
-    /// Placeholder keys treated as optional when they're the last field in the format.
-    /// Add new optional trailing fields here — no other change needed.
-    static let optionalTrailingKeys: Set<String> = ["BUCKET", "REFILLNO"]
+    /// Maps the regex's named capture groups (server-defined, lowercase) to the app's field keys.
+    static let groupNameToKey: [String: String] = [
+        "rxnumber": "RXNO",
+        "ndc":      "NDCNO",
+        "refillno": "REFILLNO",
+        "qty":      "QTY",
+        "bucket":   "BUCKET"
+    ]
 
-    // MARK: Extract Keys / Values
+    // MARK: Regex Compilation
 
-    static func extractKeys(from format: String) throws -> [String] {
-        let regex = try NSRegularExpression(pattern: "\\{(.*?)\\}")
+    /// Relaxes the `ndc` group's body to also accept "-" (e.g. scanned `0527-8113-37`),
+    /// since the server's pattern (e.g. `\d{11}`) only allows bare digits. The dash is
+    /// stripped from the captured NDC value afterward in `mappedData`.
+    static func applyDashTolerance(to format: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: "\\(\\?<ndc>([^()]*)\\)") else { return format }
         let range = NSRange(format.startIndex..., in: format)
-        return regex.matches(in: format, range: range).compactMap { match in
-            guard let keyRange = Range(match.range(at: 1), in: format) else { return nil }
-            return String(format[keyRange])
-                .trimmingCharacters(in: .whitespaces)
-                .uppercased()
+        guard let match = regex.firstMatch(in: format, range: range),
+              let fullRange = Range(match.range, in: format),
+              let bodyRange = Range(match.range(at: 1), in: format) else { return format }
+
+        var body = String(format[bodyRange]).replacingOccurrences(of: "\\d", with: "[\\d-]")
+        // Widen the length quantifier by 2 to allow for up to two "-" separators (e.g. 11-1134-33).
+        if let quantifierRegex = try? NSRegularExpression(pattern: "\\{(\\d+)\\}") {
+            let bodySearchRange = NSRange(body.startIndex..., in: body)
+            if let quantifierMatch = quantifierRegex.firstMatch(in: body, range: bodySearchRange),
+               let numberRange = Range(quantifierMatch.range(at: 1), in: body),
+               let count = Int(body[numberRange]),
+               let quantifierMatchRange = Range(quantifierMatch.range, in: body) {
+                body.replaceSubrange(quantifierMatchRange, with: "{\(count),\(count + 2)}")
+            }
         }
+        var result = format
+        result.replaceSubrange(fullRange, with: "(?<ndc>\(body))")
+        return result
     }
 
-    static func extractValues(from rawValue: String) -> [String] {
-        rawValue
-            .split(separator: "|")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
+    private static func compile(_ format: String) throws -> NSRegularExpression {
+        try NSRegularExpression(pattern: applyDashTolerance(to: format))
     }
 
-    /// Maps a scanned barcode value against a `{KEY}`-templated format string.
-    /// Returns `[:]` if the format has no placeholders or the value has no segments.
-    static func mappedData(format: String, actualValue: String) throws -> [String: String] {
-        let keys   = try extractKeys(from: format)
-        let values = extractValues(from: actualValue)
-
-        guard !keys.isEmpty, !values.isEmpty else { return [:] }
-
-        return zip(keys, values).reduce(into: [String: String]()) { result, pair in
-            result[pair.0] = pair.1
+    /// Maps a scanned barcode value against the server-supplied named-group regex format.
+    /// Returns `[:]` if the format doesn't compile or the value doesn't match.
+    static func mappedData(format: String, actualValue: String) -> [String: String] {
+        guard !format.isEmpty, !actualValue.isEmpty else {
+            print("[BarcodeFormatParser] mappedData: empty format or value — format=\(format) value=\(actualValue)")
+            return [:]
         }
+
+        guard let regex = try? compile(format) else {
+            print("[BarcodeFormatParser] mappedData: format failed to compile — format=\(format)")
+            return [:]
+        }
+        let valueRange = NSRange(actualValue.startIndex..., in: actualValue)
+        guard let match = regex.firstMatch(in: actualValue, range: valueRange) else {
+            print("[BarcodeFormatParser] mappedData: NO MATCH")
+            print("[BarcodeFormatParser]   format=\(format)")
+            print("[BarcodeFormatParser]   value=\(actualValue)")
+            return [:]
+        }
+
+        var result: [String: String] = [:]
+        for (groupName, key) in groupNameToKey {
+            let groupRange = match.range(withName: groupName)
+            guard groupRange.location != NSNotFound,
+                  let range = Range(groupRange, in: actualValue) else { continue }
+
+            var value = String(actualValue[range]).trimmingCharacters(in: .whitespaces)
+            if key == "NDCNO" {
+                value = value.replacingOccurrences(of: "-", with: "")
+            }
+            result[key] = value
+        }
+        return result
     }
 
     // MARK: Barcode Format Match Check
 
-    /// Builds a regex from the configured format and tests the scanned value against it.
+    /// Compiles the server-supplied regex format and tests the scanned value against it.
     static func matches(_ value: String, format: String) -> Bool {
-        guard !format.isEmpty else { return false }
+        guard !format.isEmpty else {
+            print("[BarcodeFormatParser] matches: format empty — scanned value=\(value)")
+            return false
+        }
 
         do {
-            let placeholderRegex = try NSRegularExpression(pattern: "\\{[^}]+\\}")
-            let formatRange      = NSRange(format.startIndex..., in: format)
-            let matches          = placeholderRegex.matches(in: format, range: formatRange)
-            guard !matches.isEmpty else { return false }
-
-            var regexParts: [String] = []
-            var lastEnd = format.startIndex
-
-            for (index, match) in matches.enumerated() {
-                guard let matchRange = Range(match.range, in: format) else { continue }
-
-                let literal = String(format[lastEnd..<matchRange.lowerBound])
-                let keyName = String(format[matchRange])
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "{}"))
-                    .uppercased()
-
-                let isLastPlaceholder = index == matches.count - 1
-                let isOptional        = isLastPlaceholder && optionalTrailingKeys.contains(keyName)
-
-                if isOptional {
-                    let escapedLiteral = NSRegularExpression.escapedPattern(for: literal)
-                    regexParts.append("(?:\(escapedLiteral)(.+?))?")
-                } else {
-                    if !literal.isEmpty {
-                        regexParts.append(NSRegularExpression.escapedPattern(for: literal))
-                    }
-                    regexParts.append("(.+?)")
-                }
-
-                lastEnd = matchRange.upperBound
-            }
-
-            let trailing = String(format[lastEnd...])
-            if !trailing.isEmpty {
-                regexParts.append(NSRegularExpression.escapedPattern(for: trailing))
-            }
-
-            let pattern    = "^" + regexParts.joined() + "$"
-            let valueRegex = try NSRegularExpression(pattern: pattern)
+            let regex = try compile(format)
             let valueRange = NSRange(value.startIndex..., in: value)
-            return valueRegex.firstMatch(in: value, range: valueRange) != nil
+            let isMatch = regex.firstMatch(in: value, range: valueRange) != nil
+            if !isMatch {
+                print("[BarcodeFormatParser] matches: NO MATCH")
+                print("[BarcodeFormatParser]   format=\(format)")
+                print("[BarcodeFormatParser]   value=\(value)")
+            }
+            return isMatch
 
         } catch {
-            print("[BarcodeFormatParser] matches error: \(error)")
+            print("[BarcodeFormatParser] matches error: \(error) format=\(format)")
             return false
         }
     }

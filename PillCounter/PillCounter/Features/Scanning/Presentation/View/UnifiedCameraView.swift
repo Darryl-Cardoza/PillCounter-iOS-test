@@ -109,7 +109,6 @@ struct UnifiedCameraView: View {
     @State var showStockNoteOptions:   Bool = false
     @State var stockNoteError: String?
     @State var showDeleteAllTransactionDetailsPopup: Bool = false
-    @State var showStepCompletionPopup: Bool = false
     @State var showCountMismatchPopup: Bool = false
     @State var selectedTransactionDetail: PillCountTransactionDetailsEntity?
     @State var showTransactionHistory: Bool = true
@@ -155,7 +154,6 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
             .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
-//            .customPopup(isPresented: $showStepCompletionPopup) { showStepCompletion }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
             .customPopup(isPresented: $showHl7UnavailablePopup, dismissOnBackgroundTap: false) { hl7UnavailablePopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
@@ -298,6 +296,17 @@ struct UnifiedCameraView: View {
                     .ignoresSafeArea()
                 }
             }
+            // The pill-count overlay (movable Add/Done ring, etc.) is a sibling
+            // subtree over UnifiedCameraLayout, so its own drags never reach the
+            // screen-wide activity gesture defined there — reset here too so
+            // dragging the ring still counts as activity.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !cameraService.isPausedDueToInactivity else { return }
+                        cameraService.resetInactivityTimer()
+                    }
+            )
     }
 
     private var rootWithBarcodePopups: some View {
@@ -549,7 +558,6 @@ struct UnifiedCameraView: View {
             switch phase {
             case .active:
                 cameraService.start()
-                cameraService.cancelInactivityTimer()
                 if !showPillCountPanel { cameraService.enableBarcodeScanning() }
                 if currentScanType == .stockCount && !isOpenPillScanMode {
                     cameraService.pauseCounting()
@@ -798,16 +806,16 @@ extension UnifiedCameraView {
             }
             // Start directly — start() runs on the session queue (serialized) and
             // re-attaches the preview itself, so the extra main-queue hop is unneeded
-            // and only delayed the first frame.
+            // and only delayed the first frame. start() also arms the inactivity timer,
+            // which must keep running from here so pure idle (no taps) still triggers
+            // the resume overlay.
             cameraService.start()
-            cameraService.cancelInactivityTimer()
             initializeTransaction()
             if pillScanViewModel.currentControlledStep != .vial {
                 cameraService.resumeCounting()
             }
         } else {
             cameraService.start()
-            cameraService.cancelInactivityTimer()
             cameraService.enableBarcodeScanning()
             if currentScanType == .stockCount {
                 // Stock count only needs barcode scanning; pill detection must stay off.
@@ -1258,7 +1266,8 @@ extension UnifiedCameraView {
         }
 
         if nextStep == nil {
-            if pillScanViewModel.currentTransaction?.is_dispense == true {
+            if pillScanViewModel.currentTransaction?.is_from_pms != true
+                && pillScanViewModel.currentTransaction?.is_dispense == true {
                 showNoteOption = true
             } else {
                 showConfirmCompletionPopup = true
@@ -1285,7 +1294,6 @@ extension UnifiedCameraView {
         } else if nextStep == nil {
             showConfirmCompletionPopup = true
         } else {
-//            showStepCompletionPopup = true
             // Newly added to skip completion popup.
             // Clearing capturedVialImage removes the full-screen vial still overlay and
             // reveals the live feed. The session was never stopped (vial only freezes
@@ -1665,7 +1673,6 @@ extension UnifiedCameraView {
 
         cameraService.pauseCounting()
         cameraService.start()
-        cameraService.cancelInactivityTimer()
         cameraService.resetBarcodeScanState()
         cameraService.enableBarcodeScanning()
         showStockCountPanel = true

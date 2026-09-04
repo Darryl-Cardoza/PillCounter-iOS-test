@@ -751,6 +751,7 @@ final class CameraService: NSObject, ObservableObject {
 
         currentCameraOrientation = newOrientation
         applyOrientation()
+        resetInactivityTimer()
     }
 
     /// CONFIGURES INITIAL CAMERA ORIENTATION

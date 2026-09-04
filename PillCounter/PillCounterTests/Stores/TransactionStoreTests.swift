@@ -107,6 +107,56 @@ struct TransactionStoreTests {
         #expect(TransactionStore.shared.getBottleList(txnId: bogusTxnId) == [])
     }
 
+    // MARK: - create(...) rejects unresolved drugId
+
+    @Test func createReturnsNilAndPersistsNothingWhenDrugIdDoesNotResolve() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+
+        let unresolvedDrugId = TestIds.unique()
+        let before = TransactionStore.shared.fetchPartial(for: fixture.user, isDispense: true).count
+
+        let result = TransactionStore.shared.create(
+            for: fixture.user,
+            drugId: unresolvedDrugId,
+            isDispense: true
+        )
+
+        #expect(result == nil)
+        let after = TransactionStore.shared.fetchPartial(for: fixture.user, isDispense: true).count
+        #expect(after == before)
+    }
+
+    @Test func createReturnsNilWhenDrugIdIsNil() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+
+        let result = TransactionStore.shared.create(
+            for: fixture.user,
+            drugId: nil,
+            isDispense: true
+        )
+
+        #expect(result == nil)
+    }
+
+    @Test func createSucceedsAndLinksDrugWhenDrugIdResolves() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+
+        let result = TransactionStore.shared.create(
+            for: fixture.user,
+            drugId: fixture.drugId,
+            isDispense: true
+        )
+
+        #expect(result != nil)
+        #expect(result?.drug?.drug_id == fixture.drugId)
+        if let txnId = result?.txn_id {
+            TransactionStore.shared.hardDelete(txnId: txnId)
+        }
+    }
+
     // MARK: - fetchById(_:in:)
 
     @Test func fetchByIdInContextReturnsMatchingRow() {

@@ -98,7 +98,7 @@ protocol TransactionDataSource: AnyObject {
         isFromPms: Bool, drugName: String?, targetCount: Int32,
         isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
         workFlowStep: String?, refillNo: String?
-    ) -> PillCountTransactionEntity
+    ) -> PillCountTransactionEntity?
     func update(
         txnId: Int64, drugId: Int64?, isDispense: Bool, targetCount: Int32?,
         substituedDrugId: Int64?, isSubstitue: Bool

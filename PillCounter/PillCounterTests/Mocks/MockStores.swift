@@ -102,7 +102,7 @@ final class MockTransactionDataSource: TransactionDataSource {
         isFromPms: Bool, drugName: String?, targetCount: Int32,
         isControlled: Bool?, rxNo: String?, bucketId: String?, priority: String?,
         workFlowStep: String?, refillNo: String?
-    ) -> PillCountTransactionEntity {
+    ) -> PillCountTransactionEntity? {
         fatalError("not needed for bottle-rescan tests")
     }
 

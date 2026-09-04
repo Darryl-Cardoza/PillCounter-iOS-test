@@ -512,6 +512,8 @@ extension PillScanViewModel {
             self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
             Log("HL7: Rx \(rxNo) already exists (txnId=\(existing.txn_id)) — updated in place, no new txn created")
         } else {
+            self.currentTransaction = nil
+
             await createTransaction(
                 drugId: drugIdToUse,
                 isDispense: isDispense,
@@ -523,6 +525,15 @@ extension PillScanViewModel {
                 priority: priority,
                 workFlowStep: initialWorkFlowStep
             )
+
+            guard currentTransaction != nil else {
+                Log("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)")
+                HL7NotificationManager.show(
+                    title: L10n.BarcodeScan.drugNotFound,
+                    body: L10n.BarcodeScan.drugNotFoundMessage
+                )
+                return
+            }
 
             if let txnId = currentTransaction?.txn_id {
                 TransactionStore.shared.setHl7Identifiers(

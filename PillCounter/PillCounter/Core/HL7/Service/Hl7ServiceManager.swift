@@ -43,9 +43,21 @@ final class Hl7ServiceManager {
     ///   the library itself.
     private let hl7 = HL7(
         version: AppStorageManager.shared.hl7Version,
-        strictMode: false,	
+        strictMode: false,
         validationConfig: .companion.DEFAULT,
         extraSegments: []
+    )
+
+    /// Builds the reject ACK for a message so malformed it produced no
+    /// parseable MSH at all (no `HL7Message`, not even a `partialMessage`, to
+    /// swap sender/receiver from) — the one case `self.hl7.ack(message:)`
+    /// can't handle, since that needs a parsed `HL7Message` to begin with.
+    /// Every other ACK/NACK, including all validation rejects, goes through
+    /// `self.hl7.ack(message:)` directly in `startServerIfNeeded`'s `onMessage`.
+    private lazy var ackBuilder = AckBuilder(
+        builder: HL7Builder.companion.builder()
+            .defaultVersion(version: AppStorageManager.shared.hl7Version)
+            .build()
     )
 
     var imageServer: ImageWebServer?
@@ -410,8 +422,25 @@ final class Hl7ServiceManager {
                         let reasons = failure?.errors.map { $0.message }.joined(separator: "; ") ?? "unknown parse failure"
                         print("[HL7][SERVER] Failed to parse incoming message: \(reasons)")
                         self.listener?.onError(source: "Hl7ServiceManager.parse", error: Hl7ParseFailureError(reason: reasons))
-                        let ack = HL7ACKBuilder.buildResponse(from: raw, code: .AR, errorMessage: reasons)
-                        return (ack: ack, controlId: "")
+
+                        // Even an unparseable message may carry a readable MSH via
+                        // partialMessage — build the reject ACK from it (echoing its
+                        // control ID into MSA-2) the same way a validation reject does.
+                        // Only fall back to a header-less rejection if the parser
+                        // couldn't recover even that much.
+                        let rejectIssue = ValidationIssue(
+                            severity: .reject,
+                            errorText: "Malformed HL7 message: \(reasons)",
+                            segmentId: nil, fieldPosition: nil, errorCode: nil
+                        )
+                        let rejectResult = ValidationResult(issues: [rejectIssue])
+
+                        if let partial = failure?.partialMessage {
+                            let ackMessage = self.ackBuilder.build(inbound: partial, result: rejectResult)
+                            return (ack: ackMessage.encode(), controlId: partial.messageControlId)
+                        }
+
+                        return (ack: HL7ACKBuilder.buildFallbackRejectACK(reason: reasons), controlId: "")
                     }
 
                     let message = success.message

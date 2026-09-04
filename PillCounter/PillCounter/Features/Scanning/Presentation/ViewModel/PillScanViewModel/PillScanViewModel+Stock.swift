@@ -289,14 +289,9 @@ extension PillScanViewModel {
     }
 
     func formatExpiry(_ date: Date?) -> String? {
-        guard let date else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-
-        return formatter.string(from: date)
+        DateUtils.formatExpiryYYYYMMdd(date)
     }
-    
+
     private func handlePostScanUI(containerStatus: StockCountOptionContainerStatus) {
         if containerStatus == .sealed {
             isNdcAdded = true
@@ -308,20 +303,22 @@ extension PillScanViewModel {
     func updatePmsTxnCount(
         stockTxn: StockTxnEntity,
         containerStatus: StockCountOptionContainerStatus,
-        scannedQty: Int
+        scannedQty: Int,
+        lotNo: String? = nil,
+        expNo: String? = nil
     ) {
         switch containerStatus {
         case .sealed:
-            // additive-by-one: sealed row's bottle_qty += 1
-            let existingQty = bottleInfoDAO
-                .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
-                .first { $0.bottle_qty > 0 && $0.loose_qty == 0 }?
-                .bottle_qty ?? 0
+            // Fetch-or-create by the scanned lot+exp, same key every other sealed write
+            // site uses — no PMS-specific single-row exception.
+            let existingQty = bottleInfoDAO.sealedBottleQty(
+                stockTxnId: stockTxn.stock_txn_id, lotNo: lotNo, expNo: expNo
+            )
             self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
                 stockTxnId: stockTxn.stock_txn_id,
                 bottleQty: existingQty + 1,
-                lotNo: nil,
-                expNo: nil
+                lotNo: lotNo,
+                expNo: expNo
             )
             handlePostScanUI(containerStatus: containerStatus)
 
@@ -330,8 +327,8 @@ extension PillScanViewModel {
             self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
                 stockTxnId: stockTxn.stock_txn_id,
                 looseQty: Int32(scannedQty),
-                lotNo: nil,
-                expNo: nil,
+                lotNo: lotNo,
+                expNo: expNo,
                 serialNo: nil
             )
             handlePostScanUI(containerStatus: containerStatus)

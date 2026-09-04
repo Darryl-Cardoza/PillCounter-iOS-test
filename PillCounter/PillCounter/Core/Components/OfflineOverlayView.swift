@@ -19,7 +19,7 @@ struct OfflineOverlayView: View {
     /// No public API exposes the device's real display corner radius —
     /// these are tuned to visually match a notch/Dynamic Island iPhone and
     /// an iPad, without relying on private APIs.
-    private var borderCornerRadius: CGFloat { isIpad ? 24 : 60 }
+    private var borderCornerRadius: CGFloat { isIpad ? 24 : 40 }
 
     var body: some View {
         if offlineManager.isOffline {
@@ -54,11 +54,13 @@ struct OfflineOverlayView: View {
                 Text(DurationFormatter.logoutWarningText(offlineManager.remainingOfflineTime))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
+                    .frame(maxWidth: isIpad ? 320 : 200)
                     .background(Capsule().fill(Color.red.opacity(0.9)))
                     .transition(.move(edge: .leading).combined(with: .opacity))
-                    .fixedSize(horizontal: true, vertical: false)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.leading, 20)

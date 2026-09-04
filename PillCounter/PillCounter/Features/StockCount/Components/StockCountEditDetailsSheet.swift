@@ -21,6 +21,7 @@ struct EditableLotRow: Identifiable {
     var sealedBottles: Int        // editable
     var openPills: Int            // editable
     let packageQty: Int32
+    let field: LotField           // which section this row belongs to — sealed and open never share a row
 }
 
 // MARK: - Edit Details Sheet
@@ -203,9 +204,12 @@ struct StockCountEditDetailsSheet: View {
             // Column header
             lotColumnHeader()
 
-            // Rows
+            // Rows — sealed rows only, and only while the count is still > 0
+            // (a zeroed row is dropped from view entirely, not shown as an editable 0).
             ForEach($lotRows) { $row in
-                sealedLotRow(row: $row)
+                if row.field == .sealed && row.sealedBottles > 0 {
+                    sealedLotRow(row: $row)
+                }
             }
         }
     }
@@ -275,9 +279,12 @@ struct StockCountEditDetailsSheet: View {
             // Column header
             lotColumnHeader()
 
-            // Rows
+            // Rows — open rows only, and only while the count is still > 0
+            // (a zeroed row is dropped from view entirely, not shown as an editable 0).
             ForEach($lotRows) { $row in
-                lotRow(row: $row, value: $row.openPills, field: .open)
+                if row.field == .open && row.openPills > 0 {
+                    lotRow(row: $row, value: $row.openPills, field: .open)
+                }
             }
         }
     }
@@ -408,31 +415,41 @@ struct StockCountEditDetailsSheet: View {
 
         var rows: [EditableLotRow] = []
 
-        // Sealed row stands alone — one BottleInfoEntity row per StockTxnEntity.
-        if let sealed = bottles.first(where: { $0.bottle_qty > 0 && $0.loose_qty == 0 }) {
+        // Sealed rows group by lot|expiry, same as opened rows — a StockTxn can now have
+        // multiple sealed rows (one per distinct lot/exp), not just one.
+        let sealedBottleRows = bottles.filter { $0.isSealed }
+        let sealedGrouped = Dictionary(grouping: sealedBottleRows) { $0.sealedLotKey }
+        for (_, lotBottles) in sealedGrouped {
+            guard let first = lotBottles.first else { continue }
+            let sealedQty = lotBottles.reduce(0) { $0 + Int($1.bottle_qty) }
+            guard sealedQty > 0 else { continue }
             rows.append(EditableLotRow(
-                bottleIds: [sealed.bottle_id],
-                lot: sealed.lot_no ?? "",
-                expiry: sealed.exp_no ?? "",
-                sealedBottles: Int(sealed.bottle_qty),
+                bottleIds: lotBottles.map { $0.bottle_id },
+                lot: first.lot_no ?? "",
+                expiry: first.exp_no ?? "",
+                sealedBottles: sealedQty,
                 openPills: 0,
-                packageQty: pkgQty
+                packageQty: pkgQty,
+                field: .sealed
             ))
         }
 
-        // Opened rows group by lot|expiry — same logic as the mapper.
-        let openedRows = bottles.filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
-        let grouped = Dictionary(grouping: openedRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
-        for (_, lotBottles) in grouped {
+        // Opened rows group by lot|expiry — never merged with sealed rows even when the
+        // lot/exp matches (each scan stays its own DB row; only the display is combined).
+        let openedRows = bottles.filter { !$0.isSealed }
+        let openedGrouped = Dictionary(grouping: openedRows) { $0.sealedLotKey }
+        for (_, lotBottles) in openedGrouped {
             guard let first = lotBottles.first else { continue }
             let openPills = lotBottles.reduce(0) { $0 + Int($1.loose_qty) }
+            guard openPills > 0 else { continue }
             rows.append(EditableLotRow(
                 bottleIds: lotBottles.map { $0.bottle_id },
                 lot: first.lot_no ?? "",
                 expiry: first.exp_no ?? "",
                 sealedBottles: 0,
                 openPills: openPills,
-                packageQty: pkgQty
+                packageQty: pkgQty,
+                field: .open
             ))
         }
 
@@ -462,13 +479,13 @@ struct StockCountEditDetailsSheet: View {
 
     private func saveChanges() {
         for row in lotRows {
-            // A lot row aggregates the counts of every bottle row in the group
-            // (see buildRows — openPills is a sum over row.bottleIds for opened rows;
-            // sealed rows are always a single bottleId). Writing that summed value onto
-            // only the first row while leaving siblings at their original counts would
-            // inflate the NDC-wide total on the next reload. Collapse the group: put the
-            // edited totals on the primary row and zero the rest, so the saved group
-            // total equals exactly what the user sees.
+            // A lot row aggregates the counts of every bottle row in the group (see
+            // buildRows — both sealed and opened rows are now grouped by lot|expiry and
+            // summed across bottleIds). Writing that summed value onto only the first row
+            // while leaving siblings at their original counts would inflate the NDC-wide
+            // total on the next reload. Collapse the group: put the edited totals on the
+            // primary row and zero the rest, so the saved group total equals exactly what
+            // the user sees.
             let primaryBottleId = row.bottleIds.first
             for bottleId in row.bottleIds {
                 let isPrimary = bottleId == primaryBottleId

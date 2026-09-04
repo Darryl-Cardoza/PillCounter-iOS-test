@@ -207,6 +207,10 @@ final class MockStockTxnDataSource: StockTxnDataSource {
 final class MockBottleInfoDataSource: BottleInfoDataSource {
     var bottleInfosDidChange = PassthroughSubject<Void, Never>()
     func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity? { nil }
+    func sealedBottleQty(stockTxnId: Int64, lotNo: String?, expNo: String?) -> Int32 {
+        let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
+        return fetchByStockTxn(stockTxnId: stockTxnId).first { $0.isSealed && $0.sealedLotKey == targetKey }?.bottle_qty ?? 0
+    }
     func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?) -> BottleInfoEntity? { nil }
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32) {}
     func fetchById(_ bottleId: Int64) -> BottleInfoEntity? { nil }

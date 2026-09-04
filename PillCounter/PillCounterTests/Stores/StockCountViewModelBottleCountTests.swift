@@ -29,16 +29,16 @@ struct StockCountViewModelBottleCountTests {
         vm.currentBatch = batch
 
         // Per-lot lookup for a lot with no row yet must be 0, not the NDC-wide sum.
-        #expect(vm.existingBottleCount(for: fixture.drug.ndc ?? "", lotNo: "LOT-B", expNo: "2027-06") == 0)
+        #expect(vm.sealedBottleCount(ndc: fixture.drug.ndc ?? "", lot: "LOT-B", exp: "2027-06") == 0)
         // NDC-wide sum is still 3 (LOT-A only).
-        #expect(vm.existingBottleCount(for: fixture.drug.ndc ?? "") == 3)
+        #expect(vm.sealedBottleTotal(forNdc: fixture.drug.ndc ?? "") == 3)
 
         // Simulate what fetchDrugDataOnly does when scanning LOT-B for the first time:
         // seed pendingBottleCount from the PER-LOT count (0) + 1, not the NDC-wide sum + 1.
         vm.committedLotNo = "LOT-B"
         vm.committedExpNo = "2027-06"
         vm.committedStockTxnId = stockTxn.stock_txn_id
-        vm.pendingBottleCount = vm.existingBottleCount(for: fixture.drug.ndc ?? "", lotNo: "LOT-B", expNo: "2027-06") + 1
+        vm.pendingBottleCount = vm.sealedBottleCount(ndc: fixture.drug.ndc ?? "", lot: "LOT-B", exp: "2027-06") + 1
 
         #expect(vm.pendingBottleCount == 1, "Scanning a brand-new lot must seed pendingBottleCount at 1, not NDC-wide-sum + 1")
 

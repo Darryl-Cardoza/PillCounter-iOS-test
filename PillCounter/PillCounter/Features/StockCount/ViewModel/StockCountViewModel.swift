@@ -306,11 +306,7 @@ class StockCountViewModel: ObservableObject {
     }
 
     func formatExpiry(_ date: Date?) -> String? {
-        guard let date else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        return formatter.string(from: date)
+        DateUtils.formatExpiryYYYYMMdd(date)
     }
 
     private func fetchDrugDataOnly(rawValue: String, gtin: String, lotNumber: String = "", expiry: String = "") async {
@@ -345,8 +341,8 @@ class StockCountViewModel: ObservableObject {
             )
             committedLotNo = lotNumber
             committedExpNo = expiry
-            existingNdcBottleCount = existingBottleCount(for: ndc)
-            pendingBottleCount = existingBottleCount(for: ndc, lotNo: lotNumber, expNo: expiry) + 1
+            existingNdcBottleCount = sealedBottleTotal(forNdc: ndc)
+            pendingBottleCount = sealedBottleCount(ndc: ndc, lot: lotNumber, exp: expiry) + 1
             isLoading = false
             showStockCountScannedDetails = true
             print("Fetched response from Local")
@@ -390,8 +386,8 @@ class StockCountViewModel: ObservableObject {
             )
             committedLotNo = lotNumber
             committedExpNo = expiry
-            existingNdcBottleCount = existingBottleCount(for: ndc)
-            pendingBottleCount = existingBottleCount(for: ndc, lotNo: lotNumber, expNo: expiry) + 1
+            existingNdcBottleCount = sealedBottleTotal(forNdc: ndc)
+            pendingBottleCount = sealedBottleCount(ndc: ndc, lot: lotNumber, exp: expiry) + 1
             isLoading = false
             showStockCountScannedDetails = true
             print("Fetched response from API: \(response)")
@@ -444,11 +440,11 @@ class StockCountViewModel: ObservableObject {
     /// the count.
     func resyncScannedDrugCounts() {
         guard let ndc = scannedDrugData?.ndc else { return }
-        existingNdcBottleCount = existingBottleCount(for: ndc)
+        existingNdcBottleCount = sealedBottleTotal(forNdc: ndc)
         if let bottleId = committedBottleId, let bottle = bottleInfoDAO.fetchById(bottleId) {
             pendingBottleCount = Int(bottle.bottle_qty)
         } else {
-            pendingBottleCount = existingBottleCount(for: ndc, lotNo: committedLotNo, expNo: committedExpNo)
+            pendingBottleCount = sealedBottleCount(ndc: ndc, lot: committedLotNo, exp: committedExpNo)
         }
     }
 
@@ -456,31 +452,23 @@ class StockCountViewModel: ObservableObject {
     /// the SUM of bottle_qty across every sealed BottleInfoEntity row (one per distinct
     /// lot/exp), or 0 if none yet. A single StockTxn can now have multiple sealed rows.
     /// Displayed alongside the stepper so the user sees current total + how many they're adding.
-    func existingBottleCount(for ndc: String) -> Int {
+    func sealedBottleTotal(forNdc ndc: String) -> Int {
         guard let batchId = currentBatch?.batch_id,
               let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) else { return 0 }
         return bottleInfoDAO
             .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
-            .filter { $0.bottle_qty > 0 && $0.loose_qty == 0 }
+            .filter { $0.isSealed }
             .reduce(0) { $0 + Int($1.bottle_qty) }
     }
 
     /// Returns the sealed bottle count for ONE specific (ndc, lot, exp) row — 0 if that
     /// exact lot/exp combination has no sealed row yet. Used to seed the stepper when a
-    /// scan resolves to a specific lot, since existingBottleCount(for:) is the NDC-wide
+    /// scan resolves to a specific lot, since sealedBottleTotal(forNdc:) is the NDC-wide
     /// combined sum across every lot and would double-count on a re-scan of an existing lot.
-    func existingBottleCount(for ndc: String, lotNo: String, expNo: String) -> Int {
+    func sealedBottleCount(ndc: String, lot: String, exp: String) -> Int {
         guard let batchId = currentBatch?.batch_id,
               let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) else { return 0 }
-        let row = bottleInfoDAO
-            .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
-            .first {
-                $0.bottle_qty > 0
-                    && $0.loose_qty == 0
-                    && ($0.lot_no ?? "") == lotNo
-                    && ($0.exp_no ?? "") == expNo
-            }
-        return Int(row?.bottle_qty ?? 0)
+        return Int(bottleInfoDAO.sealedBottleQty(stockTxnId: stockTxn.stock_txn_id, lotNo: lot, expNo: exp))
     }
 
     /// NDC-wide sealed bottle total shown in the scanned-detail card — sealed bottle qty
@@ -497,13 +485,10 @@ class StockCountViewModel: ObservableObject {
               let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) else {
             return pendingBottleCount
         }
+        let committedKey = SealedLotKey(lotNo: committedLotNo, expNo: committedExpNo)
         let otherLotsTotal = bottleInfoDAO
             .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
-            .filter {
-                $0.bottle_qty > 0
-                    && $0.loose_qty == 0
-                    && !(($0.lot_no ?? "") == committedLotNo && ($0.exp_no ?? "") == committedExpNo)
-            }
+            .filter { $0.isSealed && $0.sealedLotKey != committedKey }
             .reduce(0) { $0 + Int($1.bottle_qty) }
         return otherLotsTotal + pendingBottleCount
     }
@@ -515,7 +500,7 @@ class StockCountViewModel: ObservableObject {
               let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) else { return 0 }
         return bottleInfoDAO
             .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
-            .filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
+            .filter { !$0.isSealed }
             .count
     }
 
@@ -527,7 +512,7 @@ class StockCountViewModel: ObservableObject {
               let stockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) else { return 0 }
         return bottleInfoDAO
             .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
-            .filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
+            .filter { !$0.isSealed }
             .reduce(0) { $0 + Int($1.loose_qty) }
     }
 
@@ -560,9 +545,9 @@ class StockCountViewModel: ObservableObject {
             // the first lot shown for this NDC; falls back to the first sealed row of any.
             let sealedRows = bottleInfoDAO
                 .fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
-                .filter { $0.bottle_qty > 0 && $0.loose_qty == 0 }
-            let sealedRow = sealedRows.first { ($0.lot_no ?? "") == (firstLot?.lot ?? "") && ($0.exp_no ?? "") == (firstLot?.expiry ?? "") }
-                ?? sealedRows.first
+                .filter { $0.isSealed }
+            let targetKey = SealedLotKey(lotNo: firstLot?.lot ?? "", expNo: firstLot?.expiry ?? "")
+            let sealedRow = sealedRows.first { $0.sealedLotKey == targetKey } ?? sealedRows.first
             committedBottleId = sealedRow?.bottle_id
             committedLotNo = sealedRow?.lot_no ?? firstLot?.lot ?? ""
             committedExpNo = sealedRow?.exp_no ?? firstLot?.expiry ?? ""
@@ -596,8 +581,8 @@ class StockCountViewModel: ObservableObject {
             for stockTxn in stockTxnList {
                 let bottles = bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
 
-                let sealedRows = bottles.filter { $0.bottle_qty > 0 && $0.loose_qty == 0 }
-                let openedRows = bottles.filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
+                let sealedRows = bottles.filter { $0.isSealed }
+                let openedRows = bottles.filter { !$0.isSealed }
 
                 for sealed in sealedRows {
                     let sealedQty = sealed.bottle_qty * packageQty
@@ -613,7 +598,7 @@ class StockCountViewModel: ObservableObject {
                 // sealedBottleQty so "Sealed Bottles" vs "Opened Bottles" stay distinct.
                 openedBottleCount += Int32(openedRows.count)
 
-                let openGrouped = Dictionary(grouping: openedRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
+                let openGrouped = Dictionary(grouping: openedRows) { $0.sealedLotKey }
                 for (_, rows) in openGrouped {
                     let open = rows.reduce(0) { $0 + $1.loose_qty }
                     totalOpen += open

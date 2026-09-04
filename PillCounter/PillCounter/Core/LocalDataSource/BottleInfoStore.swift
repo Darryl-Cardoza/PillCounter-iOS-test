@@ -6,6 +6,25 @@
 import CoreData
 import Combine
 
+/// Identity key for a sealed BottleInfoEntity row: (lot_no, exp_no), normalising
+/// nil to "" so a missing lot/exp is itself a valid, poolable key.
+struct SealedLotKey: Hashable {
+    let lotNo: String
+    let expNo: String
+
+    init(lotNo: String?, expNo: String?) {
+        self.lotNo = lotNo ?? ""
+        self.expNo = expNo ?? ""
+    }
+}
+
+extension BottleInfoEntity {
+    /// Sealed heuristic: a sealed row has bottle_qty > 0 and loose_qty == 0.
+    var isSealed: Bool { bottle_qty > 0 && loose_qty == 0 }
+
+    var sealedLotKey: SealedLotKey { SealedLotKey(lotNo: lot_no, expNo: exp_no) }
+}
+
 final class BottleInfoStore {
 
     static let shared = BottleInfoStore()
@@ -23,12 +42,17 @@ final class BottleInfoStore {
     // is itself a valid key, so repeated no-lot-info scans pool into the same row.
 
     private func fetchSealedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
-        let targetLot = lotNo ?? ""
-        let targetExp = expNo ?? ""
+        let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
         return fetchByStockTxn(stockTxnId: stockTxnId).first {
-            $0.bottle_qty > 0 && $0.loose_qty == 0 &&
-            ($0.lot_no ?? "") == targetLot && ($0.exp_no ?? "") == targetExp
+            $0.isSealed && $0.sealedLotKey == targetKey
         }
+    }
+
+    /// Sealed bottle_qty for one specific (stockTxnId, lotNo, expNo) row — 0 if that
+    /// exact lot/exp has no sealed row yet. Exposed so callers don't hand-filter
+    /// `fetchByStockTxn` to reimplement this lookup.
+    func sealedBottleQty(stockTxnId: Int64, lotNo: String?, expNo: String?) -> Int32 {
+        fetchSealedRow(stockTxnId: stockTxnId, lotNo: lotNo, expNo: expNo)?.bottle_qty ?? 0
     }
 
     // MARK: - Sealed bottle writes (one row per stock_txn_id + lot_no + exp_no, absolute set)

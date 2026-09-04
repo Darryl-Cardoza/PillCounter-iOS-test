@@ -417,8 +417,8 @@ struct StockCountEditDetailsSheet: View {
 
         // Sealed rows group by lot|expiry, same as opened rows — a StockTxn can now have
         // multiple sealed rows (one per distinct lot/exp), not just one.
-        let sealedBottleRows = bottles.filter { $0.bottle_qty > 0 && $0.loose_qty == 0 }
-        let sealedGrouped = Dictionary(grouping: sealedBottleRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
+        let sealedBottleRows = bottles.filter { $0.isSealed }
+        let sealedGrouped = Dictionary(grouping: sealedBottleRows) { $0.sealedLotKey }
         for (_, lotBottles) in sealedGrouped {
             guard let first = lotBottles.first else { continue }
             let sealedQty = lotBottles.reduce(0) { $0 + Int($1.bottle_qty) }
@@ -436,8 +436,8 @@ struct StockCountEditDetailsSheet: View {
 
         // Opened rows group by lot|expiry — never merged with sealed rows even when the
         // lot/exp matches (each scan stays its own DB row; only the display is combined).
-        let openedRows = bottles.filter { !($0.bottle_qty > 0 && $0.loose_qty == 0) }
-        let openedGrouped = Dictionary(grouping: openedRows) { "\($0.lot_no ?? "")|\($0.exp_no ?? "")" }
+        let openedRows = bottles.filter { !$0.isSealed }
+        let openedGrouped = Dictionary(grouping: openedRows) { $0.sealedLotKey }
         for (_, lotBottles) in openedGrouped {
             guard let first = lotBottles.first else { continue }
             let openPills = lotBottles.reduce(0) { $0 + Int($1.loose_qty) }

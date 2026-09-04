@@ -341,14 +341,14 @@ extension PillScanViewModel {
 
     @MainActor
     func createBatchAndTxnsFromHL7Request(
-        medications: [RXESegment],
+        inventoryItems: [INVSegment],
         requestId : String,
         bucketId: String?
     ) async {
 
         print("Requset Comes here")
-        guard !medications.isEmpty else {
-            print("Meidcation is empty")
+        guard !inventoryItems.isEmpty else {
+            print("Inventory items empty")
             return
         }
 
@@ -363,24 +363,37 @@ extension PillScanViewModel {
 
         var resolvedItems: [ResolvedItem] = []
 
-        for med in medications {
+        for item in inventoryItems {
 
-            let ndc = med.giveCode
-            let lot = ""          // RXE usually doesn't send lot
-            let expiry = ""       // RXE usually doesn't s expiry
+            // INVSegment's named substanceCode/substanceName do NOT bind to
+            // INV-1 (confirmed live: substanceCode returned "A", INV-2's status
+            // code, for `INV|76385-118-01^Etodolac^L|A^Active^HL70383|...`).
+            // Read INV-1 directly by field/component position instead — exact
+            // per the HL7 wire spec, no dependency on the typed property's
+            // (apparently wrong) binding in this build.
+            let ndc = item.raw.componentValue(n: 1, c: 1)
+            let lot = item.lotNumber
+            let expiry = item.expirationDate
             let targetCount: Int32 = 0 // request → no quantity
 
             guard !ndc.isEmpty else { continue }
 
             // MARK: Local DB check
-            if let existing = drugMasterDAO.fetchByNdc(ndc) {
+            // Digits-only match — PMS sends NDC in whatever format that run
+            // uses (with/without hyphens, 10 or 11 digit), while the stored
+            // row is keyed on the API's own normalized format. Exact-string
+            // fetchByNdc misses these and re-hits the API for a known drug.
+            if let existing = drugMasterDAO.fetchByNdcDigitsOnly(ndc) {
                 guard let localName = existing.drug_name, !localName.isEmpty else {
                     continue
                 }
 
+                // Stored NDC, not the raw PMS one — keeps the transaction's
+                // NDC matching drugMasterDAO's key regardless of which format
+                // this PMS run happened to send.
                 resolvedItems.append(
                     ResolvedItem(
-                        ndc: ndc,
+                        ndc: existing.ndc ?? ndc,
                         drugId: existing.drug_id,
                         resolvedName: localName,
                         lot: lot,
@@ -401,22 +414,40 @@ extension PillScanViewModel {
 
                 guard let scannedNdc = response.data?.scannedNdc,
                       let lookup = scannedNdc.lookupName,
-                      !lookup.isEmpty else {
+                      !lookup.isEmpty,
+                      let apiNdc = scannedNdc.drugCode,
+                      !apiNdc.isEmpty else {
+                    // Invalid/unknown NDC (PMS-sent NDC not found, or API returned
+                    // no usable drug_code/lookup_name) — discard entirely, never
+                    // create a transaction against an empty/unresolved NDC.
                     continue
                 }
 
+                // upsertFromApi/fetchOrCreateNoWrap looks up by NDC and returns
+                // the EXISTING row's drug_id if apiNdc was already saved by a
+                // prior request — generateUniqueDrugId()'s newId is only used
+                // when the row is newly created. Must read back the id that was
+                // actually persisted, or StockTxnStore.fetchOrCreate's later
+                // fetchById(drugId) misses, entity.drug stays nil, and the row
+                // renders "Unknown" (and NDC-collides into the empty group).
                 let newId = generateUniqueDrugId()
 
-                drugMasterDAO.upsertFromApi(
-                    ndc:    scannedNdc.drugCode ?? "",
+                guard let persisted = drugMasterDAO.upsertFromApi(
+                    ndc:    apiNdc,
                     drugId: newId,
                     drug:   scannedNdc
-                )
+                ) else {
+                    continue
+                }
 
+                // Always the API's NDC (11-digit, normalized) — never the raw
+                // PMS-sent one (may be 10-digit/differently formatted), so the
+                // stored drug row and the transaction's NDC always match and
+                // later scan validation doesn't mismatch on digit count.
                 resolvedItems.append(
                     ResolvedItem(
-                        ndc: ndc,
-                        drugId: newId,
+                        ndc: apiNdc,
+                        drugId: persisted.drug_id,
                         resolvedName: lookup,
                         lot: lot,
                         expiry: expiry,

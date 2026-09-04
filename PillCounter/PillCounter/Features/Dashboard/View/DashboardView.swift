@@ -6,6 +6,7 @@
 //  DashboardViewModel; this view owns layout and navigation only.
 //
 
+import Combine
 import SwiftUI
 
 // MARK: - Main view
@@ -89,12 +90,21 @@ struct DashboardView: View {
         }
         .ignoresSafeArea(edges: .top)
         .onAppear(perform: onAppear)
-        // Queue refreshes on any transaction store change (create/update/delete/
-        // status), which covers scan completion — so no PillScanViewModel observer
-        // is needed here.
+        // Queue refreshes on any transaction/batch/stock-txn store change
+        // (create/update/delete/status), which covers scan completion AND
+        // HL7 inventory-request batch creation (BatchStore/StockTxnStore are
+        // separate singletons from TransactionStore, each with their own
+        // identically-named-but-distinct publisher — without merging all
+        // three, inventory-created data only appeared after an app restart
+        // or an unrelated dispense-flow refresh) — so no PillScanViewModel
+        // observer is needed here.
         .onReceive(
-            TransactionStore.shared.transactionsDidChange
-                .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+            Publishers.Merge3(
+                TransactionStore.shared.transactionsDidChange,
+                BatchStore.shared.transactionsDidChange,
+                StockTxnStore.shared.stockTxnsDidChange
+            )
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
         ) {
             Task { await viewModel.loadQueueData(userId: userId) }
         }

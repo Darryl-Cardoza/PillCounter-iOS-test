@@ -104,10 +104,11 @@ extension PillScanViewModel {
             return .zniDispenseResult
         }
 
-        // Inventory Request
+        // Inventory Request — INR^U06 carries INV segments (NDC/name/status/
+        // type/location), not RXE.
         if message.messageType == "INR",
-           message.triggerEvent == "U04",
-           !message.medications.isEmpty {
+           message.triggerEvent == "U06",
+           !message.invSegments.isEmpty {
             return .inventoryRequest
         }
 
@@ -195,12 +196,12 @@ extension PillScanViewModel {
         callback: HL7SimpleCallback? = nil
     ) async {
         await createBatchAndTxnsFromHL7Request(
-            medications: message.medications,
+            inventoryItems: message.invSegments,
             requestId: message.messageControlId,
             bucketId: ""
         )
 
-        let medCount = message.medications.count
+        let medCount = message.invSegments.count
         HL7NotificationManager.show(
             title: L10n.Hl7Notification.inventoryRequestTitle,
             body: medCount == 1

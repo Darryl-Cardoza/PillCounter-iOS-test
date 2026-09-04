@@ -400,8 +400,8 @@ final class Hl7ServiceManager {
             try server.start(
                 serviceName: serviceName,
                 serviceType: serviceType,
-                onMessage: { [weak self] raw, messageId in
-                    guard let self else { return }
+                onMessage: { [weak self] raw -> (ack: String, controlId: String) in
+                    guard let self else { return (ack: "", controlId: "") }
                     print("Raw message -> \(raw)")
 
                     let result = self.hl7.parse(raw: raw)
@@ -410,13 +410,23 @@ final class Hl7ServiceManager {
                         let reasons = failure?.errors.map { $0.message }.joined(separator: "; ") ?? "unknown parse failure"
                         print("[HL7][SERVER] Failed to parse incoming message: \(reasons)")
                         self.listener?.onError(source: "Hl7ServiceManager.parse", error: Hl7ParseFailureError(reason: reasons))
-                        return
+                        let ack = HL7ACKBuilder.buildResponse(from: raw, code: .AR, errorMessage: reasons)
+                        return (ack: ack, controlId: "")
                     }
 
-                    self.listener?.onMessageReceived(
-                        message: success.message,
-                        rawHl7: raw
-                    )
+                    let message = success.message
+                    let controlId = message.messageControlId
+                    let validation = self.hl7.validate(message: message)
+                    let ack = self.hl7.ack(message: message)
+
+                    if validation.worst == .accept {
+                        self.listener?.onMessageReceived(message: message, rawHl7: raw)
+                    } else {
+                        let reasons = validation.issues.map { $0.errorText }.joined(separator: "; ")
+                        print("[HL7][SERVER] Rejected message controlId=\(controlId): \(reasons)")
+                    }
+
+                    return (ack: ack, controlId: controlId)
                 },
                 onAckSent: { [weak self] messageId in
                     self?.listener?.onAckSent(messageId: messageId)
@@ -644,22 +654,24 @@ final class Hl7ServiceManager {
     }
 
     private func handleIncomingHL7(_ hl7: String) {
-        let segments = hl7.components(separatedBy: "\r")
-        guard let msa = segments.first(where: { $0.hasPrefix("MSA|") }) else {
+        let result = self.hl7.parse(raw: hl7)
+        guard let success = result as? HL7ParseResult.Success else {
+            print("[HL7][CLIENT] Failed to parse incoming ACK")
+            return
+        }
+
+        guard let msa = success.message.msaSegment else {
             print("[HL7][CLIENT] Not an ACK (no MSA segment)")
             return
         }
 
-        let fields  = msa.components(separatedBy: "|")
-        guard fields.count >= 2 else { print("[HL7][CLIENT] Invalid MSA"); return }
+        let ackCode = msa.acknowledgmentCode
+        let messageId = msa.messageControlId.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let ackCode   = fields[safe: 1] ?? ""
-        let messageId = fields[safe: 2]?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        print("[HL7][CLIENT] ACK received code=\(ackCode) messageId=\(messageId ?? "nil")")
+        print("[HL7][CLIENT] ACK received code=\(ackCode) messageId=\(messageId)")
 
         listener?.onAckReceived(
-            messageId: messageId?.isEmpty == true ? nil : messageId,
+            messageId: messageId.isEmpty ? nil : messageId,
             ackCode: ackCode,
             hl7: hl7
         )

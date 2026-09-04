@@ -163,6 +163,7 @@ protocol TransactionDetailDataSource: AnyObject {
 protocol DrugCatalogDataSource: AnyObject {
     func fetchByGtin(_ gtin: String) -> DrugMasterEntity?
     func fetchByNdc(_ ndc: String) -> DrugMasterEntity?
+    func fetchByNdcDigitsOnly(_ ndc: String) -> DrugMasterEntity?
     func saveManual(
         ndc: String,
         gtin: String,

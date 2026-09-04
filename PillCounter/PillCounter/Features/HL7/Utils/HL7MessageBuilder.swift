@@ -406,7 +406,22 @@ final class HL7CompletionBuilder {
         return "OBX|" + fields.joined(separator: "|")
     }
 
-    // MARK: - Inventory Response (INR U06, INV + ZAD)
+    // MARK: - Inventory Response (INU^U05 — standard segments only, no Z-segments)
+    //
+    // Per plans/inventory-message/inu-u05-field-spec.md. `InuU05Scope`'s DSL
+    // has no `obx` block and `INVBuilder`'s fields (substanceCode/substanceName/
+    // lotNumber/expirationDate/inventoryOnHandQuantity) don't match this spec's
+    // INV-2 composite (NDC^Name^L^Serial^GTIN) or its INV-3/4/7/8/9/10/12/15
+    // layout — same class of gap as the Controlled/Hazardous OBX rows and the
+    // Vivid ZUI-8 image field elsewhere in this file. DSL builds MSH+ORC only;
+    // NTE, the two operator OBX rows, and every INV+its child OBX rows are
+    // raw-spliced pipe-delimited text, inserted after ORC.
+    //
+    // No serial number / GTIN sent (not tracked by BottleInfoEntity/DrugMasterEntity
+    // today — grouping stays keyed on ndc+name+lot+expiry, same as before).
+    // No IMG_REF (no image capture exists for stock-count bottles). No adjustment
+    // breakdown (no expected-on-hand value is tracked anywhere in this app's
+    // inventory flow — every response is a plain count, spec §9 Scenarios 1-4).
     func buildInventoryMessage(
         batch: BatchCountEntity,
         user: UserEntity?
@@ -415,7 +430,6 @@ final class HL7CompletionBuilder {
         let now = DateUtils.currentTimestamp()
         let messageId = "RES\(Int(Date().timeIntervalSince1970))"
         let requestId = batch.req_id_from_pms ?? "REQ\(batch.batch_id)"
-        let orderId = batch.bucket_id ?? ""
 
         let stockTxns = StockTxnStore.shared.fetchByBatch(batchId: batch.batch_id, in: context)
 
@@ -434,13 +448,23 @@ final class HL7CompletionBuilder {
                     lot: bottle.lot_no ?? "", expiry: bottle.exp_no ?? ""
                 )
                 var e = grouped[key] ?? (0, 0)
-                e.opened += bottle.loose_qty
-                e.sealed += bottle.bottle_qty * drug.package_qty
+                // BottleInfoStore.addOpenedBottle always sets bottle_qty=1 on an
+                // opened row (a fixed constant, not a real sealed-bottle count) —
+                // multiplying it by package_qty here double-counted every opened
+                // row as an extra sealed bottle. Same sealed/opened discriminator
+                // BottleInfoStore.fetchSealedRow already uses: loose_qty == 0 means
+                // this row is a sealed bottle; otherwise it's an opened one and
+                // bottle_qty is not meaningful.
+                if bottle.loose_qty == 0 {
+                    e.sealed += bottle.bottle_qty * drug.package_qty
+                } else {
+                    e.opened += bottle.loose_qty
+                }
                 grouped[key] = e
             }
         }
 
-        let message = builder.inrU06 { scope in
+        let message = builder.inuU05 { scope in
             scope.msh { msh in
                 msh.sendingApplication = self.config.sendingApplication
                 msh.sendingFacility = self.config.sendingFacility
@@ -454,77 +478,81 @@ final class HL7CompletionBuilder {
 
             scope.orc { orc in
                 orc.orderControl = "RE"
-                orc.placerOrderNumber = orderId
-            }
-
-            let grandTotal = grouped.values.reduce(Int32(0)) { $0 + $1.opened + $1.sealed }
-            let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
-            for note in self.buildCommonNotes(batch: batch, totalCount: ndcCount) {
-                scope.nte { nte in
-                    nte.setId = note.setId
-                    nte.sourceOfComment = note.sourceOfComment
-                    nte.comment = note.comment
-                    nte.commentType = note.commentType
-                }
-            }
-
-            var zinSetId: Int32 = 1
-            for (key, value) in grouped {
-                let total = value.opened + value.sealed
-
-                scope.inv { inv in
-                    // INV-2.1 (substance code / NDC) has no dedicated property on the
-                    // current INVBuilder — reusing inventoryLocationIdentifier as a
-                    // stopgap until the library exposes a proper substanceCode field.
-                    inv.substanceCode = key.ndc
-                    inv.substanceCodeSystem = "NDC"
-                    inv.substanceName = key.name.isEmpty ? nil : key.name
-                    inv.inventoryOnHandQuantity = "\(total)"
-                    inv.lotNumber = key.lot.isEmpty ? nil : key.lot
-                    inv.expirationDate = key.expiry.isEmpty ? nil : key.expiry
-                }
-
-                // ZIN — per-NDC/lot opened vs sealed bottle breakdown (custom segment,
-                // see HL7Message+Segments.swift). One row per non-zero bucket.
-                if value.opened > 0 {
-                    scope.zin { zin in
-                        zin.setId = "\(zinSetId)"
-                        zin.dispenseType = "OPENED"
-                        zin.quantity = "\(value.opened)"
-                        zin.lotNumber = key.lot.isEmpty ? nil : key.lot
-                        zin.expiry = key.expiry.isEmpty ? nil : key.expiry
-                    }
-                    zinSetId += 1
-                }
-                if value.sealed > 0 {
-                    scope.zin { zin in
-                        zin.setId = "\(zinSetId)"
-                        zin.dispenseType = "SEALED"
-                        zin.quantity = "\(value.sealed)"
-                        zin.lotNumber = key.lot.isEmpty ? nil : key.lot
-                        zin.expiry = key.expiry.isEmpty ? nil : key.expiry
-                    }
-                    zinSetId += 1
-                }
-            }
-
-            // One ZAD per message (batch-level adjustment record), not per INV line.
-            scope.zad { zad in
-                zad.setId = "1"
-                zad.adjustmentType = "CYCLE_COUNT"
-                zad.adjustmentQuantity = "\(grandTotal)"
-                zad.adjustmentReason = ZadReasonCode.shared.CYCLE_COUNT
-                zad.adjustmentDateTime = now
-                zad.approvedBy = user?.fname ?? "Unknown"
+                // ORC-2: this batch's own id, correlated to the inbound request's
+                // MSH-10 when this response is answering one (spec §3).
+                orc.placerOrderNumber = "\(batch.batch_id)^\(requestId)"
             }
         }
 
-        // The ACK for the originating request (MSA-2 = requestId) is a separate
-        // message from this INR^U06 response; build/send it via `HL7.ack(message:)`
-        // or `HL7Builder().ack { ... }` where the inbound request is parsed, not here.
-        _ = requestId
+        var encoded = message.encode()
 
-        return message.encode()
+        let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
+        var segments: [String] = []
+        var setId = 1
+
+        // NTE — batch summary.
+        let noteComment = self.buildCommonNotes(batch: batch, totalCount: ndcCount).first?.comment ?? ""
+        segments.append("NTE|1|L|\(noteComment)|INFO")
+
+        // Message-level OBX row (OBX-4 blank) — operator identification. Name is
+        // whoever last authenticated via face scan (the physical operator right
+        // now), not the logged-in account — falls back to the account name only
+        // when no face session is active. OPERATOR_ID intentionally omitted.
+        let accountName = [user?.fname, user?.lname]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let faceSessionName = AppStorageManager.shared.faceLockCurrentUserName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let operatorName = (faceSessionName?.isEmpty == false) ? faceSessionName! : accountName
+        segments.append(self.rawInuObxSegment(setId: setId, valueType: "ST", observationId: "OPERATOR_NAME", subId: nil, value: operatorName))
+        setId += 1
+
+        // One INV per group, immediately followed by its SEALED_QTY/OPEN_QTY OBX rows.
+        var invSetId = 1
+        for (key, value) in grouped {
+            let total = value.opened + value.sealed
+
+            // INV-2: NDC^Name^L (serial/GTIN omitted — not tracked today).
+            let itemIdentifier = "\(key.ndc)^\(key.name)^L"
+            var invFields = Array(repeating: "", count: 15)
+            invFields[0] = "\(invSetId)"                              // INV-1 Set ID
+            invFields[1] = itemIdentifier                             // INV-2 Item Identifier
+            invFields[2] = "A^Active^HL70383"                          // INV-3 Status
+            invFields[3] = "DRUG^Drug^HL70384"                         // INV-4 Item Type
+            invFields[6] = "\(total)"                                  // INV-7 Quantity On Hand
+            invFields[7] = "\(total)"                                  // INV-8 Quantity Available
+            invFields[8] = "\(total)"                                  // INV-9 Quantity Expected
+            invFields[9] = "TAB^Tablets^UCUM"                          // INV-10 Units
+            invFields[11] = key.expiry                                 // INV-12 Expiration Date
+            invFields[14] = key.lot                                    // INV-15 Lot Number
+            segments.append("INV|" + invFields.joined(separator: "|"))
+
+            segments.append(self.rawInuObxSegment(setId: setId, valueType: "NM", observationId: "SEALED_QTY", subId: invSetId, value: "\(value.sealed)"))
+            setId += 1
+            segments.append(self.rawInuObxSegment(setId: setId, valueType: "NM", observationId: "OPEN_QTY", subId: invSetId, value: "\(value.opened)"))
+            setId += 1
+
+            invSetId += 1
+        }
+
+        encoded = self.insertSegments(segments, afterLastPrefixIn: encoded, prefix: "ORC")
+
+        return encoded
+    }
+
+    /// One OBX row per the INU^U05 spec's shared layout: `OBX|<setId>|<valueType>|
+    /// <observationId>|<subId>|<value>||||||F`. `subId` (OBX-4) links a per-bottle
+    /// row back to its INV's Set-ID — nil for the message-level operator rows.
+    private func rawInuObxSegment(setId: Int, valueType: String, observationId: String, subId: Int?, value: String) -> String {
+        var fields = Array(repeating: "", count: 11)
+        fields[0] = "\(setId)"
+        fields[1] = valueType
+        fields[2] = observationId
+        fields[3] = subId.map { "\($0)" } ?? ""
+        fields[4] = value
+        fields[10] = "F"
+        return "OBX|" + fields.joined(separator: "|")
     }
 }
 

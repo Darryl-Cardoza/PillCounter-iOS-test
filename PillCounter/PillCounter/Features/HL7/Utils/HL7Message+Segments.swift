@@ -46,4 +46,16 @@ extension HL7Message {
     var zniSegment: ZNISegment? {
         segmentNamed(name: "ZNI") as? ZNISegment
     }
+
+    /// INV — Inventory Detail. INR^U06 inventory requests carry one INV
+    /// segment per drug line (NDC/name/status/type/location), no RXE.
+    var invSegments: [INVSegment] {
+        segmentsNamed(name: "INV").compactMap { $0 as? INVSegment }
+    }
+
+    /// MSA — Message Acknowledgment. Present on ACK messages the app
+    /// receives back from the PMS for messages it sent.
+    var msaSegment: MSASegment? {
+        segmentNamed(name: "MSA") as? MSASegment
+    }
 }

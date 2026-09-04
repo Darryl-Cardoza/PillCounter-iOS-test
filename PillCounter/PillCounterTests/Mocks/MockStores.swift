@@ -234,6 +234,11 @@ final class MockDrugCatalogDataSource: DrugCatalogDataSource {
 
     func fetchByGtin(_ gtin: String) -> DrugMasterEntity? { drugsByGtin[gtin] }
     func fetchByNdc(_ ndc: String) -> DrugMasterEntity? { drugsByNdc[ndc] }
+    func fetchByNdcDigitsOnly(_ ndc: String) -> DrugMasterEntity? {
+        let target = ndc.filter(\.isNumber)
+        guard !target.isEmpty else { return nil }
+        return drugsByNdc.first { ($0.value.ndc ?? "").filter(\.isNumber) == target }?.value
+    }
 
     func saveManual(
         ndc: String, gtin: String, drugId: Int64, drugName: String, drugType: String?,

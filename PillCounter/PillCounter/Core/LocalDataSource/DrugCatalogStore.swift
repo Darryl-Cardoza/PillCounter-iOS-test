@@ -140,6 +140,17 @@ final class DrugCatalogStore {
         }
     }
 
+    /// Same lookup as `fetchByNdc`, but compares digits-only so a PMS-sent NDC
+    /// (which arrives in whatever format that PMS run happens to use — with or
+    /// without hyphens, 10 or 11 digit) still matches a row stored under the
+    /// API's own normalized format. An exact-string `fetchByNdc` misses these
+    /// and forces a redundant API call for an already-known drug.
+    func fetchByNdcDigitsOnly(_ ndc: String) -> DrugMasterEntity? {
+        let target = ndc.filter(\.isNumber)
+        guard !target.isEmpty else { return nil }
+        return fetchAll().first { ($0.ndc ?? "").filter(\.isNumber) == target }
+    }
+
     func fetchByGtin(_ gtin: String) -> DrugMasterEntity? {
         sync {
             let request: NSFetchRequest<DrugMasterEntity> = DrugMasterEntity.fetchRequest()

@@ -39,11 +39,16 @@ struct PillScanDetailGridScreen: View {
     }
 
     private var targetCount: Int {
-        Int(pillScanViewModel.currentTransaction?.target_count ?? 0)
-    }
-
-    private var isDispenseCount: Bool {
-        pillScanViewModel.currentTransaction?.is_dispense ?? true
+        if details.first?.type == ControlledStep.containerPending.rawValue,
+           let txnId = pillScanViewModel.currentTransaction?.txn_id {
+            let initiateCount = pillScanViewModel.transactionDetailDAO.totalCountForStep(
+                txnId: txnId,
+                step: .containerInitiate
+            )
+            let dispenseTarget = Int(pillScanViewModel.currentTransaction?.target_count ?? 0)
+            return max(Int(initiateCount) - dispenseTarget, 0)
+        }
+        return Int(pillScanViewModel.currentTransaction?.target_count ?? 0)
     }
 
     @State private var isFixed: Bool = false
@@ -66,8 +71,7 @@ struct PillScanDetailGridScreen: View {
                 onBack: { dismiss() },
             )
             .onAppear {
-                if isDispenseCount { return }
-                isFixed = (details.first?.type != ControlledStep.containerInitiate.rawValue)
+                isFixed = (details.first?.type == ControlledStep.containerInitiate.rawValue)
             }
             // MARK: - Edit mode bottom bar
             if isEditing {
@@ -202,7 +206,7 @@ struct PillScanDetailGridScreen: View {
         Group {
             HStack(spacing: 8) {
                 Text(drugName)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(appColors.text)
                     .lineLimit(1)
 
@@ -217,7 +221,7 @@ struct PillScanDetailGridScreen: View {
     
     private var countView: some View {
         Text(!isFixed ? "\(pillCount)/\(targetCount)" : "\(pillCount)")
-            .font(.system(size: 25, weight: .bold))
+            .font(.system(size: 18, weight: .bold))
             .foregroundColor(appColors.secondary)
     }
 

@@ -47,7 +47,7 @@ struct PillCountTargetProgressBar: View {
             .frame(height: trackHeight)
 
             // Count text — never compressed, so it stays readable.
-            (Text("\(current)/").foregroundStyle(appColors.secondary) + Text("\(target)").foregroundStyle(appColors.text))
+            (Text("\(current)").foregroundStyle(appColors.secondary) + Text("/\(target)").foregroundStyle(appColors.text))
                 .font(.system(size: isIpad ? 20 : 13, weight: .semibold))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)

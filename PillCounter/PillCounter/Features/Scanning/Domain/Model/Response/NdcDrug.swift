@@ -232,9 +232,22 @@ extension NdcDrug {
             return Int32(qty)
         }
 
-        // Case 3: fallback to description
+        // Case 3: fallback to the package's own stock_qty — present even when there's
+        // no levels structure at all (e.g. a plain bottle-of-N with no multi-level
+        // packaging breakdown).
+        if let stockQty = package?.stockQty {
+            return Int32(stockQty)
+        }
+
+        // Case 4: last resort — parse the leading quantity out of the description
+        // (e.g. "bottle, 1,000 each ..."). Strip thousands-separator commas from
+        // digit runs BEFORE splitting on non-digit characters, or "1,000" splits
+        // into "1" and "000" and picks up "1" instead of 1000.
         if let desc = package?.description {
-            let numbers = desc
+            let withoutThousandsCommas = desc.replacingOccurrences(
+                of: "(?<=[0-9]),(?=[0-9]{3}\\b)", with: "", options: .regularExpression
+            )
+            let numbers = withoutThousandsCommas
                 .components(separatedBy: CharacterSet.decimalDigits.inverted)
                 .compactMap { Int($0) }
 

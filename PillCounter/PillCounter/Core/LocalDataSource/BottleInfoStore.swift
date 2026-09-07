@@ -18,24 +18,32 @@ struct SealedLotKey: Hashable {
     }
 }
 
+/// One snapshot captured during open-pill counting: the file path plus the pill
+/// count at the moment of that specific Add tap (not the row's running total —
+/// see BottleInfoEntity.images).
+struct BottleImageRecord: Codable, Equatable {
+    let path: String
+    let count: Int32
+}
+
 extension BottleInfoEntity {
     /// Sealed heuristic: a sealed row has bottle_qty > 0 and loose_qty == 0.
     var isSealed: Bool { bottle_qty > 0 && loose_qty == 0 }
 
     var sealedLotKey: SealedLotKey { SealedLotKey(lotNo: lot_no, expNo: exp_no) }
 
-    /// Snapshot image paths captured during open-pill counting for this row,
-    /// decoded from `image_paths_json`. Empty for sealed rows and any opened
-    /// row with no captured images.
-    var imagePaths: [String] { BottleInfoEntity.decodeImagePaths(image_paths_json) }
+    /// Snapshots captured during open-pill counting for this row, decoded from
+    /// `image_paths_json`. Empty for sealed rows and any opened row with no
+    /// captured images.
+    var images: [BottleImageRecord] { BottleInfoEntity.decodeImages(image_paths_json) }
 
-    static func decodeImagePaths(_ json: String?) -> [String] {
+    static func decodeImages(_ json: String?) -> [BottleImageRecord] {
         guard let json, let data = json.data(using: .utf8) else { return [] }
-        return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+        return (try? JSONDecoder().decode([BottleImageRecord].self, from: data)) ?? []
     }
 
-    static func encodeImagePaths(_ paths: [String]) -> String? {
-        guard !paths.isEmpty, let data = try? JSONEncoder().encode(paths) else { return nil }
+    static func encodeImages(_ images: [BottleImageRecord]) -> String? {
+        guard !images.isEmpty, let data = try? JSONEncoder().encode(images) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 }
@@ -120,13 +128,13 @@ final class BottleInfoStore {
         }
     }
 
-    /// Appends `paths` to an existing opened row's `image_paths_json` array (no-op if
-    /// `paths` is empty). Used to merge captured snapshots into a row that was already
+    /// Appends `images` to an existing opened row's `image_paths_json` array (no-op if
+    /// `images` is empty). Used to merge captured snapshots into a row that was already
     /// merged/updated via `fetchOpenedRow` + `updateOpenedBottleLooseQty`.
-    func appendImagePaths(bottleId: Int64, paths: [String]) {
-        guard !paths.isEmpty, let bottle = fetchById(bottleId) else { return }
-        let merged = bottle.imagePaths + paths
-        bottle.image_paths_json = BottleInfoEntity.encodeImagePaths(merged)
+    func appendImages(bottleId: Int64, images: [BottleImageRecord]) {
+        guard !images.isEmpty, let bottle = fetchById(bottleId) else { return }
+        let merged = bottle.images + images
+        bottle.image_paths_json = BottleInfoEntity.encodeImages(merged)
         bottle.updated_at = nowMs()
         CoreDataManager.shared.save(context: context)
         bottleInfosDidChange.send()
@@ -135,7 +143,7 @@ final class BottleInfoStore {
     @discardableResult
     func addOpenedBottle(
         stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
-        imagePaths: [String] = []
+        images: [BottleImageRecord] = []
     ) -> BottleInfoEntity? {
         guard let stockTxn = StockTxnStore.shared.fetchById(stockTxnId) else { return nil }
 
@@ -148,7 +156,7 @@ final class BottleInfoStore {
         entity.lot_no = lotNo
         entity.exp_no = expNo
         entity.serial_no = serialNo
-        entity.image_paths_json = BottleInfoEntity.encodeImagePaths(imagePaths)
+        entity.image_paths_json = BottleInfoEntity.encodeImages(images)
         entity.stockTxn = stockTxn
 
         let now = nowMs()

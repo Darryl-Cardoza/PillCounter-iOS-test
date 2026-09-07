@@ -101,23 +101,23 @@ struct BottleInfoStoreTests {
 
     // MARK: - Open-pill image paths
 
-    @Test func encodeDecodeImagePathsRoundTrips() {
-        let paths = ["a.jpg", "b.jpg", "c.jpg"]
-        let json = BottleInfoEntity.encodeImagePaths(paths)
-        #expect(BottleInfoEntity.decodeImagePaths(json) == paths)
+    @Test func encodeDecodeImagesRoundTrips() {
+        let images = [BottleImageRecord(path: "a.jpg", count: 5), BottleImageRecord(path: "b.jpg", count: 10)]
+        let json = BottleInfoEntity.encodeImages(images)
+        #expect(BottleInfoEntity.decodeImages(json) == images)
     }
 
-    @Test func decodeImagePathsReturnsEmptyForNilOrInvalidJson() {
-        #expect(BottleInfoEntity.decodeImagePaths(nil).isEmpty)
-        #expect(BottleInfoEntity.decodeImagePaths("not json").isEmpty)
+    @Test func decodeImagesReturnsEmptyForNilOrInvalidJson() {
+        #expect(BottleInfoEntity.decodeImages(nil).isEmpty)
+        #expect(BottleInfoEntity.decodeImages("not json").isEmpty)
     }
 
-    @Test func encodeImagePathsReturnsNilForEmptyArray() {
-        #expect(BottleInfoEntity.encodeImagePaths([]) == nil)
+    @Test func encodeImagesReturnsNilForEmptyArray() {
+        #expect(BottleInfoEntity.encodeImages([]) == nil)
     }
 
-    /// addOpenedBottle persists the captured image paths on the new row.
-    @Test func addOpenedBottleStoresImagePaths() {
+    /// addOpenedBottle persists the captured images (path + count) on the new row.
+    @Test func addOpenedBottleStoresImages() {
         let fixture = BatchTrackingFixture()
         defer { fixture.cleanUp() }
         let batch = fixture.makeBatch()
@@ -125,16 +125,16 @@ struct BottleInfoStoreTests {
 
         let bottle = BottleInfoStore.shared.addOpenedBottle(
             stockTxnId: stockTxn.stock_txn_id, looseQty: 5, lotNo: "LOT-A", expNo: "2027-01",
-            serialNo: nil, imagePaths: ["img1.jpg"]
+            serialNo: nil, images: [BottleImageRecord(path: "img1.jpg", count: 5)]
         )
         defer { if let bottle { BottleInfoStore.shared.softDelete(bottleId: bottle.bottle_id) } }
 
-        #expect(bottle?.imagePaths == ["img1.jpg"])
+        #expect(bottle?.images == [BottleImageRecord(path: "img1.jpg", count: 5)])
     }
 
-    /// appendImagePaths merges new paths onto an existing row's array rather than
+    /// appendImages merges new images onto an existing row's array rather than
     /// overwriting it — repeated Add taps for the same lot/exp keep every snapshot.
-    @Test func appendImagePathsMergesOntoExistingRow() {
+    @Test func appendImagesMergesOntoExistingRow() {
         let fixture = BatchTrackingFixture()
         defer { fixture.cleanUp() }
         let batch = fixture.makeBatch()
@@ -142,15 +142,17 @@ struct BottleInfoStoreTests {
 
         let bottle = BottleInfoStore.shared.addOpenedBottle(
             stockTxnId: stockTxn.stock_txn_id, looseQty: 5, lotNo: "LOT-A", expNo: "2027-01",
-            serialNo: nil, imagePaths: ["img1.jpg"]
+            serialNo: nil, images: [BottleImageRecord(path: "img1.jpg", count: 5)]
         )
         defer { if let bottle { BottleInfoStore.shared.softDelete(bottleId: bottle.bottle_id) } }
         guard let bottle else { Issue.record("expected bottle"); return }
 
-        BottleInfoStore.shared.appendImagePaths(bottleId: bottle.bottle_id, paths: ["img2.jpg"])
+        BottleInfoStore.shared.appendImages(bottleId: bottle.bottle_id, images: [BottleImageRecord(path: "img2.jpg", count: 3)])
 
         let refetched = BottleInfoStore.shared.fetchById(bottle.bottle_id)
-        #expect(refetched?.imagePaths == ["img1.jpg", "img2.jpg"])
+        #expect(refetched?.images == [
+            BottleImageRecord(path: "img1.jpg", count: 5), BottleImageRecord(path: "img2.jpg", count: 3)
+        ])
     }
 
     /// fetchOpenedRow finds an existing opened row by exact (stockTxnId, lot, exp) and
@@ -164,7 +166,7 @@ struct BottleInfoStoreTests {
         let sealed = BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 1, lotNo: "LOT-A", expNo: "2027-01")
         let opened = BottleInfoStore.shared.addOpenedBottle(
             stockTxnId: stockTxn.stock_txn_id, looseQty: 5, lotNo: "LOT-A", expNo: "2027-01",
-            serialNo: nil, imagePaths: []
+            serialNo: nil, images: []
         )
         defer {
             if let sealed { BottleInfoStore.shared.softDelete(bottleId: sealed.bottle_id) }

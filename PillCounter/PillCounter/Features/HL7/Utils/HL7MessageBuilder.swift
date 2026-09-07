@@ -417,10 +417,13 @@ final class HL7CompletionBuilder {
     //
     // No serial number / GTIN sent (not tracked by BottleInfoEntity/DrugMasterEntity
     // today — grouping stays keyed on ndc+name+lot+expiry, same as before).
-    // IMG_REF is emitted per-INV only when a group's opened rows carried captured
-    // images (controlled-drug open-pill counts) — see BottleInfoEntity.imagePaths.
-    // No adjustment breakdown (no expected-on-hand value is tracked anywhere in
-    // this app's inventory flow — every response is a plain count, spec §9 Scenarios 1-4).
+    // Image OBX rows (IMG001, IMG002... — same scheme as dispense's buildImageOBX)
+    // are emitted per-INV, one per captured image, only when a group's opened rows
+    // carried images (controlled-drug open-pill counts) — see BottleInfoEntity.images.
+    // ZAD carries batch.note as a free-text adjustment
+    // comment when present — no structured adjustment type/reason/quantity exists
+    // anywhere in this app's data model today. Groups with total qty 0 are skipped
+    // entirely (spec §9 Scenarios 1-4 — every response is a plain count).
     func buildInventoryMessage(
         batch: BatchCountEntity,
         user: UserEntity?
@@ -436,7 +439,7 @@ final class HL7CompletionBuilder {
         struct Key: Hashable {
             let ndc: String; let name: String; let lot: String; let expiry: String
         }
-        var grouped: [Key: (opened: Int32, sealed: Int32, imagePaths: [String])] = [:]
+        var grouped: [Key: (opened: Int32, sealed: Int32, images: [BottleImageRecord])] = [:]
 
         for stockTxn in stockTxns {
             guard let drug = stockTxn.drug else { continue }
@@ -458,11 +461,14 @@ final class HL7CompletionBuilder {
                     e.sealed += bottle.bottle_qty * drug.package_qty
                 } else {
                     e.opened += bottle.loose_qty
-                    e.imagePaths += bottle.imagePaths
+                    e.images += bottle.images
                 }
                 grouped[key] = e
             }
         }
+
+        // Zero-total groups carry no information for PMS — never emit an INV for them.
+        grouped = grouped.filter { $0.value.opened + $0.value.sealed > 0 }
 
         let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
         var setId = 1
@@ -507,6 +513,18 @@ final class HL7CompletionBuilder {
                 nte.commentType = "INFO"
             }
 
+            // batch.note doubles as this app's only adjustment note today — no
+            // structured adjustment type/reason/quantity is captured anywhere, so
+            // ZAD only carries the free-text comment + who's responsible for it.
+            let adjustmentNote = batch.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !adjustmentNote.isEmpty {
+                scope.zad { zad in
+                    zad.setId = "1"
+                    zad.comment = adjustmentNote
+                    zad.approvedBy = operatorName
+                }
+            }
+
             scope.obx { obx in
                 obx.setId = "\(setId)"
                 obx.valueType = "ST"
@@ -518,6 +536,11 @@ final class HL7CompletionBuilder {
 
             // One INV per group, immediately followed by its SEALED_QTY/OPEN_QTY OBX rows.
             var invSetId = 1
+            var imgCounter = 1
+            func nextImgId() -> String {
+                defer { imgCounter += 1 }
+                return "IMG" + String(format: "%03d", imgCounter)
+            }
             for (key, value) in grouped {
                 let total = value.opened + value.sealed
 
@@ -562,19 +585,18 @@ final class HL7CompletionBuilder {
                 }
                 setId += 1
 
-                // One OBX per image (not `~`-joined into a single field) — `~` is HL7's
-                // repeat separator, so Hl7Core's encoder escapes a literal `~` inside a
-                // field value to `\R\` rather than treating it as a real field repeat.
-                // Separate OBX rows (same subId, linking back to this INV) sidesteps
-                // that entirely and is directly GET-able one filename at a time via
-                // ImageWebServer's `/images/<filename>` route.
-                for imagePath in value.imagePaths {
+                // One OBX per image, same shape as the dispense flow's buildImageOBX —
+                // unique observationId (IMG001, IMG002...) rather than `~`-joining paths
+                // into one field (`~` is HL7's repeat separator; Hl7Core's encoder escapes
+                // a literal `~` in a value to `\R\`). subId still links back to this INV,
+                // which dispense's single-drug messages never needed.
+                for image in value.images {
                     scope.obx { obx in
                         obx.setId = "\(setId)"
                         obx.valueType = "RP"
-                        obx.observationId = "IMG_REF"
+                        obx.observationId = nextImgId()
                         obx.subId = "\(invSetId)"
-                        obx.observationValue = "/images/\(imagePath)"
+                        obx.observationValue = "/images/\(image.path)"
                         obx.resultStatus = "F"
                     }
                     setId += 1

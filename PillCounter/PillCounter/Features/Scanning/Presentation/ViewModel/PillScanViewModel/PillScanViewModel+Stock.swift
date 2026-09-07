@@ -282,7 +282,7 @@ extension PillScanViewModel {
             bottleInfoDAO.updateOpenedBottleLooseQty(
                 bottleId: existing.bottle_id, looseQty: existing.loose_qty + Int32(loosePillCount)
             )
-            bottleInfoDAO.appendImagePaths(bottleId: existing.bottle_id, paths: pendingOpenBottleImagePaths)
+            bottleInfoDAO.appendImages(bottleId: existing.bottle_id, images: pendingOpenBottleDbImages)
             self.currentBottleInfo = bottleInfoDAO.fetchById(existing.bottle_id)
         } else {
             self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
@@ -291,7 +291,7 @@ extension PillScanViewModel {
                 lotNo: pendingOpenBottleLot,
                 expNo: pendingOpenBottleExpiry,
                 serialNo: pendingOpenBottleSerial,
-                imagePaths: pendingOpenBottleImagePaths
+                images: pendingOpenBottleDbImages
             )
         }
         self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
@@ -301,7 +301,7 @@ extension PillScanViewModel {
         pendingOpenBottleSerial = nil
         pendingOpenBottleDrug = nil
         pendingOpenBottleDrugId = nil
-        pendingOpenBottleImagePaths = []
+        pendingOpenBottleDbImages = []
         pendingOpenBottleImages = []
     }
 

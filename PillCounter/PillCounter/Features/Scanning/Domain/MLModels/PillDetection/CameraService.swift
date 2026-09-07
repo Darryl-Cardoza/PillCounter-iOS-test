@@ -203,6 +203,8 @@ final class CameraService: NSObject, ObservableObject {
     var isTrayColorDetectionEnabled: Bool = false
 
     @Published var isAuthorized = false
+    /// Distinguishes "still checking" from "checked and denied" — both read isAuthorized == false.
+    @Published var isPermissionCheckComplete = false
     @Published var error: String?
     @Published private(set) var isPausedDueToInactivity = false
     /// When false, ML inference is skipped every frame — model stays loaded, camera keeps running.
@@ -229,19 +231,23 @@ final class CameraService: NSObject, ObservableObject {
 
     // MARK: - PERMISSIONS
     /// CHECKS AND REQUESTS CAMERA AUTHORIZATION
-    private func checkPermissions() {
+    func checkPermissions() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             isAuthorized = true
-            configureSession()
+            isPermissionCheckComplete = true
+            if session.inputs.isEmpty { configureSession() }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
                     self?.isAuthorized = granted
+                    self?.isPermissionCheckComplete = true
                     if granted { self?.configureSession() }
                 }
             }
         default:
+            isAuthorized = false
+            isPermissionCheckComplete = true
             error = "Camera access denied"
         }
     }

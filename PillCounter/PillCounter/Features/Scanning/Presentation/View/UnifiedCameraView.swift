@@ -556,6 +556,7 @@ struct UnifiedCameraView: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
+                if !cameraService.isAuthorized { cameraService.checkPermissions() }
                 cameraService.start()
                 if !showPillCountPanel { cameraService.enableBarcodeScanning() }
                 if currentScanType == .stockCount && !isOpenPillScanMode {
@@ -1269,14 +1270,9 @@ extension UnifiedCameraView {
 
     /// Open-pill counting, any drug type: capture and save a snapshot for this Add tap
     /// off the main thread. Always feeds the temporary in-memory grid (`pendingOpenBottleImages`
-    /// — released on Proceed/Back, never persisted to CoreData) so the operator can review
-    /// every captured image for this count. Additionally, when the drug is controlled
-    /// (drug_type non-empty), the same path is also appended to `pendingOpenBottleImagePaths`,
-    /// which IS persisted — flushed into BottleInfoEntity.image_paths_json on Proceed
-    /// (see createOpenedBottleFromPendingScan). Count already incremented above and is never
-    /// blocked on this — the path lands in time for Proceed in the normal case, and if it
-    /// hasn't yet (a very fast Proceed tap) the count is still saved correctly, just without
-    /// that one image.
+    /// — released on Proceed/Back, never persisted to CoreData). When the drug is
+    /// controlled, the same path+count is also appended to `pendingOpenBottleDbImages`,
+    /// which IS persisted (BottleInfoEntity.image_paths_json on Proceed).
     private func captureOpenBottleImage() {
         guard let rawImage = cameraService.captureSnapshotWithOverlays() else { return }
 
@@ -1316,7 +1312,9 @@ extension UnifiedCameraView {
                     )
                 )
                 if isControlled {
-                    pillScanViewModel?.pendingOpenBottleImagePaths.append(savedPath)
+                    pillScanViewModel?.pendingOpenBottleDbImages.append(
+                        BottleImageRecord(path: savedPath, count: Int32(stableCount))
+                    )
                 }
             }
         }
@@ -1717,7 +1715,7 @@ extension UnifiedCameraView {
             pillScanViewModel.pendingOpenBottleSerial = nil
             pillScanViewModel.pendingOpenBottleDrug = nil
             pillScanViewModel.pendingOpenBottleDrugId = nil
-            pillScanViewModel.pendingOpenBottleImagePaths = []
+            pillScanViewModel.pendingOpenBottleDbImages = []
             pillScanViewModel.pendingOpenBottleImages = []
             pillScanViewModel.currentTransaction = nil
             pillScanViewModel.currentStockTxn = nil

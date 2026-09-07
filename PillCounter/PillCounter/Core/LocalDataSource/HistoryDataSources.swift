@@ -131,10 +131,10 @@ protocol BottleInfoDataSource: AnyObject {
     @discardableResult
     func addOpenedBottle(
         stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
-        imagePaths: [String]
+        images: [BottleImageRecord]
     ) -> BottleInfoEntity?
     func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity?
-    func appendImagePaths(bottleId: Int64, paths: [String])
+    func appendImages(bottleId: Int64, images: [BottleImageRecord])
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32)
     func fetchById(_ bottleId: Int64) -> BottleInfoEntity?
     func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity]
@@ -255,11 +255,11 @@ extension BottleInfoDataSource {
     @discardableResult
     func addOpenedBottle(
         stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
-        imagePaths: [String] = []
+        images: [BottleImageRecord] = []
     ) -> BottleInfoEntity? {
         addOpenedBottle(
             stockTxnId: stockTxnId, looseQty: looseQty, lotNo: lotNo, expNo: expNo, serialNo: serialNo,
-            imagePaths: imagePaths
+            images: images
         )
     }
 }

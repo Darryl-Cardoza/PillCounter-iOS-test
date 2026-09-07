@@ -103,15 +103,6 @@ struct UnifiedCameraLayout: View {
                 PillCountingLoader()
             }
 
-            // ── Inactivity pause overlay ──────────────────────────────────────
-            // When the stock count sheet is showing, UnifiedCameraView redraws this
-            // overlay itself after the sheet's own .overlay-based bottomSheet, so it
-            // actually paints on top instead of underneath the sheet. Skip it here
-            // to avoid a duplicate underneath.
-            if cameraService.isPausedDueToInactivity && !showStockCountPanel {
-                inactivityOverlay
-            }
-
             // ── Header row ────────────────────────────────────────────────────
             // Hidden while the new pill-count layout is active (non-vial) — its top
             // bar hosts the back button / instruction / glove / drug info instead.
@@ -206,26 +197,6 @@ struct UnifiedCameraLayout: View {
     }
 
     // MARK: - Sub-views
-
-    private var inactivityOverlay: some View {
-        Color.black.opacity(0.6)
-            .ignoresSafeArea()
-            .overlay(
-                VStack(spacing: 16) {
-                    Text(L10n.PillCount.pausedDueToInactivity)
-                        .foregroundStyle(appColors.text)
-                    Button(action: onResume) {
-                        Text(L10n.PillCount.resume)
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, 20)
-                            .background(appColors.primary)
-                            .cornerRadius(30)
-                    }
-                }
-            )
-    }
 
     private var controlledStepRow: some View {
         VStack(spacing: 0) {

@@ -98,4 +98,83 @@ struct BottleInfoStoreTests {
         #expect(rows.count == 1)
         #expect(rows.first?.bottle_qty == 4)
     }
+
+    // MARK: - Open-pill image paths
+
+    @Test func encodeDecodeImagePathsRoundTrips() {
+        let paths = ["a.jpg", "b.jpg", "c.jpg"]
+        let json = BottleInfoEntity.encodeImagePaths(paths)
+        #expect(BottleInfoEntity.decodeImagePaths(json) == paths)
+    }
+
+    @Test func decodeImagePathsReturnsEmptyForNilOrInvalidJson() {
+        #expect(BottleInfoEntity.decodeImagePaths(nil).isEmpty)
+        #expect(BottleInfoEntity.decodeImagePaths("not json").isEmpty)
+    }
+
+    @Test func encodeImagePathsReturnsNilForEmptyArray() {
+        #expect(BottleInfoEntity.encodeImagePaths([]) == nil)
+    }
+
+    /// addOpenedBottle persists the captured image paths on the new row.
+    @Test func addOpenedBottleStoresImagePaths() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch()
+        let stockTxn = fixture.makeStockTxn(batch: batch)
+
+        let bottle = BottleInfoStore.shared.addOpenedBottle(
+            stockTxnId: stockTxn.stock_txn_id, looseQty: 5, lotNo: "LOT-A", expNo: "2027-01",
+            serialNo: nil, imagePaths: ["img1.jpg"]
+        )
+        defer { if let bottle { BottleInfoStore.shared.softDelete(bottleId: bottle.bottle_id) } }
+
+        #expect(bottle?.imagePaths == ["img1.jpg"])
+    }
+
+    /// appendImagePaths merges new paths onto an existing row's array rather than
+    /// overwriting it — repeated Add taps for the same lot/exp keep every snapshot.
+    @Test func appendImagePathsMergesOntoExistingRow() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch()
+        let stockTxn = fixture.makeStockTxn(batch: batch)
+
+        let bottle = BottleInfoStore.shared.addOpenedBottle(
+            stockTxnId: stockTxn.stock_txn_id, looseQty: 5, lotNo: "LOT-A", expNo: "2027-01",
+            serialNo: nil, imagePaths: ["img1.jpg"]
+        )
+        defer { if let bottle { BottleInfoStore.shared.softDelete(bottleId: bottle.bottle_id) } }
+        guard let bottle else { Issue.record("expected bottle"); return }
+
+        BottleInfoStore.shared.appendImagePaths(bottleId: bottle.bottle_id, paths: ["img2.jpg"])
+
+        let refetched = BottleInfoStore.shared.fetchById(bottle.bottle_id)
+        #expect(refetched?.imagePaths == ["img1.jpg", "img2.jpg"])
+    }
+
+    /// fetchOpenedRow finds an existing opened row by exact (stockTxnId, lot, exp) and
+    /// ignores sealed rows / rows with a different lot or exp.
+    @Test func fetchOpenedRowMatchesExactLotExpAndIgnoresSealedRows() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch()
+        let stockTxn = fixture.makeStockTxn(batch: batch)
+
+        let sealed = BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 1, lotNo: "LOT-A", expNo: "2027-01")
+        let opened = BottleInfoStore.shared.addOpenedBottle(
+            stockTxnId: stockTxn.stock_txn_id, looseQty: 5, lotNo: "LOT-A", expNo: "2027-01",
+            serialNo: nil, imagePaths: []
+        )
+        defer {
+            if let sealed { BottleInfoStore.shared.softDelete(bottleId: sealed.bottle_id) }
+            if let opened { BottleInfoStore.shared.softDelete(bottleId: opened.bottle_id) }
+        }
+
+        let found = BottleInfoStore.shared.fetchOpenedRow(stockTxnId: stockTxn.stock_txn_id, lotNo: "LOT-A", expNo: "2027-01")
+        #expect(found?.bottle_id == opened?.bottle_id)
+
+        let notFound = BottleInfoStore.shared.fetchOpenedRow(stockTxnId: stockTxn.stock_txn_id, lotNo: "LOT-B", expNo: "2027-01")
+        #expect(notFound == nil)
+    }
 }

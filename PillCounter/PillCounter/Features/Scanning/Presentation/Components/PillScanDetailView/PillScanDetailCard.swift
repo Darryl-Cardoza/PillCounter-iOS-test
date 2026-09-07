@@ -16,31 +16,31 @@ struct PillScanDetailItem: Identifiable {
 
 
 struct PillScanDetailCard: View {
- 
-    let detail: PillCountTransactionDetailsEntity
+
+    let detail: PillScanDetailItem
     let isEditing: Bool
     let isSelected: Bool
- 
+
     @EnvironmentObject private var appColors: AppColors
- 
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
                 Rectangle()
                     .fill(appColors.secondaryBackground)
 
-                imageView(path: detail.image_path)
+                imageView(path: detail.imagePath)
                     .padding(12)
             }
             .frame(height: 160)
             .clipShape(TopRoundedRectangle(radius: 8))
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(detail.pill_count)")
+                Text("\(detail.pillCount)")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(appColors.primary)
 
-                Text(DateUtils.formatToUSDateTime(detail.created_at))
+                Text(DateUtils.formatToUSDateTime(detail.capturedAt))
                     .font(.system(size: 11))
                     .foregroundColor(appColors.text.opacity(0.65))
             }

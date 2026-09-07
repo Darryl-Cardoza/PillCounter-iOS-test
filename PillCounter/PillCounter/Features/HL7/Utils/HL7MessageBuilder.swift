@@ -417,9 +417,10 @@ final class HL7CompletionBuilder {
     //
     // No serial number / GTIN sent (not tracked by BottleInfoEntity/DrugMasterEntity
     // today — grouping stays keyed on ndc+name+lot+expiry, same as before).
-    // No IMG_REF (no image capture exists for stock-count bottles). No adjustment
-    // breakdown (no expected-on-hand value is tracked anywhere in this app's
-    // inventory flow — every response is a plain count, spec §9 Scenarios 1-4).
+    // IMG_REF is emitted per-INV only when a group's opened rows carried captured
+    // images (controlled-drug open-pill counts) — see BottleInfoEntity.imagePaths.
+    // No adjustment breakdown (no expected-on-hand value is tracked anywhere in
+    // this app's inventory flow — every response is a plain count, spec §9 Scenarios 1-4).
     func buildInventoryMessage(
         batch: BatchCountEntity,
         user: UserEntity?
@@ -435,7 +436,7 @@ final class HL7CompletionBuilder {
         struct Key: Hashable {
             let ndc: String; let name: String; let lot: String; let expiry: String
         }
-        var grouped: [Key: (opened: Int32, sealed: Int32)] = [:]
+        var grouped: [Key: (opened: Int32, sealed: Int32, imagePaths: [String])] = [:]
 
         for stockTxn in stockTxns {
             guard let drug = stockTxn.drug else { continue }
@@ -445,7 +446,7 @@ final class HL7CompletionBuilder {
                     ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
                     lot: bottle.lot_no ?? "", expiry: bottle.exp_no ?? ""
                 )
-                var e = grouped[key] ?? (0, 0)
+                var e = grouped[key] ?? (0, 0, [])
                 // BottleInfoStore.addOpenedBottle always sets bottle_qty=1 on an
                 // opened row (a fixed constant, not a real sealed-bottle count) —
                 // multiplying it by package_qty here double-counted every opened
@@ -457,6 +458,7 @@ final class HL7CompletionBuilder {
                     e.sealed += bottle.bottle_qty * drug.package_qty
                 } else {
                     e.opened += bottle.loose_qty
+                    e.imagePaths += bottle.imagePaths
                 }
                 grouped[key] = e
             }
@@ -559,6 +561,24 @@ final class HL7CompletionBuilder {
                     obx.resultStatus = "F"
                 }
                 setId += 1
+
+                // One OBX per image (not `~`-joined into a single field) — `~` is HL7's
+                // repeat separator, so Hl7Core's encoder escapes a literal `~` inside a
+                // field value to `\R\` rather than treating it as a real field repeat.
+                // Separate OBX rows (same subId, linking back to this INV) sidesteps
+                // that entirely and is directly GET-able one filename at a time via
+                // ImageWebServer's `/images/<filename>` route.
+                for imagePath in value.imagePaths {
+                    scope.obx { obx in
+                        obx.setId = "\(setId)"
+                        obx.valueType = "RP"
+                        obx.observationId = "IMG_REF"
+                        obx.subId = "\(invSetId)"
+                        obx.observationValue = "/images/\(imagePath)"
+                        obx.resultStatus = "F"
+                    }
+                    setId += 1
+                }
 
                 invSetId += 1
             }

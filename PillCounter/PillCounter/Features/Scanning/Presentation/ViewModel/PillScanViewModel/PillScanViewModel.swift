@@ -53,6 +53,19 @@ class PillScanViewModel: ObservableObject {
     var pendingOpenBottleExpiry: String?
     var pendingOpenBottleSerial: String?
 
+    /// Snapshot paths captured on each Add tap during an open-pill count of a
+    /// controlled drug (drug_type non-empty). Appended in the background as each
+    /// capture completes; flushed into the BottleInfoEntity row's image_paths_json
+    /// on Proceed — see `createOpenedBottleFromPendingScan`.
+    var pendingOpenBottleImagePaths: [String] = []
+
+    /// Snapshot captured on every Add tap during an open-pill count, ANY drug type
+    /// (unlike `pendingOpenBottleImagePaths`, which is controlled-only and persisted).
+    /// Purely in-memory, feeds PillScanDetailGridScreen's grid for this count only —
+    /// never written to CoreData, released on Proceed or Back (see
+    /// `createOpenedBottleFromPendingScan` / UnifiedCameraView.handleBack).
+    @Published var pendingOpenBottleImages: [PillScanDetailItem] = []
+
     /// Resolved NDC/drug/batch identity for an open-pill scan, held in memory only.
     /// No BatchCountEntity or StockTxnEntity is created until the count is confirmed
     /// (Proceed) — see `createOpenedBottleFromPendingScan`. This lets the header/UI
@@ -580,8 +593,19 @@ class PillScanViewModel: ObservableObject {
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }
-    
-    
+
+    /// Removes one captured image from the temporary open-pill grid (`pendingOpenBottleImages`)
+    /// and, if it was also queued for DB persistence (controlled drug), from
+    /// `pendingOpenBottleImagePaths` too — so a deleted image never gets saved on Proceed.
+    func removePendingOpenBottleImage(id: Int64) {
+        guard let removed = pendingOpenBottleImages.first(where: { $0.id == id }) else { return }
+        pendingOpenBottleImages.removeAll { $0.id == id }
+        if let path = removed.imagePath {
+            pendingOpenBottleImagePaths.removeAll { $0 == path }
+        }
+    }
+
+
     func deleteAllDetailsOfCurrentTransaction() {
         guard let txnId = currentTransaction?.txn_id else {
             return

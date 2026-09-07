@@ -129,7 +129,12 @@ protocol BottleInfoDataSource: AnyObject {
     func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity?
     func sealedBottleQty(stockTxnId: Int64, lotNo: String?, expNo: String?) -> Int32
     @discardableResult
-    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?) -> BottleInfoEntity?
+    func addOpenedBottle(
+        stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
+        imagePaths: [String]
+    ) -> BottleInfoEntity?
+    func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity?
+    func appendImagePaths(bottleId: Int64, paths: [String])
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32)
     func fetchById(_ bottleId: Int64) -> BottleInfoEntity?
     func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity]
@@ -243,6 +248,19 @@ extension TransactionDataSource {
 extension TransactionDetailDataSource {
     func add(txnId: Int64, pillCount: Int32, imagePath: String? = nil, type: String? = nil, isManual: Bool = false) {
         add(txnId: txnId, pillCount: pillCount, imagePath: imagePath, type: type, isManual: isManual)
+    }
+}
+
+extension BottleInfoDataSource {
+    @discardableResult
+    func addOpenedBottle(
+        stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
+        imagePaths: [String] = []
+    ) -> BottleInfoEntity? {
+        addOpenedBottle(
+            stockTxnId: stockTxnId, looseQty: looseQty, lotNo: lotNo, expNo: expNo, serialNo: serialNo,
+            imagePaths: imagePaths
+        )
     }
 }
 

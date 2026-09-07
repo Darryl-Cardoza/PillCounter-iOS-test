@@ -272,13 +272,28 @@ extension PillScanViewModel {
         guard let batch else { return }
 
         let stockTxn = stockTxnDAO.fetchOrCreate(batch: batch, drugId: drugId, bucketId: batch.bucket_id)
-        self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
-            stockTxnId: stockTxn.stock_txn_id,
-            looseQty: Int32(loosePillCount),
-            lotNo: pendingOpenBottleLot,
-            expNo: pendingOpenBottleExpiry,
-            serialNo: pendingOpenBottleSerial
-        )
+
+        // Merge by (stockTxnId, lot, exp) — a controlled-drug open-pill count that
+        // spans multiple Add taps for the same bottle accumulates loose_qty and
+        // image_paths on one row instead of creating a new row per tap.
+        if let existing = bottleInfoDAO.fetchOpenedRow(
+            stockTxnId: stockTxn.stock_txn_id, lotNo: pendingOpenBottleLot, expNo: pendingOpenBottleExpiry
+        ) {
+            bottleInfoDAO.updateOpenedBottleLooseQty(
+                bottleId: existing.bottle_id, looseQty: existing.loose_qty + Int32(loosePillCount)
+            )
+            bottleInfoDAO.appendImagePaths(bottleId: existing.bottle_id, paths: pendingOpenBottleImagePaths)
+            self.currentBottleInfo = bottleInfoDAO.fetchById(existing.bottle_id)
+        } else {
+            self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+                stockTxnId: stockTxn.stock_txn_id,
+                looseQty: Int32(loosePillCount),
+                lotNo: pendingOpenBottleLot,
+                expNo: pendingOpenBottleExpiry,
+                serialNo: pendingOpenBottleSerial,
+                imagePaths: pendingOpenBottleImagePaths
+            )
+        }
         self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
 
         pendingOpenBottleLot = nil
@@ -286,6 +301,8 @@ extension PillScanViewModel {
         pendingOpenBottleSerial = nil
         pendingOpenBottleDrug = nil
         pendingOpenBottleDrugId = nil
+        pendingOpenBottleImagePaths = []
+        pendingOpenBottleImages = []
     }
 
     func formatExpiry(_ date: Date?) -> String? {

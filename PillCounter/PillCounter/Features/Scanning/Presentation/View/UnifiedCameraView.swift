@@ -947,6 +947,12 @@ extension UnifiedCameraView {
               !pillScanViewModel.isCheckingNdc
         else { return }
 
+        // A BT scanner input is real operator activity but isn't a touch, so it
+        // never hit the drag-gesture reset in UnifiedCameraLayout — the idle clock
+        // kept ticking underneath a run of back-to-back scans (different barcodes
+        // each time) until it fired and paused mid-scan. Reset it here too.
+        cameraService.resetInactivityTimer()
+
         // Vial step auto-capture: while the pill-count panel is on the vial step, a
         // scanned barcode is the dispensing vial's RX label — not an RX/NDC scan.
         // Match it against the transaction and capture; never fall through to the

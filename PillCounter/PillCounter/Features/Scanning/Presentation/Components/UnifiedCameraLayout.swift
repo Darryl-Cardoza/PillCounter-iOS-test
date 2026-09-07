@@ -104,7 +104,11 @@ struct UnifiedCameraLayout: View {
             }
 
             // ── Inactivity pause overlay ──────────────────────────────────────
-            if cameraService.isPausedDueToInactivity {
+            // When the stock count sheet is showing, UnifiedCameraView redraws this
+            // overlay itself after the sheet's own .overlay-based bottomSheet, so it
+            // actually paints on top instead of underneath the sheet. Skip it here
+            // to avoid a duplicate underneath.
+            if cameraService.isPausedDueToInactivity && !showStockCountPanel {
                 inactivityOverlay
             }
 

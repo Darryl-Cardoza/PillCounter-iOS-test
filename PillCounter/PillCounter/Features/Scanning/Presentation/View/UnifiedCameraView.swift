@@ -68,6 +68,7 @@ struct UnifiedCameraView: View {
     @State private var stockSheetCurrentHeight: CGFloat = UIScreen.main.bounds.height * 0.48
     @State private var stockSheetCurrentWidth: CGFloat = UIScreen.main.bounds.width * 0.45
     @State private var stockSheetIsExpanded: Bool = false
+    @State private var showStockEditSheet: Bool = false
 
     init(
         currentScanType: ScanType,
@@ -410,6 +411,7 @@ struct UnifiedCameraView: View {
                 StockCountBatchBottomSheet(
                     containerStatus: $scannedBottleContainerStatus,
                     isExpanded: $stockSheetIsExpanded,
+                    showEditSheet: $showStockEditSheet,
                     onPortraitDragChanged: { translationY in
                         let base = stockSheetIsExpanded ? stockCountSheetExpandedHeight : stockCountSheetHeight
                         let clamped = min(max(base - translationY, stockCountSheetHeight), stockCountSheetExpandedHeight + 20)
@@ -431,7 +433,66 @@ struct UnifiedCameraView: View {
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
             }
+            .onChange(of: showStockEditSheet) { _, isEditing in
+                // iPhone only — Edit Details takes over the whole sheet while open,
+                // then snaps back to the normal collapsed size on close. Driven
+                // directly off the @State binding (not a child callback + separate
+                // onChange hop) so the frame resize and the content swap animate
+                // in the same pass instead of visibly stepping apart.
+                guard UIDevice.current.userInterfaceIdiom != .pad else { return }
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                    if isEditing {
+                        stockSheetCurrentHeight = stockCountSheetExpandedHeight
+                        stockSheetCurrentWidth = stockCountSheetExpandedWidth
+                        stockSheetIsExpanded = true
+                    } else {
+                        stockSheetCurrentHeight = stockCountSheetHeight
+                        stockSheetCurrentWidth = stockCountSheetWidth
+                        stockSheetIsExpanded = false
+                    }
+                }
+            }
+            // BottomSheet paints itself as an .overlay on the content above, so the
+            // stock sheet always sits above UnifiedCameraLayout's own inactivity
+            // overlay. Redraw the resume prompt here, after the sheet, so it wins
+            // when both are visible at once.
+            .overlay {
+                if cameraService.isPausedDueToInactivity {
+                    resumeOverlay
+                }
+            }
             .customPopup(isPresented: $stockCountViewModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false) { ndcMismatchPopup }
+    }
+
+    private var resumeOverlay: some View {
+        Color.black.opacity(0.6)
+            .ignoresSafeArea()
+            .overlay(
+                VStack(spacing: 16) {
+                    Text(L10n.PillCount.pausedDueToInactivity)
+                        .foregroundStyle(appColors.text)
+                    Button(action: {
+                        cameraService.resumeIfPaused()
+                        cameraService.resetInactivityTimer()
+                        cameraService.resetGloveDetection()
+                        pillScanViewModel.updateGlovesDetected(detected: false)
+                    }) {
+                        Text(L10n.PillCount.resume)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 32)
+                            .padding(.vertical, 20)
+                            .background(appColors.primary)
+                            .cornerRadius(30)
+                    }
+                }
+            )
+            .onTapGesture {
+                cameraService.resumeIfPaused()
+                cameraService.resetInactivityTimer()
+                cameraService.resetGloveDetection()
+                pillScanViewModel.updateGlovesDetected(detected: false)
+            }
     }
     
     // Split into two properties so the Swift type-checker doesn't time out
@@ -485,6 +546,16 @@ struct UnifiedCameraView: View {
                     stockSheetCurrentWidth = stockCountSheetWidth
                     stockSheetIsExpanded = false
                 }
+            }
+            .onChange(of: isLandscape) { _, _ in
+                // The Stock Count sheet's current height/width are sized for the
+                // orientation they were last set in (open, drag/snap, or the
+                // panel-visibility reset above) — rotating the device while the
+                // sheet is open otherwise leaves it holding the wrong-orientation
+                // value, which is what visually breaks the iPhone layout on rotate.
+                guard showStockCountPanel, UIDevice.current.userInterfaceIdiom != .pad else { return }
+                stockSheetCurrentHeight = stockSheetIsExpanded ? stockCountSheetExpandedHeight : stockCountSheetHeight
+                stockSheetCurrentWidth = stockSheetIsExpanded ? stockCountSheetExpandedWidth : stockCountSheetWidth
             }
             .onChange(of: cameraService.glovesConfirmed) { _, confirmed in
                 if confirmed { pillScanViewModel.updateGlovesDetected(detected: true) }
@@ -1445,6 +1516,13 @@ extension UnifiedCameraView {
     /// - Same barcode as current pending drug → increment bottle count, apply 5s cooldown, no UI flicker
     /// - Different barcode → auto-commit pending drug first, then show new drug info
     func handleStockCountScan(_ rawValue: String) async {
+        // A barcode scanned while Edit Details is open must not land underneath it —
+        // close the edit sheet first so the fresh scan surfaces as the normal
+        // scanned-drug-details state instead of rendering behind/through the editor.
+        if showStockEditSheet {
+            showStockEditSheet = false
+        }
+
         // In open pill mode the barcode is used to identify which NDC is being counted.
         // Create/update the transaction with .opened status, then start pill counting.
         if isOpenPillScanMode {

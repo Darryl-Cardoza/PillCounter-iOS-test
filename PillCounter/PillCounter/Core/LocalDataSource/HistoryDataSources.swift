@@ -130,7 +130,12 @@ protocol BottleInfoDataSource: AnyObject {
     func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity?
     func sealedBottleQty(stockTxnId: Int64, lotNo: String?, expNo: String?) -> Int32
     @discardableResult
-    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?) -> BottleInfoEntity?
+    func addOpenedBottle(
+        stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
+        images: [BottleImageRecord]
+    ) -> BottleInfoEntity?
+    func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity?
+    func appendImages(bottleId: Int64, images: [BottleImageRecord])
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32)
     func fetchById(_ bottleId: Int64) -> BottleInfoEntity?
     func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity]

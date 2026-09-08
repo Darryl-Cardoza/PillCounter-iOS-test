@@ -53,6 +53,60 @@ class PillScanViewModel: ObservableObject {
     var pendingOpenBottleExpiry: String?
     var pendingOpenBottleSerial: String?
 
+    /// One captured snapshot from an open-pill Add tap — the single source of truth
+    /// for both the grid (`pendingOpenBottleImages`) and the controlled-drug DB
+    /// persistence payload (`pendingOpenBottleDbImages`), which used to be two
+    /// separately-mutated parallel arrays that had to be kept in lockstep by hand.
+    /// `id` is a monotonic per-session counter (`nextOpenBottleImageId`), not a
+    /// timestamp — two Add taps in the same millisecond must not collide.
+    struct OpenBottleImageRecord {
+        let id: Int64
+        let path: String
+        let pillCount: Int32
+        let capturedAt: Int64
+        let isControlled: Bool
+    }
+
+    /// Storage for `OpenBottleImageRecord`s captured this open-pill session. Purely
+    /// in-memory, never written to CoreData directly — released on Proceed or Back
+    /// (see `createOpenedBottleFromPendingScan` / UnifiedCameraView.handleBack).
+    /// Read through `pendingOpenBottleImages` (grid, all drug types) and
+    /// `pendingOpenBottleDbImages` (controlled-drug subset, persisted to
+    /// BottleInfoEntity.image_paths_json on Proceed) rather than directly.
+    @Published var openBottleImageRecords: [OpenBottleImageRecord] = []
+
+    /// Next id to hand out for an `OpenBottleImageRecord` — see its doc comment for
+    /// why this is a counter, not `Date().timeIntervalSince1970`.
+    private var nextOpenBottleImageId: Int64 = 1
+
+    /// Snapshot captured on every Add tap during an open-pill count, ANY drug type.
+    /// Feeds PillScanDetailGridScreen's grid for this count only.
+    var pendingOpenBottleImages: [PillScanDetailItem] {
+        openBottleImageRecords.map {
+            PillScanDetailItem(id: $0.id, imagePath: $0.path, pillCount: Int($0.pillCount), capturedAt: $0.capturedAt)
+        }
+    }
+
+    /// Snapshots (path + count) captured during an open-pill count of a controlled
+    /// drug (drug_type non-empty) only. Flushed into the BottleInfoEntity row's
+    /// image_paths_json on Proceed — see `createOpenedBottleFromPendingScan`.
+    var pendingOpenBottleDbImages: [BottleImageRecord] {
+        openBottleImageRecords
+            .filter { $0.isControlled }
+            .map { BottleImageRecord(path: $0.path, count: $0.pillCount) }
+    }
+
+    /// Appends one captured snapshot — the only way `openBottleImageRecords` grows.
+    /// Hands out this session's next monotonic id.
+    func appendOpenBottleImage(path: String, pillCount: Int, capturedAt: Int64, isControlled: Bool) {
+        let record = OpenBottleImageRecord(
+            id: nextOpenBottleImageId, path: path, pillCount: Int32(pillCount),
+            capturedAt: capturedAt, isControlled: isControlled
+        )
+        nextOpenBottleImageId += 1
+        openBottleImageRecords.append(record)
+    }
+
     /// Resolved NDC/drug/batch identity for an open-pill scan, held in memory only.
     /// No BatchCountEntity or StockTxnEntity is created until the count is confirmed
     /// (Proceed) — see `createOpenedBottleFromPendingScan`. This lets the header/UI
@@ -584,8 +638,44 @@ class PillScanViewModel: ObservableObject {
 
         getAllTransactionDetailsOfTheCurrentTransaction()
     }
-    
-    
+
+    /// Removes one captured image (by its `OpenBottleImageRecord.id`) from the
+    /// temporary open-pill session — a single removeAll on `openBottleImageRecords`
+    /// now keeps the grid and the controlled-drug DB payload in sync automatically,
+    /// since both are derived from it. Also subtracts that image's pillCount from
+    /// `addCurrentOpenPillCount`, which is the grid's displayed total and the
+    /// loose_qty saved on Proceed — otherwise a deleted image's pills would still
+    /// count toward the total and get persisted/sent over HL7.
+    func removePendingOpenBottleImage(id: Int64) {
+        guard let removed = openBottleImageRecords.first(where: { $0.id == id }) else { return }
+        openBottleImageRecords.removeAll { $0.id == id }
+        addCurrentOpenPillCount = max(0, addCurrentOpenPillCount - Int(removed.pillCount))
+        PhotoFileManager.shared.deleteImage(fileName: removed.path)
+    }
+
+    /// Deletes every on-disk file for a non-controlled record — those never get
+    /// written into a BottleInfoEntity row (`pendingOpenBottleDbImages` only carries
+    /// controlled ones), so they'd otherwise sit on disk forever. Call this right
+    /// before clearing `openBottleImageRecords` on Proceed SUCCESS specifically —
+    /// the controlled records were just persisted via `pendingOpenBottleDbImages`,
+    /// so they must be left alone here.
+    func deleteUnpersistedOpenBottleImages() {
+        for record in openBottleImageRecords where !record.isControlled {
+            PhotoFileManager.shared.deleteImage(fileName: record.path)
+        }
+    }
+
+    /// Deletes every on-disk file this open-pill session wrote — controlled and
+    /// non-controlled alike. Call this on Back: the session is abandoned entirely,
+    /// no BottleInfoEntity row was ever created, so nothing is persisted regardless
+    /// of `isControlled`.
+    func deleteAllOpenBottleImages() {
+        for record in openBottleImageRecords {
+            PhotoFileManager.shared.deleteImage(fileName: record.path)
+        }
+    }
+
+
     func deleteAllDetailsOfCurrentTransaction() {
         guard let txnId = currentTransaction?.txn_id else {
             return

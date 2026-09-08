@@ -25,9 +25,28 @@ struct PillScanDetailGridScreen: View {
 
     
     // MARK: - Derived data from ViewModel
-    private var details: [PillCountTransactionDetailsEntity] {
-        (pillScanViewModel.currentTransactionTransactionDetails ?? [])
+    //
+    // Open-pill counting has no PillCountTransactionEntity backing it (see
+    // PillScanViewModel+Stock.createOpenedBottleFromPendingScan) — while a count is in
+    // progress (pendingOpenBottleDrugId != nil) this screen reads the temporary,
+    // in-memory pendingOpenBottleImages instead of the CoreData-backed transaction
+    // details used by every other flow (FIXED/REGULAR dispense, controlled steps).
+    private var isOpenPillSession: Bool {
+        pillScanViewModel.pendingOpenBottleDrugId != nil
+    }
+
+    private var details: [PillScanDetailItem] {
+        if isOpenPillSession {
+            return pillScanViewModel.pendingOpenBottleImages
+        }
+        return (pillScanViewModel.currentTransactionTransactionDetails ?? [])
             .filter { !$0.is_deleted }
+            .map {
+                PillScanDetailItem(
+                    id: $0.txn_details_id, imagePath: $0.image_path,
+                    pillCount: Int($0.pill_count), capturedAt: $0.created_at
+                )
+            }
     }
 
     private var drugName: String {
@@ -35,11 +54,19 @@ struct PillScanDetailGridScreen: View {
     }
 
     private var pillCount: Int {
-        details.reduce(0) { $0 + Int($1.pill_count) }
+        if isOpenPillSession { return pillScanViewModel.addCurrentOpenPillCount }
+        return details.reduce(0) { $0 + $1.pillCount }
+    }
+
+    /// The containerPending special-case only applies to the FIXED-dispense flow's
+    /// CoreData-backed details — open-pill sessions have no such rows/steps.
+    private var rawTransactionDetails: [PillCountTransactionDetailsEntity] {
+        (pillScanViewModel.currentTransactionTransactionDetails ?? []).filter { !$0.is_deleted }
     }
 
     private var targetCount: Int {
-        if details.first?.type == ControlledStep.containerPending.rawValue,
+        if isOpenPillSession { return 0 }
+        if rawTransactionDetails.first?.type == ControlledStep.containerPending.rawValue,
            let txnId = pillScanViewModel.currentTransaction?.txn_id {
             let initiateCount = pillScanViewModel.transactionDetailDAO.totalCountForStep(
                 txnId: txnId,
@@ -71,7 +98,8 @@ struct PillScanDetailGridScreen: View {
                 onBack: { dismiss() },
             )
             .onAppear {
-                isFixed = (details.first?.type == ControlledStep.containerInitiate.rawValue)
+                isFixed = isOpenPillSession
+                    || (rawTransactionDetails.first?.type == ControlledStep.containerInitiate.rawValue)
             }
             // MARK: - Edit mode bottom bar
             if isEditing {
@@ -144,7 +172,7 @@ struct PillScanDetailGridScreen: View {
     @ViewBuilder
     private var headerActions: some View {
         if isEditing {
-            let allIds = Set(details.map { $0.txn_details_id })
+            let allIds = Set(details.map { $0.id })
             let allSelected = !allIds.isEmpty && selectedIds == allIds
 
             HStack(spacing: 10) {
@@ -235,17 +263,17 @@ struct PillScanDetailGridScreen: View {
                     columns: gridColumns,
                     spacing: 10
                 ) {
-                    ForEach(details, id: \.txn_details_id) { detail in
+                    ForEach(details, id: \.id) { detail in
                         PillScanDetailCard(
                             detail: detail,
                             isEditing: isEditing,
-                            isSelected: selectedIds.contains(detail.txn_details_id)
+                            isSelected: selectedIds.contains(detail.id)
                         )
                         .onTapGesture {
                             if isEditing {
-                                toggleSelection(detail.txn_details_id)
+                                toggleSelection(detail.id)
                             } else {
-                                if let path = detail.image_path,
+                                if let path = detail.imagePath,
                                    let uiImage = PhotoFileManager.shared.loadImage(from: path) {
                                     selectedUIImage = uiImage
                                 }
@@ -281,17 +309,17 @@ struct PillScanDetailGridScreen: View {
                         emptyState
                     } else {
                         LazyVGrid(columns: gridColumns, spacing: 10) {
-                            ForEach(details, id: \.txn_details_id) { detail in
+                            ForEach(details, id: \.id) { detail in
                                 PillScanDetailCard(
                                     detail: detail,
                                     isEditing: isEditing,
-                                    isSelected: selectedIds.contains(detail.txn_details_id)
+                                    isSelected: selectedIds.contains(detail.id)
                                 )
                                 .onTapGesture {
                                     if isEditing {
-                                        toggleSelection(detail.txn_details_id)
+                                        toggleSelection(detail.id)
                                     } else {
-                                        if let path = detail.image_path,
+                                        if let path = detail.imagePath,
                                            let uiImage = PhotoFileManager.shared.loadImage(from: path) {
                                             selectedUIImage = uiImage
                                         }
@@ -307,17 +335,17 @@ struct PillScanDetailGridScreen: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: 12) {
-                            ForEach(details, id: \.txn_details_id) { detail in
+                            ForEach(details, id: \.id) { detail in
                                 PillScanDetailCard(
                                     detail: detail,
                                     isEditing: isEditing,
-                                    isSelected: selectedIds.contains(detail.txn_details_id)
+                                    isSelected: selectedIds.contains(detail.id)
                                 )
                                 .onTapGesture {
                                     if isEditing {
-                                        toggleSelection(detail.txn_details_id)
+                                        toggleSelection(detail.id)
                                     } else {
-                                        if let path = detail.image_path,
+                                        if let path = detail.imagePath,
                                            let uiImage = PhotoFileManager.shared.loadImage(from: path) {
                                             selectedUIImage = uiImage
                                         }
@@ -512,7 +540,7 @@ struct PillScanDetailGridScreen: View {
     }
 
     private func toggleAll() {
-        let allIds = Set(details.map { $0.txn_details_id })
+        let allIds = Set(details.map { $0.id })
         if selectedIds == allIds {
             selectedIds.removeAll()
         } else {
@@ -522,10 +550,14 @@ struct PillScanDetailGridScreen: View {
 
     private func performDelete() {
         for id in selectedIds {
-            pillScanViewModel
-                .softDeleteCurrentTransactionSelectedTransactionDetail(
-                    txnDetailId: id
-                )
+            if isOpenPillSession {
+                pillScanViewModel.removePendingOpenBottleImage(id: id)
+            } else {
+                pillScanViewModel
+                    .softDeleteCurrentTransactionSelectedTransactionDetail(
+                        txnDetailId: id
+                    )
+            }
         }
         withAnimation {
             isEditing = false

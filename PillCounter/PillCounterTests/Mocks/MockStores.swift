@@ -233,7 +233,9 @@ final class MockBottleInfoDataSource: BottleInfoDataSource {
         let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
         return fetchByStockTxn(stockTxnId: stockTxnId).first { $0.isSealed && $0.sealedLotKey == targetKey }?.bottle_qty ?? 0
     }
-    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?) -> BottleInfoEntity? { nil }
+    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?, images: [BottleImageRecord]) -> BottleInfoEntity? { nil }
+    func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? { nil }
+    func appendImages(bottleId: Int64, images: [BottleImageRecord]) {}
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32) {}
     func fetchById(_ bottleId: Int64) -> BottleInfoEntity? { nil }
     func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity] { [] }

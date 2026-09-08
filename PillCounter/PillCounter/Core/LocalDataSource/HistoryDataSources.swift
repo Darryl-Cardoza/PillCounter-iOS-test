@@ -83,6 +83,7 @@ protocol TransactionDataSource: AnyObject {
     func updateNote(txnId: Int64, note: String)
     func updateTargetCount(txnId: Int64, targetCount: Int32)
     func updateWorkflowStep(txnId: Int64, step: ControlledStep)
+    func clearWorkflowStep(txnId: Int64)
     func updateGlovesDetected(txnId: Int64, detected: Bool)
     func updateHazardousTrayDetected(txnId: Int64, detected: Bool)
     func updateNdcVerified(txnId: Int64, verified: Bool)
@@ -157,6 +158,8 @@ protocol TransactionDetailDataSource: AnyObject {
     func softDeleteForStep(txnId: Int64, step: ControlledStep)
     func update(detailId: Int64, block: (PillCountTransactionDetailsEntity) -> Void)
     func sumPillCount(detailIds: [Int64]) -> Int
+    @discardableResult
+    func hardDeleteAll(txnId: Int64) -> (success: Bool, imagePaths: [String])
 }
 
 // MARK: - Drug-catalog store seam

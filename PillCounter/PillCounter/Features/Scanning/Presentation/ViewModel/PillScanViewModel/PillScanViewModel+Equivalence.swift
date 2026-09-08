@@ -52,10 +52,12 @@ extension PillScanViewModel {
             scannedNdc: scannedNdc
         )
 
-        Task {
+        ndcCheckTask = Task {
             do {
                 let response = try await controlledRepo
                     .getControlledDrugInfo(ndcValidationRequest: request)
+
+                guard !Task.isCancelled else { return }
 
                 ndcComparisonResponse = response
 
@@ -83,11 +85,13 @@ extension PillScanViewModel {
 
             } catch {
                 print("API Faield with error: \(error)")
+                guard !Task.isCancelled else { return }
                 isNdcEquivalent = false
                 showToastMessage(text: L10n.BarcodeScan.ndcDoesNotMatch)
                 ndcMismatchRestartFlow = true
             }
 
+            guard !Task.isCancelled else { return }
             isCheckingNdc = false
         }
     }

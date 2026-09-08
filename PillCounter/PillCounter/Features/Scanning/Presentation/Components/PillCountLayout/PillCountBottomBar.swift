@@ -36,10 +36,15 @@ struct PillCountBottomBar: View {
     /// only "View all counts" and the steps row are meaningful; progress bar,
     /// live count and Proceed are hidden.
     var hidesCountUI: Bool = false
+    /// Whether the reset icon is tappable — false once the transaction is completed.
+    var isResetEnabled: Bool = true
 
     let onShowDetailGrid: () -> Void
     /// Finish the open-ended parent pour. Only used when `isOpenEndedCountStep`.
     var onDone: () -> Void = {}
+    /// Reset the current transaction — hard-deletes its counts/images and
+    /// restarts it from the scan step.
+    var onReset: () -> Void = {}
 
     /// iPhone in portrait — needs extra vertical padding so the bar isn't too thin.
     private var isPortrait: Bool { !isLandscape }
@@ -61,16 +66,26 @@ struct PillCountBottomBar: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: isIpad ? 24 : 12) {
+            // Reset the current transaction — hard-deletes its counts/images
+            // and restarts it from the scan step.
+            Button(action: onReset) {
+                Image("icon_reset")
+                    .renderingMode(.template)
+                    .font(.system(size: isIpad ? 14 : 11, weight: .semibold))
+                    .foregroundStyle(isResetEnabled ? appColors.primary : Color.gray)
+            }
+            .disabled(!isResetEnabled)
+
             // "View all counts" — opens the full detail grid overlay. Hidden on the
             // vial/scan bar (hidesCountUI) — there's no per-drug detail grid yet.
             if !hidesCountUI {
                 Button(action: onShowDetailGrid) {
                     HStack(spacing: 8) {
                         Text(L10n.PillScan.viewAllCounts)
-                            .font(.system(size: isIpad ? 16 : 13, weight: .semibold))
+                            .font(.system(size: isIpad ? 18 : 13, weight: .semibold))
                             .foregroundStyle(appColors.primary)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: isIpad ? 14 : 11, weight: .semibold))
+                            .font(.system(size: isIpad ? 16 : 11, weight: .semibold))
                             .foregroundStyle(appColors.primary)
                     }
                 }

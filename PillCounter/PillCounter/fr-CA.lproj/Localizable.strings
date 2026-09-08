@@ -142,6 +142,7 @@
 "barcodeScan.copy" = "Copier";
 "barcodeScan.rescanRequired" = "Nouveau scan requis";
 "barcodeScan.ndcDoesNotMatch" = "Le NDC scanné ne correspond pas";
+"barcodeScan.resetTransactionFailed" = "Échec de la réinitialisation. Veuillez réessayer.";
 "barcodeScan.substitute" = "Substituer";
 "barcodeScan.rescan" = "Scanner à nouveau";
 "barcodeScan.qrScannedSuccessfully" = "Vérifier les détails du flacon de stock";

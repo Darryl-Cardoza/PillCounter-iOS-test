@@ -17,17 +17,32 @@ struct VialBottomContentView: View {
     
     // MARK: - Common Size Variables
     private var isIPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-    private var iconSize: CGFloat { isIPad ? 32 : 40 }
+    private var iconSize: CGFloat { isIPad ? 44 : 40 }
     private var captureButtonSize: CGFloat { isIPad ? 100 : 70 }
     private var captureIconSize: CGFloat { isIPad ? 42 : 28 }
     private var captureIconWeight: Font.Weight { .medium }
     private var labelFont: Font { isIPad ? .title3 : .caption }
-    private var layoutSpacing: CGFloat { isIPad ? 120 : (isLandscape ? 70 : 90) }
+    private var layoutSpacing: CGFloat { isIPad ? 100 : (isLandscape ? 70 : 90) }
 
     var body: some View {
-        // Redo / capture / done always sit in a horizontal row — at the bottom in
-        // both orientations (landscape previously stacked them into a centered column).
-        HStack(spacing: layoutSpacing) {
+        // Portrait: horizontal row at the bottom. Landscape: vertical column
+        // pinned to the trailing (right) edge, same redo/capture/done order.
+        Group {
+            if isLandscape {
+                VStack(spacing: layoutSpacing) { controlItems }
+            } else {
+                HStack(spacing: layoutSpacing) { controlItems }
+            }
+        }
+        .padding(24)
+        .background(Color.black.opacity(0))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(16)
+    }
+
+    @ViewBuilder
+    private var controlItems: some View {
+        Group {
             VStack(spacing: 10) {
                 Image("redo_icon")
                     .renderingMode(.template)
@@ -55,7 +70,7 @@ struct VialBottomContentView: View {
 
             ZStack {
                 Circle()
-                    .fill(appColors.primary)
+                    .fill(isCaptured ? appColors.primaryBackground : appColors.primary)
                     .frame(width: captureButtonSize, height: captureButtonSize)
                 Image(systemName: "camera")
                     .font(.system(size: captureIconSize, weight: captureIconWeight))
@@ -79,11 +94,6 @@ struct VialBottomContentView: View {
                 doneVial()
             }
         }
-        .padding(24)
-        // Same translucent dark backdrop as the top / bottom bars.
-        .background(Color.black.opacity(0.45))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(16)
     }
 
     private func captureVial() {

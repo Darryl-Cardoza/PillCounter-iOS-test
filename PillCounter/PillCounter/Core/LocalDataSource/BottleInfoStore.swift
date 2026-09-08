@@ -151,7 +151,10 @@ final class BottleInfoStore {
         entity.bottle_id = generateUniqueId()
         entity.stock_txn_id = stockTxnId
         entity.batch_id = stockTxn.batch_id
-        entity.bottle_qty = 1
+        // An opened row is not a bottle count — 0 keeps isSealed's
+        // (bottle_qty > 0 && loose_qty == 0) heuristic correct even when
+        // looseQty is 0 (bottle opened, counted empty).
+        entity.bottle_qty = 0
         entity.loose_qty = looseQty
         entity.lot_no = lotNo
         entity.exp_no = expNo

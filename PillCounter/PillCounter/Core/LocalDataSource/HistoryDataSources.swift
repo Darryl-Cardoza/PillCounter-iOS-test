@@ -251,19 +251,6 @@ extension TransactionDetailDataSource {
     }
 }
 
-extension BottleInfoDataSource {
-    @discardableResult
-    func addOpenedBottle(
-        stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
-        images: [BottleImageRecord] = []
-    ) -> BottleInfoEntity? {
-        addOpenedBottle(
-            stockTxnId: stockTxnId, looseQty: looseQty, lotNo: lotNo, expNo: expNo, serialNo: serialNo,
-            images: images
-        )
-    }
-}
-
 extension DrugCatalogDataSource {
     func saveManual(
         ndc: String, gtin: String = "", drugId: Int64, drugName: String,

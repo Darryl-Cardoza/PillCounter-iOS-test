@@ -48,7 +48,8 @@ extension PillScanViewModel {
                     looseQty: 0,
                     lotNo: decoded.lotNumber,
                     expNo: expiryString,
-                    serialNo: decoded.serialNumber
+                    serialNo: decoded.serialNumber,
+                    images: []
                 )
             }
 
@@ -150,7 +151,8 @@ extension PillScanViewModel {
                 looseQty: 0,
                 lotNo: decoded.lotNumber,
                 expNo: expiryString,
-                serialNo: decoded.serialNumber
+                serialNo: decoded.serialNumber,
+                images: []
             )
         }
 
@@ -296,13 +298,18 @@ extension PillScanViewModel {
         }
         self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
 
+        // Non-controlled-drug snapshots never get referenced by the BottleInfoEntity
+        // row above (only the controlled ones were just persisted via
+        // pendingOpenBottleDbImages) — delete their files before the records are
+        // cleared, or they sit on disk forever.
+        deleteUnpersistedOpenBottleImages()
+
         pendingOpenBottleLot = nil
         pendingOpenBottleExpiry = nil
         pendingOpenBottleSerial = nil
         pendingOpenBottleDrug = nil
         pendingOpenBottleDrugId = nil
-        pendingOpenBottleDbImages = []
-        pendingOpenBottleImages = []
+        openBottleImageRecords = []
     }
 
     func formatExpiry(_ date: Date?) -> String? {
@@ -346,7 +353,8 @@ extension PillScanViewModel {
                 looseQty: Int32(scannedQty),
                 lotNo: lotNo,
                 expNo: expNo,
-                serialNo: nil
+                serialNo: nil,
+                images: []
             )
             handlePostScanUI(containerStatus: containerStatus)
         }

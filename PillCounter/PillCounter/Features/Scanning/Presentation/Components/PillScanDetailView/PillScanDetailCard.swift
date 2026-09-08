@@ -7,8 +7,12 @@
 import SwiftUI
 
 // MARK: - Data Model
+/// One grid card. `id` is stable and unique within this list but its source varies
+/// by flow: the CoreData-backed txn_details_id for dispense, or
+/// PillScanViewModel.OpenBottleImageRecord.id (a monotonic per-session counter,
+/// not a timestamp) for an open-pill count — see PillScanDetailGridScreen.details.
 struct PillScanDetailItem: Identifiable {
-    let id: Int64          // txn_details_id
+    let id: Int64
     let imagePath: String?
     let pillCount: Int
     let capturedAt: Int64  // timestamp ms

@@ -1184,17 +1184,17 @@ extension UnifiedCameraView {
     }
 
     /// Operator name for a captured image's metadata overlay — dispense (handleAdd) and
-    /// open-pill (captureOpenBottleImage) both use this, same precedence
-    /// HL7MessageBuilder uses for the inventory response's OPERATOR_NAME OBX: whoever
-    /// last authenticated via face scan (the physical operator right now) takes
-    /// priority; falls back to the logged-in account's name when no face session is
-    /// active. Not `currentTransaction?.user` — that reflects whoever the count was
-    /// originally assigned to, not who's actually standing at the camera right now.
+    /// open-pill (captureOpenBottleImage) both use this, same OperatorName.current
+    /// HL7MessageBuilder uses for the inventory response's OPERATOR_NAME OBX. Reads
+    /// userProfileDetails directly rather than the cached userViewModel.fullName —
+    /// the two can go stale relative to each other. Not `currentTransaction?.user` —
+    /// that reflects whoever the count was originally assigned to, not who's actually
+    /// standing at the camera right now.
     func currentOperatorName() -> String {
-        let accountName = userViewModel.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let faceSessionName = AppStorageManager.shared.faceLockCurrentUserName?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (faceSessionName?.isEmpty == false) ? faceSessionName! : accountName
+        OperatorName.current(
+            fname: userViewModel.userProfileDetails?.fname,
+            lname: userViewModel.userProfileDetails?.lname
+        )
     }
 
     func handleAdd() {
@@ -1230,8 +1230,12 @@ extension UnifiedCameraView {
             showSuccessAnimation = false
         }
 
+        // Open-pill mode has no currentTransaction, so addTransactionDetailToCurrentTransaction
+        // below is a no-op there regardless of imagePath — capturing/saving a snapshot for it
+        // would just orphan a JPEG on disk with no row ever pointing at it. captureOpenBottleImage()
+        // is the only snapshot this mode needs (feeds pendingOpenBottleImages / …DbImages).
         var savedPath: String? = nil
-        if let rawImage = cameraService.captureSnapshotWithOverlays() {
+        if !isOpenPillScanMode, let rawImage = cameraService.captureSnapshotWithOverlays() {
             let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
             guard let processed = rawImage.compressedGrayscale(maxWidth: 1080, quality: 1.0) else { return }
             guard let data = processed.jpegData(compressionQuality: 0.5) else { return }
@@ -1269,10 +1273,9 @@ extension UnifiedCameraView {
     }
 
     /// Open-pill counting, any drug type: capture and save a snapshot for this Add tap
-    /// off the main thread. Always feeds the temporary in-memory grid (`pendingOpenBottleImages`
-    /// — released on Proceed/Back, never persisted to CoreData). When the drug is
-    /// controlled, the same path+count is also appended to `pendingOpenBottleDbImages`,
-    /// which IS persisted (BottleInfoEntity.image_paths_json on Proceed).
+    /// off the main thread, then record it via `appendOpenBottleImage` — the single
+    /// source both the grid (`pendingOpenBottleImages`) and, for controlled drugs,
+    /// the DB persistence payload (`pendingOpenBottleDbImages`) are derived from.
     private func captureOpenBottleImage() {
         guard let rawImage = cameraService.captureSnapshotWithOverlays() else { return }
 
@@ -1306,16 +1309,9 @@ extension UnifiedCameraView {
             guard let savedPath = PhotoFileManager.shared.saveImage(finalImage) else { return }
 
             DispatchQueue.main.async {
-                pillScanViewModel?.pendingOpenBottleImages.append(
-                    PillScanDetailItem(
-                        id: Int64(timestamp), imagePath: savedPath, pillCount: stableCount, capturedAt: timestamp
-                    )
+                pillScanViewModel?.appendOpenBottleImage(
+                    path: savedPath, pillCount: stableCount, capturedAt: timestamp, isControlled: isControlled
                 )
-                if isControlled {
-                    pillScanViewModel?.pendingOpenBottleDbImages.append(
-                        BottleImageRecord(path: savedPath, count: Int32(stableCount))
-                    )
-                }
             }
         }
     }
@@ -1715,8 +1711,12 @@ extension UnifiedCameraView {
             pillScanViewModel.pendingOpenBottleSerial = nil
             pillScanViewModel.pendingOpenBottleDrug = nil
             pillScanViewModel.pendingOpenBottleDrugId = nil
-            pillScanViewModel.pendingOpenBottleDbImages = []
-            pillScanViewModel.pendingOpenBottleImages = []
+            // Session abandoned — no BottleInfoEntity row was ever created, so every
+            // snapshot captureOpenBottleImage() wrote this session is orphaned
+            // (controlled and non-controlled alike). Delete before clearing, or they
+            // sit on disk forever.
+            pillScanViewModel.deleteAllOpenBottleImages()
+            pillScanViewModel.openBottleImageRecords = []
             pillScanViewModel.currentTransaction = nil
             pillScanViewModel.currentStockTxn = nil
             pillScanViewModel.addCurrentOpenPillCount = 0

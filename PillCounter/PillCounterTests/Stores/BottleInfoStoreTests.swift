@@ -179,4 +179,34 @@ struct BottleInfoStoreTests {
         let notFound = BottleInfoStore.shared.fetchOpenedRow(stockTxnId: stockTxn.stock_txn_id, lotNo: "LOT-B", expNo: "2027-01")
         #expect(notFound == nil)
     }
+
+    /// An opened row counted to exactly 0 loose pills must still be found by
+    /// fetchOpenedRow — isSealed must not mistake it for a sealed row (bottle_qty=0
+    /// on opened rows keeps it out of the sealed bucket regardless of loose_qty).
+    /// A second Add tap on the same lot/exp must merge into that same row, not
+    /// create a duplicate.
+    @Test func fetchOpenedRowFindsZeroLooseQtyOpenedRowAndMergesRepeatedAdds() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch()
+        let stockTxn = fixture.makeStockTxn(batch: batch)
+
+        let opened = BottleInfoStore.shared.addOpenedBottle(
+            stockTxnId: stockTxn.stock_txn_id, looseQty: 0, lotNo: "LOT-A", expNo: "2027-01",
+            serialNo: nil, images: []
+        )
+        defer { if let opened { BottleInfoStore.shared.softDelete(bottleId: opened.bottle_id) } }
+        guard let opened else { Issue.record("expected opened bottle"); return }
+
+        #expect(opened.isSealed == false)
+
+        let found = BottleInfoStore.shared.fetchOpenedRow(stockTxnId: stockTxn.stock_txn_id, lotNo: "LOT-A", expNo: "2027-01")
+        #expect(found?.bottle_id == opened.bottle_id)
+
+        BottleInfoStore.shared.updateOpenedBottleLooseQty(bottleId: opened.bottle_id, looseQty: 3)
+
+        let rows = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+        #expect(rows.count == 1)
+        #expect(rows.first?.loose_qty == 3)
+    }
 }

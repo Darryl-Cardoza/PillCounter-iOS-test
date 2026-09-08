@@ -267,33 +267,28 @@ struct UnifiedCameraView: View {
             .overlay {
                 // Hidden while the inactivity "Resume" overlay (in UnifiedCameraLayout,
                 // the layer below) is up — so Resume stays the topmost, tappable control.
-                if showPillCountPanel && !cameraService.isPausedDueToInactivity {
-                    Group {
-                        if pillScanViewModel.currentControlledStep == .vial {
-                            VStack {
-                                Spacer()
-                                vialControlBottomView
-                                    .padding(.bottom, UIDevice.current.userInterfaceIdiom == .pad ? 24 : 14)
-                            }
-                        } else {
-                            PillCountLayout(
-                                pillScanViewModel: pillScanViewModel,
-                                cameraService: cameraService,
-                                isDispense: router.selectedPillScanningIsDispense ?? true,
-                                isLandscape: isLandscape,
-                                isAddDisabled: isAddDisabled,
-                                instructionText: overlayInstructionText,
-                                showGloveIndicator: (currentScanType != .stockCount || isOpenPillScanMode)
-                                    && cameraService.isGloveDetectionEnabled,
-                                isOpenPillScanMode: isOpenPillScanMode,
-                                onBack: { handleBack() },
-                                onAdd: { handleAdd() },
-                                onAllDone: { handleComplete() },
-                                onShowDetailGrid: { showDetailGrid = true },
-                                onReset: { showResetTransactionPopup = true }
-                            )
-                        }
-                    }
+                // PillCountLayout handles .vial and .scan internally (bottom bar only,
+                // no ring/top bar content that needs real drug/count data) — no
+                // separate branch needed here for either.
+                if (showPillCountPanel || pillScanViewModel.currentControlledStep == .scan)
+                    && !cameraService.isPausedDueToInactivity {
+                    PillCountLayout(
+                        pillScanViewModel: pillScanViewModel,
+                        cameraService: cameraService,
+                        isDispense: router.selectedPillScanningIsDispense ?? true,
+                        isLandscape: isLandscape,
+                        isAddDisabled: isAddDisabled,
+                        instructionText: overlayInstructionText,
+                        showGloveIndicator: (currentScanType != .stockCount || isOpenPillScanMode)
+                            && cameraService.isGloveDetectionEnabled,
+                        isOpenPillScanMode: isOpenPillScanMode,
+                        isRxLabelScan: scanType == .rx_label,
+                        onBack: { handleBack() },
+                        onAdd: { handleAdd() },
+                        onAllDone: { handleComplete() },
+                        onShowDetailGrid: { showDetailGrid = true },
+                        onReset: { showResetTransactionPopup = true }
+                    )
                     .environmentObject(darkAppColors)
                     .ignoresSafeArea()
                 }
@@ -545,6 +540,7 @@ struct UnifiedCameraView: View {
             isLandscape: isLandscape,
             instructionText: overlayInstructionText,
             showPillDetectionUI: currentScanType != .stockCount || isOpenPillScanMode,
+            scanType: scanType,
             onBack: { handleBack() },
             onResume: {
                 cameraService.resumeIfPaused()
@@ -706,11 +702,6 @@ struct UnifiedCameraView: View {
 //        )
 //    }
 
-    private var vialControlBottomView: some View {
-        VialBottomContentView()
-            .environmentObject(cameraService)
-            .environmentObject(darkAppColors)
-    }
 }
 
 // MARK: - Lifecycle

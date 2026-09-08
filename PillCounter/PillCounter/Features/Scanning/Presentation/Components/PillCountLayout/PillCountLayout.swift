@@ -29,6 +29,11 @@ struct PillCountLayout: View {
     /// True when the user is counting open/loose pills — overrides the targetVerification
     /// tooltip and voice label from "Count Prescribed Quantity" to "Count Open Pills".
     let isOpenPillScanMode: Bool
+    /// True while scanning the RX label barcode (ScanType.rx_label) — the .scan step's
+    /// top and bottom bars are both suppressed here since there's nothing step-relevant
+    /// to show yet (unlike scanning the container/stock barcode, where the steps row
+    /// is useful).
+    let isRxLabelScan: Bool
 
     let onBack: () -> Void
     let onAdd: () -> Void
@@ -69,6 +74,66 @@ struct PillCountLayout: View {
 
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
+    /// Vial step — swaps the movable count ring for the redo/capture/done controls
+    /// and suppresses the count/target parts of the bottom bar (view via `hidesCountUI`
+    /// on `PillCountBottomBar`).
+    private var isVialStep: Bool { pillScanViewModel.currentControlledStep == .vial }
+
+    /// Raw barcode-scan phase (before RX resolves) — no drug is known yet, so the
+    /// top bar (drug name / NDC / etc.) is also suppressed, unlike vial.
+    private var isScanStep: Bool { pillScanViewModel.currentControlledStep == .scan }
+
+    /// Steps with no drug/target/count data yet — vial (capture only) and the raw
+    /// barcode-scan phase (before RX resolves). Both suppress the count ring and
+    /// show only the bottom bar's steps row (via `hidesCountUI` on `PillCountBottomBar`).
+    private var isBarOnlyStep: Bool { isVialStep || isScanStep }
+
+    /// The effectively-current transaction. During `.scan`, `currentTransaction`
+    /// is often still nil: the RX-label decode path hasn't assigned it yet (falls
+    /// back to `fetchedRxTransaction`, populated at decode time), and the
+    /// dashboard-tap path (.barcode/.resumeCount scanType) never assigns it until
+    /// a barcode is matched either — that path already fetched the txn into
+    /// `selectedTransaction` (see `startDispenseCount`). Single source so
+    /// `activeSteps`, `topBarDrug`, and the top bar's bucket_id all resolve the
+    /// same transaction instead of each re-deriving this fallback chain.
+    private var resolvedTransaction: PillCountTransactionEntity? {
+        pillScanViewModel.currentTransaction
+            ?? pillScanViewModel.fetchedRxTransaction
+            ?? pillScanViewModel.selectedTransaction
+    }
+
+    /// `.scan` with no transaction resolvable anywhere yet (fresh `.barcode`/
+    /// `.stockCount` scan, nothing selected) — nothing real to show, so bars are
+    /// suppressed instead of showing the resolver's fabricated placeholder steps.
+    /// Open-pill scan mode included: its `.scan` step is always pre-barcode (drug
+    /// found flips the step straight to `.targetVerification` — see
+    /// `handleDrugFoundState`), so there's never a drug to show in the top bar here.
+    private var isUnresolvedScan: Bool {
+        isScanStep && resolvedTransaction == nil
+    }
+
+    /// Suppresses both PillCountTopBar and PillCountBottomBar during `.scan` when
+    /// there's nothing real to show them: scanning the RX label itself (that scan
+    /// IS what resolves the transaction — the legacy header in UnifiedCameraLayout
+    /// covers this screen instead), or no transaction resolved at all yet (fresh
+    /// .barcode/.stockCount scan).
+    private var hidesTopAndBottomBars: Bool { isScanStep && (isRxLabelScan || isUnresolvedScan) }
+
+    /// Steps row source — same computation everywhere so `.scan` shows the same
+    /// drug-specific steps that show once the transaction resolves, instead of a
+    /// separate/duplicated fetch.
+    private var activeSteps: [ControlledStep] {
+        if isOpenPillScanMode {
+            return [.scan, .targetVerification]
+        }
+        return PillCountingStepResolver.getActiveSteps(txn: resolvedTransaction)
+    }
+
+    /// Top bar drug info source. Same nil-window as `activeSteps` — see its comment.
+    private var topBarDrug: DrugMasterEntity? {
+        pillScanViewModel.currentDrug ?? resolvedTransaction?.drug
+    }
+
     /// Any device in portrait — the steps row is lifted out of the bottom bar
     /// (the bottom bar can't fit everything in one line in portrait) and shown
     /// above it. Applies to both iPhone and iPad portrait.
@@ -78,9 +143,9 @@ struct PillCountLayout: View {
 
     /// Target for the current step (0 when there is no meaningful target, e.g. REGULAR).
     private var targetCount: Int {
-        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false {
+        if isOpenPillScanMode || resolvedTransaction?.is_dispense == false {
             return 0
-        } else if pillScanViewModel.currentTransaction?.is_from_pms == true {
+        } else if resolvedTransaction?.is_from_pms == true {
             return pillScanViewModel.currentControlledTargetCount ?? 0
         } else {
             return pillScanViewModel.currentControlledTargetCount ?? 0
@@ -89,9 +154,9 @@ struct PillCountLayout: View {
 
     /// Total committed count for the current transaction / step.
     private var currentTotalCount: Int {
-        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false {
+        if isOpenPillScanMode || resolvedTransaction?.is_dispense == false {
             return pillScanViewModel.addCurrentOpenPillCount
-        } else if pillScanViewModel.currentTransaction?.is_from_pms == true {
+        } else if resolvedTransaction?.is_from_pms == true {
             return Int(pillScanViewModel.getTotalCuntForCurrentStep())
         } else {
             return pillScanViewModel.getTotalPillCountOfCurrentTransaction()
@@ -104,7 +169,7 @@ struct PillCountLayout: View {
     }
 
     private var isFixed: Bool {
-        pillScanViewModel.currentTransaction?.is_dispense == true
+        resolvedTransaction?.is_dispense == true
     }
 
     /// Open-ended parent pour — no target; the bar shows the live count and an
@@ -120,27 +185,47 @@ struct PillCountLayout: View {
     }
 
     var body: some View {
+        // Computed once per body pass — PillCountingStepResolver.getActiveSteps
+        // does a real Core Data fetch, and both the lifted-out StepProgressRow
+        // (portrait) and PillCountBottomBar below read the same steps list.
+        let activeSteps = activeSteps
         ZStack {
-            // ── Movable / clickable count ring (the ring itself is the Add target) ──
-            MovablePillCountRing(
-                count: cameraService.stableCount,
-                isTargetReached: isTargetReached,
-                isAddDisabled: isAddDisabled,
-                isLandscape: isLandscape,
-                onAdd: onAdd,
-                onAllDone: onAllDone
-            )
-            .zIndex(10000)
+            if isVialStep {
+                // ── Vial capture controls, trailing edge, landscape only. In
+                // portrait they're stacked directly above the bottom bar below
+                // (single VStack, so they can't overlap it). ──
+                if isLandscape {
+                    HStack {
+                        Spacer()
+                        vialControlBottomView
+                            .padding(.trailing, isIpad ? 24 : 14)
+                    }
+                }
+            } else if !isBarOnlyStep {
+                // ── Movable / clickable count ring (the ring itself is the Add target) ──
+                MovablePillCountRing(
+                    count: cameraService.stableCount,
+                    isTargetReached: isTargetReached,
+                    isAddDisabled: isAddDisabled,
+                    isLandscape: isLandscape,
+                    onAdd: onAdd,
+                    onAllDone: onAllDone
+                )
+                .zIndex(10000)
+            }
 
             // ── Top + bottom bars ──────────────────────────────────────────
             VStack(spacing: 0) {
+                // Shown for every step except the RX-label scan itself, which has
+                // no confirmed drug yet — the legacy header there covers it instead.
+                if !hidesTopAndBottomBars {
                 PillCountTopBar(
-                    ndc: pillScanViewModel.currentDrug?.ndc ?? "-",
-                    drugName: pillScanViewModel.currentDrug?.drug_name ?? "-",
-                    drugImagePath: pillScanViewModel.currentDrug?.drug_image,
-                    form: pillScanViewModel.currentDrug?.dosage_form ?? "-",
-                    strength: pillScanViewModel.currentDrug?.strength ?? "-",
-                    bucket: pillScanViewModel.currentTransaction?.bucket_id
+                    ndc: topBarDrug?.ndc ?? "-",
+                    drugName: topBarDrug?.drug_name ?? "-",
+                    drugImagePath: topBarDrug?.drug_image,
+                    form: topBarDrug?.dosage_form ?? "-",
+                    strength: topBarDrug?.strength ?? "-",
+                    bucket: resolvedTransaction?.bucket_id
                         ?? pillScanViewModel.currentStockTxn?.bucket_id ?? "NORMAL",
                     instructionText: instructionText,
                     isLandscape: isLandscape,
@@ -149,37 +234,49 @@ struct PillCountLayout: View {
                     showGloveIndicator: showGloveIndicator,
                     onBack: onBack
                 )
+                }
 
                 Spacer()
 
                 // In portrait (iPhone or iPad) the steps row is lifted out of the
                 // bottom bar (which can't fit everything in a single line) and
                 // shown above it.
-                if isPortrait {
+                if isPortrait && !isBarOnlyStep {
                     StepProgressRow(
-                        activeSteps: isOpenPillScanMode ? [.scan, .targetVerification] : PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
+                        activeSteps: activeSteps,
                         currentStep: pillScanViewModel.currentControlledStep,
                         onTapStep: { handleStepTap($0) }
                     )
                 }
 
+                // Vial controls stacked directly above the bar in portrait — same
+                // VStack as the bar below, so Spacer-driven bottom pinning can't
+                // make them overlap.
+                if isVialStep && isPortrait {
+                    vialControlBottomView
+                        .padding(.bottom, isIpad ? 24 : 14)
+                }
+
+                if !hidesTopAndBottomBars {
                 PillCountBottomBar(
-                    activeSteps: isOpenPillScanMode ? [.scan, .targetVerification] : PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction),
+                    activeSteps: activeSteps,
                     currentStep: pillScanViewModel.currentControlledStep,
                     currentTotalCount: currentTotalCount,
                     targetCount: targetCount,
                     isIpad: isIpad,
                     isLandscape: isLandscape,
-                    showSteps: !isPortrait,
+                    showSteps: !isPortrait || isBarOnlyStep,
                     onTapStep: { handleStepTap($0) },
                     isOpenEndedCountStep: isOpenEndedStep,
-                    isRegularCountType: isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false,
+                    isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,
                     isDoneEnabled: isDoneEnabled,
+                    hidesCountUI: isBarOnlyStep,
                     isResetEnabled: isOpenPillScanMode || pillScanViewModel.canResetCurrentTransaction,
                     onShowDetailGrid: onShowDetailGrid,
                     onDone: onAllDone,
                     onReset: onReset
                 )
+                }
             }
         }
         // Float the instruction tooltip above the tapped (or current) step icon,
@@ -216,6 +313,15 @@ struct PillCountLayout: View {
         }
         .onAppear { presentTooltip(for: pillScanViewModel.currentControlledStep) }
         .onChange(of: pillScanViewModel.currentControlledStep) { _, step in presentTooltip(for: step) }
+    }
+
+    /// Redo / capture / done controls for the vial step. `VialBottomContentView`
+    /// reads `pillScanViewModel` / `cameraService` as environment objects, so both
+    /// are injected here even though this view already holds them as plain lets.
+    private var vialControlBottomView: some View {
+        VialBottomContentView()
+            .environmentObject(pillScanViewModel)
+            .environmentObject(cameraService)
     }
 }
 

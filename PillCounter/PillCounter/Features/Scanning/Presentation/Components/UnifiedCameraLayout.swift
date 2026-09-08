@@ -25,6 +25,10 @@ struct UnifiedCameraLayout: View {
     let isLandscape: Bool
     let instructionText: String
     let showPillDetectionUI: Bool
+    /// Which barcode is currently being scanned — the legacy header row is only
+    /// relevant while scanning the RX label itself (.rx_label); other scan types
+    /// (.barcode, .stockCount, .resumeCount) rely on PillCountLayout's own bar.
+    let scanType: ScanType
     let onBack: () -> Void
     let onResume: () -> Void
 
@@ -109,10 +113,18 @@ struct UnifiedCameraLayout: View {
             }
 
             // ── Header row ────────────────────────────────────────────────────
-            // Hidden while the new pill-count layout is active (non-vial) — its top
-            // bar hosts the back button / instruction / glove / drug info instead.
-            // The vial step still uses this header (its overlay is bottom-only).
-            if !(showPillCountPanel && pillScanViewModel.currentControlledStep != .vial) {
+            // Hidden while the new pill-count layout is active — PillCountLayout's
+            // own top bar (back button / instruction / glove / drug info) covers
+            // every step now, vial included. Also hidden for .scan — PillCountLayout
+            // now renders there too (bottom bar only, no top bar), so this legacy
+            // header would just duplicate/collide with it. Exception: .stockCount's
+            // .scan step never resolves a transaction (no drug known yet), so
+            // PillCountLayout suppresses its top bar there too — without this
+            // legacy header the operator would have no back button at all.
+            if !showPillCountPanel
+                && (pillScanViewModel.currentControlledStep != .scan
+                    || scanType == .rx_label
+                    || scanType == .stockCount) {
             VStack {
                 ZStack {
                     // ── Portrait: instruction centered independently ──

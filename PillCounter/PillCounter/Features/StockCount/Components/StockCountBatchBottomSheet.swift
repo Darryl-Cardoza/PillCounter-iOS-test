@@ -351,7 +351,7 @@ struct StockCountBatchBottomSheet: View {
                 // Animated so the sheet frame (grown/shrunk by onEditSheetChanged in the
                 // parent) resizes in lockstep with this content swap instead of the two
                 // visibly stepping apart — one instant, the other springing in later.
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                withAnimation(.stockSheetResize) {
                     showEditSheet = false
                 }
             })
@@ -363,7 +363,7 @@ struct StockCountBatchBottomSheet: View {
                 onCancel: onCancel,
                 onAdd: onAdd,
                 onEditTapped: {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                    withAnimation(.stockSheetResize) {
                         showEditSheet = true
                     }
                 },

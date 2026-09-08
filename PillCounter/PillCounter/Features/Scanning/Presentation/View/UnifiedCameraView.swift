@@ -37,6 +37,12 @@ struct UnifiedCameraView: View {
     @EnvironmentObject var pillScanViewModel: PillScanViewModel
     @EnvironmentObject var userViewModel: UserViewModel
     @EnvironmentObject var stockCountViewModel: StockCountViewModel
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    @Environment(\.verticalSizeClass) private var vSizeClass
+    // Matches StockCountBatchBottomSheet's own isIPad — the child decides its
+    // iPhone-vs-iPad layout off size class, not idiom, so an iPad in Split View /
+    // Slide Over (compact size class) must resize the frame the same way here too.
+    private var isIPadRegularSizeClass: Bool { hSizeClass == .regular && vSizeClass == .regular }
 
     // ── Navigation parameter ──────────────────────────────────────────────────
     let currentScanType: ScanType
@@ -210,7 +216,7 @@ struct UnifiedCameraView: View {
     func snapStockSheet(portrait height: CGFloat) {
         let mid = (stockCountSheetExpandedHeight + stockCountSheetHeight) / 2
         let target = height > mid ? stockCountSheetExpandedHeight : stockCountSheetHeight
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+        withAnimation(.stockSheetResize) {
             stockSheetCurrentHeight = target
             stockSheetIsExpanded = (target == stockCountSheetExpandedHeight)
         }
@@ -219,7 +225,7 @@ struct UnifiedCameraView: View {
     func snapStockSheet(landscape width: CGFloat) {
         let mid = (stockCountSheetExpandedWidth + stockCountSheetWidth) / 2
         let target = width > mid ? stockCountSheetExpandedWidth : stockCountSheetWidth
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+        withAnimation(.stockSheetResize) {
             stockSheetCurrentWidth = target
             stockSheetIsExpanded = (target == stockCountSheetExpandedWidth)
         }
@@ -439,8 +445,8 @@ struct UnifiedCameraView: View {
                 // directly off the @State binding (not a child callback + separate
                 // onChange hop) so the frame resize and the content swap animate
                 // in the same pass instead of visibly stepping apart.
-                guard UIDevice.current.userInterfaceIdiom != .pad else { return }
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                guard !isIPadRegularSizeClass else { return }
+                withAnimation(.stockSheetResize) {
                     if isEditing {
                         stockSheetCurrentHeight = stockCountSheetExpandedHeight
                         stockSheetCurrentWidth = stockCountSheetExpandedWidth
@@ -452,16 +458,17 @@ struct UnifiedCameraView: View {
                     }
                 }
             }
+            .customPopup(isPresented: $stockCountViewModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false) { ndcMismatchPopup }
             // BottomSheet paints itself as an .overlay on the content above, so the
             // stock sheet always sits above UnifiedCameraLayout's own inactivity
-            // overlay. Redraw the resume prompt here, after the sheet, so it wins
-            // when both are visible at once.
+            // overlay. Redraw the resume prompt here, last, so it wins over both the
+            // sheet and the NDC-mismatch popup when more than one is visible at once —
+            // inactivity requires re-verifying gloves/operator before anything else.
             .overlay {
                 if cameraService.isPausedDueToInactivity {
                     resumeOverlay
                 }
             }
-            .customPopup(isPresented: $stockCountViewModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false) { ndcMismatchPopup }
     }
 
     private var resumeOverlay: some View {
@@ -471,12 +478,7 @@ struct UnifiedCameraView: View {
                 VStack(spacing: 16) {
                     Text(L10n.PillCount.pausedDueToInactivity)
                         .foregroundStyle(appColors.text)
-                    Button(action: {
-                        cameraService.resumeIfPaused()
-                        cameraService.resetInactivityTimer()
-                        cameraService.resetGloveDetection()
-                        pillScanViewModel.updateGlovesDetected(detected: false)
-                    }) {
+                    Button(action: resumeFromInactivity) {
                         Text(L10n.PillCount.resume)
                             .font(.headline)
                             .foregroundColor(.white)
@@ -487,12 +489,15 @@ struct UnifiedCameraView: View {
                     }
                 }
             )
-            .onTapGesture {
-                cameraService.resumeIfPaused()
-                cameraService.resetInactivityTimer()
-                cameraService.resetGloveDetection()
-                pillScanViewModel.updateGlovesDetected(detected: false)
-            }
+            .onTapGesture(perform: resumeFromInactivity)
+    }
+
+    // New operator may have taken over — re-verify gloves and clear DB flag.
+    private func resumeFromInactivity() {
+        cameraService.resumeIfPaused()
+        cameraService.resetInactivityTimer()
+        cameraService.resetGloveDetection()
+        pillScanViewModel.updateGlovesDetected(detected: false)
     }
     
     // Split into two properties so the Swift type-checker doesn't time out
@@ -545,6 +550,7 @@ struct UnifiedCameraView: View {
                     stockSheetCurrentHeight = stockCountSheetHeight
                     stockSheetCurrentWidth = stockCountSheetWidth
                     stockSheetIsExpanded = false
+                    showStockEditSheet = false
                 }
             }
             .onChange(of: isLandscape) { _, _ in
@@ -553,7 +559,7 @@ struct UnifiedCameraView: View {
                 // panel-visibility reset above) — rotating the device while the
                 // sheet is open otherwise leaves it holding the wrong-orientation
                 // value, which is what visually breaks the iPhone layout on rotate.
-                guard showStockCountPanel, UIDevice.current.userInterfaceIdiom != .pad else { return }
+                guard showStockCountPanel, !isIPadRegularSizeClass else { return }
                 stockSheetCurrentHeight = stockSheetIsExpanded ? stockCountSheetExpandedHeight : stockCountSheetHeight
                 stockSheetCurrentWidth = stockSheetIsExpanded ? stockCountSheetExpandedWidth : stockCountSheetWidth
             }
@@ -613,14 +619,7 @@ struct UnifiedCameraView: View {
             isLandscape: isLandscape,
             instructionText: overlayInstructionText,
             showPillDetectionUI: currentScanType != .stockCount || isOpenPillScanMode,
-            onBack: { handleBack() },
-            onResume: {
-                cameraService.resumeIfPaused()
-                cameraService.resetInactivityTimer()
-                // New operator may have taken over — re-verify gloves and clear DB flag.
-                cameraService.resetGloveDetection()
-                pillScanViewModel.updateGlovesDetected(detected: false)
-            }
+            onBack: { handleBack() }
         )
         .onAppear(perform: onAppear)
         .onDisappear(perform: onDisappear)
@@ -812,6 +811,7 @@ extension UnifiedCameraView {
         stockSheetCurrentHeight = stockCountSheetHeight
         stockSheetCurrentWidth = stockCountSheetWidth
         stockSheetIsExpanded = false
+        showStockEditSheet = false
         pillScanViewModel.resetScanningState()
         // Seed the tray-colour gate for flows that start with the pill-count sheet
         // already shown (e.g. .resumeCount), since onChange won't fire on appear.
@@ -1109,6 +1109,7 @@ extension UnifiedCameraView {
         pillScanViewModel.isNdcEquivalent = false
         pillScanViewModel.showNdcEquivalencePopup = false
         stockCountViewModel.reset()
+        showStockEditSheet = false
     }
 
     // MARK: - Continuous dispense

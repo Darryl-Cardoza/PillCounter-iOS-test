@@ -26,7 +26,6 @@ struct UnifiedCameraLayout: View {
     let instructionText: String
     let showPillDetectionUI: Bool
     let onBack: () -> Void
-    let onResume: () -> Void
 
     var body: some View {
         ZStack {
@@ -182,9 +181,6 @@ struct UnifiedCameraLayout: View {
             // .showToastMessage). No local toast here to avoid duplicate toasts.
         }
         .ignoresSafeArea()
-        .onTapGesture {
-            if cameraService.isPausedDueToInactivity { onResume() }
-        }
         // Any touch on the screen counts as activity — reset the idle clock without
         // consuming the touch, so buttons/gestures underneath still work normally.
         .simultaneousGesture(

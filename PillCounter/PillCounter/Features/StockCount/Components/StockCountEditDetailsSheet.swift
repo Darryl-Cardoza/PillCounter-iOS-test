@@ -23,9 +23,12 @@ struct EditableLotRow: Identifiable {
     let packageQty: Int32
     let field: LotField           // which section this row belongs to — sealed and open never share a row
     /// The value this row's owned field (sealedBottles for .sealed, openPills for .open)
-    /// had when loaded from the DB in buildRows(). Save diffs against this so an
-    /// untouched row — most rows, on any given edit — issues no DB write at all.
-    let originalValue: Int
+    /// currently holds in the DB. Save diffs against this so an untouched row — most
+    /// rows, on any given edit — issues no DB write at all. Starts as the value loaded
+    /// in buildRows(), but deleteRow() writes the DB immediately (bypassing Save), so it
+    /// must re-sync this to 0 there too — otherwise trash-then-restore-to-the-same-value
+    /// looks "unchanged" to Save and the zero from deleteRow never gets overwritten.
+    var originalValue: Int
 }
 
 // MARK: - Edit Details Sheet
@@ -521,6 +524,9 @@ struct StockCountEditDetailsSheet: View {
             case .open:   lotRows[idx].openPills = 0
             }
         }
+        // deleteRow just wrote 0 to the DB directly — keep originalValue in sync so
+        // Save's unchanged-row guard doesn't skip a later restore back to 0.
+        lotRows[idx].originalValue = 0
     }
 
     private func saveChanges() {

@@ -117,9 +117,14 @@ struct UnifiedCameraLayout: View {
             // own top bar (back button / instruction / glove / drug info) covers
             // every step now, vial included. Also hidden for .scan — PillCountLayout
             // now renders there too (bottom bar only, no top bar), so this legacy
-            // header would just duplicate/collide with it.
+            // header would just duplicate/collide with it. Exception: .stockCount's
+            // .scan step never resolves a transaction (no drug known yet), so
+            // PillCountLayout suppresses its top bar there too — without this
+            // legacy header the operator would have no back button at all.
             if !showPillCountPanel
-                && (pillScanViewModel.currentControlledStep != .scan || scanType == .rx_label) {
+                && (pillScanViewModel.currentControlledStep != .scan
+                    || scanType == .rx_label
+                    || scanType == .stockCount) {
             VStack {
                 ZStack {
                     // ── Portrait: instruction centered independently ──

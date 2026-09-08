@@ -30,8 +30,9 @@ struct PillCountLayout: View {
     /// tooltip and voice label from "Count Prescribed Quantity" to "Count Open Pills".
     let isOpenPillScanMode: Bool
     /// True while scanning the RX label barcode (ScanType.rx_label) — the .scan step's
-    /// bottom bar is suppressed here since there's nothing step-relevant to show yet
-    /// (unlike scanning the container/stock barcode, where the steps row is useful).
+    /// top and bottom bars are both suppressed here since there's nothing step-relevant
+    /// to show yet (unlike scanning the container/stock barcode, where the steps row
+    /// is useful).
     let isRxLabelScan: Bool
 
     let onBack: () -> Void
@@ -71,7 +72,7 @@ struct PillCountLayout: View {
     private var isIpad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     /// Vial step — swaps the movable count ring for the redo/capture/done controls
-    /// and suppresses the count/target parts of the bottom bar (view via `isVialStep`
+    /// and suppresses the count/target parts of the bottom bar (view via `hidesCountUI`
     /// on `PillCountBottomBar`).
     private var isVialStep: Bool { pillScanViewModel.currentControlledStep == .vial }
 
@@ -81,7 +82,7 @@ struct PillCountLayout: View {
 
     /// Steps with no drug/target/count data yet — vial (capture only) and the raw
     /// barcode-scan phase (before RX resolves). Both suppress the count ring and
-    /// show only the bottom bar's steps row (via `isVialStep` on `PillCountBottomBar`).
+    /// show only the bottom bar's steps row (via `hidesCountUI` on `PillCountBottomBar`).
     private var isBarOnlyStep: Bool { isVialStep || isScanStep }
 
     /// The effectively-current transaction. During `.scan`, `currentTransaction`
@@ -101,8 +102,11 @@ struct PillCountLayout: View {
     /// `.scan` with no transaction resolvable anywhere yet (fresh `.barcode`/
     /// `.stockCount` scan, nothing selected) — nothing real to show, so bars are
     /// suppressed instead of showing the resolver's fabricated placeholder steps.
+    /// Open-pill scan mode included: its `.scan` step is always pre-barcode (drug
+    /// found flips the step straight to `.targetVerification` — see
+    /// `handleDrugFoundState`), so there's never a drug to show in the top bar here.
     private var isUnresolvedScan: Bool {
-        isScanStep && !isOpenPillScanMode && resolvedTransaction == nil
+        isScanStep && resolvedTransaction == nil
     }
 
     /// Suppresses both PillCountTopBar and PillCountBottomBar during `.scan` when
@@ -136,9 +140,9 @@ struct PillCountLayout: View {
 
     /// Target for the current step (0 when there is no meaningful target, e.g. REGULAR).
     private var targetCount: Int {
-        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false {
+        if isOpenPillScanMode || resolvedTransaction?.is_dispense == false {
             return 0
-        } else if pillScanViewModel.currentTransaction?.is_from_pms == true {
+        } else if resolvedTransaction?.is_from_pms == true {
             return pillScanViewModel.currentControlledTargetCount ?? 0
         } else {
             return pillScanViewModel.currentControlledTargetCount ?? 0
@@ -147,9 +151,9 @@ struct PillCountLayout: View {
 
     /// Total committed count for the current transaction / step.
     private var currentTotalCount: Int {
-        if isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false {
+        if isOpenPillScanMode || resolvedTransaction?.is_dispense == false {
             return pillScanViewModel.addCurrentOpenPillCount
-        } else if pillScanViewModel.currentTransaction?.is_from_pms == true {
+        } else if resolvedTransaction?.is_from_pms == true {
             return Int(pillScanViewModel.getTotalCuntForCurrentStep())
         } else {
             return pillScanViewModel.getTotalPillCountOfCurrentTransaction()
@@ -162,7 +166,7 @@ struct PillCountLayout: View {
     }
 
     private var isFixed: Bool {
-        pillScanViewModel.currentTransaction?.is_dispense == true
+        resolvedTransaction?.is_dispense == true
     }
 
     /// Open-ended parent pour — no target; the bar shows the live count and an
@@ -261,7 +265,7 @@ struct PillCountLayout: View {
                     showSteps: !isPortrait || isBarOnlyStep,
                     onTapStep: { handleStepTap($0) },
                     isOpenEndedCountStep: isOpenEndedStep,
-                    isRegularCountType: isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false,
+                    isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,
                     isDoneEnabled: isDoneEnabled,
                     hidesCountUI: isBarOnlyStep,
                     onShowDetailGrid: onShowDetailGrid,

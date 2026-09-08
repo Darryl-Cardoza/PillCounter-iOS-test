@@ -22,7 +22,11 @@ struct VialBottomContentView: View {
     private var captureIconSize: CGFloat { isIPad ? 42 : 28 }
     private var captureIconWeight: Font.Weight { .medium }
     private var labelFont: Font { isIPad ? .title3 : .caption }
-    private var layoutSpacing: CGFloat { isIPad ? 100 : (isLandscape ? 70 : 90) }
+    // iPhone landscape has only ~375-430pt of height shared with the top/bottom
+    // bars, so the row's 70pt spacing (sized for portrait's much wider row) would
+    // push "redo"/"done" under those bars. 28pt keeps the column's total height
+    // comfortably inside that range.
+    private var layoutSpacing: CGFloat { isIPad ? 100 : (isLandscape ? 28 : 90) }
 
     var body: some View {
         // Portrait: horizontal row at the bottom. Landscape: vertical column
@@ -34,9 +38,6 @@ struct VialBottomContentView: View {
                 HStack(spacing: layoutSpacing) { controlItems }
             }
         }
-        .padding(24)
-        .background(Color.black.opacity(0))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(16)
     }
 

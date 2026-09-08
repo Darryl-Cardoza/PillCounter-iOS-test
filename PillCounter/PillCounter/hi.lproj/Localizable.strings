@@ -252,6 +252,7 @@
 "barcodeScan.copy" = "कॉपी करें";
 "barcodeScan.rescanRequired" = "पुनः स्कैन आवश्यक";
 "barcodeScan.ndcDoesNotMatch" = "स्कैन किया गया एनडीसी मेल नहीं खाता";
+"barcodeScan.resetTransactionFailed" = "रीसेट विफल हुआ। कृपया पुनः प्रयास करें।";
 "barcodeScan.substitute" = "प्रतिस्थापित करें";
 "barcodeScan.rescan" = "पुनः स्कैन करें";
 "barcodeScan.qrScannedSuccessfully" = "स्टॉक बोतल विवरण सत्यापित करें";

@@ -135,6 +135,8 @@ final class MockTransactionDetailDataSource: TransactionDetailDataSource {
     /// txnId -> image paths returned by `hardDeleteAll`, and the txnIds it was called with.
     var hardDeleteAllImagePaths: [Int64: [String]] = [:]
     var hardDeleteAllCalledWith: [Int64] = []
+    /// Set false to simulate the underlying save failing.
+    var hardDeleteAllShouldSucceed: Bool = true
 
     func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32 { 0 }
     func totalCountsForSteps(txnIds: [Int64], step: ControlledStep) -> [Int64: Int32] {
@@ -169,9 +171,10 @@ final class MockTransactionDetailDataSource: TransactionDetailDataSource {
     }
 
     @discardableResult
-    func hardDeleteAll(txnId: Int64) -> [String] {
+    func hardDeleteAll(txnId: Int64) -> (success: Bool, imagePaths: [String]) {
         hardDeleteAllCalledWith.append(txnId)
-        return hardDeleteAllImagePaths[txnId] ?? []
+        guard hardDeleteAllShouldSucceed else { return (false, []) }
+        return (true, hardDeleteAllImagePaths[txnId] ?? [])
     }
 }
 

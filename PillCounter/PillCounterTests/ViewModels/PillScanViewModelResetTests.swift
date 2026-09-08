@@ -8,6 +8,7 @@
 
 import Testing
 import Foundation
+import UIKit
 @testable import PillCounter
 
 @MainActor
@@ -157,5 +158,79 @@ struct PillScanViewModelResetTests {
         #expect(transactionDetailDAO.hardDeleteAllCalledWith.isEmpty)
         #expect(transactionDAO.updateNdcVerifiedCalls.isEmpty)
         #expect(transactionDAO.clearWorkflowStepCalls.isEmpty)
+    }
+
+    @Test func resetClearsBottleList() {
+        let transactionDAO = MockTransactionDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO)
+        let txn = makeTransaction(txnId: 42)
+        vm.currentTransaction = txn
+        transactionDAO.setBottleList(txnId: 42, [
+            BottleInfo(lotNumber: "L1", expirationDate: "01/2030", serialNumber: "S1", txnDetailsIds: [1], scannedAt: 0, barcodeImagePath: "bottle1.enc")
+        ])
+
+        vm.resetCurrentTransaction()
+
+        #expect(transactionDAO.getBottleList(txnId: 42).isEmpty)
+    }
+
+    @Test func resetClearsLeftoverScanAndPopupState() {
+        let vm = makeViewModel()
+        let txn = makeTransaction(txnId: 42)
+        vm.currentTransaction = txn
+        vm.pendingBarcodeImagePath = "pending.enc"
+        vm.vialCapturedImagePath = "vial.enc"
+        vm.capturedVialImage = UIImage()
+        vm.targetCount = ["1", "2", "3", "4"]
+        vm.note = "some note"
+        vm.showAddBottlePopup = true
+        vm.showReplaceBottlePopup = true
+        vm.pendingBottleRescan = BottleInfo(lotNumber: "L", expirationDate: "01/2030", serialNumber: "S", txnDetailsIds: [], scannedAt: 0)
+        vm.pendingBottleRescanImage = UIImage()
+        vm.isNdcAdded = true
+        vm.ndcMismatchRestartFlow = true
+        vm.shouldAutoProceedToCount = true
+        vm.showCompletionPopup = true
+
+        vm.resetCurrentTransaction()
+
+        #expect(vm.pendingBarcodeImagePath == nil)
+        #expect(vm.vialCapturedImagePath == nil)
+        #expect(vm.capturedVialImage == nil)
+        #expect(vm.targetCount == ["", "", "", ""])
+        #expect(vm.note == "")
+        #expect(vm.showAddBottlePopup == false)
+        #expect(vm.showReplaceBottlePopup == false)
+        #expect(vm.pendingBottleRescan == nil)
+        #expect(vm.pendingBottleRescanImage == nil)
+        #expect(vm.isNdcAdded == false)
+        #expect(vm.ndcMismatchRestartFlow == false)
+        #expect(vm.shouldAutoProceedToCount == false)
+        #expect(vm.showCompletionPopup == false)
+    }
+
+    @Test func resetReturnsFalseAndDoesNotDeleteAnythingWhenHardDeleteFails() {
+        let transactionDAO = MockTransactionDataSource()
+        let transactionDetailDAO = MockTransactionDetailDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO)
+        let txn = makeTransaction(txnId: 42)
+        vm.currentTransaction = txn
+        transactionDetailDAO.hardDeleteAllImagePaths[42] = ["img1.enc"]
+        transactionDetailDAO.hardDeleteAllShouldSucceed = false
+        vm.currentTransactionTransactionDetails = [PillCountTransactionDetailsEntity(context: MockCoreData.context)]
+        vm.currentControlledTargetCount = 30
+        transactionDAO.setBottleList(txnId: 42, [
+            BottleInfo(lotNumber: "L1", expirationDate: "01/2030", serialNumber: "S1", txnDetailsIds: [1], scannedAt: 0)
+        ])
+
+        let result = vm.resetCurrentTransaction()
+
+        #expect(result == false)
+        #expect(transactionDAO.getBottleList(txnId: 42).isEmpty == false)
+        // The DB save failed — nothing downstream should be treated as reset.
+        #expect(transactionDAO.updateNdcVerifiedCalls.isEmpty)
+        #expect(transactionDAO.clearWorkflowStepCalls.isEmpty)
+        #expect(vm.currentTransactionTransactionDetails?.isEmpty == false)
+        #expect(vm.currentControlledTargetCount == 30)
     }
 }

@@ -268,17 +268,24 @@ final class TransactionDetailStore: BaseDataStore<PillCountTransactionDetailsEnt
     /// can delete the backing image files — batch-deleting rows first would
     /// lose that information, since `NSBatchDeleteRequest` never materializes
     /// the objects. Used by transaction reset.
+    ///
+    /// `success` is `false` if the underlying save failed — the rows were
+    /// NOT actually removed, so `imagePaths` is empty and the caller must
+    /// not delete any files.
     @discardableResult
-    func hardDeleteAll(txnId: Int64) -> [String] {
+    func hardDeleteAll(txnId: Int64) -> (success: Bool, imagePaths: [String]) {
         sync {
             let request: NSFetchRequest<PillCountTransactionDetailsEntity> = PillCountTransactionDetailsEntity.fetchRequest()
             request.predicate = NSPredicate(format: "txn_id == %lld", txnId)
-            guard let details = try? context.fetch(request), !details.isEmpty else { return [] }
+            guard let details = try? context.fetch(request), !details.isEmpty else { return (true, []) }
             let imagePaths = details.compactMap { $0.image_path }
             details.forEach { context.delete($0) }
-            CoreDataManager.shared.save(context: context)
+            guard CoreDataManager.shared.saveReturningSuccess(context: context) else {
+                StoreLogger.debug("🔍 [TransactionDetailDAO] HARD DELETE ALL FAILED — txnId: \(txnId), count: \(details.count)")
+                return (false, [])
+            }
             StoreLogger.debug("🔍 [TransactionDetailDAO] HARD DELETED ALL — txnId: \(txnId), count: \(details.count)")
-            return imagePaths
+            return (true, imagePaths)
         }
     }
 

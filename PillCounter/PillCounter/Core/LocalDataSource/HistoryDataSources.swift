@@ -159,7 +159,7 @@ protocol TransactionDetailDataSource: AnyObject {
     func update(detailId: Int64, block: (PillCountTransactionDetailsEntity) -> Void)
     func sumPillCount(detailIds: [Int64]) -> Int
     @discardableResult
-    func hardDeleteAll(txnId: Int64) -> [String]
+    func hardDeleteAll(txnId: Int64) -> (success: Bool, imagePaths: [String])
 }
 
 // MARK: - Drug-catalog store seam

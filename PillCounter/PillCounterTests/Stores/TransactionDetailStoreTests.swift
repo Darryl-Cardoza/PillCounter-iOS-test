@@ -198,8 +198,9 @@ struct TransactionDetailStoreTests {
         TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 2, imagePath: "img2.enc")
         TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 3)
 
-        let paths = TransactionDetailStore.shared.hardDeleteAll(txnId: txn.txn_id)
-        #expect(Set(paths) == Set(["img1.enc", "img2.enc"]))
+        let result = TransactionDetailStore.shared.hardDeleteAll(txnId: txn.txn_id)
+        #expect(result.success == true)
+        #expect(Set(result.imagePaths) == Set(["img1.enc", "img2.enc"]))
     }
 
     @Test func hardDeleteAllDoesNotTouchOtherTransactions() {
@@ -217,6 +218,8 @@ struct TransactionDetailStoreTests {
     }
 
     @Test func hardDeleteAllReturnsEmptyForUnknownTxn() {
-        #expect(TransactionDetailStore.shared.hardDeleteAll(txnId: -999_999).isEmpty)
+        let result = TransactionDetailStore.shared.hardDeleteAll(txnId: -999_999)
+        #expect(result.success == true)
+        #expect(result.imagePaths.isEmpty)
     }
 }

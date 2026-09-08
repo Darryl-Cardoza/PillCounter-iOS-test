@@ -1055,8 +1055,17 @@ extension UnifiedCameraView {
     /// this the exact same physical barcode is silently ignored until it
     /// physically leaves and re-enters frame (see `forceReleaseBarcodeLock`).
     func resetTransactionInPlace() {
-        pillScanViewModel.resetCurrentTransaction()
+        guard pillScanViewModel.resetCurrentTransaction() else {
+            pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.resetTransactionFailed)
+            return
+        }
         resetForFreshBarcodeEntry()
+
+        // Don't rely on .onChange(of: currentControlledStep) to refresh the
+        // detail grid — it only fires on a value CHANGE, and the step
+        // re-derived after reset can land back on the same value it already
+        // held, leaving stale pre-reset details on screen.
+        pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
 
         showPillCountPanel = false
         scanType = .barcode

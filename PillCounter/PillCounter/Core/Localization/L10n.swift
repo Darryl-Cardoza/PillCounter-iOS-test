@@ -391,6 +391,7 @@ enum L10n {
         static let copy = NSLocalizedString("barcodeScan.copy", comment: "")
         static let rescanRequired = NSLocalizedString("barcodeScan.rescanRequired", comment: "")
         static let ndcDoesNotMatch = NSLocalizedString("barcodeScan.ndcDoesNotMatch", comment: "")
+        static let resetTransactionFailed = NSLocalizedString("barcodeScan.resetTransactionFailed", comment: "")
         static let bottleAlreadyScanned = NSLocalizedString("bottleRescan.alreadyScanned", comment: "")
         static let addBottleTitle = NSLocalizedString("bottleRescan.addBottleTitle", comment: "")
         static let addBottleMessage = NSLocalizedString("bottleRescan.addBottleMessage", comment: "")

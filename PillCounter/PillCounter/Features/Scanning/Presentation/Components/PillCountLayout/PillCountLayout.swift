@@ -34,6 +34,9 @@ struct PillCountLayout: View {
     let onAdd: () -> Void
     let onAllDone: () -> Void
     let onShowDetailGrid: () -> Void
+    /// Reset the current transaction — hard-deletes its counts/images and
+    /// restarts it from the scan step.
+    var onReset: () -> Void = {}
 
     // ── Step instruction tooltip ───────────────────────────────────────────
     // Rendered at this (full-screen) level so it can float above the current
@@ -172,8 +175,10 @@ struct PillCountLayout: View {
                     isOpenEndedCountStep: isOpenEndedStep,
                     isRegularCountType: isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false,
                     isDoneEnabled: isDoneEnabled,
+                    isResetEnabled: pillScanViewModel.canResetCurrentTransaction,
                     onShowDetailGrid: onShowDetailGrid,
-                    onDone: onAllDone
+                    onDone: onAllDone,
+                    onReset: onReset
                 )
             }
         }

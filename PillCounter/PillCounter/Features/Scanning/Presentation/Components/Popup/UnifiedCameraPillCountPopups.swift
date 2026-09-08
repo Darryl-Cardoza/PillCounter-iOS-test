@@ -153,6 +153,20 @@ extension UnifiedCameraView {
         }
     }
 
+    var resetTransactionPopup: some View {
+        ConfirmationDialogue(
+            title: L10n.PillCount.confirmResetTitle,
+            message: L10n.PillCount.confirmResetMessage,
+            cancelButtonText: L10n.Common.cancel,
+            confirmButtonText: L10n.Common.ok,
+            onCancel: { showResetTransactionPopup = false },
+            onConfirm: {
+                showResetTransactionPopup = false
+                resetTransactionInPlace()
+            }
+        )
+    }
+
     var countMismatchDialog: some View {
         ConfirmationDialogue(
             title: L10n.PillCount.countMismatchTitle,

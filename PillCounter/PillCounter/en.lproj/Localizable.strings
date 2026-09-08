@@ -101,8 +101,8 @@
 "pillCount.countMismatchMessage" = "The counted quantity does not match the target count. Do you want to proceed?";
 "pillCount.confirmStepCompletionTitle" = "Confirm Step Completion";
 "pillCount.confirmStepCompletionMessage" = "Are you sure you want to complete this step?";
-"pillCount.confirmResetTitle" = "Reset Transaction?";
-"pillCount.confirmResetMessage" = "This will permanently delete all counts and images for this transaction and restart it from the scan step. This cannot be undone.";
+"pillCount.confirmResetTitle" = "Reset Count?";
+"pillCount.confirmResetMessage" = "This will permanently delete all counts and images captured so far and restart from the scan step. This cannot be undone.";
 "pillCount.addNote" = "ADD NOTE";
 "pillCount.pleaseAddNote" = "Please add a note";
 "pillCount.skipStepTitle" = "Skip Step";

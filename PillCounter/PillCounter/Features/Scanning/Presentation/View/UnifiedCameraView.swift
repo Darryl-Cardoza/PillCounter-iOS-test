@@ -1070,6 +1070,48 @@ extension UnifiedCameraView {
         startScanTimeout()
     }
 
+    /// "Reset" confirmed while in open-pill scan mode (stock-count loose-pill
+    /// counting — no `PillCountTransactionEntity` backs this mode, so there is
+    /// no DB row to touch). Deletes the temp images captured before Proceed
+    /// (barcode capture, vial photo — neither is referenced by any DB row
+    /// yet, so leaving them would orphan the files) and clears all pending
+    /// open-bottle identity/lot/count state, then drops back to the
+    /// barcode-scan step FOR THE SAME open-pill session — `isOpenPillScanMode`
+    /// stays true (unlike `handleBack`'s open-pill branch, which exits the
+    /// mode entirely; reset restarts it in place instead).
+    func resetOpenPillScanInPlace() {
+        if let path = pillScanViewModel.pendingBarcodeImagePath {
+            PhotoFileManager.shared.deleteImage(fileName: path)
+        }
+        pillScanViewModel.pendingBarcodeImagePath = nil
+        if let path = pillScanViewModel.vialCapturedImagePath {
+            PhotoFileManager.shared.deleteImage(fileName: path)
+        }
+        pillScanViewModel.vialCapturedImagePath = nil
+        pillScanViewModel.capturedVialImage = nil
+
+        pillScanViewModel.pendingOpenBottleDrug = nil
+        pillScanViewModel.pendingOpenBottleDrugId = nil
+        pillScanViewModel.pendingOpenBottleBucketId = nil
+        pillScanViewModel.pendingOpenBottleLot = nil
+        pillScanViewModel.pendingOpenBottleExpiry = nil
+        pillScanViewModel.pendingOpenBottleSerial = nil
+        pillScanViewModel.addCurrentOpenPillCount = 0
+
+        resetForFreshBarcodeEntry()
+
+        showPillCountPanel = false
+        scanType = .barcode
+
+        cameraService.disableBarcodeScanning()
+        cameraService.pauseCounting()
+        cameraService.resetBarcodeScanState()
+        cameraService.forceReleaseBarcodeLock()
+        cameraService.start()
+        cameraService.enableBarcodeScanning()
+        startScanTimeout()
+    }
+
     /// Every view-model/screen flag `onAppear` clears before a fresh
     /// `.barcode` scan, minus anything that would drop the current
     /// transaction — shared by `onAppear` (via `resetScanningState()`, which

@@ -175,7 +175,7 @@ struct PillCountLayout: View {
                     isOpenEndedCountStep: isOpenEndedStep,
                     isRegularCountType: isOpenPillScanMode || pillScanViewModel.currentTransaction?.is_dispense == false,
                     isDoneEnabled: isDoneEnabled,
-                    isResetEnabled: pillScanViewModel.canResetCurrentTransaction,
+                    isResetEnabled: isOpenPillScanMode || pillScanViewModel.canResetCurrentTransaction,
                     onShowDetailGrid: onShowDetailGrid,
                     onDone: onAllDone,
                     onReset: onReset

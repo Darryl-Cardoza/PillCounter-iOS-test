@@ -162,7 +162,11 @@ extension UnifiedCameraView {
             onCancel: { showResetTransactionPopup = false },
             onConfirm: {
                 showResetTransactionPopup = false
-                resetTransactionInPlace()
+                if isOpenPillScanMode {
+                    resetOpenPillScanInPlace()
+                } else {
+                    resetTransactionInPlace()
+                }
             }
         )
     }

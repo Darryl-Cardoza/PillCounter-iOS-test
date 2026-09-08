@@ -108,6 +108,7 @@ struct UnifiedCameraView: View {
     @State var showStockNoteOptions:   Bool = false
     @State var stockNoteError: String?
     @State var showDeleteAllTransactionDetailsPopup: Bool = false
+    @State var showResetTransactionPopup: Bool = false
     @State var showCountMismatchPopup: Bool = false
     @State var selectedTransactionDetail: PillCountTransactionDetailsEntity?
     @State var showTransactionHistory: Bool = true
@@ -153,6 +154,7 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
             .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
+            .customPopup(isPresented: $showResetTransactionPopup) { resetTransactionPopup }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
             .customPopup(isPresented: $showHl7UnavailablePopup, dismissOnBackgroundTap: false) { hl7UnavailablePopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
@@ -287,7 +289,8 @@ struct UnifiedCameraView: View {
                                 onBack: { handleBack() },
                                 onAdd: { handleAdd() },
                                 onAllDone: { handleComplete() },
-                                onShowDetailGrid: { showDetailGrid = true }
+                                onShowDetailGrid: { showDetailGrid = true },
+                                onReset: { showResetTransactionPopup = true }
                             )
                         }
                     }
@@ -1032,6 +1035,115 @@ extension UnifiedCameraView {
         pillScanViewModel.isNdcEquivalent = false
         pillScanViewModel.showNdcEquivalencePopup = false
         stockCountViewModel.reset()
+    }
+
+    /// "Reset Transaction" confirmed — hard-deletes the txn's counts/images
+    /// (view-model side) and drops this screen back to the barcode-scan step
+    /// for the SAME transaction, in place (no navigation).
+    ///
+    /// Reuses every flag `onAppear` resets for a fresh `.barcode` entry (see
+    /// `resetForFreshBarcodeEntry()`) instead of hand-picking a subset — a
+    /// first attempt here only cleared a few scan-related fields and left
+    /// `isCheckingNdc`/popup flags from the PRIOR (already-verified) scan
+    /// dangling, which silently blocked every later scan (`handleScannedCode`
+    /// no-ops while `isCheckingNdc` is stuck true). `selectedTransaction`/
+    /// `currentTransaction` are deliberately NOT cleared — the re-scan must
+    /// re-verify against this same txn, not a freshly fetched one.
+    ///
+    /// Also force-releases the camera's same-barcode lock: the operator's
+    /// bottle typically never leaves the frame across a reset, so without
+    /// this the exact same physical barcode is silently ignored until it
+    /// physically leaves and re-enters frame (see `forceReleaseBarcodeLock`).
+    func resetTransactionInPlace() {
+        guard pillScanViewModel.resetCurrentTransaction() else {
+            pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.resetTransactionFailed)
+            return
+        }
+        resetForFreshBarcodeEntry()
+
+        // Don't rely on .onChange(of: currentControlledStep) to refresh the
+        // detail grid — it only fires on a value CHANGE, and the step
+        // re-derived after reset can land back on the same value it already
+        // held, leaving stale pre-reset details on screen.
+        pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
+
+        showPillCountPanel = false
+        scanType = .barcode
+
+        cameraService.disableBarcodeScanning()
+        cameraService.pauseCounting()
+        cameraService.resetBarcodeScanState()
+        cameraService.forceReleaseBarcodeLock()
+        cameraService.start()
+        cameraService.enableBarcodeScanning()
+        startScanTimeout()
+    }
+
+    /// "Reset" confirmed while in open-pill scan mode (stock-count loose-pill
+    /// counting — no `PillCountTransactionEntity` backs this mode, so there is
+    /// no DB row to touch). Deletes the temp images captured before Proceed
+    /// (barcode capture, vial photo — neither is referenced by any DB row
+    /// yet, so leaving them would orphan the files) and clears all pending
+    /// open-bottle identity/lot/count state, then drops back to the
+    /// barcode-scan step FOR THE SAME open-pill session — `isOpenPillScanMode`
+    /// stays true (unlike `handleBack`'s open-pill branch, which exits the
+    /// mode entirely; reset restarts it in place instead).
+    func resetOpenPillScanInPlace() {
+        if let path = pillScanViewModel.pendingBarcodeImagePath {
+            PhotoFileManager.shared.deleteImage(fileName: path)
+        }
+        pillScanViewModel.pendingBarcodeImagePath = nil
+        if let path = pillScanViewModel.vialCapturedImagePath {
+            PhotoFileManager.shared.deleteImage(fileName: path)
+        }
+        pillScanViewModel.vialCapturedImagePath = nil
+        pillScanViewModel.capturedVialImage = nil
+
+        pillScanViewModel.pendingOpenBottleDrug = nil
+        pillScanViewModel.pendingOpenBottleDrugId = nil
+        pillScanViewModel.pendingOpenBottleBucketId = nil
+        pillScanViewModel.pendingOpenBottleLot = nil
+        pillScanViewModel.pendingOpenBottleExpiry = nil
+        pillScanViewModel.pendingOpenBottleSerial = nil
+        pillScanViewModel.addCurrentOpenPillCount = 0
+
+        resetForFreshBarcodeEntry()
+
+        showPillCountPanel = false
+        scanType = .barcode
+
+        cameraService.disableBarcodeScanning()
+        cameraService.pauseCounting()
+        cameraService.resetBarcodeScanState()
+        cameraService.forceReleaseBarcodeLock()
+        cameraService.start()
+        cameraService.enableBarcodeScanning()
+        startScanTimeout()
+    }
+
+    /// Every view-model/screen flag `onAppear` clears before a fresh
+    /// `.barcode` scan, minus anything that would drop the current
+    /// transaction — shared by `onAppear` (via `resetScanningState()`, which
+    /// DOES clear the transaction) and `resetTransactionInPlace()` (which
+    /// must not).
+    private func resetForFreshBarcodeEntry() {
+        pillScanViewModel.showRxFlowPopup = false
+        pillScanViewModel.showRxOnHoldPopup = false
+        pillScanViewModel.showRxInProgressPopup = false
+        pillScanViewModel.showNdcEquivalencePopup = false
+        pillScanViewModel.showScannedDrugInfoPopoup = false
+        pillScanViewModel.showVerifyStockBottlePopup = false
+        pillScanViewModel.fetchedRxTransaction = nil
+        pillScanViewModel.isDrugFound = nil
+        pillScanViewModel.isCheckingNdc = false
+        pillScanViewModel.isNdcEquivalent = false
+        pillScanViewModel.ndcComparisonResponse = nil
+        pillScanViewModel.scannedRxData = nil
+
+        cameraState = .scanning
+        scannedRawValue = nil
+        capturedImage = nil
+        hasInitializedStep = false
     }
 
     // MARK: - Continuous dispense

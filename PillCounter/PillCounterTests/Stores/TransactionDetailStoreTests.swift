@@ -172,4 +172,54 @@ struct TransactionDetailStoreTests {
         #expect(viaContext == viaDefault)
         #expect(viaContext[txn.txn_id] == 6)
     }
+
+    // MARK: - hardDeleteAll(txnId:)
+
+    @Test func hardDeleteAllRemovesEveryDetailRowForTxn() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+        let kept = TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 5)!
+        let deleted = TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 3)!
+        TransactionDetailStore.shared.softDelete(detailId: deleted.txn_details_id)
+
+        TransactionDetailStore.shared.hardDeleteAll(txnId: txn.txn_id)
+
+        #expect(TransactionDetailStore.shared.fetchById(kept.txn_details_id) == nil)
+        #expect(TransactionDetailStore.shared.fetchById(deleted.txn_details_id) == nil)
+        #expect(TransactionDetailStore.shared.fetchAll(txnId: txn.txn_id).isEmpty)
+    }
+
+    @Test func hardDeleteAllReturnsImagePathsOfDeletedRows() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+        TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 1, imagePath: "img1.enc")
+        TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 2, imagePath: "img2.enc")
+        TransactionDetailStore.shared.add(txnId: txn.txn_id, pillCount: 3)
+
+        let result = TransactionDetailStore.shared.hardDeleteAll(txnId: txn.txn_id)
+        #expect(result.success == true)
+        #expect(Set(result.imagePaths) == Set(["img1.enc", "img2.enc"]))
+    }
+
+    @Test func hardDeleteAllDoesNotTouchOtherTransactions() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn1 = fixture.makeTransaction()
+        let txn2 = fixture.makeTransaction()
+        TransactionDetailStore.shared.add(txnId: txn1.txn_id, pillCount: 5)
+        let untouched = TransactionDetailStore.shared.add(txnId: txn2.txn_id, pillCount: 7)!
+
+        TransactionDetailStore.shared.hardDeleteAll(txnId: txn1.txn_id)
+
+        #expect(TransactionDetailStore.shared.fetchAll(txnId: txn1.txn_id).isEmpty)
+        #expect(TransactionDetailStore.shared.fetchById(untouched.txn_details_id) != nil)
+    }
+
+    @Test func hardDeleteAllReturnsEmptyForUnknownTxn() {
+        let result = TransactionDetailStore.shared.hardDeleteAll(txnId: -999_999)
+        #expect(result.success == true)
+        #expect(result.imagePaths.isEmpty)
+    }
 }

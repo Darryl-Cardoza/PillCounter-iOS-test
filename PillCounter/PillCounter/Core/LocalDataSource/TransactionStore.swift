@@ -591,6 +591,21 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
         transactionsDidChange.send()
     }
 
+    /// Clears `workflow_step` back to nil — same "not yet resolved" state a
+    /// brand-new transaction starts in (see `create(...)`'s `workFlowStep: String? = nil`
+    /// default). Used by transaction reset so `getWorkflowStep`/`getControlledStep`
+    /// re-derive the real first step (`.containerInitiate`/`.targetVerification`)
+    /// instead of getting stuck on a persisted step value that's never otherwise written.
+    func clearWorkflowStep(txnId: Int64) {
+        sync {
+            guard let txn = fetchByIdNoWrap(txnId) else { return }
+            txn.workflow_step = nil
+            txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
+            CoreDataManager.shared.save(context: context)
+        }
+        transactionsDidChange.send()
+    }
+
     func getContainerPendingTarget(txnId: Int64) -> Int32 {
         guard let txn = fetchById(txnId) else { return 0 }
         let containerCount = TransactionDetailStore.shared.totalCountForStep(txnId: txnId, step: .containerInitiate)

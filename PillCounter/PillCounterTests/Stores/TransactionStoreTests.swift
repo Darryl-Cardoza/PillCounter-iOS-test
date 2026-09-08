@@ -862,4 +862,27 @@ struct TransactionStoreTests {
         TransactionStore.shared.sweepStaleSyncedTransactions(olderThan: 3600)
         #expect(TransactionStore.shared.fetchById(txn.txn_id) != nil)
     }
+
+    // MARK: - clearWorkflowStep
+
+    @Test func clearWorkflowStepResetsToNilAfterBeingSet() {
+        let fixture = BottleTrackingFixture()
+        defer { fixture.cleanUp() }
+        let txn = fixture.makeTransaction()
+        TransactionStore.shared.updateWorkflowStep(txnId: txn.txn_id, step: .vial)
+        guard let fetched = TransactionStore.shared.fetchById(txn.txn_id) else {
+            Issue.record("expected transaction to exist")
+            return
+        }
+        #expect(TransactionStore.shared.getWorkflowStep(txn: fetched) == .vial)
+
+        TransactionStore.shared.clearWorkflowStep(txnId: txn.txn_id)
+
+        #expect(TransactionStore.shared.getWorkflowStep(txn: fetched) == nil)
+    }
+
+    @Test func clearWorkflowStepNoOpsForUnknownTxn() {
+        // Must not crash/throw when the txn doesn't exist.
+        TransactionStore.shared.clearWorkflowStep(txnId: -999_999)
+    }
 }

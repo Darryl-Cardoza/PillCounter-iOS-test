@@ -136,6 +136,10 @@ class PillScanViewModel: ObservableObject {
 
     // MARK: Controlled drug Equivalence
     @Published var isCheckingNdc: Bool = false
+    /// Handle to the in-flight `getControlledDrugInfo` API call, so a reset
+    /// can cancel it before it lands and re-populates state reset just
+    /// cleared — see `resetCurrentTransaction()`.
+    var ndcCheckTask: Task<Void, Never>?
     @Published var ndcComparisonResponse: NdcComparisonResponse?
     @Published var isNdcEquivalent: Bool = false
     @Published var showNdcEquivalencePopup = false

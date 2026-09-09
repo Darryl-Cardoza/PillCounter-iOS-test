@@ -29,7 +29,7 @@ extension UnifiedCameraView {
                         txn_id: pillScanViewModel.currentTransaction?.txn_id ?? 0,
                         note: pillScanViewModel.note
                     )
-                    await MainActor.run { showConfirmCompletionPopup = true }
+                    await MainActor.run { onComplete() }
                 }
             },
             secondaryTitle: L10n.Common.skip,
@@ -37,12 +37,11 @@ extension UnifiedCameraView {
                 showNoteOption = false
                 pillScanViewModel.note = ""
                 Task(priority: .background) {
-                    await MainActor.run { showConfirmCompletionPopup = true }
+                    await MainActor.run { onComplete() }
                 }
             },
             onClose: {
                 showNoteOption = false
-                showConfirmCompletionPopup = false
             }
         )
     }
@@ -55,11 +54,11 @@ extension UnifiedCameraView {
             confirmButtonText: L10n.Common.ok,
             onCancel: {
                 showNoteOption = false
-                showConfirmCompletionPopup = false
+//                showConfirmCompletionPopup = false
             },
             onConfirm: {
                 showNoteOption = false
-                showConfirmCompletionPopup = false
+//                showConfirmCompletionPopup = false
 
                 // Capture before any state reset — startContinuousDispense() clears
                 // currentTransaction, so read the id/type up front.

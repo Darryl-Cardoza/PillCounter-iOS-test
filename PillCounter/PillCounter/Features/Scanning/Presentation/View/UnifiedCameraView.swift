@@ -149,6 +149,8 @@ struct UnifiedCameraView: View {
                 if isShowing { cameraService.pauseCounting() }
             }
             .customPopup(isPresented: $showNoteOption) { showNoteOptionPopup }
+            .customPopup(isPresented: $pillScanViewModel.showSkipBackCountPopup,
+                         dismissOnBackgroundTap: false) { skipBackCountPopup }
             .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
             .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
@@ -705,7 +707,34 @@ struct UnifiedCameraView: View {
 
 // MARK: - Lifecycle
 extension UnifiedCameraView {
-    
+
+    /// Terminal step reached — collect a note first when the flow asks for one,
+    /// otherwise complete straight away. Every "no next step" path funnels through
+    /// here so the note prompt can't be skipped by one of them.
+    func finishTransaction() {
+        // The vial still is a full-screen overlay; clear it or it stays on top of
+        // whatever comes next. Counting was only frozen, so the session needs no rebind.
+        if pillScanViewModel.capturedVialImage != nil {
+            pillScanViewModel.capturedVialImage = nil
+            pillScanViewModel.vialCapturedImagePath = nil
+            cameraService.resetInactivityTimer()
+        }
+
+        if shouldAskForNote {
+            showNoteOption = true
+        } else {
+            onComplete()
+        }
+    }
+
+    /// Notes are asked for on operator-entered dispenses (a PMS-driven txn carries
+    /// its own note) and wherever the pill-counting setting opts into them.
+    var shouldAskForNote: Bool {
+        if addNoteSettings { return true }
+        return pillScanViewModel.currentTransaction?.is_from_pms != true
+            && pillScanViewModel.currentTransaction?.is_dispense == true
+    }
+
     func onComplete() {
         // Capture before any state reset — startContinuousDispense() clears
         // currentTransaction, so read the id/type up front.
@@ -1478,15 +1507,10 @@ extension UnifiedCameraView {
         }
 
         if nextStep == nil {
-            if pillScanViewModel.currentTransaction?.is_from_pms != true
-                && pillScanViewModel.currentTransaction?.is_dispense == true {
-                showNoteOption = true
-            } else {
-               onComplete()
-            }
+            finishTransaction()
             return
         }
-        
+
         // Newly added to skip completion popup.
         // Clearing capturedVialImage removes the full-screen vial still overlay and
         // reveals the live feed. The session was never stopped (vial only freezes
@@ -1502,10 +1526,8 @@ extension UnifiedCameraView {
     func handleVialDone() {
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
-        if addNoteSettings && nextStep == nil {
-            showNoteOption = true
-        } else if nextStep == nil {
-           onComplete()
+        if nextStep == nil {
+            finishTransaction()
         } else {
             // Newly added to skip completion popup.
             // Clearing capturedVialImage removes the full-screen vial still overlay and

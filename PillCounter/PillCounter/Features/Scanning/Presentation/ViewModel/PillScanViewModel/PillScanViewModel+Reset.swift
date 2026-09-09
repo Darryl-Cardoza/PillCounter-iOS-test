@@ -85,6 +85,7 @@ extension PillScanViewModel {
         ndcMismatchRestartFlow = false
         shouldAutoProceedToCount = false
         showCompletionPopup = false
+        showSkipBackCountPopup = false
 
         return true
     }

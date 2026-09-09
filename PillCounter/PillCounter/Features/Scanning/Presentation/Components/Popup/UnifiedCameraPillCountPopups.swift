@@ -46,6 +46,23 @@ extension UnifiedCameraView {
         )
     }
 
+    /// Back count has nothing left to scan (remaining == 0). Skip-only by design —
+    /// the step is unreachable, so a cancel would just strand the transaction.
+    var skipBackCountPopup: some View {
+        ConfirmationDialogue(
+            title: L10n.PillCount.skipStepTitle,
+            message: L10n.PillCount.skipStepMessage,
+            cancelButtonText: "",
+            confirmButtonText: L10n.Common.skip,
+            showSingleConfirmButton: true,
+            onCancel: {},
+            onConfirm: {
+                pillScanViewModel.showSkipBackCountPopup = false
+                finishTransaction()
+            }
+        )
+    }
+
     var showConfirmCompletion: some View {
         ConfirmationDialogue(
             title: L10n.PillCount.confirmCompletionTitle,

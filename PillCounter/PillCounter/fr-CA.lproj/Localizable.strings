@@ -73,8 +73,8 @@
 "pillCount.confirmStepCompletionMessage" = "Êtes-vous sûr de vouloir terminer cette étape ?";
 "pillCount.addNote" = "AJOUTER UNE NOTE";
 "pillCount.pleaseAddNote" = "Veuillez ajouter une note";
-"pillCount.skipStepTitle" = "Passer l’étape";
-"pillCount.skipStepMessage" = "Le comptage restant est 0. Voulez-vous passer l’étape en attente du contenant ?";
+"pillCount.skipStepTitle" = "Rien à compter";
+"pillCount.skipStepMessage" = "Le contenant n’a aucun comptage restant, l’étape de contre-comptage n’est donc pas requise. Touchez Passer pour terminer cette transaction.";
 "pillCount.totalCountExceedsTarget" = "Le comptage total de la transaction dépasse la cible.";
 "pillCount.imageAlreadyCaptured" = "Image déjà capturée. Appuyez sur Refaire pour capturer à nouveau.";
 "pillCount.countLessThanTarget" = "Le comptage est inférieur à la cible.";

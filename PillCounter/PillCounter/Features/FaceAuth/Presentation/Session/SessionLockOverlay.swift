@@ -40,6 +40,19 @@ struct SessionLockOverlay: View {
         .onChange(of: sessionManager.lockState) { _, newState in
             handleLockStateChange(newState)
         }
+        .onAppear(perform: autoStartScanIfNeeded)
+        .onChange(of: sessionManager.shouldAutoStartScan) { _, _ in
+            autoStartScanIfNeeded()
+        }
+    }
+
+    /// Post-login lock sets `shouldAutoStartScan` and expects the camera to
+    /// open immediately rather than waiting for the "Unlock" tap — see
+    /// `FaceSessionManager.lockAfterLogin()`.
+    private func autoStartScanIfNeeded() {
+        guard sessionManager.shouldAutoStartScan, sessionManager.lockState == .locked else { return }
+        sessionManager.consumeAutoStartScan()
+        startScan()
     }
 
     @ViewBuilder

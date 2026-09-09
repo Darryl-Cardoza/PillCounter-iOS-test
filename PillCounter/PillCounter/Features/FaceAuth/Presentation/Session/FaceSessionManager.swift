@@ -49,6 +49,14 @@ final class FaceSessionManager: ObservableObject {
     /// mid-animation. `dismissOverlay()` ends this window.
     @Published private(set) var isOverlayVisible: Bool = true
 
+    /// Set alongside `.locked` when the lock is the direct result of a fresh
+    /// login (not cold launch/background/inactivity) — the overlay reads
+    /// this once to auto-start the scan itself, skipping the "tap to
+    /// unlock" screen, since a login just happened and asking the user to
+    /// tap again is redundant. Consumed (set back to false) by whoever acts
+    /// on it so it never re-fires on an unrelated `.locked` transition.
+    @Published private(set) var shouldAutoStartScan: Bool = false
+
     /// True once the cold-launch lock has been dismissed at least once. The
     /// app's root view uses this to switch presentation mechanisms: the
     /// very first lock renders in the same first frame as the dashboard (see
@@ -134,6 +142,28 @@ final class FaceSessionManager: ObservableObject {
         lockState = .locked
         isOverlayVisible = true
         stopIdleTimer()
+    }
+
+    /// Fresh OTP login while users are enrolled — go straight to the camera
+    /// instead of the normal lock icon screen, since the user just proved
+    /// intent by logging in. Skipped entirely when nobody is enrolled, same
+    /// as every other lock entry point.
+    func lockAfterLogin() {
+        guard hasEnrolledUsers else {
+            releaseLockIfNoUsersEnrolled()
+            return
+        }
+        lockState = .locked
+        isOverlayVisible = true
+        idleDurationAtLock = nil
+        shouldAutoStartScan = true
+        stopIdleTimer()
+    }
+
+    /// Called by the overlay once it has acted on `shouldAutoStartScan` so a
+    /// later unrelated `.locked` (background, inactivity) doesn't replay it.
+    func consumeAutoStartScan() {
+        shouldAutoStartScan = false
     }
 
     func lockDueToInactivity() {

@@ -98,7 +98,15 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private nonisolated(unsafe) var relaxedThisStep = false
     /// Best candidate seen so far in the current step's window (frame +
     /// detection + quality), replaced whenever a higher-scoring one arrives.
+    /// Used only as the hard-timeout fallback — NOT eligible at the soft
+    /// window deadline, since it may never have matched the step's pose.
     private nonisolated(unsafe) var bestCandidate: (pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, quality: FaceQualityResult)?
+    /// Best candidate seen so far THAT ALSO SATISFIED the step's pose range.
+    /// This is what the soft window deadline captures — without this
+    /// separate tracker, the soft deadline would fall back to `bestCandidate`
+    /// regardless of pose and the turn-left/turn-right/chin-up steps would
+    /// never actually require the user to move.
+    private nonisolated(unsafe) var bestPoseMatchedCandidate: (pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, quality: FaceQualityResult)?
     /// Thumbnail rendered from the `.center` step's accepted frame, persisted
     /// once enrollment succeeds and shown in the Quick Access Users row. Held
     /// as a rendered UIImage rather than the raw CVPixelBuffer because the
@@ -163,6 +171,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         currentStepIndex = 0
         poseHoldFrames = 0
         bestCandidate = nil
+        bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         relaxedThisStep = false
         pendingUserId = nil
@@ -309,9 +318,12 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
         // Track the best-scoring candidate seen this window regardless of
         // exact pose match — guarantees the window always has *something*
-        // to fall back on when the deadline hits.
+        // to fall back on when the hard timeout hits.
         if bestCandidate == nil || quality.qualityScore > bestCandidate!.quality.qualityScore {
             bestCandidate = (pixelBuffer, detections[0], quality)
+        }
+        if poseMatches, bestPoseMatchedCandidate == nil || quality.qualityScore > bestPoseMatchedCandidate!.quality.qualityScore {
+            bestPoseMatchedCandidate = (pixelBuffer, detections[0], quality)
         }
 
         if poseHoldFrames >= poseHoldFrameThreshold {
@@ -348,7 +360,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             relaxQualityThresholds()
         }
 
-        if elapsed >= stepWindowSeconds, let candidate = bestCandidate {
+        if elapsed >= stepWindowSeconds, let candidate = bestPoseMatchedCandidate {
             captureStep(using: candidate)
             return
         }
@@ -402,6 +414,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             // or eventually hard-timeout the step.
             Log("Enrollment: step \(currentStepIndex) (\(step)) — embedding generation failed, retrying")
             bestCandidate = nil
+            bestPoseMatchedCandidate = nil
             return
         }
 
@@ -428,6 +441,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
     private nonisolated func advanceToNextStep() {
         bestCandidate = nil
+        bestPoseMatchedCandidate = nil
         poseHoldFrames = 0
         relaxedThisStep = false
         resetQualityThresholds()

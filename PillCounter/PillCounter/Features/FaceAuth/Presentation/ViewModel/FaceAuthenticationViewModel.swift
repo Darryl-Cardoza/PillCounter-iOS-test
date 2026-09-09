@@ -190,6 +190,10 @@ final class FaceAuthenticationViewModel: ObservableObject {
     private nonisolated func resetQualityThresholds() {
         qualityChecker.minFaceWidthPx = 240
         qualityChecker.maxFaceWidthRatio = 0.85
+        // Center-offset gate is enrollment-only — disable it here since
+        // FaceQualityChecker.shared is a singleton shared with enrollment.
+        qualityChecker.maxCenterOffsetXRatio = 1.0
+        qualityChecker.maxCenterOffsetYRatio = 1.0
     }
 
     private nonisolated static func monotonicNow() -> TimeInterval {

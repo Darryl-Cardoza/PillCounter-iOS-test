@@ -41,6 +41,15 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// arrow unlit rather than pointing from a stale pose estimate — the row
     /// itself stays on screen either way.
     @Published private(set) var hasLiveFace: Bool = false
+    /// Reason the most recent frame was rejected by FaceQualityChecker, nil
+    /// when the last frame was acceptable or had no usable face. Drives an
+    /// override of the step's default instruction text (e.g. "center your
+    /// face") for reasons the user can act on.
+    @Published private(set) var liveRejectionReason: FaceQualityRejectionReason?
+    /// Steps whose sample has already been captured — once a direction lands
+    /// here, EnrollmentPoseGuidance freezes that arrow to a done mark instead
+    /// of following live pose. Session-scoped; reset on every new attempt.
+    @Published private(set) var completedSteps: Set<EnrollmentPoseStep> = []
 
     private let poseSteps = EnrollmentPoseStep.allCases
 
@@ -161,6 +170,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
         hasLiveFace = false
         liveYawDegrees = 0
         livePitchDegrees = 0
+        liveRejectionReason = nil
+        completedSteps = []
         state = .preparing
 
         let user = repository.registerUser(firstName: trimmedFirstName, lastName: trimmedLastName)
@@ -196,6 +207,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
         bestCandidate = nil
         frontalAvatar = nil
         hasLiveFace = false
+        liveRejectionReason = nil
+        completedSteps = []
         state = .idle
     }
 
@@ -225,6 +238,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
         bestCandidate = nil
         frontalAvatar = nil
         hasLiveFace = false
+        liveRejectionReason = nil
+        completedSteps = []
         firstName = ""
         lastName = ""
         state = .idle
@@ -246,14 +261,20 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
         guard detections.count == 1 else {
             Log("Enrollment: frame skipped — \(detections.count) face(s) detected")
-            DispatchQueue.main.async { self.hasLiveFace = false }
+            DispatchQueue.main.async {
+                self.hasLiveFace = false
+                self.liveRejectionReason = nil
+            }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
 
         let quality = qualityChecker.check(detection: detections[0], pixelBuffer: pixelBuffer)
         guard quality.isAcceptable else {
-            DispatchQueue.main.async { self.hasLiveFace = false }
+            DispatchQueue.main.async {
+                self.hasLiveFace = false
+                self.liveRejectionReason = quality.reason
+            }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
@@ -262,7 +283,10 @@ final class FaceEnrollmentViewModel: ObservableObject {
         // check, before this frame is eligible as a capture candidate. See
         // FaceCaptureValidator.swift for what this catches and why.
         guard FaceCaptureValidator.isFaceCaptureValid(face: detections[0], frame: pixelBuffer) == nil else {
-            DispatchQueue.main.async { self.hasLiveFace = false }
+            DispatchQueue.main.async {
+                self.hasLiveFace = false
+                self.liveRejectionReason = nil
+            }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
@@ -274,6 +298,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             self.liveYawDegrees = quality.yawDegrees
             self.livePitchDegrees = quality.pitchDegrees
             self.hasLiveFace = true
+            self.liveRejectionReason = nil
         }
 
         if poseMatches {
@@ -381,6 +406,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
 
         collectedEmbeddings.append(embedding)
+        DispatchQueue.main.async { self.completedSteps.insert(step) }
 
         // Render the row thumbnail from the frontal step only — the turned and
         // chin-up poses make for a poor portrait. Done here rather than in
@@ -461,6 +487,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private nonisolated func resetQualityThresholds() {
         qualityChecker.minFaceWidthPx = 240
         qualityChecker.maxFaceWidthRatio = 0.85
+        qualityChecker.maxCenterOffsetXRatio = 0.30
+        qualityChecker.maxCenterOffsetYRatio = 0.30
     }
 
     private nonisolated func relaxQualityThresholds() {
@@ -483,7 +511,9 @@ final class FaceEnrollmentViewModel: ObservableObject {
         switch state {
         case .idle: return L10n.FaceAuth.instructionIdle
         case .preparing: return L10n.FaceAuth.instructionPreparing
-        case .awaitingPose(let step, _, _): return step.instructionKey
+        case .awaitingPose(let step, _, _):
+            if liveRejectionReason == .faceCropIncomplete { return L10n.FaceAuth.faceOffCenter }
+            return step.instructionKey
         case .poseHeld: return L10n.FaceAuth.poseHoldStill
         case .capturingSample: return L10n.FaceAuth.poseCaptured
         case .enrollmentComplete: return L10n.FaceAuth.instructionComplete

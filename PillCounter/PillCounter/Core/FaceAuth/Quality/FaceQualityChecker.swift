@@ -37,6 +37,13 @@ final class FaceQualityChecker {
     /// Face wider than this fraction of the frame = too close. Matches
     /// MAX_FACE_WIDTH_RATIO = 0.85 in both references, unscaled (a ratio).
     var maxFaceWidthRatio: CGFloat = 0.85
+    /// Max allowed distance from frame center to box center, as a fraction
+    /// of frame width/height — catches a face that's mostly out of the
+    /// camera view (cropped at an edge) rather than merely off-pose.
+    /// Deliberately loose: enrollment-only, not part of the reference
+    /// implementations above.
+    var maxCenterOffsetXRatio: CGFloat = 0.30
+    var maxCenterOffsetYRatio: CGFloat = 0.30
 
     // MARK: - Soft-score inputs (never hard-reject)
 
@@ -84,6 +91,13 @@ final class FaceQualityChecker {
         guard box.width <= frame.width * maxFaceWidthRatio else {
             Log("Quality: REJECT faceTooClose (width \(box.width) > \(frame.width * maxFaceWidthRatio))")
             return .rejected(.faceTooClose, qualityScore: Float(box.width))
+        }
+        let centerOffsetX = abs(box.midX - frame.width / 2)
+        let centerOffsetY = abs(box.midY - frame.height / 2)
+        guard centerOffsetX <= frame.width * maxCenterOffsetXRatio,
+              centerOffsetY <= frame.height * maxCenterOffsetYRatio else {
+            Log("Quality: REJECT faceCropIncomplete (offset \(Int(centerOffsetX)),\(Int(centerOffsetY)))")
+            return .rejected(.faceCropIncomplete, qualityScore: Float(box.width))
         }
 
         // TEMP DEBUG landmark-sanity check — not gating yet, log only.

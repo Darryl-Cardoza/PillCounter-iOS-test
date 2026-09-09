@@ -48,6 +48,19 @@ enum EnrollmentPoseStep: Int, CaseIterable {
         }
     }
 
+    /// Voiceover text for this step — center/turnLeft/turnRight use Android's
+    /// exact spoken-strings-reference.md copy (distinct from instructionKey's
+    /// on-screen wording); chinUp/centerAgain have no Android equivalent, so
+    /// they simply speak their own display text.
+    var spokenKey: String {
+        switch self {
+        case .center: return L10n.FaceAuth.spokenPoseCenter
+        case .turnLeft: return L10n.FaceAuth.spokenPoseTurnLeft
+        case .turnRight: return L10n.FaceAuth.spokenPoseTurnRight
+        case .chinUp, .centerAgain: return instructionKey
+        }
+    }
+
     var next: EnrollmentPoseStep? {
         let all = Self.allCases
         guard let idx = all.firstIndex(of: self), idx + 1 < all.count else { return nil }

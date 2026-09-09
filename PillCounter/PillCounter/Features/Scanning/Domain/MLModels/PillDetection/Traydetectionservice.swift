@@ -96,6 +96,22 @@ struct TrayResult: Identifiable {
         }
         return rect.contains(CGPoint(x: x, y: y))
     }
+
+    /// True if this region contains any point of the square of half-side `radius`
+    /// around (x, y) — the deploy contract's "dilate the tray mask by half a pill"
+    /// without rewriting the mask. Sampled at the centre, the four edge midpoints
+    /// and the four corners of that square; a radius of 0 is exactly `containsPoint`.
+    func containsPointWithin(_ x: CGFloat, _ y: CGFloat, radius: CGFloat) -> Bool {
+        if containsPoint(x, y) { return true }
+        if radius <= 0 { return false }
+        for dy in -1...1 {
+            for dx in -1...1 {
+                if dx == 0 && dy == 0 { continue }
+                if containsPoint(x + CGFloat(dx) * radius, y + CGFloat(dy) * radius) { return true }
+            }
+        }
+        return false
+    }
 }
 
 // MARK: - TrayDetectionService

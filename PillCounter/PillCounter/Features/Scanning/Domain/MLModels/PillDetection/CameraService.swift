@@ -69,44 +69,51 @@ final class CameraService: NSObject, ObservableObject {
     /// a bounded object inside it. Matches Android TRAY_MAX_FRAME_COVERAGE = 0.75.
     private static let trayMaxFrameCoverage: CGFloat = 0.75
 
-    /// Number of recent frames whose pill counts are kept for median smoothing.
-    /// The raw per-frame count jitters ±1–2 even on a static scene; reporting the
-    /// median over this window steadies the displayed number. Markers (dots) still
-    /// come from the live frame, so they stay responsive. Matches Android
-    /// PILL_COUNT_SMOOTH_WINDOW = 5.
-    private static let countSmoothWindow: Int = 5
-
-    /// Rolling buffer of recent per-frame counts, oldest first. Median → stableCount.
-    private var recentCounts: [Int] = []
-
-    /// Number of consecutive empty frames (gate closed OR model found 0 pills) the
-    /// last non-zero count is held before it is allowed to drain toward zero. The
-    /// median over countSmoothWindow only tolerates ±1–2 jitter — it flips to 0 as
-    /// soon as a short burst of empty frames (a momentary segmentation/gate flicker
-    /// or a blurred frame) fills the window with zeros, which is the "count suddenly
-    /// drops to 0 even though pills are still there" symptom. While we are inside the
-    /// hold the empty frame is NOT pushed into the median, so stableCount stays put.
-    /// Once empties persist past the hold the zeros flow in normally, so the count
-    /// still falls to 0 when the tray is genuinely emptied or removed.
-    private static let countHoldFrames: Int = 5
-
-    /// Consecutive empty-frame counter feeding the countHoldFrames hold.
-    private var emptyCountFrames: Int = 0
-
-    /// Number of consecutive frames the last-good tray/chute detections are held
-    /// after a momentary segmentation miss, so the overlay + pill gate don't blink
-    /// on an otherwise-steady scene. Matches Android TRAY_HOLD_FRAMES = 1: kept
-    /// short so the tray (and the pill markers gated by it) clear almost immediately
-    /// when the camera moves away — a longer hold leaves a visible ghost of the old
-    /// box. The COUNT is separately protected from a single dropped frame by the
-    /// median over countSmoothWindow, so a 1-frame hold is enough.
+    // ── Tray gate hysteresis (mirrors Android PillAnalyzer) ──────────────────
+    /// The overlay box is held for at most this many incomplete frames so it
+    /// clears almost immediately when the camera moves away (a longer hold left a
+    /// visible ghost box).
     private static let trayHoldFrames: Int = 1
 
-    /// Last-good tray/chute detections (with masks) and the miss counter, used to
-    /// bridge a single dropped segmentation frame. Mirrors Android
-    /// heldTrayDetections / trayMissFrames. Reset on counting pause/resume.
+    /// The pill GATE is held longer: the segmenter drops the chute (or the tray)
+    /// for a frame or two on a steady scene, and every such drop used to zero the
+    /// pill result — the on-screen flicker. The gate opens on the first complete
+    /// frame (tray AND chute) and closes only after this many consecutive
+    /// incomplete ones; while held, the last complete tray set keeps driving the
+    /// crop and the mask filter.
+    private static let gateCloseFrames: Int = 6
+
+    /// Last COMPLETE tray set (tray + chute, with masks) and how many consecutive
+    /// frames have failed to reproduce it. Session-queue state.
     private var heldTrayDetections: [TrayResult] = []
-    private var trayMissFrames: Int = 0
+    private var incompleteFrames: Int = 0
+
+    // ── Tray crop for the pill model ─────────────────────────────────────────
+    /// Margin added around the tray bbox per side, as a fraction of the bbox
+    /// size, so a pill sitting on the rim (the deploy contract dilates the tray
+    /// mask by half a pill) stays whole inside the crop.
+    private static let trayCropMargin: CGFloat = 0.05
+    /// A crop narrower than this (px) means the tray is too far away to count
+    /// from; use the full frame rather than upscale noise.
+    private static let trayCropMinSide: CGFloat = 64
+
+    /// Deploy contract mask_dilate_pill_fraction: the tray mask is treated as
+    /// dilated by this × the median pill side, so a pill whose centre sits on the
+    /// segmented rim doesn't blink in and out as the boundary jitters.
+    private static let maskDilatePillFraction: CGFloat = 0.5
+
+    /// Cross-frame pill state (deploy contract). The tracker decides which
+    /// detections are real (enter/keep/exit); the stabilizer decides what number
+    /// is displayed. Both live on the session queue.
+    private let pillTracker = PillTracker()
+    private let countStabilizer = CountStabilizer()
+
+    /// Frame-to-frame camera motion, fed to the tracker so a hand-held pan does
+    /// not break every pill's association at once.
+    private let motionEstimator = CameraMotionEstimator()
+
+    /// Frame counter for the throttled DEBUG pipeline log.
+    private var pipelineFrameIndex: Int = 0
 
     /// True once AE/AF/AWB have been locked for the current counting session.
     /// The `.hd1280x720` preset already steadies the stream, but residual 3A
@@ -687,22 +694,24 @@ final class CameraService: NSObject, ObservableObject {
             self.gloveDetections  = []
             self.isGloveHazardous = false
             self.excessPillIDs    = []
-            self.recentCounts.removeAll()   // start the next session's median fresh
-            self.emptyCountFrames = 0
         }
         // Restart the sticky excess picker so the next session doesn't inherit
         // highlights chosen against a stale tray/target.
         chuteProximity.reset()
-        // Drop the held tray/chute detections so the next session re-acquires them
-        // from scratch rather than counting against a stale tray that may no longer
-        // be in frame.
-        heldTrayDetections.removeAll()
-        trayMissFrames = 0
 
-        // Release the AE/AF/AWB lock on the session queue so the next counting
-        // session re-meters a fresh scene (possibly a different tray/lighting)
-        // before locking again.
-        sessionQueue.async { [weak self] in self?.unlock3A() }
+        // On the session queue (where the pipeline mutates them): drop the held
+        // tray set, the tracks, the count latch and the motion reference so the
+        // next session re-acquires everything from scratch, and release the
+        // AE/AF/AWB lock so a fresh scene re-meters before locking again.
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.heldTrayDetections.removeAll()
+            self.incompleteFrames = 0
+            self.pillTracker.reset()
+            self.countStabilizer.reset()
+            self.motionEstimator.reset()
+            self.unlock3A()
+        }
     }
 
     func resumeCounting() {
@@ -869,29 +878,19 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             ? gloveDetector.detect(pixelBuffer: pixelBuffer)
             : []
 
+        // ── Camera motion (frame-to-frame registration) ──────────────────────
+        // Registers this frame against the previous one so the pill tracker can
+        // move its tracks by the pan before matching (see PillTracker).
+        let cameraMotion = motionEstimator.estimate(pixelBuffer)
+
         // ── Model 2: Tray / chute segmentation (MobileNetV2-UNet 384×384) ────
         // Returns .tray and .chute regions, each carrying a per-pixel mask. Pills
         // are tested against the masks (not bounding boxes) — 1:1 with Android.
-        var allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
+        let allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
 
-        // ── Tray temporal hold (anti-flicker) ────────────────────────────────
-        // Bridge a single dropped tray-seg frame so the overlay + pill gate don't
-        // blink on a steady scene. Clears after trayHoldFrames consecutive misses
-        // so the tray still disappears when you move away. Mirrors Android.
-        if !allTrays.isEmpty {
-            heldTrayDetections = allTrays
-            trayMissFrames = 0
-        } else if trayMissFrames < Self.trayHoldFrames {
-            trayMissFrames += 1
-            allTrays = heldTrayDetections
-        } else {
-            heldTrayDetections = []
-        }
-
-        // ── "Complete product" gate (mirrors Android TrayGate) ───────────────
+        // ── "Complete product" test (mirrors Android TrayGate) ───────────────
         // A valid scene requires BOTH a tray AND a chute, and the largest tray must
         // NOT fill the frame (that would be the background surface, not a tray).
-        // When closed: no pill count, no tray/chute overlay.
         let trayDets  = allTrays.filter { $0.trayClass == .tray }
         let chuteDets = allTrays.filter { $0.trayClass == .chute }
 
@@ -903,20 +902,29 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         let trayFillsFrame = trayCoverage >= Self.trayMaxFrameCoverage
         let isCompleteTray = !trayDets.isEmpty && !chuteDets.isEmpty && !trayFillsFrame
 
-        let gateOpen = isCompleteTray
+        // ── Gate hysteresis ──────────────────────────────────────────────────
+        // Open on the first complete frame, close only after gateCloseFrames
+        // consecutive incomplete ones. gateTrays drives the crop and the mask
+        // filter — this frame's set when it is complete, otherwise the last
+        // complete one. The overlay box is held for the shorter trayHoldFrames.
+        if isCompleteTray {
+            heldTrayDetections = allTrays
+            incompleteFrames = 0
+        } else {
+            incompleteFrames += 1
+        }
+        let gateOpen = !heldTrayDetections.isEmpty && incompleteFrames <= Self.gateCloseFrames
+        if !gateOpen { heldTrayDetections.removeAll() }
+        let gateTrays     = heldTrayDetections
+        let gateTrayDets  = gateTrays.filter { $0.trayClass == .tray }
+        let gateChuteDets = gateTrays.filter { $0.trayClass == .chute }
+        let displayTrays  = (gateOpen && incompleteFrames <= Self.trayHoldFrames) ? gateTrays : []
 
         // Once a complete, stable scene (tray AND chute) is acquired, lock
         // AE/AF/AWB so the imaging stops drifting and a hand reaching in can't
         // retrigger a whole-scene re-exposure. Idempotent — only fires once per
         // session; released on counting pause/resume.
         if isCompleteTray { lock3AIfNeeded() }
-
-        // Overlay shows tray/chute only when the scene is a complete product.
-        let displayTrays = isCompleteTray ? allTrays : []
-
-        // Tray/chute detections (with masks) used by the pill filter below.
-        let effectiveTrayDets  = trayDets
-        let effectiveChuteDets = chuteDets
 
         // First tray rect for tray-colour sampling (display/feature only).
         let trayRects = trayDets.map { $0.rect }
@@ -945,30 +953,62 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             }
         }
 
-        // ── Model 3: Pill detection (PP-YOLOE+s 640×640) ─────────────────────
-        detector.detect(pixelBuffer: pixelBuffer) { [weak self] allPills, _ in
+        // ── Model 3: Pill detection (PP-YOLOE+s 640×640) on the TRAY CROP ────
+        // With the gate open only the tray's bounding box (plus a small margin)
+        // goes to the pill model: the chute and everything else in the frame are
+        // cropped away, and the pills fill the 640 canvas at the scale the model
+        // was trained on (deploy contract: "feed the detector the tray crop, not
+        // the whole frame"). Otherwise the full frame is used.
+        let cropRect = gateOpen ? Self.trayCropRegion(gateTrayDets, frameSize: frameSz) : nil
+        let cameraShift = cameraMotion.map { CGVector(dx: $0.dx, dy: $0.dy) }
+
+        detector.detect(pixelBuffer: pixelBuffer, cropRect: cropRect) { [weak self] afterNms, _ in
             guard let self else { return }
 
-            // Counting GATE (mirrors Android): only count when the scene is a
-            // complete product (tray AND chute, tray not filling frame). Then keep a
-            // pill only if its CENTRE lands on the actual TRAY mask AND not on the
-            // CHUTE mask. Using the per-pixel masks (not bounding boxes) is what
-            // makes counting correct at any angle/height and keeps chute pills out —
-            // the bbox of an angled tray covers non-tray area including the chute,
-            // but the mask does not.
+            // Tracker (deploy contract): enter 0.50 on two consecutive frames, keep
+            // at 0.35, exit after three misses, one pill per track, camera motion
+            // compensated. Runs every frame so pills confirm while the gate opens.
+            let confirmed = self.pillTracker.update(afterNms, cameraShift: cameraShift)
+
+            // Counting GATE: only count while the (hysteretic) gate is open. Then
+            // keep a pill only if its CENTRE lands on the TRAY mask dilated by half
+            // a pill side, AND not on the CHUTE mask. Using the per-pixel masks (not
+            // bounding boxes) is what makes counting correct at any angle/height
+            // and keeps chute pills out.
             let filtered: [DetectionResult]
+            var visibleOnTray = 0
             if !gateOpen {
                 filtered = []
             } else {
-                filtered = allPills.filter { pill in
-                    let cx = pill.center.x
-                    let cy = pill.center.y
-                    let inTray = effectiveTrayDets.contains { $0.containsPoint(cx, cy) }
-                    guard inTray else { return false }
-                    let inChute = effectiveChuteDets.contains { $0.containsPoint(cx, cy) }
-                    return !inChute
+                let dilate = Self.maskDilatePillFraction * Self.medianSide(confirmed)
+                let onTray: (DetectionResult) -> Bool = { pill in
+                    let c = pill.center
+                    return gateTrayDets.contains { $0.containsPointWithin(c.x, c.y, radius: dilate) }
+                        && !gateChuteDets.contains { $0.containsPoint(c.x, c.y) }
                 }
+                filtered = confirmed.filter(onTray)
+                // What the detector actually sees on the tray this frame, at the
+                // score a track can survive on. A coasting or duplicate track has no
+                // detection under it, so the count is never allowed above this.
+                visibleOnTray = afterNms.filter { $0.confidence >= PillTracker.keepScore && onTray($0) }.count
             }
+
+            // Displayed count is smoothed twice: median over the recent window,
+            // then a latch requiring consecutive agreement. Per-frame count =
+            // confirmed tracks on the tray, capped by the detections visible on the
+            // tray: tracks add hysteresis, never pills.
+            let counted = self.countStabilizer.update(rawCount: min(filtered.count, visibleOnTray))
+
+            #if DEBUG
+            self.pipelineFrameIndex += 1
+            if self.pipelineFrameIndex % 10 == 0 {
+                let crop = cropRect.map { "\(Int($0.width))x\(Int($0.height))" } ?? "full"
+                let motion = cameraMotion.map { String(format: "%.1f,%.1f", $0.dx, $0.dy) } ?? "n/a"
+                print("🧮 [PIPELINE] gateOpen=\(gateOpen) incomplete=\(self.incompleteFrames) "
+                      + "pillInput=\(crop) afterNMS=\(afterNms.count) tracked=\(filtered.count) "
+                      + "visible=\(visibleOnTray) counted=\(counted) motion=\(motion)")
+            }
+            #endif
 
             let hazardous        = gloves.contains { $0.isHazardous }
             // A glove box existing somewhere in frame isn't enough — a bare hand can
@@ -982,43 +1022,11 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             DispatchQueue.main.async {
                 guard self.isCountingEnabled else { return }
 
-                // Markers (dots) come from the LIVE frame so they stay responsive.
+                // Markers (dots) are the confirmed tracks on the tray this frame.
                 self.detections = filtered
 
-                // Displayed/committed count is the MEDIAN over the last few frames,
-                // so a single boundary pill blinking across the threshold doesn't
-                // jitter the number. Median (not mean) ignores the occasional spike.
-                //
-                // Empty-frame hold: a momentary gate/segmentation flicker or a blurred
-                // frame yields 0 pills for a frame or two even though the tray is still
-                // full. Feeding those zeros straight into the median collapses it to 0
-                // (the "count drops to zero" symptom). So while we have a non-zero
-                // count and only a short burst of empties has elapsed, DON'T record the
-                // zero — hold the median window. Once empties persist past the hold the
-                // zeros flow in normally, so the count still drains to 0 when the tray
-                // is genuinely emptied or removed.
-                let frameCount = filtered.count
-                let holdingEmpty: Bool
-                if frameCount == 0 {
-                    self.emptyCountFrames += 1
-                    holdingEmpty = self.stableCount > 0
-                        && self.emptyCountFrames <= Self.countHoldFrames
-                } else {
-                    self.emptyCountFrames = 0
-                    holdingEmpty = false
-                }
-
-                // While holding, leave recentCounts/stableCount untouched so a brief
-                // burst of empty frames can't collapse the median to 0; other overlay
-                // state below still updates normally.
-                if !holdingEmpty {
-                    self.recentCounts.append(frameCount)
-                    if self.recentCounts.count > Self.countSmoothWindow {
-                        self.recentCounts.removeFirst()
-                    }
-                    let sortedCounts = self.recentCounts.sorted()
-                    self.stableCount = sortedCounts[sortedCounts.count / 2]
-                }
+                // The count is the tracker + stabilizer output computed above.
+                self.stableCount = counted
 
                 self.trayDetections   = displayTrays
 
@@ -1043,6 +1051,33 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
                 if glovesNowSafe { self.glovesConfirmed = true }
             }
         }
+    }
+}
+
+// MARK: - PIPELINE GEOMETRY HELPERS
+extension CameraService {
+
+    /// The frame region handed to the pill model: the TRAY bounding box (the
+    /// chute is a separate class and lies outside it), grown by `trayCropMargin`
+    /// per side and clamped to the frame. Nil when there is no tray or the crop is
+    /// too small to be worth upscaling.
+    fileprivate static func trayCropRegion(_ trays: [TrayResult], frameSize: CGSize) -> CGRect? {
+        guard let tray = trays.max(by: { $0.rect.width * $0.rect.height < $1.rect.width * $1.rect.height })
+        else { return nil }
+        let mx = tray.rect.width * trayCropMargin
+        let my = tray.rect.height * trayCropMargin
+        let frame = CGRect(origin: .zero, size: frameSize)
+        let region = tray.rect.insetBy(dx: -mx, dy: -my).integral.intersection(frame)
+        guard !region.isNull, region.width >= trayCropMinSide, region.height >= trayCropMinSide
+        else { return nil }
+        return region
+    }
+
+    /// Median of sqrt(w·h) over `dets`; 0 when there are none.
+    fileprivate static func medianSide(_ dets: [DetectionResult]) -> CGFloat {
+        guard !dets.isEmpty else { return 0 }
+        let sides = dets.map { ($0.rect.width * $0.rect.height).squareRoot() }.sorted()
+        return sides[sides.count / 2]
     }
 }
 

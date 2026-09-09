@@ -4,8 +4,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PURPOSE
 // ───────
-// Runs the PP-YOLOE+s pill detector on every camera frame and returns a
-// stable, temporally-smoothed set of bounding boxes plus a pill count.
+// Runs the PP-YOLOE+s pill detector on a camera frame — or on the tray crop
+// of it — and returns the decoded, NMS'd boxes in full-frame coordinates.
+// Temporal smoothing lives in PillTracker / CountStabilizer (CameraService).
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // MODEL ARCHITECTURE — pills_detector_fp16.mlpackage
@@ -22,7 +23,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // INPUT — image, 640×640 RGB (ImageFeatureType)
 // ─────────────────────────────────────────────────────────────────────────────
-//   • Call Letterbox.preprocess(_:targetSize:640) to scale + pad the camera frame.
+//   • Letterbox.letterbox(_:targetSize:640, cropRect:) scales + pads the camera
+//     frame, or just the tray's bounding box when CameraService passes one
+//     (deploy contract: "feed the detector the tray crop, not the whole frame" —
+//     pills in a whole frame shrink far below the ~35 px the model was trained at).
 //   • Pass the resulting CVPixelBuffer directly — CoreML reads BGRA buffers and
 //     converts to RGB internally; no manual channel rearrangement needed.
 //   • ImageNet normalization (mean / std) is baked into the model's first layer.
@@ -72,27 +76,18 @@
 //     x1 = cx − l_px,  y1 = cy − t_px
 //     x2 = cx + r_px,  y2 = cy + b_px
 //
-//   Un-letterbox to original camera-frame space using Letterbox.currentScaleInfo.
+//   Un-letterbox to original camera-frame space with the ScaleInfo the
+//   letterbox call returned (scale, pad, and the crop's origin offset).
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// CONFIDENCE HYSTERESIS (replaces CountStabilizer median window)
+// WHAT THIS SERVICE RETURNS
 // ─────────────────────────────────────────────────────────────────────────────
-//   The old YOLO model with built-in NMS was stable enough for a simple median
-//   window.  PP-YOLOE+s raw outputs are noisier frame-to-frame, so we use a
-//   two-threshold hysteresis scheme instead:
-//
-//   ENTER threshold (enterConf = 0.55)
-//     A NEW detection (no overlap with any box from the previous frame) must
-//     exceed this stricter threshold to be admitted.
-//
-//   STAY threshold (stayConf = 0.45)
-//     A detection that OVERLAPS (IoU ≥ overlapIoU = 0.45) with a detection
-//     from the previous frame is kept as long as confidence stays above this
-//     lower threshold.  This avoids flickering when the model wavers between
-//     0.48 and 0.52 on a detection it clearly saw in the prior frame.
-//
-//   The hysteresis set is updated every frame:
-//     active ← NMS( ENTER candidates ∪ STAY candidates )
+//   Every anchor at or above the pre-NMS floor (0.35), class-agnostic greedy NMS
+//   at IoU 0.50, capped to the reference decoder's ceilings (1500 proposals in,
+//   500 detections out). Temporal decisions — enter at 0.50 on two consecutive
+//   frames, keep at 0.35, exit after three misses, median + latch on the count —
+//   are made by PillTracker and CountStabilizer in CameraService, exactly as on
+//   Android and in the desktop reference (deploy contract).
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -133,45 +128,21 @@ final class PillDetectionService {
     /// Number of DFL distribution bins per box side (68 channels / 4 sides = 17).
     private let regMax: Int = 17
 
-    /// ENTER hysteresis threshold: a brand-new (non-overlapping) detection must
-    /// exceed this confidence to be accepted in the current frame.
-    ///
-    /// The cls output is already post-sigmoid (model has baked-in sigmoid, per the
-    /// iOS integration spec).  Values are direct probabilities [0, 1] — do NOT apply
-    /// sigmoid again.  Reference scoreThresh from spec = 0.25; we use 0.45 as a
-    /// middle ground — stricter than spec for stability, but low enough that real
-    /// pills the model scores 0.45–0.60 still ENTER. At 0.60 (the previous value)
-    /// a real pill the model was only ~0.5 confident about on its FIRST appearance
-    /// never entered and was never counted — the "tray detected, pills present, but
-    /// count = 0" symptom — because a new pill has no prior-frame box to fall back
-    /// on the softer STAY threshold. Matches Android PILL_CONF_ENTER = 0.50.
-    private let enterConf: Float = 0.50
+    /// Pre-NMS score floor. The cls output is already post-sigmoid (do NOT apply
+    /// sigmoid again). Below the tracker's keep score (0.35) nothing can hold a
+    /// track, so anchors under this never need decoding. Matches Android
+    /// PRE_NMS_SCORE_FLOOR.
+    private let scoreFloor: Float = 0.35
 
-    /// STAY hysteresis threshold: a detection overlapping a box from the previous
-    /// frame is kept as long as confidence stays above this softer threshold.
-    /// Lower than enterConf to avoid flickering on detections already confirmed.
-    ///
-    /// MUST be < enterConf for the two-threshold hysteresis to do anything — when
-    /// stayConf == enterConf the STAY grace is a no-op and every pill is gated at a
-    /// flat threshold each frame, so a pill wavering just above/below it flickers in
-    /// and out of the count (and edge/chute-lip pills blink). Matches the design
-    /// documented in this file's header (enter strict, stay softer).
-    private let stayConf: Float = 0.35
+    /// Deploy-contract nms_iou. Measured in the training repo: no two distinct
+    /// pills overlap above IoU 0.5, so a second box above it is a duplicate on
+    /// the same pill. Matches Android PILL_NMS_IOU.
+    private let nmsIoU: Float = 0.50
 
-    /// Minimum IoU between a new detection and a previous-frame detection to
-    /// count as "the same object" for STAY-mode purposes. Matches Android
-    /// HYSTERESIS_IOU = 0.40.
-    private let overlapIoU: Float = 0.40
-
-    /// IoU threshold used in Non-Maximum Suppression. Matches Android
-    /// PILL_NMS_IOU = 0.45. NMS runs BEFORE hysteresis (Android order).
-    private let nmsIoU: Float = 0.45
-
-    // MARK: - State
-
-    /// Bounding boxes from the most recently completed frame.
-    /// Used as the "previous frame" reference for STAY-mode hysteresis.
-    private var previousFrameBoxes: [CGRect] = []
+    /// Reference decoder ceilings: at most this many candidates enter NMS and this
+    /// many detections leave it (nms_top_k / keep_top_k).
+    private let nmsTopK = 1500
+    private let keepTopK = 500
 
     // MARK: - Model Reference
 
@@ -179,27 +150,37 @@ final class PillDetectionService {
 
     // MARK: - Public API
 
-    /// Runs full detection pipeline (preprocess → infer → decode → NMS → hysteresis).
+    /// Runs the detection pipeline (letterbox → infer → decode → NMS) and hands
+    /// the boxes to `completion` synchronously, on the calling queue.
     ///
     /// - Parameters:
-    ///   - pixelBuffer: Raw camera frame (any resolution). Will be letterboxed to 640×640.
-    ///   - completion:  Called on the inference queue with (filtered detections, stable count).
+    ///   - pixelBuffer: Raw camera frame (any resolution).
+    ///   - cropRect:    Region of the frame to feed the model, in frame pixels
+    ///                  (the tray's bounding box). nil feeds the whole frame.
+    ///                  Boxes come back in full-frame coordinates either way.
+    ///   - completion:  Called with (post-NMS detections ≥ 0.35, their count).
     func detect(pixelBuffer: CVPixelBuffer,
+                cropRect: CGRect? = nil,
                 completion: @escaping ([DetectionResult], Int) -> Void) {
 
         guard let model else { return }
 
         let frameSize = pixelBuffer.size
 
-        // ── Step 1: Letterbox to 640×640 ──────────────────────────────────
-        guard let resized = Letterbox.preprocess(pixelBuffer, targetSize: Int(inputSize)) else {
+        // ── Step 1: Letterbox the frame (or the tray crop) to 640×640 ─────
+        guard let input = Letterbox.letterbox(pixelBuffer, targetSize: Int(inputSize), cropRect: cropRect) else {
             return
         }
+        let scaleInfo = input.info
 
-        var scaleInfo = Letterbox.currentScaleInfo
+        // Debug builds only: keep a sample of the exact images handed to the model.
+        #if DEBUG
+        ModelInputDump.maybeSave(input.buffer,
+                                 label: cropRect.map { "crop_\(Int($0.width))x\(Int($0.height))" } ?? "full")
+        #endif
 
         // ── Step 2: Build CoreML image input ──────────────────────────────
-        let mlInput = pills_detector_fp16Input(image: resized)
+        let mlInput = pills_detector_fp16Input(image: input.buffer)
 
         // ── Step 3: Run inference ──────────────────────────────────────────
         guard let output = try? model.prediction(input: mlInput) else {
@@ -211,8 +192,6 @@ final class PillDetectionService {
         // ── Step 4: Decode all three FPN stride levels ─────────────────────
         // Each stride level contributes a cls tensor and a box tensor.
         // All outputs are CHANNEL-LAST: shape [1, H, W, C].
-        scaleInfo = Letterbox.currentScaleInfo
-
         var raw: [DetectionResult] = []
 
         let strideLevels: [(cls: MLMultiArray, box: MLMultiArray, stride: Int)] = [
@@ -233,21 +212,16 @@ final class PillDetectionService {
         }
 
         // ── Step 5: Non-Maximum Suppression ────────────────────────────────
-        // Android order: decode → NMS → hysteresis. Running NMS first collapses
-        // the duplicate boxes a single pill produces across grid cells/FPN levels
-        // BEFORE the hysteresis overlap test, so the prev-frame IoU match in STAY
-        // mode compares against clean single boxes (not a cloud of duplicates).
-        let afterNms = NMS.run(detections: raw, iouThreshold: nmsIoU)
+        // Class-agnostic greedy NMS, with the reference decoder's ceilings on
+        // proposals in and detections out. Temporal filtering happens in the
+        // caller's PillTracker.
+        if raw.count > nmsTopK {
+            raw.sort { $0.confidence > $1.confidence }
+            raw.removeLast(raw.count - nmsTopK)
+        }
+        let afterNms = Array(NMS.run(detections: raw, iouThreshold: nmsIoU).prefix(keepTopK))
 
-        // ── Step 6: Confidence hysteresis ──────────────────────────────────
-        // New pills must clear enterConf; borderline pills (≥ stayConf) survive
-        // only if they overlap a pill from the previous frame.
-        let final = applyHysteresis(afterNms)
-
-        // Update hysteresis state for the next frame.
-        previousFrameBoxes = final.map { $0.rect }
-
-        completion(final, final.count)
+        completion(afterNms, afterNms.count)
     }
 
     // MARK: - FPN Level Decode (DFL + Sigmoid + Un-letterbox)
@@ -268,7 +242,7 @@ final class PillDetectionService {
                                 box: MLMultiArray,
                                 stride: Int,
                                 originalSize: CGSize,
-                                scaleInfo: Letterbox.ScaleInfo?) -> [DetectionResult] {
+                                scaleInfo: Letterbox.ScaleInfo) -> [DetectionResult] {
 
         let gridH = cls.shape[1].intValue  // height of this FPN grid
         let gridW = cls.shape[2].intValue  // width  of this FPN grid
@@ -323,9 +297,8 @@ final class PillDetectionService {
                     score = Swift.max(score, readF32(clsRaw, at: clsBase + c * clsSC, elem: clsElem))
                 }
 
-                // Pre-filter: reject anchors below the lower STAY threshold.
-                // Proper ENTER/STAY gating happens in applyHysteresis().
-                guard score >= stayConf else { continue }
+                // Pre-filter: below the tracker's keep score nothing can hold a track.
+                guard score >= scoreFloor else { continue }
 
                 // ── DFL box decode ─────────────────────────────────────────
                 // Box tensor layout [1, H, W, 68]: 68 logits per anchor.
@@ -353,14 +326,13 @@ final class PillDetectionService {
                 var y2 = cy + bDist
 
                 // ── Un-letterbox to original camera-frame space ────────────
-                // Letterbox.preprocess stored (scale, padX, padY).
-                // Reverse: original = (letterboxed − pad) / scale
-                if let s = scaleInfo {
-                    x1 = (x1 - s.padX) / s.scale
-                    y1 = (y1 - s.padY) / s.scale
-                    x2 = (x2 - s.padX) / s.scale
-                    y2 = (y2 - s.padY) / s.scale
-                }
+                // Reverse the letterbox, then shift by the crop origin so boxes
+                // land in full-frame coordinates whatever region was fed.
+                let s = scaleInfo
+                x1 = (x1 - s.padX) / s.scale + s.offsetX
+                y1 = (y1 - s.padY) / s.scale + s.offsetY
+                x2 = (x2 - s.padX) / s.scale + s.offsetX
+                y2 = (y2 - s.padY) / s.scale + s.offsetY
 
                 guard x2 > x1, y2 > y1 else { continue }
 
@@ -373,35 +345,6 @@ final class PillDetectionService {
         }
 
         return results
-    }
-
-    // MARK: - Confidence Hysteresis
-
-    /// Partitions raw candidates into ENTER and STAY sets, applies the
-    /// appropriate threshold to each, and merges the survivors.
-    ///
-    /// STAY candidates are those whose bounding box overlaps (IoU ≥ overlapIoU)
-    /// at least one box from the previous frame.  They are kept if confidence
-    /// ≥ stayConf.  All other candidates are ENTER and require ≥ enterConf.
-    private func applyHysteresis(_ candidates: [DetectionResult]) -> [DetectionResult] {
-
-        var kept: [DetectionResult] = []
-
-        for det in candidates {
-            let overlapsAnything = previousFrameBoxes.contains { prev in
-                iou(det.rect, prev) >= overlapIoU
-            }
-
-            if overlapsAnything {
-                // STAY mode — lower bar: detection was already "confirmed"
-                if det.confidence >= stayConf { kept.append(det) }
-            } else {
-                // ENTER mode — stricter bar: new detection must be confident enough
-                if det.confidence >= enterConf { kept.append(det) }
-            }
-        }
-
-        return kept
     }
 
     // MARK: - DFL Soft-Argmax
@@ -444,13 +387,6 @@ final class PillDetectionService {
             return Float(Float16(bitPattern: bits))
         }
         return raw.load(fromByteOffset: index * 4, as: Float.self)
-    }
-
-    private func iou(_ a: CGRect, _ b: CGRect) -> Float {
-        let inter = a.intersection(b)
-        guard !inter.isNull, inter.width > 0, inter.height > 0 else { return 0 }
-        let ia = inter.width * inter.height
-        return Float(ia / (a.width * a.height + b.width * b.height - ia))
     }
 }
 

@@ -172,6 +172,16 @@ struct PillCountLayout: View {
         resolvedTransaction?.is_dispense == true
     }
 
+    /// Reset is offered only while there is something to undo. Straight after a reset
+    /// the transaction is still PARTIAL (so `canResetCurrentTransaction` stays true)
+    /// but every detail row and image is already gone — nothing left to wipe.
+    private var hasCountsToReset: Bool {
+        if isOpenPillScanMode {
+            return !pillScanViewModel.pendingOpenBottleImages.isEmpty
+        }
+        return !(pillScanViewModel.currentTransactionTransactionDetails ?? []).isEmpty
+    }
+
     /// Open-ended parent pour — no target; the bar shows the live count and an
     /// explicit "Done" button (the ring stays an "Add" control).
     private var isOpenEndedStep: Bool {
@@ -271,7 +281,8 @@ struct PillCountLayout: View {
                     isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,
                     isDoneEnabled: isDoneEnabled,
                     hidesCountUI: isBarOnlyStep,
-                    isResetEnabled: isOpenPillScanMode || pillScanViewModel.canResetCurrentTransaction,
+                    isResetEnabled: (isOpenPillScanMode || pillScanViewModel.canResetCurrentTransaction)
+                        && hasCountsToReset,
                     onShowDetailGrid: onShowDetailGrid,
                     onDone: onAllDone,
                     onReset: onReset

@@ -1141,7 +1141,10 @@ extension UnifiedCameraView {
         // held, leaving stale pre-reset details on screen.
         pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
 
-        showPillCountPanel = false
+        // Back to the barcode-scan step in place, panel left up: PillCountLayout renders
+        // only while the panel is true or the step is .scan, so tearing the panel down
+        // here dropped the top and bottom bars from the reset screen.
+        pillScanViewModel.currentControlledStep = .scan
         scanType = .barcode
 
         cameraService.disableBarcodeScanning()

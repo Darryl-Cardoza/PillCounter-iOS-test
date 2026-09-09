@@ -64,3 +64,8 @@ implementation to a subagent, Task/Agent call, workflow, or background job. No
 
 Read-only delegation for search or code location is allowed when it genuinely saves
 context — but every edit to the codebase is made by you, here.
+
+### Minimal comments
+
+Only comment non-obvious WHY (hidden constraint, workaround, subtle invariant). Never
+restate WHAT the code does. No multi-paragraph comment blocks.

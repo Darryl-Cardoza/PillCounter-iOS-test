@@ -406,20 +406,25 @@ final class HL7CompletionBuilder {
         return "OBX|" + fields.joined(separator: "|")
     }
 
-    // MARK: - Inventory Response (INU^U05 — standard segments only, no Z-segments)
+    // MARK: - Inventory Response (INU^U05 — standard segments plus one Z-segment, ZAD)
     //
     // Built entirely through Hl7Core's `InuU05Scope` DSL — `invCount` for each
     // INV row (the library's standard-first count-result layout: itemCode/
     // statusCode/typeCode/quantityOnHand/../lotNumber map straight onto
-    // INV-1/2/3/7/8/9/16 per the official HL7 spec), `nte` for the batch-summary
-    // note, and `obx` for the operator-identification and per-INV SEALED_QTY/
-    // OPEN_QTY rows (OBX-4 subId links each pair back to its INV's setId).
+    // INV-1/2/3/7/8/9/16 per the official HL7 spec), `zad` for the batch's
+    // adjustment note (this app's only structured note today), and `obx` for the
+    // operator-identification and per-INV SEALED_QTY/OPEN_QTY rows (OBX-4 subId
+    // links each pair back to its INV's setId).
     //
     // No serial number / GTIN sent (not tracked by BottleInfoEntity/DrugMasterEntity
     // today — grouping stays keyed on ndc+name+lot+expiry, same as before).
-    // No IMG_REF (no image capture exists for stock-count bottles). No adjustment
-    // breakdown (no expected-on-hand value is tracked anywhere in this app's
-    // inventory flow — every response is a plain count, spec §9 Scenarios 1-4).
+    // Image OBX rows (IMG001, IMG002... — same scheme as dispense's buildImageOBX)
+    // are emitted per-INV, one per captured image, only when a group's opened rows
+    // carried images (controlled-drug open-pill counts) — see BottleInfoEntity.images.
+    // ZAD carries batch.note as a free-text adjustment
+    // comment when present — no structured adjustment type/reason/quantity exists
+    // anywhere in this app's data model today. Groups with total qty 0 are skipped
+    // entirely (spec §9 Scenarios 1-4 — every response is a plain count).
     func buildInventoryMessage(
         batch: BatchCountEntity,
         user: UserEntity?
@@ -435,7 +440,7 @@ final class HL7CompletionBuilder {
         struct Key: Hashable {
             let ndc: String; let name: String; let lot: String; let expiry: String
         }
-        var grouped: [Key: (opened: Int32, sealed: Int32)] = [:]
+        var grouped: [Key: (opened: Int32, sealed: Int32, images: [BottleImageRecord])] = [:]
 
         for stockTxn in stockTxns {
             guard let drug = stockTxn.drug else { continue }
@@ -445,39 +450,31 @@ final class HL7CompletionBuilder {
                     ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
                     lot: bottle.lot_no ?? "", expiry: bottle.exp_no ?? ""
                 )
-                var e = grouped[key] ?? (0, 0)
-                // BottleInfoStore.addOpenedBottle always sets bottle_qty=1 on an
-                // opened row (a fixed constant, not a real sealed-bottle count) —
-                // multiplying it by package_qty here double-counted every opened
-                // row as an extra sealed bottle. Same sealed/opened discriminator
-                // BottleInfoStore.fetchSealedRow already uses: loose_qty == 0 means
-                // this row is a sealed bottle; otherwise it's an opened one and
-                // bottle_qty is not meaningful.
-                if bottle.loose_qty == 0 {
+                var e = grouped[key] ?? (0, 0, [])
+                // Use the same isSealed discriminator as the rest of the app
+                // (BottleInfoStore.fetchSealedRow, StockCountViewModel, HistoryViewModel)
+                // rather than loose_qty == 0 alone — addOpenedBottle sets bottle_qty=0
+                // on opened rows, so a bottle opened and counted to 0 loose pills is
+                // still correctly seen as opened, not sealed.
+                if bottle.isSealed {
                     e.sealed += bottle.bottle_qty * drug.package_qty
                 } else {
                     e.opened += bottle.loose_qty
+                    e.images += bottle.images
                 }
                 grouped[key] = e
             }
         }
 
-        let ndcCount = Int32(Set(grouped.keys.map { $0.ndc }).count)
+        // Zero-total groups carry no information for PMS — never emit an INV for them.
+        grouped = grouped.filter { $0.value.opened + $0.value.sealed > 0 }
+
         var setId = 1
 
         // Message-level OBX row (OBX-4 blank) — operator identification. Name is
-        // whoever last authenticated via face scan (the physical operator right
-        // now), not the logged-in account — falls back to the account name only
-        // when no face session is active. OPERATOR_ID intentionally omitted.
-        let accountName = [user?.fname, user?.lname]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-        let faceSessionName = AppStorageManager.shared.faceLockCurrentUserName?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let operatorName = (faceSessionName?.isEmpty == false) ? faceSessionName! : accountName
-
-        let noteComment = self.buildCommonNotes(batch: batch, totalCount: ndcCount).first?.comment ?? ""
+        // Same OperatorName.current UnifiedCameraView uses for captured-image overlays.
+        // OPERATOR_ID intentionally omitted.
+        let operatorName = OperatorName.current(fname: user?.fname, lname: user?.lname)
 
         let message = builder.inuU05 { scope in
             scope.msh { msh in
@@ -498,11 +495,16 @@ final class HL7CompletionBuilder {
                 orc.placerOrderNumber = "\(batch.batch_id)^\(requestId)"
             }
 
-            scope.nte { nte in
-                nte.setId = "1"
-                nte.sourceOfComment = "L"
-                nte.comment = noteComment
-                nte.commentType = "INFO"
+            // batch.note doubles as this app's only adjustment note today — no
+            // structured adjustment type/reason/quantity is captured anywhere, so
+            // ZAD only carries the free-text comment + who's responsible for it.
+            let adjustmentNote = batch.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !adjustmentNote.isEmpty {
+                scope.zad { zad in
+                    zad.setId = "1"
+                    zad.comment = adjustmentNote
+                    zad.approvedBy = operatorName
+                }
             }
 
             scope.obx { obx in
@@ -516,6 +518,7 @@ final class HL7CompletionBuilder {
 
             // One INV per group, immediately followed by its SEALED_QTY/OPEN_QTY OBX rows.
             var invSetId = 1
+            var imgIdCounter = ImgIdCounter()
             for (key, value) in grouped {
                 let total = value.opened + value.sealed
 
@@ -560,6 +563,23 @@ final class HL7CompletionBuilder {
                 }
                 setId += 1
 
+                // One OBX per image, same shape as the dispense flow's buildImageOBX —
+                // unique observationId (IMG001, IMG002...) rather than `~`-joining paths
+                // into one field (`~` is HL7's repeat separator; Hl7Core's encoder escapes
+                // a literal `~` in a value to `\R\`). subId still links back to this INV,
+                // which dispense's single-drug messages never needed.
+                for image in value.images {
+                    scope.obx { obx in
+                        obx.setId = "\(setId)"
+                        obx.valueType = "RP"
+                        obx.observationId = imgIdCounter.next()
+                        obx.subId = "\(invSetId)"
+                        obx.observationValue = "/images/\(image.path)"
+                        obx.resultStatus = "F"
+                    }
+                    setId += 1
+                }
+
                 invSetId += 1
             }
         }
@@ -570,6 +590,17 @@ final class HL7CompletionBuilder {
 
 // MARK: - Shared Private Helpers
 private extension HL7CompletionBuilder {
+
+    // MARK: Image observationId counter
+    // IMG001, IMG002... — one instance per message build, never shared across builds,
+    // so each message's image OBX rows get their own contiguous IMG### sequence.
+    struct ImgIdCounter {
+        private var counter = 1
+        mutating func next() -> String {
+            defer { counter += 1 }
+            return "IMG" + String(format: "%03d", counter)
+        }
+    }
 
     // MARK: Image OBX Builder
     struct ObxRow {
@@ -590,11 +621,7 @@ private extension HL7CompletionBuilder {
     ) -> [ObxRow] {
 
         var obxList: [ObxRow] = []
-        var imgCounter = 1
-        func nextImgId() -> String {
-            defer { imgCounter += 1 }
-            return "IMG" + String(format: "%03d", imgCounter)
-        }
+        var imgIdCounter = ImgIdCounter()
 
         for (index, detail) in details.enumerated() {
 
@@ -618,7 +645,7 @@ private extension HL7CompletionBuilder {
                     // valueType: "ST",
                     valueType: "RP",
                     // observationId: observationId,
-                    observationId: nextImgId(),
+                    observationId: imgIdCounter.next(),
                     // observationText: "\(label) \(index + 1)",
                     observationText: type,
                     observationValue: observationValue,
@@ -643,7 +670,7 @@ private extension HL7CompletionBuilder {
                     // valueType: "ST",
                     valueType: "RP",
                     // observationId: observationId,
-                    observationId: nextImgId(),
+                    observationId: imgIdCounter.next(),
                     observationText: "Barcode Image",
                     // observationValue: "count=0|type=\(ControlledStep.scan.imageLabel)|image=\(fileName)",
                     // observationValue: "/images/\(barcodePath)",
@@ -810,28 +837,6 @@ private extension HL7CompletionBuilder {
         }
 
         if let note = txn.note?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !note.isEmpty {
-            comment += " | Note: \(note)"
-        }
-
-        return [
-            NoteRow(
-                setId: "1",
-                sourceOfComment: "L",
-                comment: comment,
-                commentType: "INFO"
-            )
-        ]
-    }
-
-    func buildCommonNotes(
-        batch: BatchCountEntity,
-        totalCount: Int32
-    ) -> [NoteRow] {
-
-        var comment = "Batch Id: \(batch.batch_id) | Status: Completed | Total Count: \(totalCount)"
-
-        if let note = batch.note?.trimmingCharacters(in: .whitespacesAndNewlines),
            !note.isEmpty {
             comment += " | Note: \(note)"
         }

@@ -136,6 +136,22 @@ final class CoreDataManager {
         }
     }
 
+    /// Same as `save(context:)`, but reports whether the save actually
+    /// persisted — for callers that must not report a downstream effect
+    /// (e.g. deleting a backing file) as done when the underlying save
+    /// silently failed. Returns `true` when there was nothing to save.
+    @discardableResult
+    func saveReturningSuccess(context: NSManagedObjectContext) -> Bool {
+        guard context.hasChanges else { return true }
+        do {
+            try context.save()
+            return true
+        } catch {
+            Log("❌ CoreData save error: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func resetContext() {
         container.viewContext.performAndWait {
             container.viewContext.reset()

@@ -32,10 +32,19 @@ struct PillCountBottomBar: View {
     var isRegularCountType: Bool = false
     /// Whether the "Done" button on the open-ended step is tappable (≥1 pill).
     var isDoneEnabled: Bool = true
+    /// True on steps with no count/target data (vial, and the raw scan phase) —
+    /// only "View all counts" and the steps row are meaningful; progress bar,
+    /// live count and Proceed are hidden.
+    var hidesCountUI: Bool = false
+    /// Whether the reset icon is tappable — false once the transaction is completed.
+    var isResetEnabled: Bool = true
 
     let onShowDetailGrid: () -> Void
     /// Finish the open-ended parent pour. Only used when `isOpenEndedCountStep`.
     var onDone: () -> Void = {}
+    /// Reset the current transaction — hard-deletes its counts/images and
+    /// restarts it from the scan step.
+    var onReset: () -> Void = {}
 
     /// iPhone in portrait — needs extra vertical padding so the bar isn't too thin.
     private var isPortrait: Bool { !isLandscape }
@@ -43,36 +52,49 @@ struct PillCountBottomBar: View {
     /// Bare live-count number — shown for the open-ended container-initiate pour
     /// and for REGULAR count type (both have no meaningful fixed target).
     private var showsLiveCount: Bool {
-        isRegularCountType || (isOpenEndedCountStep && currentStep != .containerPending)
+        !hidesCountUI && (isRegularCountType || (isOpenEndedCountStep && currentStep != .containerPending))
     }
 
     /// Target progress bar — hidden for REGULAR count type and the open-ended
     /// container-initiate pour (neither has a meaningful target).
     private var showsProgressBar: Bool {
-        !isRegularCountType && !(isOpenEndedCountStep && currentStep != .containerPending)
+        !hidesCountUI && !isRegularCountType && !(isOpenEndedCountStep && currentStep != .containerPending)
     }
 
     /// Explicit Proceed button — shown for open-ended steps and REGULAR count type.
-    private var showsProceedButton: Bool { isOpenEndedCountStep || isRegularCountType }
+    private var showsProceedButton: Bool { !hidesCountUI && (isOpenEndedCountStep || isRegularCountType) }
 
     var body: some View {
         HStack(alignment: .center, spacing: isIpad ? 24 : 12) {
-            // "View all counts" — opens the full detail grid overlay.
-            Button(action: onShowDetailGrid) {
-                HStack(spacing: 8) {
-                    Text(L10n.PillScan.viewAllCounts)
-                        .font(.system(size: isIpad ? 16 : 13, weight: .semibold))
-                        .foregroundStyle(appColors.primary)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: isIpad ? 14 : 11, weight: .semibold))
-                        .foregroundStyle(appColors.primary)
-                }
+            // Reset the current transaction — hard-deletes its counts/images
+            // and restarts it from the scan step.
+            Button(action: onReset) {
+                Image("icon_reset")
+                    .renderingMode(.template)
+                    .font(.system(size: isIpad ? 14 : 11, weight: .semibold))
+                    .foregroundStyle(isResetEnabled ? appColors.primary : Color.gray)
             }
-            // In portrait the button hugs its content so the trailing progress bar
-            // can claim ALL the remaining width; in landscape it shares the bar
-            // equally (steps row sits centred between the two flexible sides).
-            .frame(maxWidth: isPortrait ? nil : .infinity, alignment: .leading)
-            .fixedSize(horizontal: isPortrait, vertical: false)
+            .disabled(!isResetEnabled)
+
+            // "View all counts" — opens the full detail grid overlay. Hidden on the
+            // vial/scan bar (hidesCountUI) — there's no per-drug detail grid yet.
+            if !hidesCountUI {
+                Button(action: onShowDetailGrid) {
+                    HStack(spacing: 8) {
+                        Text(L10n.PillScan.viewAllCounts)
+                            .font(.system(size: isIpad ? 18 : 13, weight: .semibold))
+                            .foregroundStyle(appColors.primary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: isIpad ? 16 : 11, weight: .semibold))
+                            .foregroundStyle(appColors.primary)
+                    }
+                }
+                // In portrait the button hugs its content so the trailing progress bar
+                // can claim ALL the remaining width; in landscape it shares the bar
+                // equally (steps row sits centred between the two flexible sides).
+                .frame(maxWidth: isPortrait ? nil : .infinity, alignment: .leading)
+                .fixedSize(horizontal: isPortrait, vertical: false)
+            }
 
             // Steps For — hidden here on iPhone portrait (shown above the bar instead).
             // Wrapped in an equal-share flexible frame so the row stays centred in
@@ -104,6 +126,8 @@ struct PillCountBottomBar: View {
             //  • container-initiate (open-ended, no target) → live count + Proceed
             //  • container-pending → target progress bar + Proceed (no bare count)
             //  • everything else → target progress bar only
+            //  • vial/scan (hidesCountUI) → omitted entirely so the steps row centers alone
+            if !hidesCountUI {
             HStack(spacing: isIpad ? 16 : 10) {
                 if showsProgressBar {
                     PillCountTargetProgressBar(
@@ -144,6 +168,7 @@ struct PillCountBottomBar: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, isPortrait ? 14 : 0)

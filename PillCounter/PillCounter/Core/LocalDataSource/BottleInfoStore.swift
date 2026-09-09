@@ -18,11 +18,34 @@ struct SealedLotKey: Hashable {
     }
 }
 
+/// One snapshot captured during open-pill counting: the file path plus the pill
+/// count at the moment of that specific Add tap (not the row's running total —
+/// see BottleInfoEntity.images).
+struct BottleImageRecord: Codable, Equatable {
+    let path: String
+    let count: Int32
+}
+
 extension BottleInfoEntity {
     /// Sealed heuristic: a sealed row has bottle_qty > 0 and loose_qty == 0.
     var isSealed: Bool { bottle_qty > 0 && loose_qty == 0 }
 
     var sealedLotKey: SealedLotKey { SealedLotKey(lotNo: lot_no, expNo: exp_no) }
+
+    /// Snapshots captured during open-pill counting for this row, decoded from
+    /// `image_paths_json`. Empty for sealed rows and any opened row with no
+    /// captured images.
+    var images: [BottleImageRecord] { BottleInfoEntity.decodeImages(image_paths_json) }
+
+    static func decodeImages(_ json: String?) -> [BottleImageRecord] {
+        guard let json, let data = json.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([BottleImageRecord].self, from: data)) ?? []
+    }
+
+    static func encodeImages(_ images: [BottleImageRecord]) -> String? {
+        guard !images.isEmpty, let data = try? JSONEncoder().encode(images) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
 }
 
 final class BottleInfoStore {
@@ -93,19 +116,50 @@ final class BottleInfoStore {
 
     // MARK: - Opened bottle writes (new row every call)
 
+    /// Same identity key as sealed rows: exact match on (stock_txn_id, lot_no, exp_no)
+    /// is the same opened row; any lot OR exp difference is a distinct row. Exposed for
+    /// callers (open-pill scan flow) that need to merge into an existing opened row
+    /// instead of always inserting a new one — `addOpenedBottle` itself keeps its
+    /// existing "always new row" contract for its other call sites.
+    func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
+        let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
+        return fetchByStockTxn(stockTxnId: stockTxnId).first {
+            !$0.isSealed && SealedLotKey(lotNo: $0.lot_no, expNo: $0.exp_no) == targetKey
+        }
+    }
+
+    /// Appends `images` to an existing opened row's `image_paths_json` array (no-op if
+    /// `images` is empty). Used to merge captured snapshots into a row that was already
+    /// merged/updated via `fetchOpenedRow` + `updateOpenedBottleLooseQty`.
+    func appendImages(bottleId: Int64, images: [BottleImageRecord]) {
+        guard !images.isEmpty, let bottle = fetchById(bottleId) else { return }
+        let merged = bottle.images + images
+        bottle.image_paths_json = BottleInfoEntity.encodeImages(merged)
+        bottle.updated_at = nowMs()
+        CoreDataManager.shared.save(context: context)
+        bottleInfosDidChange.send()
+    }
+
     @discardableResult
-    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?) -> BottleInfoEntity? {
+    func addOpenedBottle(
+        stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
+        images: [BottleImageRecord] = []
+    ) -> BottleInfoEntity? {
         guard let stockTxn = StockTxnStore.shared.fetchById(stockTxnId) else { return nil }
 
         let entity = BottleInfoEntity(context: context)
         entity.bottle_id = generateUniqueId()
         entity.stock_txn_id = stockTxnId
         entity.batch_id = stockTxn.batch_id
-        entity.bottle_qty = 1
+        // An opened row is not a bottle count — 0 keeps isSealed's
+        // (bottle_qty > 0 && loose_qty == 0) heuristic correct even when
+        // looseQty is 0 (bottle opened, counted empty).
+        entity.bottle_qty = 0
         entity.loose_qty = looseQty
         entity.lot_no = lotNo
         entity.exp_no = expNo
         entity.serial_no = serialNo
+        entity.image_paths_json = BottleInfoEntity.encodeImages(images)
         entity.stockTxn = stockTxn
 
         let now = nowMs()

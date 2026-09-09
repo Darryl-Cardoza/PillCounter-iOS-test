@@ -115,6 +115,7 @@ struct UnifiedCameraView: View {
     @State var showStockNoteOptions:   Bool = false
     @State var stockNoteError: String?
     @State var showDeleteAllTransactionDetailsPopup: Bool = false
+    @State var showResetTransactionPopup: Bool = false
     @State var showCountMismatchPopup: Bool = false
     @State var selectedTransactionDetail: PillCountTransactionDetailsEntity?
     @State var showTransactionHistory: Bool = true
@@ -160,6 +161,7 @@ struct UnifiedCameraView: View {
             .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
             .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
+            .customPopup(isPresented: $showResetTransactionPopup) { resetTransactionPopup }
             .customPopup(isPresented: $showCountMismatchPopup) { countMismatchDialog }
             .customPopup(isPresented: $showHl7UnavailablePopup, dismissOnBackgroundTap: false) { hl7UnavailablePopup }
             .customPopup(isPresented: $pillScanViewModel.showHazardousTrayPopup) { hazardousTrayPopup }
@@ -272,32 +274,28 @@ struct UnifiedCameraView: View {
             .overlay {
                 // Hidden while the inactivity "Resume" overlay (in UnifiedCameraLayout,
                 // the layer below) is up — so Resume stays the topmost, tappable control.
-                if showPillCountPanel && !cameraService.isPausedDueToInactivity {
-                    Group {
-                        if pillScanViewModel.currentControlledStep == .vial {
-                            VStack {
-                                Spacer()
-                                vialControlBottomView
-                                    .padding(.bottom, UIDevice.current.userInterfaceIdiom == .pad ? 24 : 14)
-                            }
-                        } else {
-                            PillCountLayout(
-                                pillScanViewModel: pillScanViewModel,
-                                cameraService: cameraService,
-                                isDispense: router.selectedPillScanningIsDispense ?? true,
-                                isLandscape: isLandscape,
-                                isAddDisabled: isAddDisabled,
-                                instructionText: overlayInstructionText,
-                                showGloveIndicator: (currentScanType != .stockCount || isOpenPillScanMode)
-                                    && cameraService.isGloveDetectionEnabled,
-                                isOpenPillScanMode: isOpenPillScanMode,
-                                onBack: { handleBack() },
-                                onAdd: { handleAdd() },
-                                onAllDone: { handleComplete() },
-                                onShowDetailGrid: { showDetailGrid = true }
-                            )
-                        }
-                    }
+                // PillCountLayout handles .vial and .scan internally (bottom bar only,
+                // no ring/top bar content that needs real drug/count data) — no
+                // separate branch needed here for either.
+                if (showPillCountPanel || pillScanViewModel.currentControlledStep == .scan)
+                    && !cameraService.isPausedDueToInactivity {
+                    PillCountLayout(
+                        pillScanViewModel: pillScanViewModel,
+                        cameraService: cameraService,
+                        isDispense: router.selectedPillScanningIsDispense ?? true,
+                        isLandscape: isLandscape,
+                        isAddDisabled: isAddDisabled,
+                        instructionText: overlayInstructionText,
+                        showGloveIndicator: (currentScanType != .stockCount || isOpenPillScanMode)
+                            && cameraService.isGloveDetectionEnabled,
+                        isOpenPillScanMode: isOpenPillScanMode,
+                        isRxLabelScan: scanType == .rx_label,
+                        onBack: { handleBack() },
+                        onAdd: { handleAdd() },
+                        onAllDone: { handleComplete() },
+                        onShowDetailGrid: { showDetailGrid = true },
+                        onReset: { showResetTransactionPopup = true }
+                    )
                     .environmentObject(darkAppColors)
                     .ignoresSafeArea()
                 }
@@ -619,6 +617,7 @@ struct UnifiedCameraView: View {
             isLandscape: isLandscape,
             instructionText: overlayInstructionText,
             showPillDetectionUI: currentScanType != .stockCount || isOpenPillScanMode,
+            scanType: scanType,
             onBack: { handleBack() }
         )
         .onAppear(perform: onAppear)
@@ -626,6 +625,7 @@ struct UnifiedCameraView: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
+                if !cameraService.isAuthorized { cameraService.checkPermissions() }
                 cameraService.start()
                 if !showPillCountPanel { cameraService.enableBarcodeScanning() }
                 if currentScanType == .stockCount && !isOpenPillScanMode {
@@ -773,11 +773,6 @@ struct UnifiedCameraView: View {
 //        )
 //    }
 
-    private var vialControlBottomView: some View {
-        VialBottomContentView()
-            .environmentObject(cameraService)
-            .environmentObject(darkAppColors)
-    }
 }
 
 // MARK: - Lifecycle
@@ -962,6 +957,15 @@ extension UnifiedCameraView {
             return
         }
 
+        // Open-pill counting already has a resolved NDC (target-verification screen
+        // showing) — a stray barcode here must not beep/vibrate or do anything; the
+        // camera-level scanner should have been disabled already (see
+        // initializeTransaction's isOpenPillScanMode branch), but guard here too in
+        // case a frame was already in flight when that happened.
+        if isOpenPillScanMode && pillScanViewModel.pendingOpenBottleDrugId != nil {
+            return
+        }
+
         // Continuous dispense note: the queue sheet is NOT dismissed here. It is
         // dismissed only once the RX scan actually succeeds and isn't blocked —
         // see the showRxFlowPopup / rxResumeInline observers below. A failed or
@@ -1062,6 +1066,11 @@ extension UnifiedCameraView {
             pillScanViewModel.currentControlledStep = .targetVerification
             pillScanViewModel.currentControlledTargetCount = 0
             pillScanViewModel.addCurrentOpenPillCount = 0
+            // GS1 metadata (lot/exp/serial) was already captured and stashed by
+            // resolveStockTxnForOpenPillScan before this ran — safe to stop the
+            // scanner now so a stray barcode during counting can't beep/vibrate
+            // or swap the NDC out from under this count (only Back/Proceed re-enable it).
+            cameraService.disableBarcodeScanning()
             cameraService.resumeCounting()
             return
         }
@@ -1110,6 +1119,115 @@ extension UnifiedCameraView {
         pillScanViewModel.showNdcEquivalencePopup = false
         stockCountViewModel.reset()
         showStockEditSheet = false
+    }
+
+    /// "Reset Transaction" confirmed — hard-deletes the txn's counts/images
+    /// (view-model side) and drops this screen back to the barcode-scan step
+    /// for the SAME transaction, in place (no navigation).
+    ///
+    /// Reuses every flag `onAppear` resets for a fresh `.barcode` entry (see
+    /// `resetForFreshBarcodeEntry()`) instead of hand-picking a subset — a
+    /// first attempt here only cleared a few scan-related fields and left
+    /// `isCheckingNdc`/popup flags from the PRIOR (already-verified) scan
+    /// dangling, which silently blocked every later scan (`handleScannedCode`
+    /// no-ops while `isCheckingNdc` is stuck true). `selectedTransaction`/
+    /// `currentTransaction` are deliberately NOT cleared — the re-scan must
+    /// re-verify against this same txn, not a freshly fetched one.
+    ///
+    /// Also force-releases the camera's same-barcode lock: the operator's
+    /// bottle typically never leaves the frame across a reset, so without
+    /// this the exact same physical barcode is silently ignored until it
+    /// physically leaves and re-enters frame (see `forceReleaseBarcodeLock`).
+    func resetTransactionInPlace() {
+        guard pillScanViewModel.resetCurrentTransaction() else {
+            pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.resetTransactionFailed)
+            return
+        }
+        resetForFreshBarcodeEntry()
+
+        // Don't rely on .onChange(of: currentControlledStep) to refresh the
+        // detail grid — it only fires on a value CHANGE, and the step
+        // re-derived after reset can land back on the same value it already
+        // held, leaving stale pre-reset details on screen.
+        pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
+
+        showPillCountPanel = false
+        scanType = .barcode
+
+        cameraService.disableBarcodeScanning()
+        cameraService.pauseCounting()
+        cameraService.resetBarcodeScanState()
+        cameraService.forceReleaseBarcodeLock()
+        cameraService.start()
+        cameraService.enableBarcodeScanning()
+        startScanTimeout()
+    }
+
+    /// "Reset" confirmed while in open-pill scan mode (stock-count loose-pill
+    /// counting — no `PillCountTransactionEntity` backs this mode, so there is
+    /// no DB row to touch). Deletes the temp images captured before Proceed
+    /// (barcode capture, vial photo — neither is referenced by any DB row
+    /// yet, so leaving them would orphan the files) and clears all pending
+    /// open-bottle identity/lot/count state, then drops back to the
+    /// barcode-scan step FOR THE SAME open-pill session — `isOpenPillScanMode`
+    /// stays true (unlike `handleBack`'s open-pill branch, which exits the
+    /// mode entirely; reset restarts it in place instead).
+    func resetOpenPillScanInPlace() {
+        if let path = pillScanViewModel.pendingBarcodeImagePath {
+            PhotoFileManager.shared.deleteImage(fileName: path)
+        }
+        pillScanViewModel.pendingBarcodeImagePath = nil
+        if let path = pillScanViewModel.vialCapturedImagePath {
+            PhotoFileManager.shared.deleteImage(fileName: path)
+        }
+        pillScanViewModel.vialCapturedImagePath = nil
+        pillScanViewModel.capturedVialImage = nil
+
+        pillScanViewModel.pendingOpenBottleDrug = nil
+        pillScanViewModel.pendingOpenBottleDrugId = nil
+        pillScanViewModel.pendingOpenBottleBucketId = nil
+        pillScanViewModel.pendingOpenBottleLot = nil
+        pillScanViewModel.pendingOpenBottleExpiry = nil
+        pillScanViewModel.pendingOpenBottleSerial = nil
+        pillScanViewModel.addCurrentOpenPillCount = 0
+
+        resetForFreshBarcodeEntry()
+
+        showPillCountPanel = false
+        scanType = .barcode
+
+        cameraService.disableBarcodeScanning()
+        cameraService.pauseCounting()
+        cameraService.resetBarcodeScanState()
+        cameraService.forceReleaseBarcodeLock()
+        cameraService.start()
+        cameraService.enableBarcodeScanning()
+        startScanTimeout()
+    }
+
+    /// Every view-model/screen flag `onAppear` clears before a fresh
+    /// `.barcode` scan, minus anything that would drop the current
+    /// transaction — shared by `onAppear` (via `resetScanningState()`, which
+    /// DOES clear the transaction) and `resetTransactionInPlace()` (which
+    /// must not).
+    private func resetForFreshBarcodeEntry() {
+        pillScanViewModel.showRxFlowPopup = false
+        pillScanViewModel.showRxOnHoldPopup = false
+        pillScanViewModel.showRxInProgressPopup = false
+        pillScanViewModel.showNdcEquivalencePopup = false
+        pillScanViewModel.showScannedDrugInfoPopoup = false
+        pillScanViewModel.showVerifyStockBottlePopup = false
+        pillScanViewModel.fetchedRxTransaction = nil
+        pillScanViewModel.isDrugFound = nil
+        pillScanViewModel.isCheckingNdc = false
+        pillScanViewModel.isNdcEquivalent = false
+        pillScanViewModel.ndcComparisonResponse = nil
+        pillScanViewModel.scannedRxData = nil
+
+        cameraState = .scanning
+        scannedRawValue = nil
+        capturedImage = nil
+        hasInitializedStep = false
     }
 
     // MARK: - Continuous dispense
@@ -1246,6 +1364,20 @@ extension UnifiedCameraView {
         }
     }
 
+    /// Operator name for a captured image's metadata overlay — dispense (handleAdd) and
+    /// open-pill (captureOpenBottleImage) both use this, same OperatorName.current
+    /// HL7MessageBuilder uses for the inventory response's OPERATOR_NAME OBX. Reads
+    /// userProfileDetails directly rather than the cached userViewModel.fullName —
+    /// the two can go stale relative to each other. Not `currentTransaction?.user` —
+    /// that reflects whoever the count was originally assigned to, not who's actually
+    /// standing at the camera right now.
+    func currentOperatorName() -> String {
+        OperatorName.current(
+            fname: userViewModel.userProfileDetails?.fname,
+            lname: userViewModel.userProfileDetails?.lname
+        )
+    }
+
     func handleAdd() {
         guard !isAddDisabled else { return }
         cameraService.resetInactivityTimer()
@@ -1279,15 +1411,12 @@ extension UnifiedCameraView {
             showSuccessAnimation = false
         }
 
+        // Open-pill mode has no currentTransaction, so addTransactionDetailToCurrentTransaction
+        // below is a no-op there regardless of imagePath — capturing/saving a snapshot for it
+        // would just orphan a JPEG on disk with no row ever pointing at it. captureOpenBottleImage()
+        // is the only snapshot this mode needs (feeds pendingOpenBottleImages / …DbImages).
         var savedPath: String? = nil
-        if let rawImage = cameraService.captureSnapshotWithOverlays() {
-            let user = [
-                pillScanViewModel.currentTransaction?.user?.fname,
-                pillScanViewModel.currentTransaction?.user?.lname
-            ]
-            .compactMap { $0 }
-            .joined(separator: " ")
-
+        if !isOpenPillScanMode, let rawImage = cameraService.captureSnapshotWithOverlays() {
             let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
             guard let processed = rawImage.compressedGrayscale(maxWidth: 1080, quality: 1.0) else { return }
             guard let data = processed.jpegData(compressionQuality: 0.5) else { return }
@@ -1302,7 +1431,7 @@ extension UnifiedCameraView {
                 count: cameraService.stableCount,
                 targetCount: txn?.target_count,
                 timestamp: timestamp,
-                userInitials: user,
+                userInitials: currentOperatorName(),
                 geolocation: locationService.locationString,
                 rx: txn?.rx_no ?? "",
                 fileSizeKB: fileSizeKB,
@@ -1320,6 +1449,51 @@ extension UnifiedCameraView {
         )
         if isOpenPillScanMode {
             pillScanViewModel.addCurrentOpenPillCount += cameraService.stableCount
+            captureOpenBottleImage()
+        }
+    }
+
+    /// Open-pill counting, any drug type: capture and save a snapshot for this Add tap
+    /// off the main thread, then record it via `appendOpenBottleImage` — the single
+    /// source both the grid (`pendingOpenBottleImages`) and, for controlled drugs,
+    /// the DB persistence payload (`pendingOpenBottleDbImages`) are derived from.
+    private func captureOpenBottleImage() {
+        guard let rawImage = cameraService.captureSnapshotWithOverlays() else { return }
+
+        let stableCount = cameraService.stableCount
+        let geolocation = locationService.locationString
+        let isControlled = !(pillScanViewModel.pendingOpenBottleDrug?.drug_type?
+            .trimmingCharacters(in: .whitespaces).isEmpty ?? true)
+        let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+        let operatorName = currentOperatorName()
+
+        DispatchQueue.global(qos: .utility).async { [weak pillScanViewModel] in
+            guard let processed = rawImage.compressedGrayscale(maxWidth: 1080, quality: 1.0),
+                  let data = processed.jpegData(compressionQuality: 0.5) else { return }
+            let fileSizeKB = Double(data.count) / 1024.0
+
+            let finalImage = processed.addingMetadataOverlay(
+                ndc: pillScanViewModel?.pendingOpenBottleDrug?.ndc ?? "",
+                substituteNdc: "",
+                workflowStep: "OPEN_PILL",
+                count: stableCount,
+                targetCount: nil,
+                timestamp: timestamp,
+                userInitials: operatorName,
+                geolocation: geolocation,
+                rx: "",
+                fileSizeKB: fileSizeKB,
+                lotNumber: pillScanViewModel?.pendingOpenBottleLot,
+                expirationDate: pillScanViewModel?.pendingOpenBottleExpiry,
+                serialNumber: pillScanViewModel?.pendingOpenBottleSerial
+            )
+            guard let savedPath = PhotoFileManager.shared.saveImage(finalImage) else { return }
+
+            DispatchQueue.main.async {
+                pillScanViewModel?.appendOpenBottleImage(
+                    path: savedPath, pillCount: stableCount, capturedAt: timestamp, isControlled: isControlled
+                )
+            }
         }
     }
 
@@ -1602,6 +1776,15 @@ extension UnifiedCameraView {
     /// In open pill mode: scan the barcode to confirm/find the drug, then hand off to pill
     /// counting. If the scanned NDC doesn't match the expected one, show an error.
     func handleOpenPillBarcodeScan(_ rawValue: String) async {
+        // Once a drug has been resolved for this open-pill session (target-verification
+        // screen showing, count in progress), a stray barcode scan must NOT swap in a
+        // different NDC out from under the count. Ignore it — the only way to change NDC
+        // is Back to cancel this count first.
+        guard pillScanViewModel.pendingOpenBottleDrugId == nil else {
+            cameraService.resetBarcodeScanState()
+            return
+        }
+
         // Do NOT create the batch here — the batch, StockTxn, and BottleInfo rows are all
         // created together on Proceed (createOpenedBottleFromPendingScan). Scanning the NDC
         // to start a count must not persist anything the user could abandon mid-count.
@@ -1716,6 +1899,12 @@ extension UnifiedCameraView {
             pillScanViewModel.pendingOpenBottleSerial = nil
             pillScanViewModel.pendingOpenBottleDrug = nil
             pillScanViewModel.pendingOpenBottleDrugId = nil
+            // Session abandoned — no BottleInfoEntity row was ever created, so every
+            // snapshot captureOpenBottleImage() wrote this session is orphaned
+            // (controlled and non-controlled alike). Delete before clearing, or they
+            // sit on disk forever.
+            pillScanViewModel.deleteAllOpenBottleImages()
+            pillScanViewModel.openBottleImageRecords = []
             pillScanViewModel.currentTransaction = nil
             pillScanViewModel.currentStockTxn = nil
             pillScanViewModel.addCurrentOpenPillCount = 0

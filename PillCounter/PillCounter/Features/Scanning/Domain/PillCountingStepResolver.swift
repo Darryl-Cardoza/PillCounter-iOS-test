@@ -13,14 +13,21 @@ struct PillCountingStepResolver {
     static func getActiveSteps(
         txn: PillCountTransactionEntity? = nil
     ) -> [ControlledStep] {
-        
-        let drugType = DrugCatalogStore.shared.fetchById(txn?.drug_id ?? 0)?.drug_type
-        
-        
+
+        // No transaction yet — nothing is known about the flow (dispense vs
+        // regular, drug schedule, etc.), so there's no real step list to return.
+        // Falling through to the flow checks below would default into CONTROLLED
+        // FLOW (since txn?.is_dispense is neither true nor false when txn is nil),
+        // fabricating a plausible-looking but meaningless step list.
+        guard let txn else { return [] }
+
+        let drugType = DrugCatalogStore.shared.fetchById(txn.drug_id)?.drug_type
+
+
         let drugSchedule = DrugSchedule(rawValue: drugType ?? "")
-        
+
         // ------ REGULAR COUNT FLOW -------
-        if txn?.is_dispense == false {
+        if txn.is_dispense == false {
             return [
                 .scan,
                 .targetVerification
@@ -28,7 +35,7 @@ struct PillCountingStepResolver {
         }
 
         // -------- NON CONTROLLED FLOW --------
-        if (txn?.is_dispense == true) && drugSchedule == nil  {
+        if (txn.is_dispense == true) && drugSchedule == nil  {
             return [
                 .scan,
                 .targetVerification,

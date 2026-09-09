@@ -7,8 +7,12 @@
 import SwiftUI
 
 // MARK: - Data Model
+/// One grid card. `id` is stable and unique within this list but its source varies
+/// by flow: the CoreData-backed txn_details_id for dispense, or
+/// PillScanViewModel.OpenBottleImageRecord.id (a monotonic per-session counter,
+/// not a timestamp) for an open-pill count — see PillScanDetailGridScreen.details.
 struct PillScanDetailItem: Identifiable {
-    let id: Int64          // txn_details_id
+    let id: Int64
     let imagePath: String?
     let pillCount: Int
     let capturedAt: Int64  // timestamp ms
@@ -16,31 +20,31 @@ struct PillScanDetailItem: Identifiable {
 
 
 struct PillScanDetailCard: View {
- 
-    let detail: PillCountTransactionDetailsEntity
+
+    let detail: PillScanDetailItem
     let isEditing: Bool
     let isSelected: Bool
- 
+
     @EnvironmentObject private var appColors: AppColors
- 
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
                 Rectangle()
                     .fill(appColors.secondaryBackground)
 
-                imageView(path: detail.image_path)
+                imageView(path: detail.imagePath)
                     .padding(12)
             }
             .frame(height: 160)
             .clipShape(TopRoundedRectangle(radius: 8))
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(detail.pill_count)")
+                Text("\(detail.pillCount)")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(appColors.primary)
 
-                Text(DateUtils.formatToUSDateTime(detail.created_at))
+                Text(DateUtils.formatToUSDateTime(detail.capturedAt))
                     .font(.system(size: 11))
                     .foregroundColor(appColors.text.opacity(0.65))
             }

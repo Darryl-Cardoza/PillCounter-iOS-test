@@ -66,10 +66,20 @@ final class MockTransactionDataSource: TransactionDataSource {
     func updateStatus(txnId: Int64, status: CountStatus) {}
     func updateNote(txnId: Int64, note: String) {}
     func updateTargetCount(txnId: Int64, targetCount: Int32) {}
-    func updateWorkflowStep(txnId: Int64, step: ControlledStep) {}
+    private(set) var updateWorkflowStepCalls: [(txnId: Int64, step: ControlledStep)] = []
+    func updateWorkflowStep(txnId: Int64, step: ControlledStep) {
+        updateWorkflowStepCalls.append((txnId, step))
+    }
+    private(set) var clearWorkflowStepCalls: [Int64] = []
+    func clearWorkflowStep(txnId: Int64) {
+        clearWorkflowStepCalls.append(txnId)
+    }
     func updateGlovesDetected(txnId: Int64, detected: Bool) {}
     func updateHazardousTrayDetected(txnId: Int64, detected: Bool) {}
-    func updateNdcVerified(txnId: Int64, verified: Bool) {}
+    private(set) var updateNdcVerifiedCalls: [(txnId: Int64, verified: Bool)] = []
+    func updateNdcVerified(txnId: Int64, verified: Bool) {
+        updateNdcVerifiedCalls.append((txnId, verified))
+    }
     func updateFromHL7Edit(txnId: Int64, drugId: Int64, targetCount: Int32, priority: String?, refillNo: String?) {}
 
     func getBottleList(txnId: Int64) -> [BottleInfo] {
@@ -122,6 +132,11 @@ final class MockTransactionDetailDataSource: TransactionDetailDataSource {
     var sumPillCountResult: Int = 0
     var addedDetailIds: [Int64] = []
     private var nextDetailId: Int64 = 1
+    /// txnId -> image paths returned by `hardDeleteAll`, and the txnIds it was called with.
+    var hardDeleteAllImagePaths: [Int64: [String]] = [:]
+    var hardDeleteAllCalledWith: [Int64] = []
+    /// Set false to simulate the underlying save failing.
+    var hardDeleteAllShouldSucceed: Bool = true
 
     func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32 { 0 }
     func totalCountsForSteps(txnIds: [Int64], step: ControlledStep) -> [Int64: Int32] {
@@ -153,6 +168,13 @@ final class MockTransactionDetailDataSource: TransactionDetailDataSource {
     func sumPillCount(detailIds: [Int64]) -> Int {
         guard !detailIds.isEmpty else { return 0 }
         return sumPillCountResult
+    }
+
+    @discardableResult
+    func hardDeleteAll(txnId: Int64) -> (success: Bool, imagePaths: [String]) {
+        hardDeleteAllCalledWith.append(txnId)
+        guard hardDeleteAllShouldSucceed else { return (false, []) }
+        return (true, hardDeleteAllImagePaths[txnId] ?? [])
     }
 }
 
@@ -211,7 +233,9 @@ final class MockBottleInfoDataSource: BottleInfoDataSource {
         let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
         return fetchByStockTxn(stockTxnId: stockTxnId).first { $0.isSealed && $0.sealedLotKey == targetKey }?.bottle_qty ?? 0
     }
-    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?) -> BottleInfoEntity? { nil }
+    func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?, images: [BottleImageRecord]) -> BottleInfoEntity? { nil }
+    func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? { nil }
+    func appendImages(bottleId: Int64, images: [BottleImageRecord]) {}
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32) {}
     func fetchById(_ bottleId: Int64) -> BottleInfoEntity? { nil }
     func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity] { [] }

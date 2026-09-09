@@ -142,17 +142,27 @@ final class FaceQualityChecker {
     /// the eye midpoint, normalized by inter-eye distance. Coarse — callers
     /// requiring a pose target should smooth this over several consecutive
     /// frames rather than trust one reading.
+    ///
+    /// Sign convention: positive = subject turned to THEIR left. In this
+    /// frame's image space the nose moves toward decreasing x when the
+    /// subject turns left, hence the negation — without it the guided flow
+    /// asked for "turn left" and only accepted a right turn.
     private func yawDegreesEstimate(_ detection: FaceDetectionResult) -> Float {
         let l = detection.landmarks
         let eyeMidX = (l.leftEye.x + l.rightEye.x) / 2
         let eyeDist = hypot(l.leftEye.x - l.rightEye.x, l.leftEye.y - l.rightEye.y)
         guard eyeDist > 1 else { return 0 }
         let ratio = Float((l.nose.x - eyeMidX) / eyeDist)
-        return ratio * 55
+        return -ratio * 55
     }
 
     /// Pitch estimate in degrees from the nose's vertical position relative
     /// to the eye-to-mouth span. Positive = chin up.
+    ///
+    /// Raising the chin tilts the head back, which projects the nose tip
+    /// *down* toward the mouth line in image space (y grows downward), so a
+    /// rising nose ratio is chin-up — the earlier `neutral - nose` form had
+    /// this backwards and the chin-up step could never be satisfied.
     private func pitchDegreesEstimate(_ detection: FaceDetectionResult) -> Float {
         let l = detection.landmarks
         let eyeMidY = (l.leftEye.y + l.rightEye.y) / 2
@@ -161,7 +171,7 @@ final class FaceQualityChecker {
         guard abs(span) > 1 else { return 0 }
         let neutralRatio: CGFloat = 0.45
         let noseRatio = (l.nose.y - eyeMidY) / span
-        let deviation = Float(neutralRatio - noseRatio)
+        let deviation = Float(noseRatio - neutralRatio)
         return deviation * 60
     }
 

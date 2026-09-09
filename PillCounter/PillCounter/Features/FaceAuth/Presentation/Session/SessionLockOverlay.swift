@@ -24,7 +24,7 @@ struct SessionLockOverlay: View {
     /// screen — the underlying pipeline has no terminal "no match" state by
     /// design (see FaceAuthenticationViewModel), it just keeps retrying
     /// frames, so this timeout is what turns that into a bounded attempt.
-    private let scanTimeout: TimeInterval = 7
+    private let scanTimeout: TimeInterval = 4
     private let welcomeDismissDelay: TimeInterval = 1.5
 
     var body: some View {

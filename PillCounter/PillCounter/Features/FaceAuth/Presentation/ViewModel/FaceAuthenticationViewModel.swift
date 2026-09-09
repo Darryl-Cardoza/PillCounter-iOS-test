@@ -70,7 +70,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
     /// One continuous budget from scan start, deliberately NOT reset when a
     /// face leaves and re-enters, so stepping in and out of frame can't extend
     /// the attempt indefinitely.
-    private let scanBudgetSeconds: TimeInterval = 7.0
+    private let scanBudgetSeconds: TimeInterval = 4.0
     private nonisolated(unsafe) var scanStartedAt: TimeInterval = 0
 
     /// Minimum time a guidance message stays on screen before another may

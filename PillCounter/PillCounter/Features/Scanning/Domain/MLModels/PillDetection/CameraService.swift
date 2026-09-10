@@ -114,6 +114,8 @@ final class CameraService: NSObject, ObservableObject {
 
     /// Frame counter for the throttled DEBUG pipeline log.
     private var pipelineFrameIndex: Int = 0
+    /// Lower edges of the score-histogram bins in the [PIPELINE] debug log.
+    private static let scoreBins: [Float] = [0.35, 0.50, 0.70, 0.90]
 
     /// True once AE/AF/AWB have been locked for the current counting session.
     /// The `.hd1280x720` preset already steadies the stream, but residual 3A
@@ -1004,9 +1006,17 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             if self.pipelineFrameIndex % 10 == 0 {
                 let crop = cropRect.map { "\(Int($0.width))x\(Int($0.height))" } ?? "full"
                 let motion = cameraMotion.map { String(format: "%.1f,%.1f", $0.dx, $0.dy) } ?? "n/a"
+                // Score histogram of what survived NMS: how far the counted pills
+                // sit above enterScore, and how much is waiting just under it.
+                // Same bins as the Android PillFilter log line.
+                var hist = [Int](repeating: 0, count: Self.scoreBins.count)
+                for d in afterNms {
+                    if let b = Self.scoreBins.lastIndex(where: { d.confidence >= $0 }) { hist[b] += 1 }
+                }
                 print("🧮 [PIPELINE] gateOpen=\(gateOpen) incomplete=\(self.incompleteFrames) "
                       + "pillInput=\(crop) afterNMS=\(afterNms.count) tracked=\(filtered.count) "
-                      + "visible=\(visibleOnTray) counted=\(counted) motion=\(motion)")
+                      + "visible=\(visibleOnTray) counted=\(counted) motion=\(motion) "
+                      + "scores[.35,.5,.7,.9]=\(hist.map(String.init).joined(separator: ","))")
             }
             #endif
 

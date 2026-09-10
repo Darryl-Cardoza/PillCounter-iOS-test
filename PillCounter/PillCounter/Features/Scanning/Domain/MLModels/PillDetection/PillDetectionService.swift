@@ -9,7 +9,7 @@
 // Temporal smoothing lives in PillTracker / CountStabilizer (CameraService).
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// MODEL ARCHITECTURE — pills_detector_fp16.mlpackage
+// MODEL ARCHITECTURE — pills_fp16.mlpackage
 // ─────────────────────────────────────────────────────────────────────────────
 // PP-YOLOE+s is an anchor-free detector (3 underlying classes, collapsed to a
 // single pill/no-pill decision by this app) built on:
@@ -122,7 +122,7 @@ final class PillDetectionService {
 
     // MARK: - Configuration
 
-    /// Input resolution for the pills_detector_fp16 model.
+    /// Input resolution for the pills_fp16 model.
     private let inputSize: CGFloat = 640
 
     /// Number of DFL distribution bins per box side (68 channels / 4 sides = 17).
@@ -180,7 +180,7 @@ final class PillDetectionService {
         #endif
 
         // ── Step 2: Build CoreML image input ──────────────────────────────
-        let mlInput = pills_detector_fp16Input(image: input.buffer)
+        let mlInput = pills_fp16Input(image: input.buffer)
 
         // ── Step 3: Run inference ──────────────────────────────────────────
         guard let output = try? model.prediction(input: mlInput) else {
@@ -285,7 +285,7 @@ final class PillDetectionService {
                 // Tensor layout [1, H, W, 3]: 3 per-class scores per anchor.
                 // We only count pills (no class distinction downstream), so take
                 // the max across the class channels as this anchor's confidence.
-                // IMPORTANT: pills_detector_fp16 bakes sigmoid into the model's
+                // IMPORTANT: pills_fp16 bakes sigmoid into the model's
                 // final layer — the cls output is already a probability in [0, 1].
                 // Do NOT apply sigmoid() again; that would double-compress scores
                 // (e.g. a background cell with true score 0.3 becomes sigmoid(0.3)=0.57,

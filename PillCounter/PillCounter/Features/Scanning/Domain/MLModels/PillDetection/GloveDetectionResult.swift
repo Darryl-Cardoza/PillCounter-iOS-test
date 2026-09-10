@@ -2,7 +2,7 @@
 // PillCounter
 //
 // Shared result types for the three-model detection pipeline:
-//   1. pills_detector_fp16  — PP-YOLOE+s pill detector
+//   1. pills_fp16           — PP-YOLOE+s pill detector
 //   2. tray_detector_fp16   — RTMDet-Tiny tray/chute detector
 //   3. gloves_detector_fp32 — YOLOX-Nano glove safety detector
 //

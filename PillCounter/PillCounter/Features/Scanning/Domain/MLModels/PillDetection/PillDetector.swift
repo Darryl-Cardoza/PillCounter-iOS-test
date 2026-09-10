@@ -2,7 +2,7 @@
 // PillCounter
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// MODEL:  pills_detector_fp16.mlpackage
+// MODEL:  pills_fp16.mlpackage
 // ARCH:   PP-YOLOE+s (anchor-free FPN with DFL box regression)
 //         3 underlying classes; app takes max score across them and treats
 //         every detection as "pill" (no per-class distinction downstream)
@@ -31,7 +31,7 @@ final class PillDetector {
 
     /// The loaded CoreML model.  nil only if the mlpackage is missing or
     /// the device cannot satisfy the requested compute units.
-    private(set) var model: pills_detector_fp16?
+    private(set) var model: pills_fp16?
 
     private init() {
         loadModel()
@@ -40,7 +40,7 @@ final class PillDetector {
     private func loadModel() {
         print("""
         ┌─────────────────────────────────────────────
-        │  [PILL MODEL] Loading pills_detector_fp16
+        │  [PILL MODEL] Loading pills_fp16
         │  Architecture : PP-YOLOE+s (anchor-free FPN)
         │  Weights      : Float16 (~14 MB)
         │  Compute      : CPU + Neural Engine
@@ -53,7 +53,7 @@ final class PillDetector {
             let config = MLModelConfiguration()
             config.computeUnits = .cpuAndNeuralEngine
 
-            model = try pills_detector_fp16(configuration: config)
+            model = try pills_fp16(configuration: config)
 
             print("✅ [PILL MODEL] Model loaded and ready")
         } catch {

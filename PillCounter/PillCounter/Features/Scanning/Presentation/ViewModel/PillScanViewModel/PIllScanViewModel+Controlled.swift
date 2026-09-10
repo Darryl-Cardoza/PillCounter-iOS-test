@@ -38,8 +38,6 @@ extension PillScanViewModel{
 
         let target = Int(txn.target_count)
 
-        let txnId = txn.txn_id
-
         switch currentControlledStep {
             
         case .scan:
@@ -218,6 +216,7 @@ extension PillScanViewModel{
         
         if let img = image {
             pendingBarcodeImagePath = PhotoFileManager.shared.saveImage(img)
+            refreshResettableWork()
         }
 
         transactionDAO.update(

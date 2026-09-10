@@ -39,7 +39,14 @@ class PillScanViewModel: ObservableObject {
 
     // this will hold the current scanning transaction that user is performing or working with.
     // Only used by the regular (non-StockCount) FIXED/REGULAR dispense-counting flow.
-    @Published var currentTransaction: PillCountTransactionEntity?
+    @Published var currentTransaction: PillCountTransactionEntity? {
+        didSet { refreshResettableWork() }
+    }
+
+    // Mirrors what hasAnythingToResetForCurrentTransaction() used to compute live —
+    // recomputed only at mutation points (see refreshResettableWork() in
+    // PillScanViewModel+Reset.swift) instead of on every SwiftUI body pass.
+    @Published var hasResettableWork: Bool = false
 
     // Stock-count equivalents of currentTransaction — one NDC row (currentStockTxn) plus the
     // specific BottleInfoEntity row (currentBottleInfo) written by the most recent scan.
@@ -379,6 +386,8 @@ class PillScanViewModel: ObservableObject {
         // step 3: set the latest transaction as current transaction.
         if let latest = transactionDAO.fetchLatest(for: user) {
             self.currentTransaction = latest
+        } else {
+            refreshResettableWork()
         }
 
     }
@@ -399,6 +408,7 @@ class PillScanViewModel: ObservableObject {
         }
 
         transactionDetailDAO.addOrReplaceVial(txnId: txnId, imagePath: imagePath)
+        refreshResettableWork()
     }
     
     // function to add transaction detail to the current transaction.
@@ -432,6 +442,7 @@ class PillScanViewModel: ObservableObject {
         }
 
         getAllTransactionDetailsOfTheCurrentTransaction()
+        refreshResettableWork()
     }
 
     // if the user selects the fixed or dispense count then he has to set the target.
@@ -637,6 +648,7 @@ class PillScanViewModel: ObservableObject {
         }
 
         getAllTransactionDetailsOfTheCurrentTransaction()
+        refreshResettableWork()
     }
 
     /// Removes one captured image (by its `OpenBottleImageRecord.id`) from the
@@ -685,6 +697,7 @@ class PillScanViewModel: ObservableObject {
 
         // Refresh in-memory state to update UI
         getAllTransactionDetailsOfTheCurrentTransaction()
+        refreshResettableWork()
     }
 
     func resetScanningState() {

@@ -115,6 +115,7 @@ extension PillScanViewModel {
     func markNdcVerified() {
         if let txnId = selectedTransaction?.txn_id {
             transactionDAO.updateNdcVerified(txnId: txnId, verified: true)
+            refreshResettableWork()
         }
     }
     

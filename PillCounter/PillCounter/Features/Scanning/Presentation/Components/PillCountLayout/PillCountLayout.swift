@@ -180,7 +180,7 @@ struct PillCountLayout: View {
         if isOpenPillScanMode {
             return !pillScanViewModel.pendingOpenBottleImages.isEmpty
         }
-        return pillScanViewModel.hasAnythingToResetForCurrentTransaction()
+        return pillScanViewModel.hasResettableWork
     }
 
     /// Open-ended parent pour — no target; the bar shows the live count and an

@@ -577,6 +577,7 @@ extension PillScanViewModel {
         if isDispense {
             updateTargetCountForCurrentTransaction()
         }
+        refreshResettableWork()
 
         // MARK: 5 Notify after successful insert/update
         let rxLabel = rxNo ?? ""

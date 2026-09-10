@@ -143,10 +143,13 @@ final class FaceQualityChecker {
     /// requiring a pose target should smooth this over several consecutive
     /// frames rather than trust one reading.
     ///
-    /// Sign convention: positive = subject turned to THEIR left. In this
-    /// frame's image space the nose moves toward decreasing x when the
-    /// subject turns left, hence the negation — without it the guided flow
-    /// asked for "turn left" and only accepted a right turn.
+    /// Sign convention: positive = subject turned to THEIR left. Depends on
+    /// FaceCameraService setting `connection.isVideoMirrored = true` for the
+    /// front camera — in that mirrored buffer the subject's own left is on
+    /// the image's left, so the nose moves toward decreasing x when the
+    /// subject turns left, hence the negation. Without it (or if the
+    /// mirroring setting ever changes) the guided flow asks for "turn left"
+    /// and only accepts a right turn.
     private func yawDegreesEstimate(_ detection: FaceDetectionResult) -> Float {
         let l = detection.landmarks
         let eyeMidX = (l.leftEye.x + l.rightEye.x) / 2

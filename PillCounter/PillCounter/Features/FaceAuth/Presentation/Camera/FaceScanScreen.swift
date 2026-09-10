@@ -187,9 +187,12 @@ private struct FaceFrameGuide: View {
         GeometryReader { geometry in
             // Head-sized oval: a fraction of the narrower edge, sat a
             // little above centre so the chin isn't pushed out of frame
-            // when the user aligns their eyes with the middle. Purely
-            // cosmetic — the actual detection/quality gating region is
-            // unchanged and independent of this shape.
+            // when the user aligns their eyes with the middle. Deliberately
+            // looser than the actual gating region (FaceQualityChecker's
+            // maxCenterOffsetXRatio/YRatio) for detection robustness — a
+            // face can be inside the gate while still outside this oval, so
+            // "move into the oval" guidance won't always fire exactly when
+            // the oval visually suggests it should.
             let width = min(geometry.size.width, geometry.size.height) * 0.45
             let height = width * 1.3
 

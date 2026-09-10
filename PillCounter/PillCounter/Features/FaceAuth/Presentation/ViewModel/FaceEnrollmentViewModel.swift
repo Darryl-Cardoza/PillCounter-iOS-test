@@ -96,16 +96,10 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private nonisolated(unsafe) var stepStartedAt: TimeInterval = 0
     private nonisolated(unsafe) var enrollmentStartedAt: TimeInterval = 0
     private nonisolated(unsafe) var relaxedThisStep = false
-    /// Best candidate seen so far in the current step's window (frame +
-    /// detection + quality), replaced whenever a higher-scoring one arrives.
-    /// Used only as the hard-timeout fallback — NOT eligible at the soft
-    /// window deadline, since it may never have matched the step's pose.
-    private nonisolated(unsafe) var bestCandidate: (pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, quality: FaceQualityResult)?
     /// Best candidate seen so far THAT ALSO SATISFIED the step's pose range.
-    /// This is what the soft window deadline captures — without this
-    /// separate tracker, the soft deadline would fall back to `bestCandidate`
-    /// regardless of pose and the turn-left/turn-right/chin-up steps would
-    /// never actually require the user to move.
+    /// Captured at the soft window deadline; if the hard timeout arrives with
+    /// this still nil, the step is skipped rather than recording a
+    /// mismatched-pose embedding (e.g. a centered frame for "turn left").
     private nonisolated(unsafe) var bestPoseMatchedCandidate: (pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, quality: FaceQualityResult)?
     /// Thumbnail rendered from the `.center` step's accepted frame, persisted
     /// once enrollment succeeds and shown in the Quick Access Users row. Held
@@ -170,7 +164,6 @@ final class FaceEnrollmentViewModel: ObservableObject {
         collectedEmbeddings = []
         currentStepIndex = 0
         poseHoldFrames = 0
-        bestCandidate = nil
         bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         relaxedThisStep = false
@@ -213,7 +206,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
         pendingUserId = nil
         collectedEmbeddings = []
-        bestCandidate = nil
+        bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         hasLiveFace = false
         liveRejectionReason = nil
@@ -244,7 +237,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         cameraService.onFrame = nil
         pendingUserId = nil
         collectedEmbeddings = []
-        bestCandidate = nil
+        bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         hasLiveFace = false
         liveRejectionReason = nil
@@ -316,12 +309,6 @@ final class FaceEnrollmentViewModel: ObservableObject {
             poseHoldFrames = 0
         }
 
-        // Track the best-scoring candidate seen this window regardless of
-        // exact pose match — guarantees the window always has *something*
-        // to fall back on when the hard timeout hits.
-        if bestCandidate == nil || quality.qualityScore > bestCandidate!.quality.qualityScore {
-            bestCandidate = (pixelBuffer, detections[0], quality)
-        }
         if poseMatches, bestPoseMatchedCandidate == nil || quality.qualityScore > bestPoseMatchedCandidate!.quality.qualityScore {
             bestPoseMatchedCandidate = (pixelBuffer, detections[0], quality)
         }
@@ -366,18 +353,11 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
 
         if elapsed >= stepHardTimeoutSeconds {
-            if let candidate = bestCandidate {
-                captureStep(using: candidate)
-            } else {
-                // Nothing usable at all for this whole step — fail the step
-                // explicitly rather than spinning forever.
-                DispatchQueue.main.async {
-                    self.state = .failed(.poorQuality(.lowConfidence))
-                }
-                isCapturingFrames = false
-                cameraService.stop()
-                cameraService.onFrame = nil
-            }
+            // No pose-matched candidate for the whole step budget — skip it
+            // rather than recording a mismatched-pose embedding (e.g. a
+            // centered frame for the "turn left" step); minimumUsableSamples
+            // is the floor that keeps overall enrollment viable.
+            advanceToNextStep()
         }
     }
 
@@ -413,7 +393,6 @@ final class FaceEnrollmentViewModel: ObservableObject {
             // let the window keep running; evaluateStepDeadlines will retry
             // or eventually hard-timeout the step.
             Log("Enrollment: step \(currentStepIndex) (\(step)) — embedding generation failed, retrying")
-            bestCandidate = nil
             bestPoseMatchedCandidate = nil
             return
         }
@@ -440,7 +419,6 @@ final class FaceEnrollmentViewModel: ObservableObject {
     }
 
     private nonisolated func advanceToNextStep() {
-        bestCandidate = nil
         bestPoseMatchedCandidate = nil
         poseHoldFrames = 0
         relaxedThisStep = false
@@ -508,6 +486,11 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private nonisolated func relaxQualityThresholds() {
         qualityChecker.minFaceWidthPx = 180
         qualityChecker.maxFaceWidthRatio = 0.9
+        // Without relaxing this too, a user stuck slightly off-center could
+        // burn the entire step window with no escape hatch — width/ratio
+        // relaxation alone doesn't help them.
+        qualityChecker.maxCenterOffsetXRatio = 0.40
+        qualityChecker.maxCenterOffsetYRatio = 0.40
     }
 
     private nonisolated static func monotonicNow() -> TimeInterval {

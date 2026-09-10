@@ -140,4 +140,29 @@ struct StockTxnEmptyPruneTests {
         #expect(StockTxnStore.shared.fetchById(stockTxn.stock_txn_id)?.is_deleted == false, "PMS-linked StockTxn must not be soft-deleted even at 0/0")
         #expect(BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id).count == 1, "PMS-linked bottle row must not be deleted even at 0/0")
     }
+
+    /// A PMS-linked NDC zeroed to 0/0 then re-scanned with the SAME lot/exp must resolve
+    /// back to a single, correctly-sealed row — not a phantom "opened" row left behind by
+    /// the 0/0 row's `isSealed` heuristic flipping to false once bottle_qty hits 0.
+    @Test @MainActor func pmsLinkedNdcZeroedThenRescannedShowsConsistentCounts() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch(requestId: "PMS-REQ-\(TestIds.unique())")
+        let stockTxn = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixture.drugId, bucketId: batch.bucket_id)
+
+        let bottle = BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 4, lotNo: "LOT-A", expNo: "2027-01")
+        #expect(bottle != nil)
+
+        // Zero it out (PMS path keeps the row alive at 0/0 — see pruneZeroedRowsAndEmptyTxn).
+        BottleInfoStore.shared.setAbsolute(bottleId: bottle!.bottle_id, bottleQty: 0, looseQty: 0)
+
+        // Re-scan the SAME lot/exp — mirrors createTxnForBatchFromScan's merge-path sealed write.
+        BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 3, lotNo: "LOT-A", expNo: "2027-01")
+
+        let vm = StockCountViewModel()
+        let grouped = vm.mapGroupedStockTxns(stockTxns: [stockTxn]).first
+        #expect(grouped?.sealedBottleQty == 3, "re-scanning the same lot must update the existing row in place, not spawn a phantom row")
+        #expect(grouped?.openedBottleCount == 0, "a re-sealed 0/0 row must not linger as a phantom opened bottle")
+        #expect(grouped?.lotDetails.count == 1, "must show exactly one lot row, not a stale zeroed duplicate")
+    }
 }

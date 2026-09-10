@@ -30,6 +30,12 @@ extension BottleInfoEntity {
     /// Sealed heuristic: a sealed row has bottle_qty > 0 and loose_qty == 0.
     var isSealed: Bool { bottle_qty > 0 && loose_qty == 0 }
 
+    /// A row zeroed out (e.g. edited/pruned down to nothing) carries no sealed-vs-opened
+    /// identity anymore — isSealed reads false for it same as a genuine opened row at 0
+    /// loose pills, so callers matching by lot/exp must treat it as reclaimable by either
+    /// kind rather than as a phantom opened bottle.
+    var isEmpty: Bool { bottle_qty == 0 && loose_qty == 0 }
+
     var sealedLotKey: SealedLotKey { SealedLotKey(lotNo: lot_no, expNo: exp_no) }
 
     /// Snapshots captured during open-pill counting for this row, decoded from
@@ -67,7 +73,7 @@ final class BottleInfoStore {
     private func fetchSealedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
         let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
         return fetchByStockTxn(stockTxnId: stockTxnId).first {
-            $0.isSealed && $0.sealedLotKey == targetKey
+            ($0.isSealed || $0.isEmpty) && $0.sealedLotKey == targetKey
         }
     }
 

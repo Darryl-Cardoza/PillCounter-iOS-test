@@ -616,8 +616,14 @@ class StockCountViewModel: ObservableObject {
             for stockTxn in stockTxnList {
                 let bottles = bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
 
-                let sealedRows = bottles.filter { $0.isSealed }
-                let openedRows = bottles.filter { !$0.isSealed }
+                // A row zeroed out to bottle_qty==0 && loose_qty==0 (e.g. a PMS NDC edited
+                // down to nothing, kept alive rather than deleted) has no sealed-vs-opened
+                // identity left — isSealed reads false for it same as a real opened row at
+                // 0 loose pills, so it must be excluded from both buckets entirely rather
+                // than counted as a phantom opened bottle.
+                let liveBottles = bottles.filter { !$0.isEmpty }
+                let sealedRows = liveBottles.filter { $0.isSealed }
+                let openedRows = liveBottles.filter { !$0.isSealed }
 
                 for sealed in sealedRows {
                     let sealedQty = sealed.bottle_qty * packageQty

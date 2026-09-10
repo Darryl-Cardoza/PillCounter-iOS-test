@@ -27,6 +27,12 @@ final class CameraService: NSObject, ObservableObject {
     @Published var scannedCodeType: String = ""
     private var barcodeEnabled: Bool = false
 
+    // Same-barcode re-scan gate — see `BarcodeScanLock`. Presence tracking
+    // (`processFrame`) runs on every metadata frame regardless of
+    // `barcodeEnabled` so a barcode removed while scanning is momentarily
+    // disabled (e.g. a previous scan still being processed) is never missed.
+    private let barcodeLock = BarcodeScanLock()
+
     // MARK: - BOTTLE RESCAN (multi-bottle dispense tracking)
     // A second, independent barcode-metadata listener that stays live during
     // dispense counting (unlike `barcodeEnabled`, which is mutually exclusive
@@ -35,24 +41,7 @@ final class CameraService: NSObject, ObservableObject {
     // which would otherwise wrongly restart the NDC-verify flow.
     @Published var bottleRescanCode: String = ""
     private var bottleRescanEnabled: Bool = false
-    private var lockedBottleRescanValue: String? = nil
-    private var bottleRescanLockMissFrames: Int = 0
-    // The value of the barcode currently locked in frame. Non-nil means we already
-    // fired the scan event and are waiting for the physical barcode to physically
-    // leave the camera's field of view before we fire again.
-    //
-    // The lock is released only after barcodeLockMissThreshold consecutive frames
-    // with no matching barcode. This debounce absorbs brief metadata dropouts from
-    // camera shake (1-2 frames) without blocking a genuine remove-and-rescan — a
-    // physical hand moving a bottle away takes well over 5 frames at 30 fps.
-    private var lockedBarcodeValue: String? = nil
-
-    // How many consecutive frames the locked barcode must be absent before the lock
-    // releases. 5 frames at 30 fps ≈ 165 ms — enough to survive a shake dropout but
-    // short enough that a real remove-and-rescan is never blocked.
-    private static let barcodeLockMissThreshold: Int = 5
-    // Running count of consecutive metadata frames where lockedBarcodeValue was absent.
-    private var barcodeLockMissFrames: Int = 0
+    private let bottleRescanLock = BarcodeScanLock()
 
     // MARK: - IMAGE PROCESSING
     // Three-model inference pipeline running on every captured camera frame:
@@ -412,7 +401,9 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.barcodeEnabled = true
-            self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            // sessionQueue (not .main) so presence tracking isn't delayed by
+            // main-thread work — see `BarcodeScanLock`. Also used by `enableBottleRescanListening()`.
+            self.metadataOutput.setMetadataObjectsDelegate(self, queue: self.sessionQueue)
             // Boost to 30fps while barcode scanning is active. More frames per second
             // means more decode attempts, which is critical for low-quality or curved
             // labels (bottle, worn print) that the decoder only reads on a sharp frame.
@@ -430,14 +421,23 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.barcodeEnabled = false
-            // Intentionally preserve lockedBarcodeValue. If scanning is re-enabled
-            // while the same physical barcode is still in frame, the lock prevents
-            // it from immediately re-firing. The lock is only released when the
-            // frame-presence check sees the barcode has left the camera view.
-            // Keep the metadata delegate attached if bottle-rescan listening is active.
-            if !self.bottleRescanEnabled {
-                self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
-            }
+            // Intentionally preserve barcodeLock.lockedValue. If scanning is
+            // re-enabled while the same physical barcode is still in frame, the
+            // lock prevents it from immediately re-firing. The lock is only
+            // released when the frame-presence check sees the barcode has left
+            // the camera view.
+            //
+            // The metadata delegate is deliberately kept attached here (NOT
+            // detached even when bottle-rescan listening is also off). Scanning
+            // is disabled while the previous scan result is processed (DB/network
+            // lookups), which can take long enough for the operator to remove and
+            // re-present the same bottle. If the delegate detached here, that
+            // removal would never be observed and the lock would never release —
+            // the same physical barcode would then silently stop scanning until
+            // force-released. Presence tracking (`barcodeLock.processFrame`) must
+            // keep running across this gap; only the "fire a new scan" behavior
+            // is gated by `barcodeEnabled`. The delegate is only ever detached in
+            // `stop()`, when the session itself stops.
             self.configureFrameRate(fps: 30)
         }
     }
@@ -461,7 +461,8 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.bottleRescanEnabled = true
-            self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            // See `enableBarcodeScanning()` — same sessionQueue-delivery reasoning.
+            self.metadataOutput.setMetadataObjectsDelegate(self, queue: self.sessionQueue)
             self.activateBarcodeAutoFocus()
             print("📷 [CameraService] bottle rescan listening ENABLED")
         }
@@ -472,11 +473,9 @@ final class CameraService: NSObject, ObservableObject {
             guard let self else { return }
             self.bottleRescanEnabled = false
             print("📷 [CameraService] bottle rescan listening DISABLED")
-            self.lockedBottleRescanValue = nil
-            self.bottleRescanLockMissFrames = 0
-            if !self.barcodeEnabled {
-                self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
-            }
+            self.bottleRescanLock.forceRelease()
+            // Metadata delegate intentionally left attached — see the comment in
+            // `disableBarcodeScanning()`. It is only ever detached in `stop()`.
             // Re-lock 3A so the pill count settles back down once rescan listening ends.
             self.is3ALocked = false
             self.lock3AIfNeeded()
@@ -542,10 +541,10 @@ final class CameraService: NSObject, ObservableObject {
 
     func resetBarcodeScanState() {
         // Clears published values so the view's onChange does not re-fire with a
-        // stale value. lockedBarcodeValue is NOT cleared here — the physical barcode
+        // stale value. barcodeLock is NOT cleared here — the physical barcode
         // may still be in frame. Clearing it would re-fire the scan event on the
-        // very next metadata callback. The lock releases only after the barcode has
-        // been absent for barcodeLockMissThreshold consecutive frames.
+        // very next metadata callback. The lock releases only once the barcode
+        // has genuinely left the frame — see `BarcodeScanLock`.
         scannedCode = ""
         scannedCodeType = ""
     }
@@ -556,8 +555,11 @@ final class CameraService: NSObject, ObservableObject {
     /// from the previous scan silently blocks the identical barcode from firing again
     /// until it physically leaves and re-enters the camera frame.
     func forceReleaseBarcodeLock() {
-        lockedBarcodeValue = nil
-        barcodeLockMissFrames = 0
+        // barcodeLock is also mutated from the metadata delegate callback on
+        // sessionQueue — hop here too so forceRelease() can't race that write.
+        sessionQueue.async { [weak self] in
+            self?.barcodeLock.forceRelease()
+        }
     }
 
     // MARK: - ZOOM CONTROL
@@ -618,12 +620,12 @@ final class CameraService: NSObject, ObservableObject {
             // scene from scratch (lighting/tray may differ after a long pause).
             self.unlock3A()
             self.session.stopRunning()
-            // Session is fully stopped — no barcodes are visible. Clear the lock
-            // so the next start() begins fresh rather than blocking on a stale value.
-            self.lockedBarcodeValue = nil
-            self.barcodeLockMissFrames = 0
-            self.lockedBottleRescanValue = nil
-            self.bottleRescanLockMissFrames = 0
+            // Session is fully stopped — no barcodes are visible. Clear both
+            // locks so the next start() begins fresh rather than blocking on a
+            // stale value, and detach the delegate now that frames have stopped.
+            self.barcodeLock.forceRelease()
+            self.bottleRescanLock.forceRelease()
+            self.metadataOutput.setMetadataObjectsDelegate(nil, queue: .main)
         }
     }
 
@@ -1245,100 +1247,50 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        // Collect all currently-visible barcode values this frame.
-        let visibleValues = metadataObjects
-            .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
-            .compactMap { $0.stringValue }
+        // Collect all currently-visible barcode/QR objects this frame.
+        let codeObjects = metadataObjects.compactMap { $0 as? AVMetadataMachineReadableCodeObject }
+        let visibleValues = codeObjects.compactMap { $0.stringValue }
 
-        if barcodeEnabled {
-            processBarcodeMetadata(metadataObjects: metadataObjects, visibleValues: visibleValues)
-        }
-        if bottleRescanEnabled {
-            processBottleRescanMetadata(metadataObjects: metadataObjects, visibleValues: visibleValues)
-        }
-    }
+        // Prefer a candidate that ISN'T the value already locked. With several
+        // codes crowded into one frame (e.g. a shelf of bottles), always taking
+        // metadataObjects.first would keep re-offering the same already-scanned
+        // code and starve the others — the operator had to physically move the
+        // camera to change what AVFoundation reports first. Skipping the locked
+        // value lets the next unscanned code in frame become the candidate as
+        // soon as the current one's scan finishes processing, no movement needed.
+        let object = codeObjects.first { $0.stringValue != barcodeLock.lockedValue }
+            ?? codeObjects.first
+        let candidateValue = object?.stringValue
 
-    private func processBarcodeMetadata(
-        metadataObjects: [AVMetadataObject],
-        visibleValues: [String]
-    ) {
-        // Release the lock only after the locked barcode has been absent for
-        // barcodeLockMissThreshold consecutive frames. A single-frame absence caused
-        // by camera shake does NOT release the lock — the miss counter must reach the
-        // threshold first. A different barcode appearing immediately clears the lock
-        // so the new code fires without waiting.
-        if let locked = lockedBarcodeValue {
-            if visibleValues.contains(locked) {
-                // Barcode still visible — reset miss counter, keep lock.
-                barcodeLockMissFrames = 0
-            } else if visibleValues.isEmpty {
-                // Barcode absent this frame (possible shake dropout) — count the miss.
-                barcodeLockMissFrames += 1
-                if barcodeLockMissFrames >= Self.barcodeLockMissThreshold {
-                    // Absent long enough — barcode was genuinely removed.
-                    lockedBarcodeValue = nil
-                    barcodeLockMissFrames = 0
-                }
-                // Lock not yet released — don't fire for any new barcode this frame.
-                return
-            } else {
-                // A DIFFERENT barcode is now in frame — release lock immediately so
-                // the new code fires right away. Same-barcode re-scan after genuine
-                // removal also reaches here (locked != nil, visible has a new value).
-                lockedBarcodeValue = nil
-                barcodeLockMissFrames = 0
+        // Presence tracking runs unconditionally — NOT gated by barcodeEnabled/
+        // bottleRescanEnabled. If it paused while scanning is disabled (e.g. a
+        // previous scan result still being processed), a barcode removed and
+        // re-presented during that gap would never be observed and its lock
+        // would never release. See `BarcodeScanLock`.
+        let barcodeFired = barcodeLock.processFrame(visibleValues: visibleValues, candidateValue: candidateValue)
+        let rescanFired = bottleRescanLock.processFrame(visibleValues: visibleValues, candidateValue: candidateValue)
+
+        // The delegate now runs on sessionQueue (not .main) so presence
+        // tracking above is never starved by MainActor work — @Published
+        // writes still must land on main.
+        if barcodeEnabled, let value = barcodeFired, let object {
+            let codeType = object.type.rawValue
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                // Clear first so SwiftUI's onChange fires even when the same barcode value
+                // re-enters the frame after a genuine removal (onChange only fires on change).
+                self.scannedCode = ""
+                self.scannedCode = value
+                self.scannedCodeType = codeType
             }
         }
-
-        // Fire a scan event only when:
-        //   • there is no locked barcode (we are ready for a new scan), AND
-        //   • a barcode is actually present in the current frame.
-        guard lockedBarcodeValue == nil,
-              let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-              let value = object.stringValue
-        else { return }
-
-        lockedBarcodeValue = value
-        barcodeLockMissFrames = 0
-        // Clear first so SwiftUI's onChange fires even when the same barcode value
-        // re-enters the frame after a genuine removal (onChange only fires on change).
-        scannedCode = ""
-        scannedCode = value
-        scannedCodeType = object.type.rawValue
-    }
-
-    /// Same lock/debounce mechanics as `processBarcodeMetadata`, on an independent
-    /// lock/channel so a mid-count bottle rescan never interferes with the primary
-    /// NDC-scan path.
-    private func processBottleRescanMetadata(
-        metadataObjects: [AVMetadataObject],
-        visibleValues: [String]
-    ) {
-        if let locked = lockedBottleRescanValue {
-            if visibleValues.contains(locked) {
-                bottleRescanLockMissFrames = 0
-            } else if visibleValues.isEmpty {
-                bottleRescanLockMissFrames += 1
-                if bottleRescanLockMissFrames >= Self.barcodeLockMissThreshold {
-                    lockedBottleRescanValue = nil
-                    bottleRescanLockMissFrames = 0
-                }
-                return
-            } else {
-                lockedBottleRescanValue = nil
-                bottleRescanLockMissFrames = 0
+        if bottleRescanEnabled, let value = rescanFired {
+            print("📷 [CameraService] bottle rescan metadata decoded: \(value)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.bottleRescanCode = ""
+                self.bottleRescanCode = value
             }
         }
-
-        guard lockedBottleRescanValue == nil,
-              let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-              let value = object.stringValue
-        else { return }
-
-        lockedBottleRescanValue = value
-        bottleRescanLockMissFrames = 0
-        print("📷 [CameraService] bottle rescan metadata decoded: \(value)")
-        bottleRescanCode = ""
-        bottleRescanCode = value
     }
 }

@@ -1668,6 +1668,9 @@ extension UnifiedCameraView {
             stockCountViewModel.committedLotNo = pillScanViewModel.currentBottleInfo?.lot_no ?? ""
             stockCountViewModel.committedExpNo = pillScanViewModel.currentBottleInfo?.exp_no ?? ""
         }
+        // editableTxn (used by Edit) falls back to selectedGroupedTransaction — refresh it here
+        // since groupedTransactions itself stays frozen (suppressListReload) until dismiss.
+        stockCountViewModel.refreshSelectedTransaction(ndc: drug.ndc)
         // Keep scannedDrugData alive so the details slot stays visible.
         stockCountViewModel.showStockCountScannedDetails = true
         cameraService.resetBarcodeScanState()

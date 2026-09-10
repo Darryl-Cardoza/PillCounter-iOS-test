@@ -12,13 +12,11 @@
 // This is a 1:1 port of the Android `TraySegmentationDetector`, because the iOS
 // and Android tray models are the SAME exported network. The previous Swift
 // implementation here was written for an old RTMDet-Tiny object detector that
-// is no longer the model shipped in tray_fp16.mlpackage — it assumed a
+// is no longer the model shipped in tray_detector_fp16.mlpackage — it assumed a
 // 640×640 MLMultiArray input and six FPN output tensors. The actual model is:
 //
-//   • Input:  "images"  — MLMultiArray [1, 3, 384, 384] Float32, NCHW, RGB,
-//             raw [0,255]. ImageNet normalisation is baked into the graph; pass
-//             raw pixels. (tray_fp16.mlpackage takes a multi-array, not an
-//             image, so the letterboxed pixels are copied into planes here.)
+//   • Input:  "images"  — CVPixelBuffer image, 384×384, ARGB, raw [0,255] RGB.
+//             ImageNet normalisation is baked into the graph; pass raw pixels.
 //   • Output: "logits"  — MLMultiArray [1, 3, 384, 384] Float, channel-first.
 //             Per-pixel class logits. Channel order: 0 = background,
 //             1 = chute, 2 = tray (matches Android CLASS_BG/CHUTE/TRAY).
@@ -154,10 +152,7 @@ final class TrayDetectionService {
 
     // MARK: - Model & Context
 
-    private var model: tray_fp16?
-
-    /// Reused model input, [1, 3, 384, 384] Float32 NCHW. Allocated lazily.
-    private var inputArray: MLMultiArray?
+    private var model: tray_detector_fp16?
 
     /// GPU-backed CIContext shared across letterbox calls; allocating per-frame is expensive.
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
@@ -175,7 +170,7 @@ final class TrayDetectionService {
             let cfg = MLModelConfiguration()
             cfg.computeUnits = .cpuAndNeuralEngine
 
-            model = try tray_fp16(configuration: cfg)
+            model = try tray_detector_fp16(configuration: cfg)
             print("✅ [TRAY MODEL] Segmentation model loaded and ready")
         } catch {
             print("❌ [TRAY MODEL] Failed to load — \(error)")
@@ -200,9 +195,8 @@ final class TrayDetectionService {
             return []
         }
 
-        // ── Step 2: Run inference (multi-array input) ─────────────────────
-        guard let input = toInputArray(lbBuffer),
-              let output = try? model.prediction(images: input) else {
+        // ── Step 2: Run inference (image input) ───────────────────────────
+        guard let output = try? model.prediction(images: lbBuffer) else {
             return []
         }
 
@@ -390,45 +384,6 @@ final class TrayDetectionService {
                          colorSpace: CGColorSpaceCreateDeviceRGB())
 
         return (out, scale, padX, padY)
-    }
-
-    // MARK: - Pixel buffer → NCHW Float32 input
-
-    /// Copies the 384×384 ARGB letterbox buffer into the reused
-    /// `[1, 3, 384, 384]` Float32 array as raw [0, 255] R, G, B planes — the
-    /// input contract of tray_fp16.mlpackage.
-    private func toInputArray(_ px: CVPixelBuffer) -> MLMultiArray? {
-        if inputArray == nil {
-            inputArray = try? MLMultiArray(
-                shape: [1, NSNumber(value: numClasses), NSNumber(value: inputSize), NSNumber(value: inputSize)],
-                dataType: .float32)
-        }
-        guard let array = inputArray else { return nil }
-
-        CVPixelBufferLockBaseAddress(px, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(px, .readOnly) }
-        guard let base = CVPixelBufferGetBaseAddress(px) else { return nil }
-        let bytesPerRow = CVPixelBufferGetBytesPerRow(px)
-        let bytes = base.assumingMemoryBound(to: UInt8.self)
-
-        let sC = array.strides[1].intValue
-        let sH = array.strides[2].intValue
-        let sW = array.strides[3].intValue
-        let dst = array.dataPointer.assumingMemoryBound(to: Float.self)
-        let rBase = 0 * sC, gBase = 1 * sC, bBase = 2 * sC
-
-        for y in 0..<inputSize {
-            let row = y * bytesPerRow
-            let outRow = y * sH
-            for x in 0..<inputSize {
-                let p = row + x * 4              // A, R, G, B (kCVPixelFormatType_32ARGB)
-                let o = outRow + x * sW
-                dst[rBase + o] = Float(bytes[p + 1])
-                dst[gBase + o] = Float(bytes[p + 2])
-                dst[bBase + o] = Float(bytes[p + 3])
-            }
-        }
-        return array
     }
 
     // MARK: - Utilities

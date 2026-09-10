@@ -1256,11 +1256,19 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        // Collect all currently-visible barcode values this frame.
-        let visibleValues = metadataObjects
-            .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
-            .compactMap { $0.stringValue }
-        let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject
+        // Collect all currently-visible barcode/QR objects this frame.
+        let codeObjects = metadataObjects.compactMap { $0 as? AVMetadataMachineReadableCodeObject }
+        let visibleValues = codeObjects.compactMap { $0.stringValue }
+
+        // Prefer a candidate that ISN'T the value already locked. With several
+        // codes crowded into one frame (e.g. a shelf of bottles), always taking
+        // metadataObjects.first would keep re-offering the same already-scanned
+        // code and starve the others — the operator had to physically move the
+        // camera to change what AVFoundation reports first. Skipping the locked
+        // value lets the next unscanned code in frame become the candidate as
+        // soon as the current one's scan finishes processing, no movement needed.
+        let object = codeObjects.first { $0.stringValue != barcodeLock.lockedValue }
+            ?? codeObjects.first
         let candidateValue = object?.stringValue
 
         // Presence tracking runs unconditionally — NOT gated by barcodeEnabled/

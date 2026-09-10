@@ -579,9 +579,6 @@ struct UnifiedCameraView: View {
                 router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
             }
         }
-        .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
-            if show { onComplete()}
-        }
         .onChange(of: pillScanViewModel.rxScanFailed) { _, failed in
             if failed {
                 pillScanViewModel.rxScanFailed = false
@@ -764,9 +761,6 @@ extension UnifiedCameraView {
                 bottleQty: nil,
                 looseQty: pillScanViewModel.addCurrentOpenPillCount
             )
-//                    router.setRoot(
-//                        to: .authentication(.login(.dashboard(.pillCount(.stockCount))))
-//                    )
             Task(priority: .background) {
                 await userViewModel.completeTheSelectedTransaction(
                     txnId: completedTxnId,
@@ -1141,9 +1135,11 @@ extension UnifiedCameraView {
         // held, leaving stale pre-reset details on screen.
         pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
 
-        // Back to the barcode-scan step in place, panel left up: PillCountLayout renders
-        // only while the panel is true or the step is .scan, so tearing the panel down
-        // here dropped the top and bottom bars from the reset screen.
+        // PillCountLayout renders while the panel is true OR the step is .scan (see
+        // rootWithPillCountSheet) — so tearing the panel down here still leaves the
+        // bars up via the step check, while re-arming BT scanner input and
+        // tray-colour tracking, both gated on showPillCountPanel specifically.
+        showPillCountPanel = false
         pillScanViewModel.currentControlledStep = .scan
         scanType = .barcode
 

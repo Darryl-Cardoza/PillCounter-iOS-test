@@ -19,6 +19,19 @@ extension PillScanViewModel {
             && status != CountStatus.FORCE_COMPLETED.rawValue
     }
 
+    /// Transaction-wide (not step-scoped) mirror of what `resetCurrentTransaction()` wipes.
+    func hasAnythingToResetForCurrentTransaction() -> Bool {
+        guard let txnId = currentTransaction?.txn_id else { return false }
+
+        if !transactionDetailDAO.fetchAll(txnId: txnId).isEmpty { return true }
+        if !transactionDAO.getBottleList(txnId: txnId).isEmpty { return true }
+        if currentTransaction?.is_ndc_verfied == true { return true }
+        if pendingBarcodeImagePath != nil { return true }
+        if vialCapturedImagePath != nil { return true }
+
+        return false
+    }
+
     /// Hard-deletes every detail row (and its backing image file) for the
     /// current transaction, clears its NDC-verified flag and persisted
     /// workflow step, and clears in-memory count state — same "not yet
@@ -84,7 +97,6 @@ extension PillScanViewModel {
         isNdcAdded = false
         ndcMismatchRestartFlow = false
         shouldAutoProceedToCount = false
-        showCompletionPopup = false
         showSkipBackCountPopup = false
 
         return true

@@ -63,62 +63,6 @@ extension UnifiedCameraView {
         )
     }
 
-    var showConfirmCompletion: some View {
-        ConfirmationDialogue(
-            title: L10n.PillCount.confirmCompletionTitle,
-            message: L10n.PillCount.confirmCompletionMessage,
-            cancelButtonText: L10n.Common.cancel,
-            confirmButtonText: L10n.Common.ok,
-            onCancel: {
-                showNoteOption = false
-//                showConfirmCompletionPopup = false
-            },
-            onConfirm: {
-                showNoteOption = false
-//                showConfirmCompletionPopup = false
-
-                // Capture before any state reset — startContinuousDispense() clears
-                // currentTransaction, so read the id/type up front.
-                let completedTxnId = pillScanViewModel.currentTransaction?.txn_id ?? 0
-                let isFixed =
-                    pillScanViewModel.currentTransaction?.is_dispense == true
-                let completedIsDispense = router.selectedPillScanningIsDispense ?? true
-
-                if isFixed {
-                    // Mark COMPLETED FIRST, then start the continuous-dispense flow.
-                    // startContinuousDispense() reads the pending-txn list to decide
-                    // whether to show the queue or go to the dashboard — if we don't
-                    // await the status write first, that gate races the completion and
-                    // still sees this txn as PARTIAL (it then re-appears in the queue).
-                    Task { @MainActor in
-                        await userViewModel.completeTheSelectedTransaction(
-                            txnId: completedTxnId,
-                            isDispense: completedIsDispense
-                        )
-                        // Continuous dispense — reset back to RX-scan in place and surface
-                        // the "Today's Queue" sheet over it. No navigation. See UnifiedCameraView.
-                        startContinuousDispense()
-                    }
-                } else {
-                    stockCountViewModel.updateCounts(
-                        bottleId: pillScanViewModel.currentBottleInfo?.bottle_id,
-                        bottleQty: nil,
-                        looseQty: pillScanViewModel.addCurrentOpenPillCount
-                    )
-//                    router.setRoot(
-//                        to: .authentication(.login(.dashboard(.pillCount(.stockCount))))
-//                    )
-                    Task(priority: .background) {
-                        await userViewModel.completeTheSelectedTransaction(
-                            txnId: completedTxnId,
-                            isDispense: completedIsDispense
-                        )
-                    }
-                }
-            }
-        )
-    }
-
     var showAddBottlePopupContent: some View {
         ConfirmationDialogue(
             title: L10n.BarcodeScan.addBottleTitle,

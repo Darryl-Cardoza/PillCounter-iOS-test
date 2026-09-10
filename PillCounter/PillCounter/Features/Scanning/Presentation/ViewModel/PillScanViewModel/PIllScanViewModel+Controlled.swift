@@ -54,14 +54,7 @@ extension PillScanViewModel{
             currentControlledTargetCount = target
 
         case .containerPending:
-            let containerCount =
-            transactionDetailDAO.totalCountForStep(
-                txnId: txnId,
-                step: .containerInitiate
-            )
-
-            currentControlledTargetCount =
-            max(Int(containerCount) - target, 0)
+            currentControlledTargetCount = containerPendingTarget()
         }
     }
     
@@ -88,13 +81,7 @@ extension PillScanViewModel{
             return stepTotal == target
 
         case .containerPending:
-            let containerCount =
-            transactionDetailDAO.totalCountForStep(
-                txnId: txn.txn_id,
-                step: .containerInitiate
-            )
-            let expected = Int(containerCount) - target
-            return stepTotal == expected
+            return stepTotal == containerPendingTarget()
             
         case .vial:
             return stepTotal == 0
@@ -119,23 +106,6 @@ extension PillScanViewModel{
     }
 
 
-    func isContainerPendingZero() -> Bool {
-        guard let txn = currentTransaction else { return false }
-
-        let target = Int(txn.target_count)
-
-        let containerCount =
-        transactionDetailDAO.totalCountForStep(
-            txnId: txn.txn_id,
-            step: .containerInitiate
-        )
-
-        let expected = Int(containerCount) - target
-
-        return currentControlledStep == .containerPending && expected == 0
-    }
-    
-    
     func getTotalCuntForCurrentStep() -> Int32 {
         guard let txnId = currentTransaction?.txn_id else {
             return 0

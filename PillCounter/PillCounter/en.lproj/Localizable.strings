@@ -95,8 +95,6 @@
 "pillCount.deleteAllTransactionsMessage" = "Are you sure you want to delete all the transactions for this current transaction.";
 "pillCount.invalidCount" = "INVALID COUNT";
 "pillCount.zeroPillsMessage" = "Cannot add a batch with 0 pills.\nPlease ensure pills are detected by the camera.";
-"pillCount.confirmCompletionTitle" = "Confirm Completion";
-"pillCount.confirmCompletionMessage" = "Are you sure you want to mark this transaction as COMPLETED?";
 "pillCount.countMismatchTitle" = "Count Mismatch";
 "pillCount.countMismatchMessage" = "The counted quantity does not match the target count. Do you want to proceed?";
 "pillCount.confirmStepCompletionTitle" = "Confirm Step Completion";

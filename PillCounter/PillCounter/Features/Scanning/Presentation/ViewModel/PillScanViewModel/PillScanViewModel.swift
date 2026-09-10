@@ -186,7 +186,6 @@ class PillScanViewModel: ObservableObject {
     // To Manager Controlled Drug Step
     @Published var currentControlledStep: ControlledStep = .scan
     @Published var currentControlledTargetCount: Int? = nil
-    @Published var showCompletionPopup = false
     @Published var showSkipBackCountPopup = false
 
     // MARK: Controlled drug Equivalence

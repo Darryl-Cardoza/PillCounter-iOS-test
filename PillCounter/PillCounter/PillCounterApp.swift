@@ -154,7 +154,7 @@ struct PillCounterApp: App {
                                 // stall when the camera view first appears.
                                 Task.detached(priority: .background) {
                                     _ = PillDetector.shared         // pills_fp16 (FP16, NeuralEngine)
-                                    _ = TrayDetectionService.shared // tray_detector_fp16 (MobileNetV2-UNet segmentation, FP16)
+                                    _ = TrayDetectionService.shared // tray_fp16 (MobileNetV2-UNet segmentation, FP16)
                                     _ = GloveDetector.shared        // gloves_detector_fp32 (FP32, GPU)
                                 }
                             }

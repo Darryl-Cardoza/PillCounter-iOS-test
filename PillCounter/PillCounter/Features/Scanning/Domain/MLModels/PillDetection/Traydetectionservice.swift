@@ -5,33 +5,41 @@
 // PURPOSE
 // ───────
 // Runs the MobileNetV2-UNet tray/chute SEMANTIC SEGMENTATION model on every
-// camera frame and returns one bounding box per detected region class
-// (TRAY or CHUTE). Only pills whose centres fall inside a TRAY box are counted;
-// CHUTE boxes are excluded from pill filtering.
+// camera frame and returns one region per detected class (TRAY or CHUTE), each
+// carrying its per-pixel mask. Only pills whose centres fall on the TRAY mask
+// are counted; the CHUTE mask is excluded from pill filtering.
 //
 // This is a 1:1 port of the Android `TraySegmentationDetector`, because the iOS
-// and Android tray models are the SAME exported network. The previous Swift
-// implementation here was written for an old RTMDet-Tiny object detector that
-// is no longer the model shipped in tray_detector_fp16.mlpackage — it assumed a
-// 640×640 MLMultiArray input and six FPN output tensors. The actual model is:
+// and Android tray models are the SAME exported network (trained in
+// `dispensesure-tray-model`). The model is:
 //
-//   • Input:  "images"  — CVPixelBuffer image, 384×384, ARGB, raw [0,255] RGB.
-//             ImageNet normalisation is baked into the graph; pass raw pixels.
+//   • Input:  "images"  — MLMultiArray [1, 3, 384, 384] Float32, NCHW, RGB,
+//             raw [0, 255]. ImageNet normalisation is baked into the graph; pass
+//             raw pixel values. (`tray_fp16.mlpackage` takes a multi-array, not
+//             an image, so the pixels are copied into planes here.)
 //   • Output: "logits"  — MLMultiArray [1, 3, 384, 384] Float, channel-first.
 //             Per-pixel class logits. Channel order: 0 = background,
 //             1 = chute, 2 = tray (matches Android CLASS_BG/CHUTE/TRAY).
 //
+// INPUT GEOMETRY — a SQUASH, not a letterbox. The training set was resized to
+// 384×384 by non-uniform scaling (dataset.md, "The resize is a squash, not a
+// letterbox"), so the camera frame is stretched straight to 384×384 with no
+// padding, each axis with its own scale. Feeding a letterboxed frame instead (as
+// this class once did, with grey bars) is train/serve skew the model never saw:
+// the bars and the changed aspect produced stray "tray" pixels on nearby objects.
+//
 // DECODE (mirrors Android decodeOutputs):
 //   For each of the 384×384 pixels, argmax over the 3 class logits. Skip
 //   background. A foreground pixel is only accepted if its winning logit beats
-//   the background logit by at least FG_LOGIT_MARGIN (a cheap confidence gate,
-//   no softmax/exp needed). Accumulate the per-class pixel bounding box. A class
-//   is emitted only if it has more than MIN_CLASS_PIXELS pixels. The 384-space
-//   bbox is then un-letterboxed back to original camera-frame coordinates.
+//   the background logit by at least fgLogitMargin (a cheap confidence gate,
+//   no softmax/exp needed). A class is emitted only if it has more than
+//   minClassPixels pixels.
 //
-// Because the box is the bounding box of EVERY tray pixel, it always spans the
-// true tray extent in any orientation — there is no "shrunk box from a single
-// anchor" failure mode (the bug the old object-detector code had in landscape).
+// OUTPUT GEOMETRY — one blob per class. The bbox and mask reported for a class
+// come from the LARGEST 4-connected component of its pixels (`MaskComponents`);
+// a stray blob elsewhere in the frame no longer stretches the tray box — and
+// with it the pill model's crop — across unrelated objects. The 384-space bbox
+// is then un-squashed back to camera-frame coordinates, per axis.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -45,7 +53,7 @@ import QuartzCore   // CACurrentMediaTime()
 
 /// A detected region returned by TrayDetectionService.
 ///
-/// rect is in the original camera-frame pixel coordinates (un-letterboxed).
+/// rect is in the original camera-frame pixel coordinates.
 /// trayClass indicates whether this is a TRAY (pill-counting region) or a
 /// CHUTE (dispenser opening — excluded from pill filtering).
 ///
@@ -58,7 +66,7 @@ import QuartzCore   // CACurrentMediaTime()
 struct TrayResult: Identifiable {
     let id = UUID()
 
-    /// Bounding box in original camera-frame pixel coordinates (overlay/debug only).
+    /// Bounding box in original camera-frame pixel coordinates (overlay + pill crop).
     let rect: CGRect
 
     /// Detection confidence. Segmentation has no per-box score, so this is 1.0
@@ -72,25 +80,26 @@ struct TrayResult: Identifiable {
     let trayClass: TrayClass
 
     /// Packed per-pixel mask in `maskSize`×`maskSize` (384) space, row-major:
-    /// `mask[y * maskSize + x]` is true where this class won the argmax+margin gate.
+    /// `mask[y * maskSize + x]` is true where this class' largest blob is.
     let mask: [Bool]
 
     /// Side length of the square mask (384). 0 if no mask (legacy/empty).
     let maskSize: Int
 
-    /// Maps original-frame coords → mask (384) space: `x_mask = x*scale + padX`.
-    /// Mirrors Android `TrayDetection.scaleInfo` (the 384-space ScaleInfo).
-    let maskScale: CGFloat
-    let maskPadX: CGFloat
-    let maskPadY: CGFloat
+    /// Maps original-frame coords → mask (384) space. The input is a squash, so
+    /// each axis has its own scale and there is no pad:
+    /// `x_mask = x * maskScaleX`, `y_mask = y * maskScaleY`.
+    /// Mirrors Android `TrayDetection.scaleInfo` (scale / scaleY, pad 0).
+    let maskScaleX: CGFloat
+    let maskScaleY: CGFloat
 
     /// True if the original-frame point (x, y) lands on a set mask pixel.
     /// Direct port of Android `TrayDetection.containsPoint`. Falls back to the
     /// bbox test only when no mask is present.
     func containsPoint(_ x: CGFloat, _ y: CGFloat) -> Bool {
         if maskSize > 0, !mask.isEmpty {
-            let xMask = Int(x * maskScale + maskPadX)
-            let yMask = Int(y * maskScale + maskPadY)
+            let xMask = Int(x * maskScaleX)
+            let yMask = Int(y * maskScaleY)
             if xMask < 0 || xMask >= maskSize || yMask < 0 || yMask >= maskSize { return false }
             return mask[yMask * maskSize + xMask]
         }
@@ -125,7 +134,7 @@ final class TrayDetectionService {
     // MARK: - Configuration
 
     /// Model input/output spatial resolution. Must match the exported .mlpackage
-    /// (logits is [1, 3, 384, 384]).
+    /// (images is [1, 3, 384, 384], logits is [1, 3, 384, 384]).
     private let inputSize: Int = 384
 
     /// Number of semantic classes in the output (bg / chute / tray).
@@ -137,9 +146,10 @@ final class TrayDetectionService {
     private let classChute      = 1
     private let classTray       = 2
 
-    /// Minimum pixel count for a class to be reported as a detection. 400 px at
-    /// 384×384 is ~0.27% of the frame — well below any real tray/chute and large
-    /// enough to reject borderline noise blobs. Matches Android MIN_CLASS_PIXELS.
+    /// Minimum pixel count for a class' largest blob to be reported as a
+    /// detection. 400 px at 384×384 is ~0.27% of the frame — well below any real
+    /// tray/chute and large enough to reject borderline noise blobs. Matches
+    /// Android MIN_CLASS_PIXELS.
     private let minClassPixels: Int = 400
 
     /// Confidence margin between the winning foreground class's logit and the
@@ -147,31 +157,39 @@ final class TrayDetectionService {
     /// class if `fgLogit - bgLogit >= fgLogitMargin`. Matches Android
     /// FG_LOGIT_MARGIN = 1.5 (≈ requiring softmax(fg) > 0.82). Raise to reject
     /// false-positive foreground pixels; lower if real boundaries are missed.
-    /// Matches Android FG_LOGIT_MARGIN = 1.5 (≈ requiring softmax(fg) > 0.82).
     private let fgLogitMargin: Float = 1.5
 
     // MARK: - Model & Context
 
-    private var model: tray_detector_fp16?
+    private var model: tray_fp16?
 
-    /// GPU-backed CIContext shared across letterbox calls; allocating per-frame is expensive.
+    /// GPU-backed CIContext shared across squash calls; allocating per-frame is expensive.
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
-    /// Reused 384×384 BGRA buffer for the letterboxed input. Allocated lazily on
-    /// the first frame and kept for the lifetime of the (singleton) service.
-    private var inputBuffer: CVPixelBuffer?
+    /// Reused 384×384 BGRA buffer the frame is squashed into before its pixels
+    /// are copied to `inputArray`. Allocated lazily on the first frame.
+    private var squashBuffer: CVPixelBuffer?
+
+    /// Reused model input, [1, 3, 384, 384] Float32 NCHW. Allocated lazily.
+    private var inputArray: MLMultiArray?
+
+    /// Largest-connected-component scratch (visited set + stack), reused per frame.
+    private let components: MaskComponents
 
     // MARK: - Init
 
-    private init() { loadModel() }
+    private init() {
+        components = MaskComponents(size: inputSize)
+        loadModel()
+    }
 
     private func loadModel() {
         do {
             let cfg = MLModelConfiguration()
             cfg.computeUnits = .cpuAndNeuralEngine
 
-            model = try tray_detector_fp16(configuration: cfg)
-            print("✅ [TRAY MODEL] Segmentation model loaded and ready")
+            model = try tray_fp16(configuration: cfg)
+            print("✅ [TRAY MODEL] Segmentation model tray_fp16 loaded and ready")
         } catch {
             print("❌ [TRAY MODEL] Failed to load — \(error)")
         }
@@ -182,43 +200,42 @@ final class TrayDetectionService {
     /// Runs the full tray segmentation pipeline on one camera frame.
     ///
     /// - Parameter pixelBuffer: Raw camera frame (any resolution, BGRA).
-    ///   Internally letterboxed to 384×384 before being passed to the model.
-    /// - Returns: At most one TRAY and one CHUTE region (the bbox of each class's
-    ///   segmentation mask), in original camera-frame coordinates.
+    ///   Internally squashed to 384×384 (no letterbox) before being passed to the model.
+    /// - Returns: At most one TRAY and one CHUTE region (the largest blob of each
+    ///   class), in original camera-frame coordinates.
     func detect(pixelBuffer: CVPixelBuffer) -> [TrayResult] {
         guard let model else { return [] }
 
         let frameSize = pixelBuffer.size
+        guard frameSize.width > 0, frameSize.height > 0 else { return [] }
 
-        // ── Step 1: Letterbox to 384×384 ──────────────────────────────────
-        guard let (lbBuffer, scale, padX, padY) = letterbox(pixelBuffer) else {
+        // ── Step 1: Squash to the 384×384 NCHW float input ─────────────────
+        guard let input = squashToInput(pixelBuffer) else { return [] }
+
+        // ── Step 2: Run inference ─────────────────────────────────────────
+        guard let output = try? model.prediction(images: input) else {
             return []
         }
 
-        // ── Step 2: Run inference (image input) ───────────────────────────
-        guard let output = try? model.prediction(images: lbBuffer) else {
-            return []
-        }
-
-        // ── Step 3: Decode the per-pixel logits → per-class bounding boxes ─
-        let results = decodeSegmentation(
+        // ── Step 3: Decode the per-pixel logits → one blob per class ───────
+        // Frame → mask mapping of the squash: per-axis scale, no pad.
+        let scaleX = CGFloat(inputSize) / frameSize.width
+        let scaleY = CGFloat(inputSize) / frameSize.height
+        return decodeSegmentation(
             logits: output.logits,
-            scale: scale, padX: padX, padY: padY,
+            scaleX: scaleX, scaleY: scaleY,
             frameSize: frameSize
         )
-
-        return results
     }
 
     // MARK: - Segmentation Decode
 
     /// Per-pixel argmax over the [1, 3, 384, 384] channel-first logits, with a
-    /// background-margin confidence gate, accumulating one bounding box per
+    /// background-margin confidence gate, then the largest connected blob per
     /// foreground class. Mirrors Android `decodeOutputs`.
     private func decodeSegmentation(logits: MLMultiArray,
-                                    scale: CGFloat,
-                                    padX: CGFloat,
-                                    padY: CGFloat,
+                                    scaleX: CGFloat,
+                                    scaleY: CGFloat,
                                     frameSize: CGSize) -> [TrayResult] {
 
         // Expected shape [1, 3, 384, 384] (NCHW). Read strides so we don't assume
@@ -226,6 +243,7 @@ final class TrayDetectionService {
         guard logits.shape.count == 4 else { return [] }
         let gridH = logits.shape[2].intValue
         let gridW = logits.shape[3].intValue
+        guard gridH == inputSize, gridW == inputSize else { return [] }
 
         let sC = logits.strides[1].intValue
         let sH = logits.strides[2].intValue
@@ -234,11 +252,8 @@ final class TrayDetectionService {
         let raw  = logits.dataPointer
         let elem = logits.dataType == .float16 ? 2 : 4
 
-        // Per-class bbox accumulators (in 384 space) + per-pixel masks.
-        // Masks are gridW×gridH (=384²) Bool arrays, row-major, exactly like
-        // Android's chuteMaskScratch / trayMaskScratch BitSets.
-        var chuteMinX = gridW, chuteMinY = gridH, chuteMaxX = -1, chuteMaxY = -1
-        var trayMinX  = gridW, trayMinY  = gridH, trayMaxX  = -1, trayMaxY  = -1
+        // Per-class masks, gridW×gridH (=384²) Bool arrays, row-major, exactly
+        // like Android's chuteMaskScratch / trayMaskScratch BitSets.
         var chutePixels = 0
         var trayPixels  = 0
         var chuteMask = [Bool](repeating: false, count: gridW * gridH)
@@ -268,54 +283,45 @@ final class TrayDetectionService {
                 // Confidence gate: foreground must beat background by the margin.
                 guard fgLogit - bg >= fgLogitMargin else { continue }
 
-                let maskIdx = maskRow + x
                 if isChute {
-                    chuteMask[maskIdx] = true
-                    if x < chuteMinX { chuteMinX = x }
-                    if x > chuteMaxX { chuteMaxX = x }
-                    if y < chuteMinY { chuteMinY = y }
-                    if y > chuteMaxY { chuteMaxY = y }
+                    chuteMask[maskRow + x] = true
                     chutePixels += 1
                 } else {
-                    trayMask[maskIdx] = true
-                    if x < trayMinX { trayMinX = x }
-                    if x > trayMaxX { trayMaxX = x }
-                    if y < trayMinY { trayMinY = y }
-                    if y > trayMaxY { trayMaxY = y }
+                    trayMask[maskRow + x] = true
                     trayPixels += 1
                 }
             }
         }
 
+        // One physical object per class: keep only the largest connected blob.
+        // Its bbox and mask are what the caller sees, so a stray blob elsewhere
+        // in the frame neither stretches the crop nor lets pills on it count.
         var out: [TrayResult] = []
-        if trayPixels > minClassPixels {
-            out.append(buildResult(
-                cls: .tray, mask: trayMask, maskSize: gridW,
-                minX: trayMinX, minY: trayMinY, maxX: trayMaxX, maxY: trayMaxY,
-                scale: scale, padX: padX, padY: padY, frameSize: frameSize))
+        if trayPixels > minClassPixels,
+           let tray = components.largest(trayMask), tray.pixelCount > minClassPixels {
+            out.append(buildResult(cls: .tray, component: tray, maskSize: gridW,
+                                   scaleX: scaleX, scaleY: scaleY, frameSize: frameSize))
         }
-        if chutePixels > minClassPixels {
-            out.append(buildResult(
-                cls: .chute, mask: chuteMask, maskSize: gridW,
-                minX: chuteMinX, minY: chuteMinY, maxX: chuteMaxX, maxY: chuteMaxY,
-                scale: scale, padX: padX, padY: padY, frameSize: frameSize))
+        if chutePixels > minClassPixels,
+           let chute = components.largest(chuteMask), chute.pixelCount > minClassPixels {
+            out.append(buildResult(cls: .chute, component: chute, maskSize: gridW,
+                                   scaleX: scaleX, scaleY: scaleY, frameSize: frameSize))
         }
         return out
     }
 
-    /// Converts a 384-space pixel bbox back to original-frame coordinates and
-    /// attaches the per-pixel mask. Mirrors Android `buildDetection`.
+    /// Converts a component's 384-space bbox back to original-frame coordinates
+    /// (per-axis un-squash) and attaches its mask. Mirrors Android `buildDetection`.
     private func buildResult(cls: TrayClass,
-                             mask: [Bool], maskSize: Int,
-                             minX: Int, minY: Int, maxX: Int, maxY: Int,
-                             scale: CGFloat, padX: CGFloat, padY: CGFloat,
+                             component: MaskComponents.Component,
+                             maskSize: Int,
+                             scaleX: CGFloat, scaleY: CGFloat,
                              frameSize: CGSize) -> TrayResult {
-        // Un-letterbox: original = (letterboxed − pad) / scale.
         // +1 on the max edge so the bbox spans the full last pixel.
-        let x1 = (CGFloat(minX)     - padX) / scale
-        let y1 = (CGFloat(minY)     - padY) / scale
-        let x2 = (CGFloat(maxX + 1) - padX) / scale
-        let y2 = (CGFloat(maxY + 1) - padY) / scale
+        let x1 = CGFloat(component.minX)     / scaleX
+        let y1 = CGFloat(component.minY)     / scaleY
+        let x2 = CGFloat(component.maxX + 1) / scaleX
+        let y2 = CGFloat(component.maxY + 1) / scaleY
 
         let cx1 = max(0, min(x1, frameSize.width))
         let cy1 = max(0, min(y1, frameSize.height))
@@ -327,63 +333,85 @@ final class TrayDetectionService {
             confidence: 1.0,
             originalFrameSize: frameSize,
             trayClass: cls,
-            mask: mask,
+            mask: component.mask,
             maskSize: maskSize,
-            // The scale/padX/padY passed in are already the 384-space values (the
-            // detector letterboxes the frame directly to 384). They map original
-            // frame coords → mask space: x_mask = x*scale + padX.
-            maskScale: scale,
-            maskPadX: padX,
-            maskPadY: padY
+            maskScaleX: scaleX,
+            maskScaleY: scaleY
         )
     }
 
-    // MARK: - Letterbox (384×384, pad = 114)
+    // MARK: - Squash (384×384, no padding) → NCHW Float32 input
 
-    /// Letterboxes the camera frame into the reused 384×384 ARGB input buffer.
-    /// Returns the buffer plus the (scale, padX, padY) needed to un-letterbox the
-    /// output bboxes back to original-frame coordinates.
-    private func letterbox(_ px: CVPixelBuffer)
-        -> (buffer: CVPixelBuffer, scale: CGFloat, padX: CGFloat, padY: CGFloat)? {
-
+    /// Stretches the camera frame to 384×384 with independent x/y scale (the
+    /// training-set resize), renders it into the reused BGRA buffer, and copies
+    /// the pixels into the reused `[1, 3, 384, 384]` Float32 array as raw
+    /// [0, 255] RGB planes.
+    private func squashToInput(_ px: CVPixelBuffer) -> MLMultiArray? {
         let src  = CIImage(cvPixelBuffer: px)
         let srcW = src.extent.width
         let srcH = src.extent.height
         let size = CGFloat(inputSize)
+        guard srcW > 0, srcH > 0 else { return nil }
 
-        let scale = min(size / srcW, size / srcH)
-        let padX  = (size - srcW * scale) / 2
-        let padY  = (size - srcH * scale) / 2
-
+        // Move the extent origin to zero before scaling so a cropped/oriented
+        // CIImage still lands at (0, 0).
         let transformed = src
-            .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            .transformed(by: CGAffineTransform(translationX: padX, y: padY))
+            .transformed(by: CGAffineTransform(translationX: -src.extent.origin.x,
+                                               y: -src.extent.origin.y))
+            .transformed(by: CGAffineTransform(scaleX: size / srcW, y: size / srcH))
 
-        // (Re)allocate the input buffer only on first use; reuse thereafter.
-        if inputBuffer == nil {
+        // (Re)allocate the scratch buffer and input array only on first use.
+        if squashBuffer == nil {
             let attrs: [CFString: Any] = [
                 kCVPixelBufferWidthKey:           inputSize as CFNumber,
                 kCVPixelBufferHeightKey:          inputSize as CFNumber,
-                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32ARGB as CFNumber,
+                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA as CFNumber,
             ]
             var outBuf: CVPixelBuffer?
             guard CVPixelBufferCreate(kCFAllocatorDefault,
                                       inputSize, inputSize,
-                                      kCVPixelFormatType_32ARGB,
+                                      kCVPixelFormatType_32BGRA,
                                       attrs as CFDictionary,
                                       &outBuf) == kCVReturnSuccess,
                   outBuf != nil else { return nil }
-            inputBuffer = outBuf
+            squashBuffer = outBuf
         }
-        guard let out = inputBuffer else { return nil }
+        if inputArray == nil {
+            inputArray = try? MLMultiArray(
+                shape: [1, NSNumber(value: numClasses), NSNumber(value: inputSize), NSNumber(value: inputSize)],
+                dataType: .float32)
+        }
+        guard let buffer = squashBuffer, let array = inputArray else { return nil }
 
         let bounds = CGRect(x: 0, y: 0, width: size, height: size)
-        let grey = CIImage(color: CIColor(red: 114/255, green: 114/255, blue: 114/255))
-            .cropped(to: bounds)
-        ciContext.render(transformed.composited(over: grey), to: out, bounds: bounds,
+        ciContext.render(transformed, to: buffer, bounds: bounds,
                          colorSpace: CGColorSpaceCreateDeviceRGB())
 
-        return (out, scale, padX, padY)
+        // BGRA bytes → R, G, B float planes (NCHW), raw [0, 255].
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(buffer) else { return nil }
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(buffer)
+        let bytes = base.assumingMemoryBound(to: UInt8.self)
+
+        let sC = array.strides[1].intValue
+        let sH = array.strides[2].intValue
+        let sW = array.strides[3].intValue
+        let dst = array.dataPointer.assumingMemoryBound(to: Float.self)
+        let rBase = 0 * sC, gBase = 1 * sC, bBase = 2 * sC
+
+        for y in 0..<inputSize {
+            let row = y * bytesPerRow
+            let outRow = y * sH
+            for x in 0..<inputSize {
+                let p = row + x * 4              // B, G, R, A
+                let o = outRow + x * sW
+                dst[rBase + o] = Float(bytes[p + 2])
+                dst[gBase + o] = Float(bytes[p + 1])
+                dst[bBase + o] = Float(bytes[p])
+            }
+        }
+        return array
     }
 
     // MARK: - Utilities

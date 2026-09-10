@@ -3,7 +3,7 @@
 //
 // Shared result types for the three-model detection pipeline:
 //   1. pills_fp16           — PP-YOLOE+s pill detector
-//   2. tray_detector_fp16   — RTMDet-Tiny tray/chute detector
+//   2. tray_fp16            — MobileNetV2-UNet tray/chute segmenter
 //   3. gloves_detector_fp32 — YOLOX-Nano glove safety detector
 //
 // This file defines the class enums and result structs for tray and glove
@@ -18,7 +18,7 @@ import CoreGraphics
 
 /// The two object classes output by the RTMDet-Tiny tray model.
 ///
-/// The model (tray_detector_fp16.mlpackage) was trained on two region types:
+/// The model (tray_fp16.mlpackage) was trained on two region types:
 ///   • Class index 0 → TRAY   : the counting tray where pills are placed
 ///   • Class index 1 → CHUTE  : the chute / dispenser opening
 ///

@@ -482,6 +482,7 @@
 "stockCountSheet.bucket" = "Bucket";
 "stockCountSheet.batchNo" = "Batch No.";
 "stockCountSheet.expiryDate" = "Expiry Date";
+"stockCountSheet.batchNoExpiryDate" = "Batch No./Exp Dt";
 "stockCountSheet.openPills" = "Open Pills";
 "stockCountSheet.lotNumber" = "Lot Number";
 "stockCountSheet.total" = "Total";

@@ -1,5 +1,5 @@
 {
-  "originHash" : "a93dbe1d069884112a15e7765d1abbcbffca1046ec8cc65c519d0f58b405f78d",
+  "originHash" : "f8ab011d3fc48a9b3d21d421a23ec9477d020323d5e7b86c664fc7ea4f9ec021",
   "pins" : [
     {
       "identity" : "abseil-cpp-binary",
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/google/GoogleDataTransport.git",
       "state" : {
-        "revision" : "617af071af9aa1d6a091d59a202910ac482128f9",
-        "version" : "10.1.0"
+        "revision" : "ba3358d3c3dbae8ef230b58a46b97ad65e84e974",
+        "version" : "10.1.1"
       }
     },
     {

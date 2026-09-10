@@ -542,6 +542,7 @@ enum L10n {
         static let bucket   = NSLocalizedString("stockCountSheet.bucket", comment: "")
         static let batchNo   = NSLocalizedString("stockCountSheet.batchNo", comment: "")
         static let expiryDate = NSLocalizedString("stockCountSheet.expiryDate", comment: "")
+        static let batchNoExpiryDate = NSLocalizedString("stockCountSheet.batchNoExpiryDate", comment: "")
         static let openPills   = NSLocalizedString("stockCountSheet.openPills", comment: "")
         static let lotNumber = NSLocalizedString("stockCountSheet.lotNumber", comment: "")
         static let total   = NSLocalizedString("stockCountSheet.total", comment: "")

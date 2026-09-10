@@ -32,6 +32,19 @@ extension PillScanViewModel {
         if let existingStockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) {
 
             print("Existing stock txn found → merging")
+            lastScanCreatedStockTxn = false
+
+            // A sealed row is an insert only if this exact (stockTxnId, lot, exp) has no
+            // row yet — setSealedBottleQty itself updates in place otherwise. An opened row
+            // is always a fresh insert (addOpenedBottle's contract).
+            switch containerStatus {
+            case .sealed:
+                lastScanCreatedBottleInfo = bottleInfoDAO.sealedBottleQty(
+                    stockTxnId: existingStockTxn.stock_txn_id, lotNo: decoded.lotNumber, expNo: expiryString
+                ) == 0
+            case .opened:
+                lastScanCreatedBottleInfo = true
+            }
 
             // MARK: 2️⃣ Write the bottle info (absolute-set for sealed, new row for opened)
             switch containerStatus {
@@ -135,6 +148,11 @@ extension PillScanViewModel {
 
         // MARK: 6️⃣ Create StockTxnEntity for this NDC in this batch
         let stockTxn = stockTxnDAO.fetchOrCreate(batch: batch, drugId: drugIdToUse, bucketId: batch.bucket_id)
+        // We already know (line 32 found nothing) no StockTxn existed for this NDC —
+        // fetchOrCreate here always inserts, and the fresh StockTxn has no sealed/opened
+        // bottle rows yet, so the bottle-info write below is always an insert too.
+        lastScanCreatedStockTxn = true
+        lastScanCreatedBottleInfo = true
 
         // MARK: 7️⃣ Set initial bottle info (absolute-set for sealed, new row for opened)
         switch containerStatus {

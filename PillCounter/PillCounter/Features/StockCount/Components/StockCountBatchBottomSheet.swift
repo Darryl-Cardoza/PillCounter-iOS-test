@@ -96,6 +96,7 @@ struct StockCountBatchBottomSheet: View {
         if showEditSheet, let txn = editableTxn {
             // Edit takes over the ENTIRE panel (full width + height).
             StockCountEditDetailsSheet(txn: txn, onDismiss: { showEditSheet = false })
+                .id(txn.ndc)
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -198,6 +199,7 @@ struct StockCountBatchBottomSheet: View {
                 .onTapGesture { showEditSheet = false }
 
             StockCountEditDetailsSheet(txn: txn, onDismiss: { showEditSheet = false }, hugContentHeight: true)
+                .id(txn.ndc)
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
                 .frame(maxWidth: .infinity)
@@ -355,6 +357,7 @@ struct StockCountBatchBottomSheet: View {
                     showEditSheet = false
                 }
             })
+                .id(txn.ndc)
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
         } else if showDrugDetails {

@@ -234,11 +234,16 @@ final class BottleInfoStore {
 
     // MARK: - Delete
 
+    /// NSBatchDeleteRequest bypasses `context`'s object graph and can collide with an
+    /// unrelated save in flight on the same context ("Could not merge changes", silently
+    /// swallowed) — delete through the context instead so removal is part of its normal save cycle.
     func softDelete(bottleId: Int64) {
-        let request: NSFetchRequest<NSFetchRequestResult> = BottleInfoEntity.fetchRequest()
+        let request: NSFetchRequest<BottleInfoEntity> = BottleInfoEntity.fetchRequest()
         request.predicate = NSPredicate(format: "bottle_id == %lld", bottleId)
         do {
-            try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            guard let bottle = try context.fetch(request).first else { return }
+            context.delete(bottle)
+            CoreDataManager.shared.save(context: context)
             StoreLogger.debug("🧴 [BottleInfoDAO] DELETED — bottleId: \(bottleId)")
             bottleInfosDidChange.send()
         } catch {
@@ -247,10 +252,13 @@ final class BottleInfoStore {
     }
 
     func softDeleteByStockTxn(stockTxnId: Int64) {
-        let request: NSFetchRequest<NSFetchRequestResult> = BottleInfoEntity.fetchRequest()
+        let request: NSFetchRequest<BottleInfoEntity> = BottleInfoEntity.fetchRequest()
         request.predicate = NSPredicate(format: "stock_txn_id == %lld", stockTxnId)
         do {
-            try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            let bottles = try context.fetch(request)
+            guard !bottles.isEmpty else { return }
+            bottles.forEach { context.delete($0) }
+            CoreDataManager.shared.save(context: context)
             StoreLogger.debug("🧴 [BottleInfoDAO] DELETED all rows for stockTxnId: \(stockTxnId)")
         } catch {
             StoreLogger.debug("Failed to delete BottleInfoEntity for stockTxn: \(error)")

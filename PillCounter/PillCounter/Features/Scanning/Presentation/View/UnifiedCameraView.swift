@@ -1653,6 +1653,10 @@ extension UnifiedCameraView {
             stockCountViewModel.committedBottleId = pillScanViewModel.currentBottleInfo?.bottle_id
             stockCountViewModel.committedLotNo = pillScanViewModel.currentBottleInfo?.lot_no ?? ""
             stockCountViewModel.committedExpNo = pillScanViewModel.currentBottleInfo?.exp_no ?? ""
+            // PMS-linked path always merges into a StockTxn that already existed
+            // (fetched above) — never eligible for Cancel to delete.
+            stockCountViewModel.sessionCreatedStockTxn = false
+            stockCountViewModel.sessionCreatedBottleInfo = false
         } else {
             await pillScanViewModel.createTxnForBatchFromScan(
                 rawValueFromBarcodeOrQr: drug.rawBarcode,
@@ -1667,6 +1671,11 @@ extension UnifiedCameraView {
             stockCountViewModel.committedBottleId = pillScanViewModel.currentBottleInfo?.bottle_id
             stockCountViewModel.committedLotNo = pillScanViewModel.currentBottleInfo?.lot_no ?? ""
             stockCountViewModel.committedExpNo = pillScanViewModel.currentBottleInfo?.exp_no ?? ""
+            // createTxnForBatchFromScan itself knows whether it inserted fresh rows or
+            // merged into an existing NDC/lot — surface that so Cancel only ever deletes
+            // what this scan session actually created.
+            stockCountViewModel.sessionCreatedStockTxn = pillScanViewModel.lastScanCreatedStockTxn
+            stockCountViewModel.sessionCreatedBottleInfo = pillScanViewModel.lastScanCreatedBottleInfo
         }
         // editableTxn (used by Edit) falls back to selectedGroupedTransaction — refresh it here
         // since groupedTransactions itself stays frozen (suppressListReload) until dismiss.
@@ -1677,12 +1686,21 @@ extension UnifiedCameraView {
         cameraService.enableBarcodeScanning()
     }
 
-    /// Called by the Clear button — clears the detail slot and refreshes the list.
+    /// Called by the Clear button — undoes whatever this scan session freshly created,
+    /// then clears the detail slot and refreshes the list. A scan that merged into an
+    /// already-existing NDC/lot is left as-is (kept simple: no revert-to-previous-value).
     func clearScannedDetails() {
+        if stockCountViewModel.sessionCreatedBottleInfo, let bottleId = stockCountViewModel.committedBottleId {
+            stockCountViewModel.bottleInfoDAO.softDelete(bottleId: bottleId)
+        }
+        if stockCountViewModel.sessionCreatedStockTxn, let stockTxnId = stockCountViewModel.committedStockTxnId {
+            stockCountViewModel.stockTxnDAO.softDelete(stockTxnId: stockTxnId)
+        }
         stockCountViewModel.scannedDrugData = nil
         stockCountViewModel.selectedGroupedTransaction = nil
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.suppressListReload = false
+        stockCountViewModel.reset()
         stockCountViewModel.reloadAllState()
         btScannerFocusTrigger += 1
     }

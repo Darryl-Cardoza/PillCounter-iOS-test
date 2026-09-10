@@ -592,8 +592,12 @@ struct StockCountEditDetailsSheet: View {
     /// empties it completely. Returns whether the StockTxn was deleted.
     @discardableResult
     private func pruneZeroedRowsAndEmptyTxn() -> Bool {
-        guard let batchId = stockCountViewModel.currentBatch?.batch_id,
-              let stockTxn = stockCountViewModel.stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: txn.ndc) else { return false }
+        guard let batch = stockCountViewModel.currentBatch,
+              let stockTxn = stockCountViewModel.stockTxnDAO.fetchByBatchAndNdc(batchId: batch.batch_id, ndc: txn.ndc) else { return false }
+
+        // A PMS-requested NDC is a required line item for this batch — it must stay
+        // visible (and re-editable) even at 0/0, not disappear once zeroed out.
+        guard batch.req_id_from_pms == nil else { return false }
 
         let bottles = stockCountViewModel.bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
         for bottle in bottles where bottle.bottle_qty == 0 && bottle.loose_qty == 0 {

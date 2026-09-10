@@ -18,8 +18,10 @@ struct StockTxnEmptyPruneTests {
 
     /// Mirrors StockCountEditDetailsSheet.pruneZeroedRowsAndEmptyTxn: zero every
     /// bottle row for a StockTxn, soft-delete the zeroed bottles, then soft-delete
-    /// the StockTxn itself once no bottles remain.
-    private func zeroAndPrune(stockTxnId: Int64) {
+    /// the StockTxn itself once no bottles remain — unless the batch is PMS-linked,
+    /// in which case the whole prune is skipped (the NDC is a required line item).
+    private func zeroAndPrune(stockTxnId: Int64, batch: BatchCountEntity) {
+        guard batch.req_id_from_pms == nil else { return }
         let bottles = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxnId)
         for bottle in bottles {
             BottleInfoStore.shared.setAbsolute(bottleId: bottle.bottle_id, bottleQty: 0, looseQty: 0)
@@ -56,10 +58,10 @@ struct StockTxnEmptyPruneTests {
         BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnA.stock_txn_id, bottleQty: 4, lotNo: "LOT-A", expNo: "2027-01")
         BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnB.stock_txn_id, bottleQty: 4, lotNo: "LOT-B", expNo: "2027-01")
 
-        zeroAndPrune(stockTxnId: stockTxnA.stock_txn_id)
+        zeroAndPrune(stockTxnId: stockTxnA.stock_txn_id, batch: batch)
         #expect(StockTxnStore.shared.fetchById(stockTxnA.stock_txn_id)?.is_deleted == true)
 
-        zeroAndPrune(stockTxnId: stockTxnB.stock_txn_id)
+        zeroAndPrune(stockTxnId: stockTxnB.stock_txn_id, batch: batch)
         #expect(StockTxnStore.shared.fetchById(stockTxnB.stock_txn_id)?.is_deleted == true, "second NDC's StockTxn must also be soft-deleted once its only lot is zeroed")
 
         let liveStockTxns = StockTxnStore.shared.fetchByBatch(batchId: batch.batch_id)
@@ -91,9 +93,9 @@ struct StockTxnEmptyPruneTests {
         BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnB.stock_txn_id, bottleQty: 3, lotNo: "LOT-B", expNo: "2027-01")
         BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnC.stock_txn_id, bottleQty: 4, lotNo: "LOT-C", expNo: "2027-01")
 
-        zeroAndPrune(stockTxnId: stockTxnB.stock_txn_id)
-        zeroAndPrune(stockTxnId: stockTxnA.stock_txn_id)
-        zeroAndPrune(stockTxnId: stockTxnC.stock_txn_id)
+        zeroAndPrune(stockTxnId: stockTxnB.stock_txn_id, batch: batch)
+        zeroAndPrune(stockTxnId: stockTxnA.stock_txn_id, batch: batch)
+        zeroAndPrune(stockTxnId: stockTxnC.stock_txn_id, batch: batch)
 
         #expect(StockTxnStore.shared.fetchById(stockTxnA.stock_txn_id)?.is_deleted == true)
         #expect(StockTxnStore.shared.fetchById(stockTxnB.stock_txn_id)?.is_deleted == true)
@@ -118,5 +120,24 @@ struct StockTxnEmptyPruneTests {
         BottleInfoStore.shared.softDeleteByStockTxn(stockTxnId: stockTxn.stock_txn_id)
 
         #expect(BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id).isEmpty)
+    }
+
+    /// A PMS-linked batch's NDC is a required line item — zeroing it out must NOT delete
+    /// the bottle row or the StockTxn. It stays live at 0/0 so the user can still see and
+    /// re-count it, unlike a manually-started batch where zeroing prunes it away entirely.
+    @Test func pmsLinkedBatchNdcSurvivesZeroingUntouched() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch(requestId: "PMS-REQ-\(TestIds.unique())")
+        let stockTxn = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixture.drugId, bucketId: batch.bucket_id)
+
+        let bottle = BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 4, lotNo: "LOT-A", expNo: "2027-01")
+
+        // Simulate the edit sheet zeroing the row out, same as a non-PMS batch would.
+        BottleInfoStore.shared.setAbsolute(bottleId: bottle!.bottle_id, bottleQty: 0, looseQty: 0)
+        zeroAndPrune(stockTxnId: stockTxn.stock_txn_id, batch: batch)
+
+        #expect(StockTxnStore.shared.fetchById(stockTxn.stock_txn_id)?.is_deleted == false, "PMS-linked StockTxn must not be soft-deleted even at 0/0")
+        #expect(BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id).count == 1, "PMS-linked bottle row must not be deleted even at 0/0")
     }
 }

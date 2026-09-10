@@ -456,7 +456,12 @@ struct UnifiedCameraView: View {
                     }
                 }
             }
-            .customPopup(isPresented: $stockCountViewModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false) { ndcMismatchPopup }
+            .onChange(of: stockCountViewModel.showScannedNdcDoesNotMatch) { _, showing in
+                guard showing else { return }
+                ToastManager.shared.show(message: L10n.BarcodeScan.incorrectNdcMessage)
+                stockCountViewModel.showScannedNdcDoesNotMatch = false
+                restartFlow()
+            }
             // BottomSheet paints itself as an .overlay on the content above, so the
             // stock sheet always sits above UnifiedCameraLayout's own inactivity
             // overlay. Redraw the resume prompt here, last, so it wins over both the

@@ -29,19 +29,16 @@ import Foundation
 /// the return value when scanning is disabled, not by skipping the call.
 final class BarcodeScanLock {
     private let missThreshold: Int
-    private let tag: String
     private(set) var lockedValue: String?
     private var missFrames = 0
 
-    init(missThreshold: Int = 2, tag: String = "?") {
+    init(missThreshold: Int = 2) {
         self.missThreshold = missThreshold
-        self.tag = tag
     }
 
     /// Feed this frame's visible barcode values and the frame's first decoded
     /// value (the candidate to lock onto if nothing is currently locked).
     /// Returns the value that should fire as a new scan event, or nil.
-    @discardableResult
     func processFrame(visibleValues: [String], candidateValue: String?) -> String? {
         if let locked = lockedValue {
             if visibleValues.contains(locked) {

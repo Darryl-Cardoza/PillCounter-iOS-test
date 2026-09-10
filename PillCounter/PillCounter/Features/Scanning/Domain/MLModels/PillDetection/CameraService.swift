@@ -31,7 +31,7 @@ final class CameraService: NSObject, ObservableObject {
     // (`processFrame`) runs on every metadata frame regardless of
     // `barcodeEnabled` so a barcode removed while scanning is momentarily
     // disabled (e.g. a previous scan still being processed) is never missed.
-    private let barcodeLock = BarcodeScanLock(tag: "primary")
+    private let barcodeLock = BarcodeScanLock()
 
     // MARK: - BOTTLE RESCAN (multi-bottle dispense tracking)
     // A second, independent barcode-metadata listener that stays live during
@@ -41,7 +41,7 @@ final class CameraService: NSObject, ObservableObject {
     // which would otherwise wrongly restart the NDC-verify flow.
     @Published var bottleRescanCode: String = ""
     private var bottleRescanEnabled: Bool = false
-    private let bottleRescanLock = BarcodeScanLock(tag: "rescan")
+    private let bottleRescanLock = BarcodeScanLock()
 
     // MARK: - IMAGE PROCESSING
     // Three-model inference pipeline running on every captured camera frame:
@@ -401,12 +401,8 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.barcodeEnabled = true
-            // Delivered on sessionQueue (NOT .main) so presence tracking keeps
-            // running even while the main thread/MainActor is busy processing
-            // the previous scan result (Core Data/network work) — the main
-            // queue drops backlogged frames rather than draining them late,
-            // which otherwise hides a genuine remove-and-rescan of the same
-            // barcode. Only the final @Published writes hop to main.
+            // sessionQueue (not .main) so presence tracking isn't delayed by
+            // main-thread work — see `BarcodeScanLock`. Also used by `enableBottleRescanListening()`.
             self.metadataOutput.setMetadataObjectsDelegate(self, queue: self.sessionQueue)
             // Boost to 30fps while barcode scanning is active. More frames per second
             // means more decode attempts, which is critical for low-quality or curved
@@ -465,12 +461,7 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.bottleRescanEnabled = true
-            // Delivered on sessionQueue (NOT .main) so presence tracking keeps
-            // running even while the main thread/MainActor is busy processing
-            // the previous scan result (Core Data/network work) — the main
-            // queue drops backlogged frames rather than draining them late,
-            // which otherwise hides a genuine remove-and-rescan of the same
-            // barcode. Only the final @Published writes hop to main.
+            // See `enableBarcodeScanning()` — same sessionQueue-delivery reasoning.
             self.metadataOutput.setMetadataObjectsDelegate(self, queue: self.sessionQueue)
             self.activateBarcodeAutoFocus()
             print("📷 [CameraService] bottle rescan listening ENABLED")

@@ -53,6 +53,10 @@ final class CameraService: NSObject, ObservableObject {
     private let trayDetector   = TrayDetectionService.shared
     private let gloveDetector  = GloveDetectionService()
 
+    // See CameraFocusController.swift — smooth-AF disable, adjusting-focus
+    // frame gate, and periodic re-arm during barcode scanning.
+    private lazy var focusController = CameraFocusController(reArmQueue: sessionQueue)
+
     /// Reject a "tray" whose bbox covers at least this fraction of the frame — a
     /// background surface (e.g. the table) fills the frame, whereas a real tray is
     /// a bounded object inside it. Matches Android TRAY_MAX_FRAME_COVERAGE = 0.75.
@@ -274,6 +278,14 @@ final class CameraService: NSObject, ObservableObject {
             self.videoInput = input
             self.session.addInput(input)
 
+            do {
+                try device.lockForConfiguration()
+                self.focusController.applyFastFocusDefaults(on: device)
+                device.unlockForConfiguration()
+            } catch {
+                // Intentionally silent — camera still works without this tweak.
+            }
+
             if let range = device.activeFormat.videoSupportedFrameRateRanges.first {
                 let fps = min(max(30.0, range.minFrameRate), range.maxFrameRate)
                 let duration = CMTimeMake(value: 1, timescale: Int32(fps.rounded()))
@@ -362,6 +374,7 @@ final class CameraService: NSObject, ObservableObject {
             if device.isWhiteBalanceModeSupported(.locked) {
                 device.whiteBalanceMode = .locked
             }
+            focusController.applyFastFocusDefaults(on: device)
             device.unlockForConfiguration()
             is3ALocked = true
         } catch {
@@ -386,6 +399,7 @@ final class CameraService: NSObject, ObservableObject {
             if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
                 device.whiteBalanceMode = .continuousAutoWhiteBalance
             }
+            focusController.applyFastFocusDefaults(on: device)
             device.unlockForConfiguration()
         } catch {
             // Intentionally silent.
@@ -421,6 +435,8 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.barcodeEnabled = false
+            // Only stop re-arming if the rescan listener isn't also relying on it.
+            if !self.bottleRescanEnabled { self.focusController.stopReArming() }
             // Intentionally preserve barcodeLock.lockedValue. If scanning is
             // re-enabled while the same physical barcode is still in frame, the
             // lock prevents it from immediately re-firing. The lock is only
@@ -474,6 +490,8 @@ final class CameraService: NSObject, ObservableObject {
             self.bottleRescanEnabled = false
             print("📷 [CameraService] bottle rescan listening DISABLED")
             self.bottleRescanLock.forceRelease()
+            // Only stop re-arming if the primary barcode scanner isn't also relying on it.
+            if !self.barcodeEnabled { self.focusController.stopReArming() }
             // Metadata delegate intentionally left attached — see the comment in
             // `disableBarcodeScanning()`. It is only ever detached in `stop()`.
             // Re-lock 3A so the pill count settles back down once rescan listening ends.
@@ -507,10 +525,16 @@ final class CameraService: NSObject, ObservableObject {
             if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
                 device.whiteBalanceMode = .continuousAutoWhiteBalance
             }
+            focusController.applyFastFocusDefaults(on: device)
             device.unlockForConfiguration()
         } catch {
             // Intentionally silent — barcode scanning still works without focus assist.
         }
+
+        // Continuous-AF alone can drift onto the background and stay there;
+        // periodically re-center the focus point so it tracks whatever the
+        // operator is actually holding up. See CameraFocusController.
+        focusController.startReArming(device: device)
     }
 
     /// Triggers a one-shot auto-focus at the given point (normalised 0-1 coordinates,
@@ -619,6 +643,7 @@ final class CameraService: NSObject, ObservableObject {
             // Release the 3A lock before stopping so the next start() re-meters the
             // scene from scratch (lighting/tray may differ after a long pause).
             self.unlock3A()
+            self.focusController.stopReArming()
             self.session.stopRunning()
             // Session is fully stopped — no barcodes are visible. Clear both
             // locks so the next start() begins fresh rather than blocking on a
@@ -846,6 +871,14 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         else { return }
 
         lastPixelBuffer = pixelBuffer
+
+        // Skip ML inference on a frame captured while the device is still
+        // hunting for focus/exposure — using it would feed the pipeline a
+        // frame that's blurred mid-adjustment. lastPixelBuffer above is
+        // still updated so snapshot capture isn't affected.
+        if let device = captureDevice, !focusController.isFrameStable(for: device) {
+            return
+        }
 
         guard isCountingEnabled else { return }
 

@@ -31,8 +31,8 @@ struct FaceScanScreen<Guidance: View>: View {
     /// is held, which authentication has no equivalent for.
     var guideColorOverride: Color?
     let onBack: () -> Void
-    /// Extra controls stacked above the instruction pill — enrollment puts
-    /// its pose-direction arrows and progress bar here. Empty for auth.
+    /// Extra controls stacked below the instruction pill — enrollment puts
+    /// its pose-direction arrows here. Empty for auth.
     @ViewBuilder var guidance: () -> Guidance
 
     var body: some View {
@@ -56,8 +56,8 @@ struct FaceScanScreen<Guidance: View>: View {
             VStack(spacing: 0) {
                 header
                 Spacer()
-                guidance()
                 instructionPill
+                guidance()
             }
         }
         .statusBarHidden(false)
@@ -176,22 +176,29 @@ extension FaceScanScreen where Guidance == EmptyView {
     }
 }
 
-/// "Put your face here" frame — no dimmed surround, so the user can see
-/// themselves at full brightness while aligning.
+/// "Put your face here" guide — no dimmed surround, so the user can see
+/// themselves at full brightness while aligning. An oval reads as a face
+/// outline; the rectangle it replaces read as a plain box.
 private struct FaceFrameGuide: View {
 
     let color: Color
 
     var body: some View {
         GeometryReader { geometry in
-            // Head-sized square: a fraction of the narrower edge, sat a
+            // Head-sized oval: a fraction of the narrower edge, sat a
             // little above centre so the chin isn't pushed out of frame
-            // when the user aligns their eyes with the middle.
-            let side = min(geometry.size.width, geometry.size.height) * 0.62
+            // when the user aligns their eyes with the middle. Deliberately
+            // looser than the actual gating region (FaceQualityChecker's
+            // maxCenterOffsetXRatio/YRatio) for detection robustness — a
+            // face can be inside the gate while still outside this oval, so
+            // "move into the oval" guidance won't always fire exactly when
+            // the oval visually suggests it should.
+            let width = min(geometry.size.width, geometry.size.height) * 0.45
+            let height = width * 1.3
 
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            Ellipse()
                 .stroke(color, lineWidth: 2)
-                .frame(width: side, height: side)
+                .frame(width: width, height: height)
                 .position(
                     x: geometry.size.width / 2,
                     y: geometry.size.height / 2 - geometry.size.height * 0.04

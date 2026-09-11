@@ -31,8 +31,9 @@ enum CandidateScoringStrategy {
     /// (`identify()`) reference implementations exactly.
     case bestSimilarity
     /// The user's score is the mean similarity across all their stored
-    /// embeddings. Not used by either reference implementation — left here
-    /// as the documented extension point the spec asks for, not the default.
+    /// embeddings. Not used by either reference implementation, but is the
+    /// default here — bestSimilarity let one noisy oblique-angle embedding
+    /// spike a non-matching user's score past threshold (false accepts).
     case averageSimilarity
 }
 
@@ -52,6 +53,21 @@ final class FaceRecognitionConfig {
     /// lower than that.
     var acceptanceThreshold: Float = 0.38
 
+    /// Absolute floor the best score must clear on top of
+    /// `acceptanceThreshold`, applied regardless of how many users are
+    /// enrolled. This is the gate that actually protects the single-enrolled-
+    /// user case, where `minMarginOverRunnerUp` below is structurally unable
+    /// to reject anything (there is no runner-up to lead).
+    ///
+    /// 0.55 — midpoint of scores measured on-device with one enrolled user:
+    /// an UNENROLLED person scored 0.391 (a false accept under the bare 0.38
+    /// threshold), the genuine enrolled user scored 0.715. 0.55 sits 0.16
+    /// above the false accept and 0.165 below the genuine match. If a genuine
+    /// user is ever rejected, re-read the identify() debug scores before
+    /// moving this — overlapping ranges would mean no threshold can separate
+    /// them and the problem is upstream in capture quality.
+    var minAbsoluteAcceptScore: Float = 0.55
+
     /// Minimum lead the best-matching user's score must hold over the best
     /// score from any OTHER user to be accepted, even when the best score
     /// alone clears `acceptanceThreshold`. Without this gate, once two
@@ -61,11 +77,15 @@ final class FaceRecognitionConfig {
     /// either reference implementation (they only threshold) — added
     /// because a single global threshold can't distinguish "clearly A"
     /// from "barely A over B."
-    var minMarginOverRunnerUp: Float = 0.03
+    ///
+    /// 0.10 (raised from 0.03) — 0.03 was too thin to reject real near-ties
+    /// between different people's embeddings, causing false accepts. Needs
+    /// on-device tuning against real enrolled users.
+    var minMarginOverRunnerUp: Float = 0.10
 
     /// How a user's per-frame candidate score is computed from their stored
     /// embedding set.
-    var scoringStrategy: CandidateScoringStrategy = .bestSimilarity
+    var scoringStrategy: CandidateScoringStrategy = .averageSimilarity
 
     // MARK: - Performance (spec section 13)
 

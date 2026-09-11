@@ -37,6 +37,13 @@ final class FaceQualityChecker {
     /// Face wider than this fraction of the frame = too close. Matches
     /// MAX_FACE_WIDTH_RATIO = 0.85 in both references, unscaled (a ratio).
     var maxFaceWidthRatio: CGFloat = 0.85
+    /// Max allowed distance from frame center to box center, as a fraction
+    /// of frame width/height — catches a face that's mostly out of the
+    /// camera view (cropped at an edge) rather than merely off-pose.
+    /// Deliberately loose: enrollment-only, not part of the reference
+    /// implementations above.
+    var maxCenterOffsetXRatio: CGFloat = 0.30
+    var maxCenterOffsetYRatio: CGFloat = 0.30
 
     // MARK: - Soft-score inputs (never hard-reject)
 
@@ -85,6 +92,13 @@ final class FaceQualityChecker {
             Log("Quality: REJECT faceTooClose (width \(box.width) > \(frame.width * maxFaceWidthRatio))")
             return .rejected(.faceTooClose, qualityScore: Float(box.width))
         }
+        let centerOffsetX = abs(box.midX - frame.width / 2)
+        let centerOffsetY = abs(box.midY - frame.height / 2)
+        guard centerOffsetX <= frame.width * maxCenterOffsetXRatio,
+              centerOffsetY <= frame.height * maxCenterOffsetYRatio else {
+            Log("Quality: REJECT faceCropIncomplete (offset \(Int(centerOffsetX)),\(Int(centerOffsetY)))")
+            return .rejected(.faceCropIncomplete, qualityScore: Float(box.width))
+        }
 
         // TEMP DEBUG landmark-sanity check — not gating yet, log only.
         let sane = landmarkSanityCheck(detection)
@@ -128,17 +142,30 @@ final class FaceQualityChecker {
     /// the eye midpoint, normalized by inter-eye distance. Coarse — callers
     /// requiring a pose target should smooth this over several consecutive
     /// frames rather than trust one reading.
+    ///
+    /// Sign convention: positive = subject turned to THEIR left. Depends on
+    /// FaceCameraService setting `connection.isVideoMirrored = true` for the
+    /// front camera — in that mirrored buffer the subject's own left is on
+    /// the image's left, so the nose moves toward decreasing x when the
+    /// subject turns left, hence the negation. Without it (or if the
+    /// mirroring setting ever changes) the guided flow asks for "turn left"
+    /// and only accepts a right turn.
     private func yawDegreesEstimate(_ detection: FaceDetectionResult) -> Float {
         let l = detection.landmarks
         let eyeMidX = (l.leftEye.x + l.rightEye.x) / 2
         let eyeDist = hypot(l.leftEye.x - l.rightEye.x, l.leftEye.y - l.rightEye.y)
         guard eyeDist > 1 else { return 0 }
         let ratio = Float((l.nose.x - eyeMidX) / eyeDist)
-        return ratio * 55
+        return -ratio * 55
     }
 
     /// Pitch estimate in degrees from the nose's vertical position relative
     /// to the eye-to-mouth span. Positive = chin up.
+    ///
+    /// Raising the chin tilts the head back, which projects the nose tip
+    /// *down* toward the mouth line in image space (y grows downward), so a
+    /// rising nose ratio is chin-up — the earlier `neutral - nose` form had
+    /// this backwards and the chin-up step could never be satisfied.
     private func pitchDegreesEstimate(_ detection: FaceDetectionResult) -> Float {
         let l = detection.landmarks
         let eyeMidY = (l.leftEye.y + l.rightEye.y) / 2
@@ -147,7 +174,7 @@ final class FaceQualityChecker {
         guard abs(span) > 1 else { return 0 }
         let neutralRatio: CGFloat = 0.45
         let noseRatio = (l.nose.y - eyeMidY) / span
-        let deviation = Float(neutralRatio - noseRatio)
+        let deviation = Float(noseRatio - neutralRatio)
         return deviation * 60
     }
 

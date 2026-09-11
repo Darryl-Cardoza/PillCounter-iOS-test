@@ -38,8 +38,6 @@ extension PillScanViewModel{
 
         let target = Int(txn.target_count)
 
-        let txnId = txn.txn_id
-
         switch currentControlledStep {
             
         case .scan:
@@ -54,14 +52,7 @@ extension PillScanViewModel{
             currentControlledTargetCount = target
 
         case .containerPending:
-            let containerCount =
-            transactionDetailDAO.totalCountForStep(
-                txnId: txnId,
-                step: .containerInitiate
-            )
-
-            currentControlledTargetCount =
-            max(Int(containerCount) - target, 0)
+            currentControlledTargetCount = containerPendingTarget()
         }
     }
     
@@ -88,13 +79,7 @@ extension PillScanViewModel{
             return stepTotal == target
 
         case .containerPending:
-            let containerCount =
-            transactionDetailDAO.totalCountForStep(
-                txnId: txn.txn_id,
-                step: .containerInitiate
-            )
-            let expected = Int(containerCount) - target
-            return stepTotal == expected
+            return stepTotal == containerPendingTarget()
             
         case .vial:
             return stepTotal == 0
@@ -105,23 +90,20 @@ extension PillScanViewModel{
     }
     
     
-    func isContainerPendingZero() -> Bool {
-        guard let txn = currentTransaction else { return false }
+    /// Pills expected in the back count: what was poured into the container minus
+    /// what was dispensed. 0 means there is nothing left to scan.
+    func containerPendingTarget() -> Int {
+        guard let txn = currentTransaction else { return 0 }
 
-        let target = Int(txn.target_count)
-
-        let containerCount =
-        transactionDetailDAO.totalCountForStep(
+        let containerCount = transactionDetailDAO.totalCountForStep(
             txnId: txn.txn_id,
             step: .containerInitiate
         )
 
-        let expected = Int(containerCount) - target
-
-        return currentControlledStep == .containerPending && expected == 0
+        return max(Int(containerCount) - Int(txn.target_count), 0)
     }
-    
-    
+
+
     func getTotalCuntForCurrentStep() -> Int32 {
         guard let txnId = currentTransaction?.txn_id else {
             return 0
@@ -183,7 +165,16 @@ extension PillScanViewModel{
         guard let currentIndex = steps.firstIndex(of: currentControlledStep) else {
             return
         }
-        let next = steps[currentIndex + 1]
+        guard let next = steps[safe: currentIndex + 1] else { return }
+
+        // Back count with 0 remaining can never satisfy `stepTotal == expected`, and
+        // handleAdd rejects every add against a 0 target — entering the step would
+        // strand the transaction in PARTIAL. Skip it instead of proceeding.
+        if next == .containerPending, containerPendingTarget() == 0 {
+            showSkipBackCountPopup = true
+            return
+        }
+
         currentControlledStep = next
         transactionDAO.updateWorkflowStep(txnId: txn.txn_id, step: next)
         updateControlledTargetCount()
@@ -225,6 +216,7 @@ extension PillScanViewModel{
         
         if let img = image {
             pendingBarcodeImagePath = PhotoFileManager.shared.saveImage(img)
+            refreshResettableWork()
         }
 
         transactionDAO.update(

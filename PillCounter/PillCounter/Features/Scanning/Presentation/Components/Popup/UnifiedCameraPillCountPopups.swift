@@ -29,7 +29,7 @@ extension UnifiedCameraView {
                         txn_id: pillScanViewModel.currentTransaction?.txn_id ?? 0,
                         note: pillScanViewModel.note
                     )
-                    await MainActor.run { showConfirmCompletionPopup = true }
+                    await MainActor.run { onComplete() }
                 }
             },
             secondaryTitle: L10n.Common.skip,
@@ -37,68 +37,28 @@ extension UnifiedCameraView {
                 showNoteOption = false
                 pillScanViewModel.note = ""
                 Task(priority: .background) {
-                    await MainActor.run { showConfirmCompletionPopup = true }
+                    await MainActor.run { onComplete() }
                 }
             },
             onClose: {
                 showNoteOption = false
-                showConfirmCompletionPopup = false
             }
         )
     }
 
-    var showConfirmCompletion: some View {
+    /// Back count has nothing left to scan (remaining == 0). Skip-only by design —
+    /// the step is unreachable, so a cancel would just strand the transaction.
+    var skipBackCountPopup: some View {
         ConfirmationDialogue(
-            title: L10n.PillCount.confirmCompletionTitle,
-            message: L10n.PillCount.confirmCompletionMessage,
-            cancelButtonText: L10n.Common.cancel,
-            confirmButtonText: L10n.Common.ok,
-            onCancel: {
-                showNoteOption = false
-                showConfirmCompletionPopup = false
-            },
+            title: L10n.PillCount.skipStepTitle,
+            message: L10n.PillCount.skipStepMessage,
+            cancelButtonText: "",
+            confirmButtonText: L10n.Common.skip,
+            showSingleConfirmButton: true,
+            onCancel: {},
             onConfirm: {
-                showNoteOption = false
-                showConfirmCompletionPopup = false
-
-                // Capture before any state reset — startContinuousDispense() clears
-                // currentTransaction, so read the id/type up front.
-                let completedTxnId = pillScanViewModel.currentTransaction?.txn_id ?? 0
-                let isFixed =
-                    pillScanViewModel.currentTransaction?.is_dispense == true
-                let completedIsDispense = router.selectedPillScanningIsDispense ?? true
-
-                if isFixed {
-                    // Mark COMPLETED FIRST, then start the continuous-dispense flow.
-                    // startContinuousDispense() reads the pending-txn list to decide
-                    // whether to show the queue or go to the dashboard — if we don't
-                    // await the status write first, that gate races the completion and
-                    // still sees this txn as PARTIAL (it then re-appears in the queue).
-                    Task { @MainActor in
-                        await userViewModel.completeTheSelectedTransaction(
-                            txnId: completedTxnId,
-                            isDispense: completedIsDispense
-                        )
-                        // Continuous dispense — reset back to RX-scan in place and surface
-                        // the "Today's Queue" sheet over it. No navigation. See UnifiedCameraView.
-                        startContinuousDispense()
-                    }
-                } else {
-                    stockCountViewModel.updateCounts(
-                        bottleId: pillScanViewModel.currentBottleInfo?.bottle_id,
-                        bottleQty: nil,
-                        looseQty: pillScanViewModel.addCurrentOpenPillCount
-                    )
-//                    router.setRoot(
-//                        to: .authentication(.login(.dashboard(.pillCount(.stockCount))))
-//                    )
-                    Task(priority: .background) {
-                        await userViewModel.completeTheSelectedTransaction(
-                            txnId: completedTxnId,
-                            isDispense: completedIsDispense
-                        )
-                    }
-                }
+                pillScanViewModel.showSkipBackCountPopup = false
+                finishTransaction()
             }
         )
     }

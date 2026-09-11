@@ -19,22 +19,24 @@ enum EnrollmentPoseStep: Int, CaseIterable {
     case chinUp
     case centerAgain
 
-    /// Target yaw in degrees, signed (+ = subject's right, i.e. turned
-    /// toward camera-left in a mirrored front-camera preview). nil = no
-    /// yaw requirement beyond the default centered tolerance.
+    /// Target yaw in degrees, signed (+ = turned toward the subject's own
+    /// left, matching FaceQualityChecker.yawDegreesEstimate). nil = no yaw
+    /// requirement beyond the default centered tolerance.
     var targetYawDegrees: ClosedRange<Float>? {
         switch self {
         case .center, .centerAgain: return -10...10
         case .turnLeft: return 12...25
         case .turnRight: return -25...(-12)
-        case .chinUp: return -10...10
+        case .chinUp: return -12...12
         }
     }
 
+    /// + = chin up. Range is wide on the upper end because the landmark-only
+    /// pitch proxy saturates fast once the nostrils occlude the nose tip.
     var targetPitchDegrees: ClosedRange<Float>? {
         switch self {
-        case .chinUp: return 8...20
-        default: return -10...10
+        case .chinUp: return 6...30
+        default: return -12...12
         }
     }
 
@@ -45,6 +47,19 @@ enum EnrollmentPoseStep: Int, CaseIterable {
         case .turnRight: return L10n.FaceAuth.poseTurnRight
         case .chinUp: return L10n.FaceAuth.poseChinUp
         case .centerAgain: return L10n.FaceAuth.poseCenterAgain
+        }
+    }
+
+    /// Voiceover text for this step — center/turnLeft/turnRight use Android's
+    /// exact spoken-strings-reference.md copy (distinct from instructionKey's
+    /// on-screen wording); chinUp/centerAgain have no Android equivalent, so
+    /// they simply speak their own display text.
+    var spokenKey: String {
+        switch self {
+        case .center: return L10n.FaceAuth.spokenPoseCenter
+        case .turnLeft: return L10n.FaceAuth.spokenPoseTurnLeft
+        case .turnRight: return L10n.FaceAuth.spokenPoseTurnRight
+        case .chinUp, .centerAgain: return instructionKey
         }
     }
 

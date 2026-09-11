@@ -100,7 +100,6 @@ struct UnifiedCameraView: View {
     @State var isOpenPillScanMode: Bool = false
 
     @State var showNoteOption: Bool = false
-    @State var showConfirmCompletionPopup: Bool = false
     /// Shown when an RX label is scanned but HL7/PMS is disabled for this account.
     /// The scan is blocked entirely — no parse/proceed logic runs.
     @State var showHl7UnavailablePopup: Bool = false
@@ -157,7 +156,8 @@ struct UnifiedCameraView: View {
                 if isShowing { cameraService.pauseCounting() }
             }
             .customPopup(isPresented: $showNoteOption) { showNoteOptionPopup }
-            .customPopup(isPresented: $showConfirmCompletionPopup) { showConfirmCompletion }
+            .customPopup(isPresented: $pillScanViewModel.showSkipBackCountPopup,
+                         dismissOnBackgroundTap: false) { skipBackCountPopup }
             .customPopup(isPresented: $showStockEndBatchPopUp) { stockEndBatchPopup }
             .customPopup(isPresented: $showStockNoteOptions)   { stockNoteOptionPopup }
             .customPopup(isPresented: $showDeleteAllTransactionDetailsPopup) { deleteAllTransactionDetailsPopup }
@@ -649,9 +649,6 @@ struct UnifiedCameraView: View {
                 router.setRoot(to: .authentication(.login(.dashboard(.dashboardHome))))
             }
         }
-        .onChange(of: pillScanViewModel.showCompletionPopup) { _, show in
-            if show { showConfirmCompletionPopup = true }
-        }
         .onChange(of: pillScanViewModel.rxScanFailed) { _, failed in
             if failed {
                 pillScanViewModel.rxScanFailed = false
@@ -777,6 +774,71 @@ struct UnifiedCameraView: View {
 
 // MARK: - Lifecycle
 extension UnifiedCameraView {
+
+    /// Terminal step reached — collect a note first when the flow asks for one,
+    /// otherwise complete straight away. Every "no next step" path funnels through
+    /// here so the note prompt can't be skipped by one of them.
+    func finishTransaction() {
+        // The vial still is a full-screen overlay; clear it or it stays on top of
+        // whatever comes next. Counting was only frozen, so the session needs no rebind.
+        if pillScanViewModel.capturedVialImage != nil {
+            pillScanViewModel.capturedVialImage = nil
+            pillScanViewModel.vialCapturedImagePath = nil
+            cameraService.resetInactivityTimer()
+        }
+
+        if shouldAskForNote {
+            showNoteOption = true
+        } else {
+            onComplete()
+        }
+    }
+
+    /// Notes are asked for on operator-entered dispenses (a PMS-driven txn carries
+    /// its own note) and wherever the pill-counting setting opts into them.
+    var shouldAskForNote: Bool {
+        if addNoteSettings { return true }
+        return pillScanViewModel.currentTransaction?.is_from_pms != true
+            && pillScanViewModel.currentTransaction?.is_dispense == true
+    }
+
+    func onComplete() {
+        // Capture before any state reset — startContinuousDispense() clears
+        // currentTransaction, so read the id/type up front.
+        let completedTxnId = pillScanViewModel.currentTransaction?.txn_id ?? 0
+        let isFixed =
+            pillScanViewModel.currentTransaction?.is_dispense == true
+        let completedIsDispense = router.selectedPillScanningIsDispense ?? true
+
+        if isFixed {
+            // Mark COMPLETED FIRST, then start the continuous-dispense flow.
+            // startContinuousDispense() reads the pending-txn list to decide
+            // whether to show the queue or go to the dashboard — if we don't
+            // await the status write first, that gate races the completion and
+            // still sees this txn as PARTIAL (it then re-appears in the queue).
+            Task { @MainActor in
+                await userViewModel.completeTheSelectedTransaction(
+                    txnId: completedTxnId,
+                    isDispense: completedIsDispense
+                )
+                // Continuous dispense — reset back to RX-scan in place and surface
+                // the "Today's Queue" sheet over it. No navigation. See UnifiedCameraView.
+                startContinuousDispense()
+            }
+        } else {
+            stockCountViewModel.updateCounts(
+                bottleId: pillScanViewModel.currentBottleInfo?.bottle_id,
+                bottleQty: nil,
+                looseQty: pillScanViewModel.addCurrentOpenPillCount
+            )
+            Task(priority: .background) {
+                await userViewModel.completeTheSelectedTransaction(
+                    txnId: completedTxnId,
+                    isDispense: completedIsDispense
+                )
+            }
+        }
+    }
 
     /// Recomputes the glove-detection gate from whichever drug source is active
     /// for the current flow — currentTransaction (FIXED/REGULAR dispense),
@@ -1151,7 +1213,12 @@ extension UnifiedCameraView {
         // held, leaving stale pre-reset details on screen.
         pillScanViewModel.getAllTransactionDetailsOfTheCurrentTransaction()
 
+        // PillCountLayout renders while the panel is true OR the step is .scan (see
+        // rootWithPillCountSheet) — so tearing the panel down here still leaves the
+        // bars up via the step check, while re-arming BT scanner input and
+        // tray-colour tracking, both gated on showPillCountPanel specifically.
         showPillCountPanel = false
+        pillScanViewModel.currentControlledStep = .scan
         scanType = .barcode
 
         cameraService.disableBarcodeScanning()
@@ -1517,14 +1584,10 @@ extension UnifiedCameraView {
         }
 
         if nextStep == nil {
-            if pillScanViewModel.currentTransaction?.is_from_pms != true
-                && pillScanViewModel.currentTransaction?.is_dispense == true {
-                showNoteOption = true
-            } else {
-                showConfirmCompletionPopup = true
-            }
+            finishTransaction()
             return
         }
+
         // Newly added to skip completion popup.
         // Clearing capturedVialImage removes the full-screen vial still overlay and
         // reveals the live feed. The session was never stopped (vial only freezes
@@ -1540,10 +1603,8 @@ extension UnifiedCameraView {
     func handleVialDone() {
         let steps = PillCountingStepResolver.getActiveSteps(txn: pillScanViewModel.currentTransaction)
         let nextStep = pillScanViewModel.currentControlledStep.next(orderedSteps: steps)
-        if addNoteSettings && nextStep == nil {
-            showNoteOption = true
-        } else if nextStep == nil {
-            showConfirmCompletionPopup = true
+        if nextStep == nil {
+            finishTransaction()
         } else {
             // Newly added to skip completion popup.
             // Clearing capturedVialImage removes the full-screen vial still overlay and

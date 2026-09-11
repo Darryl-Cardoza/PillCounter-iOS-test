@@ -80,10 +80,6 @@ final class Hl7ServiceManager {
     private var currentInterface: NWInterface?
     private var currentServiceName: String?
 
-    /// HL7 payload queued by `sendHL7ToPMS` while a reconnect is in flight — flushed
-    /// once the client connection reaches `.ready` (see `handleClientStateChange`).
-    private var pendingOutboundHL7: String?
-
     // MARK: - Events
     weak var listener: Hl7EventListener?
 
@@ -379,7 +375,6 @@ final class Hl7ServiceManager {
             // startHeartbeat()
             startReceiving()
             startServerIfNeeded()
-            flushPendingOutboundHL7()
 
         case .failed(let error):
             print("[HL7][CLIENT] Failed: \(error)")
@@ -501,13 +496,16 @@ final class Hl7ServiceManager {
     /// identically regardless of connection mode.
     ///
     /// If already connected, sends immediately on the live connection. If not,
-    /// queues `hl7` and kicks off a (re)connect via `startPMSConnection()` —
-    /// respecting the same static-IP vs Bonjour flag used at launch — then
-    /// flushes the queued payload once the connection reaches `.ready`.
+    /// drops `hl7` and kicks off a (re)connect via `startPMSConnection()` —
+    /// respecting the same static-IP vs Bonjour flag used at launch. This message
+    /// is NOT buffered/replayed here: the caller is always a DB-backed sync queue
+    /// (`HL7TxnSyncQueue`/`HL7BatchSyncQueue`), which already resends everything
+    /// still unsynced via `Hl7ServiceController.onClientConnected()` once the
+    /// connection reaches `.ready` — buffering it here too previously caused the
+    /// same transaction to be sent twice on reconnect.
     func sendHL7ToPMS(_ hl7: String, orderId: String? = nil) {
         guard isClientConnected, clientConnection != nil else {
-            print("[HL7][CLIENT] Not connected — queuing HL7 and reconnecting")
-            pendingOutboundHL7 = hl7
+            print("[HL7][CLIENT] Not connected — dropping HL7, reconnecting")
             reconnectIfNeeded()
             return
         }
@@ -532,13 +530,6 @@ final class Hl7ServiceManager {
         } else {
             startBrowsing()
         }
-    }
-
-    private func flushPendingOutboundHL7() {
-        guard let hl7 = pendingOutboundHL7 else { return }
-        pendingOutboundHL7 = nil
-        print("[HL7][CLIENT] Flushing queued HL7 after reconnect")
-        sendClientHL7(hl7)
     }
 
     /// One-off reachability check for the Settings "Test Connection" button — opens a

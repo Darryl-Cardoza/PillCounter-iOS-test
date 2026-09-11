@@ -136,13 +136,11 @@ extension PillScanViewModel {
         }
     }
 
-    /// Looks up the transaction for the given Rx number. Checks active transactions first;
-    /// falls back to the most-recently deleted one (which can be restored).
+    /// Looks up the transaction for the given Rx number among active (non-deleted,
+    /// non-completed) transactions only. A deleted transaction must never be
+    /// resurrected by a fresh scan of the same Rx label.
     func fetchRxTransaction(rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
-        if let txn = transactionDAO.fetchByRxNo(rxNo, for: user).first {
-            return txn
-        }
-        return transactionDAO.fetchDeletedByRxNo(rxNo, for: user)
+        transactionDAO.fetchByRxNo(rxNo, for: user).first
     }
 
     // MARK: Proceed with Rx Transaction

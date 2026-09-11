@@ -1082,22 +1082,59 @@ extension CameraService {
             )
         }
 
-        // 3. Renderz
+        // 3. Render
         let renderer = UIGraphicsImageRenderer(size: imageSize)
+
         return renderer.image { ctx in
             let context = ctx.cgContext
 
             // Draw oriented image (no flip needed — CIImage already handled it)
-            UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: imageSize))
+            UIImage(cgImage: cgImage).draw(
+                in: CGRect(origin: .zero, size: imageSize)
+            )
 
-            // Badge size scales with each pill's own detected box so it never
-            // covers pills bigger/smaller than average, clamped to stay legible.
+            // MARK: - Calculate ONE badge size for all pills
+            //
+            // Use the median detected pill size so one unusually large/small
+            // detection does not affect the badge size for every pill.
+            let pillSizes = transformedDetections.map {
+                min($0.rect.width, $0.rect.height)
+            }
+
             let minBadgeSize = imageSize.width * 0.012
             let maxBadgeSize = imageSize.width * 0.08
+
+            let badgeSize: CGFloat
+
+            if pillSizes.isEmpty {
+                badgeSize = minBadgeSize
+            } else {
+                let sortedSizes = pillSizes.sorted()
+                let middle = sortedSizes.count / 2
+
+                let medianPillSize: CGFloat
+
+                if sortedSizes.count % 2 == 0 {
+                    medianPillSize =
+                        (sortedSizes[middle - 1] + sortedSizes[middle]) / 2
+                } else {
+                    medianPillSize = sortedSizes[middle]
+                }
+
+                badgeSize = min(
+                    max(medianPillSize * 0.55, minBadgeSize),
+                    maxBadgeSize
+                )
+            }
+
+            // MARK: - Draw all badges using the SAME size
             transformedDetections.enumerated().forEach { index, detection in
-                let pillDiameter = min(detection.rect.width, detection.rect.height)
-                let badgeSize = min(max(pillDiameter * 0.55, minBadgeSize), maxBadgeSize)
-                drawBadge(context: context, index: index, rect: detection.rect, badgeSize: badgeSize)
+                drawBadge(
+                    context: context,
+                    index: index,
+                    rect: detection.rect,
+                    badgeSize: badgeSize
+                )
             }
         }
     }

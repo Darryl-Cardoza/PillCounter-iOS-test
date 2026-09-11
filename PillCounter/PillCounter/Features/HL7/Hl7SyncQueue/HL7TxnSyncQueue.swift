@@ -116,8 +116,29 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
         pendingRequestId = item.requestId
         pendingAckMessageId = ackMessageId
 
-        DispatchQueue.main.async {
-            manager.sendHL7ToPMS(hl7, orderId: item.requestId)
+        DispatchQueue.main.async { [weak self] in
+            guard manager.sendHL7ToPMS(hl7, orderId: item.requestId) else {
+                // Not connected — nothing was sent, so no ACK will ever arrive.
+                // Reset in-flight state now instead of stalling until the ACK
+                // timeout; otherwise a reconnect landing inside that window
+                // finds `queue` non-empty and `enqueueUnsynced()`'s early-return
+                // (queue not empty) skips re-driving this item entirely.
+                self?.processingQueue.async {
+                    guard let self, self.pendingRequestId == item.requestId else { return }
+                    self.cancelAckTimeout()
+                    self.isSending = false
+                    self.pendingRequestId = nil
+                    self.pendingAckMessageId = nil
+                    // enqueueUnsynced()'s re-fetch guard (`queue.isEmpty` check in
+                    // loadAndEnqueuePending) skips calling processNext() whenever
+                    // the queue is non-empty, on the assumption something is
+                    // already draining it — true right up until this drop, but
+                    // false the instant we reset isSending above. Must kick it
+                    // ourselves or the item (still at queue.first) sits forever.
+                    self.processNext()
+                }
+                return
+            }
         }
 
         scheduleAckTimeout(for: item.requestId)

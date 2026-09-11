@@ -503,13 +503,18 @@ final class Hl7ServiceManager {
     /// still unsynced via `Hl7ServiceController.onClientConnected()` once the
     /// connection reaches `.ready` — buffering it here too previously caused the
     /// same transaction to be sent twice on reconnect.
-    func sendHL7ToPMS(_ hl7: String, orderId: String? = nil) {
+    /// - Returns: `true` if handed to the live connection, `false` if dropped
+    ///   (not connected) — the caller MUST reset its own in-flight/`isSending`
+    ///   state on `false`, otherwise the queue stalls waiting on an ACK that
+    ///   will never arrive for a message that was never sent.
+    @discardableResult
+    func sendHL7ToPMS(_ hl7: String, orderId: String? = nil) -> Bool {
         guard isClientConnected, clientConnection != nil else {
             print("[HL7][CLIENT] Not connected — dropping HL7, reconnecting")
             reconnectIfNeeded()
-            return
+            return false
         }
-        sendClientHL7(hl7)
+        return sendClientHL7(hl7)
     }
 
     /// Kicks off a (re)connect using the same mode selection as `startPMSConnection()`,

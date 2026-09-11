@@ -1,0 +1,168 @@
+//
+//  StockTxnEmptyPruneTests.swift
+//  PillCounterTests
+//
+//  Reproduces the reported bug: zeroing out every lot/exp row for an NDC in the
+//  edit sheet should soft-delete that NDC's StockTxn — for every NDC in a batch,
+//  not just the first one touched. Mirrors StockCountEditDetailsSheet's
+//  pruneZeroedRowsAndEmptyTxn against the real on-disk store (multiple NDCs
+//  share one BatchCountEntity, exactly like a real stock-count session).
+//
+
+import CoreData
+import Testing
+@testable import PillCounter
+
+@Suite(.serialized)
+struct StockTxnEmptyPruneTests {
+
+    /// Mirrors StockCountEditDetailsSheet.pruneZeroedRowsAndEmptyTxn: zero every
+    /// bottle row for a StockTxn, soft-delete the zeroed bottles, then soft-delete
+    /// the StockTxn itself once no bottles remain — unless the batch is PMS-linked,
+    /// in which case the whole prune is skipped (the NDC is a required line item).
+    private func zeroAndPrune(stockTxnId: Int64, batch: BatchCountEntity) {
+        guard batch.req_id_from_pms == nil else { return }
+        let bottles = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxnId)
+        for bottle in bottles {
+            BottleInfoStore.shared.setAbsolute(bottleId: bottle.bottle_id, bottleQty: 0, looseQty: 0)
+        }
+        let zeroed = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxnId)
+        for bottle in zeroed where bottle.bottle_qty == 0 && bottle.loose_qty == 0 {
+            BottleInfoStore.shared.softDelete(bottleId: bottle.bottle_id)
+        }
+        let remaining = BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxnId)
+        guard remaining.isEmpty else { return }
+        StockTxnStore.shared.softDelete(stockTxnId: stockTxnId)
+    }
+
+    /// Two NDCs in one batch. Zeroing the FIRST NDC's only lot must soft-delete
+    /// its StockTxn. Zeroing the SECOND NDC's only lot — same batch, same shared
+    /// viewContext, right after the first prune ran — must ALSO soft-delete its
+    /// StockTxn. Before the fix, the second prune's `remaining` fetch kept
+    /// returning the just-soft-deleted bottle row from the first NDC (stale
+    /// context registration from the batch-delete request), which could make
+    /// this false-negative depending on Core Data's row cache state.
+    @Test func secondNdcInSameBatchAlsoPrunesToDeletedAfterZeroing() {
+        let fixtureA = BatchTrackingFixture()
+        let fixtureB = BatchTrackingFixture()
+        defer {
+            fixtureA.cleanUp()
+            fixtureB.cleanUp()
+        }
+
+        let batch = fixtureA.makeBatch()
+        // Same batch_id for both fixtures' stock txns — two NDCs in one batch.
+        let stockTxnA = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixtureA.drugId, bucketId: batch.bucket_id)
+        let stockTxnB = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixtureB.drugId, bucketId: batch.bucket_id)
+
+        BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnA.stock_txn_id, bottleQty: 4, lotNo: "LOT-A", expNo: "2027-01")
+        BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnB.stock_txn_id, bottleQty: 4, lotNo: "LOT-B", expNo: "2027-01")
+
+        zeroAndPrune(stockTxnId: stockTxnA.stock_txn_id, batch: batch)
+        #expect(StockTxnStore.shared.fetchById(stockTxnA.stock_txn_id)?.is_deleted == true)
+
+        zeroAndPrune(stockTxnId: stockTxnB.stock_txn_id, batch: batch)
+        #expect(StockTxnStore.shared.fetchById(stockTxnB.stock_txn_id)?.is_deleted == true, "second NDC's StockTxn must also be soft-deleted once its only lot is zeroed")
+
+        let liveStockTxns = StockTxnStore.shared.fetchByBatch(batchId: batch.batch_id)
+        #expect(liveStockTxns.isEmpty, "no live (non-deleted) StockTxn rows should remain for this batch")
+
+        let counts = BatchStore.shared.transactionCounts(for: [batch.batch_id])
+        #expect(counts[batch.batch_id] == 0, "dashboard NDC count must not include soft-deleted StockTxn rows")
+    }
+
+    /// Same scenario with a THIRD NDC, and pruning in a different order (B then A then C) —
+    /// guards against a fix that happens to work only for exactly two NDCs or only when
+    /// pruned in creation order.
+    @Test func thirdNdcInSameBatchPrunesRegardlessOfOrder() {
+        let fixtureA = BatchTrackingFixture()
+        let fixtureB = BatchTrackingFixture()
+        let fixtureC = BatchTrackingFixture()
+        defer {
+            fixtureA.cleanUp()
+            fixtureB.cleanUp()
+            fixtureC.cleanUp()
+        }
+
+        let batch = fixtureA.makeBatch()
+        let stockTxnA = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixtureA.drugId, bucketId: batch.bucket_id)
+        let stockTxnB = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixtureB.drugId, bucketId: batch.bucket_id)
+        let stockTxnC = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixtureC.drugId, bucketId: batch.bucket_id)
+
+        BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnA.stock_txn_id, bottleQty: 2, lotNo: "LOT-A", expNo: "2027-01")
+        BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnB.stock_txn_id, bottleQty: 3, lotNo: "LOT-B", expNo: "2027-01")
+        BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxnC.stock_txn_id, bottleQty: 4, lotNo: "LOT-C", expNo: "2027-01")
+
+        zeroAndPrune(stockTxnId: stockTxnB.stock_txn_id, batch: batch)
+        zeroAndPrune(stockTxnId: stockTxnA.stock_txn_id, batch: batch)
+        zeroAndPrune(stockTxnId: stockTxnC.stock_txn_id, batch: batch)
+
+        #expect(StockTxnStore.shared.fetchById(stockTxnA.stock_txn_id)?.is_deleted == true)
+        #expect(StockTxnStore.shared.fetchById(stockTxnB.stock_txn_id)?.is_deleted == true)
+        #expect(StockTxnStore.shared.fetchById(stockTxnC.stock_txn_id)?.is_deleted == true)
+
+        let counts = BatchStore.shared.transactionCounts(for: [batch.batch_id])
+        #expect(counts[batch.batch_id] == 0)
+    }
+
+    /// softDeleteByStockTxn (the cascade StockTxnStore.softDelete triggers) must remove
+    /// every bottle row for that StockTxn in one call — not just a single targeted bottleId.
+    @Test func softDeleteByStockTxnRemovesAllBottlesForThatStockTxn() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch()
+        let stockTxn = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixture.drugId, bucketId: batch.bucket_id)
+
+        BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 2, lotNo: "LOT-A", expNo: "2027-01")
+        BottleInfoStore.shared.addOpenedBottle(stockTxnId: stockTxn.stock_txn_id, looseQty: 5, lotNo: "LOT-B", expNo: "2027-06", serialNo: nil)
+        #expect(BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id).count == 2)
+
+        BottleInfoStore.shared.softDeleteByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+
+        #expect(BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id).isEmpty)
+    }
+
+    /// A PMS-linked batch's NDC is a required line item — zeroing it out must NOT delete
+    /// the bottle row or the StockTxn. It stays live at 0/0 so the user can still see and
+    /// re-count it, unlike a manually-started batch where zeroing prunes it away entirely.
+    @Test func pmsLinkedBatchNdcSurvivesZeroingUntouched() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch(requestId: "PMS-REQ-\(TestIds.unique())")
+        let stockTxn = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixture.drugId, bucketId: batch.bucket_id)
+
+        let bottle = BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 4, lotNo: "LOT-A", expNo: "2027-01")
+
+        // Simulate the edit sheet zeroing the row out, same as a non-PMS batch would.
+        BottleInfoStore.shared.setAbsolute(bottleId: bottle!.bottle_id, bottleQty: 0, looseQty: 0)
+        zeroAndPrune(stockTxnId: stockTxn.stock_txn_id, batch: batch)
+
+        #expect(StockTxnStore.shared.fetchById(stockTxn.stock_txn_id)?.is_deleted == false, "PMS-linked StockTxn must not be soft-deleted even at 0/0")
+        #expect(BottleInfoStore.shared.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id).count == 1, "PMS-linked bottle row must not be deleted even at 0/0")
+    }
+
+    /// A PMS-linked NDC zeroed to 0/0 then re-scanned with the SAME lot/exp must resolve
+    /// back to a single, correctly-sealed row — not a phantom "opened" row left behind by
+    /// the 0/0 row's `isSealed` heuristic flipping to false once bottle_qty hits 0.
+    @Test @MainActor func pmsLinkedNdcZeroedThenRescannedShowsConsistentCounts() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        let batch = fixture.makeBatch(requestId: "PMS-REQ-\(TestIds.unique())")
+        let stockTxn = StockTxnStore.shared.fetchOrCreate(batch: batch, drugId: fixture.drugId, bucketId: batch.bucket_id)
+
+        let bottle = BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 4, lotNo: "LOT-A", expNo: "2027-01")
+        #expect(bottle != nil)
+
+        // Zero it out (PMS path keeps the row alive at 0/0 — see pruneZeroedRowsAndEmptyTxn).
+        BottleInfoStore.shared.setAbsolute(bottleId: bottle!.bottle_id, bottleQty: 0, looseQty: 0)
+
+        // Re-scan the SAME lot/exp — mirrors createTxnForBatchFromScan's merge-path sealed write.
+        BottleInfoStore.shared.setSealedBottleQty(stockTxnId: stockTxn.stock_txn_id, bottleQty: 3, lotNo: "LOT-A", expNo: "2027-01")
+
+        let vm = StockCountViewModel()
+        let grouped = vm.mapGroupedStockTxns(stockTxns: [stockTxn]).first
+        #expect(grouped?.sealedBottleQty == 3, "re-scanning the same lot must update the existing row in place, not spawn a phantom row")
+        #expect(grouped?.openedBottleCount == 0, "a re-sealed 0/0 row must not linger as a phantom opened bottle")
+        #expect(grouped?.lotDetails.count == 1, "must show exactly one lot row, not a stale zeroed duplicate")
+    }
+}

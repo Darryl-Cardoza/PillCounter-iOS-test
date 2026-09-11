@@ -85,6 +85,11 @@ class StockCountViewModel: ObservableObject {
     @Published var committedBottleId: Int64? = nil
     @Published var committedLotNo: String = ""
     @Published var committedExpNo: String = ""
+    /// True only when the current scan session's StockTxn/BottleInfo rows were freshly
+    /// inserted (not merged into a pre-existing NDC/lot). Cancel deletes only what this
+    /// session created — an existing row that was merely updated is left untouched.
+    @Published var sessionCreatedStockTxn: Bool = false
+    @Published var sessionCreatedBottleInfo: Bool = false
     private var stepperDebounceTask: Task<Void, Never>? = nil
 
     /// While true, DB-change publisher events do not trigger a list reload.
@@ -320,6 +325,15 @@ class StockCountViewModel: ObservableObject {
         showScanError = false
         isLoading = true
 
+        // selectedGroupedTransaction is normally set by tapping a list row (selectTransaction)
+        // or by refreshSelectedTransaction once THIS scan resolves further down — it is never
+        // otherwise cleared. Left stale from a previous NDC, editableTxn (which prefers it over
+        // matching scannedDrugData live) would hand the Edit sheet the wrong NDC's transaction
+        // for every scan after the first one a user ever selected/edited in the session. Clear
+        // it unconditionally on every new scan; refreshSelectedTransaction reassigns it fresh
+        // for the NDC being scanned right now once the scan itself resolves.
+        selectedGroupedTransaction = nil
+
         // 1. Local DB — only use if quantity is known; otherwise fall through to API to backfill it
         let localLookup = drugMasterDAO.fetchByGtin(gtin)
         print("🔵 [BT-Scan] localDB lookup gtin='\(gtin)' found=\(localLookup != nil) pkg_qty=\(localLookup?.package_qty ?? -1)")
@@ -422,6 +436,8 @@ class StockCountViewModel: ObservableObject {
         committedBottleId = nil
         committedLotNo = ""
         committedExpNo = ""
+        sessionCreatedStockTxn = false
+        sessionCreatedBottleInfo = false
         selectedGroupedTransaction = nil
         stepperDebounceTask?.cancel()
         stepperDebounceTask = nil
@@ -577,9 +593,17 @@ class StockCountViewModel: ObservableObject {
     // MARK: - Mapper
 
     func mapGroupedStockTxns(stockTxns: [StockTxnEntity]) -> [GroupedTransaction] {
+        // Dictionary(grouping:) iteration order is unspecified and varies between calls,
+        // which reshuffled row positions on every reload. Preserve stockTxns' own order
+        // (first-seen NDC) instead of the dictionary's.
         let groupedByNdc = Dictionary(grouping: stockTxns) { $0.drug?.ndc ?? "" }
+        let ndcOrder = stockTxns.reduce(into: [String]()) { order, txn in
+            let ndc = txn.drug?.ndc ?? ""
+            if !order.contains(ndc) { order.append(ndc) }
+        }
 
-        return groupedByNdc.map { ndc, stockTxnList in
+        return ndcOrder.map { ndc -> GroupedTransaction in
+            let stockTxnList = groupedByNdc[ndc] ?? []
             let drugName = stockTxnList.first?.drug?.drug_name ?? "Unknown"
             let packageQty = stockTxnList.first?.drug?.package_qty ?? 0
 
@@ -592,8 +616,14 @@ class StockCountViewModel: ObservableObject {
             for stockTxn in stockTxnList {
                 let bottles = bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
 
-                let sealedRows = bottles.filter { $0.isSealed }
-                let openedRows = bottles.filter { !$0.isSealed }
+                // A row zeroed out to bottle_qty==0 && loose_qty==0 (e.g. a PMS NDC edited
+                // down to nothing, kept alive rather than deleted) has no sealed-vs-opened
+                // identity left — isSealed reads false for it same as a real opened row at
+                // 0 loose pills, so it must be excluded from both buckets entirely rather
+                // than counted as a phantom opened bottle.
+                let liveBottles = bottles.filter { !$0.isEmpty }
+                let sealedRows = liveBottles.filter { $0.isSealed }
+                let openedRows = liveBottles.filter { !$0.isSealed }
 
                 for sealed in sealedRows {
                     let sealedQty = sealed.bottle_qty * packageQty

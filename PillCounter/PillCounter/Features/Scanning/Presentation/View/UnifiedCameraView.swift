@@ -456,7 +456,12 @@ struct UnifiedCameraView: View {
                     }
                 }
             }
-            .customPopup(isPresented: $stockCountViewModel.showScannedNdcDoesNotMatch, dismissOnBackgroundTap: false) { ndcMismatchPopup }
+            .onChange(of: stockCountViewModel.showScannedNdcDoesNotMatch) { _, showing in
+                guard showing else { return }
+                ToastManager.shared.show(message: L10n.BarcodeScan.incorrectNdcMessage)
+                stockCountViewModel.showScannedNdcDoesNotMatch = false
+                restartFlow()
+            }
             // BottomSheet paints itself as an .overlay on the content above, so the
             // stock sheet always sits above UnifiedCameraLayout's own inactivity
             // overlay. Redraw the resume prompt here, last, so it wins over both the
@@ -1703,7 +1708,7 @@ extension UnifiedCameraView {
         stockCountViewModel.suppressListReload = true
         if stockCountViewModel.currentBatch?.req_id_from_pms != nil,
            let stockTxn = stockCountViewModel.stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: drug.ndc) {
-            pillScanViewModel.updatePmsTxnCount(
+            let createdBottleInfo = pillScanViewModel.updatePmsTxnCount(
                 stockTxn: stockTxn,
                 containerStatus: scannedBottleContainerStatus,
                 scannedQty: Int(drug.quantity),
@@ -1714,6 +1719,13 @@ extension UnifiedCameraView {
             stockCountViewModel.committedBottleId = pillScanViewModel.currentBottleInfo?.bottle_id
             stockCountViewModel.committedLotNo = pillScanViewModel.currentBottleInfo?.lot_no ?? ""
             stockCountViewModel.committedExpNo = pillScanViewModel.currentBottleInfo?.exp_no ?? ""
+            // The StockTxn itself always pre-existed (fetched above) — it's a required
+            // PMS line item and never Cancel-eligible. The bottle row underneath it can
+            // still be a fresh insert for a lot/exp never counted before, so Cancel must
+            // be able to undo exactly that row — sticky OR-in for the same repeat-scan
+            // reason as the non-PMS branch below.
+            stockCountViewModel.sessionCreatedStockTxn = false
+            stockCountViewModel.sessionCreatedBottleInfo = stockCountViewModel.sessionCreatedBottleInfo || createdBottleInfo
         } else {
             await pillScanViewModel.createTxnForBatchFromScan(
                 rawValueFromBarcodeOrQr: drug.rawBarcode,
@@ -1728,6 +1740,14 @@ extension UnifiedCameraView {
             stockCountViewModel.committedBottleId = pillScanViewModel.currentBottleInfo?.bottle_id
             stockCountViewModel.committedLotNo = pillScanViewModel.currentBottleInfo?.lot_no ?? ""
             stockCountViewModel.committedExpNo = pillScanViewModel.currentBottleInfo?.exp_no ?? ""
+            // createTxnForBatchFromScan itself knows whether it inserted fresh rows or
+            // merged into an existing NDC/lot — surface that so Cancel only ever deletes
+            // what this scan session actually created. OR-in, not assign: a repeat scan
+            // of the same NDC re-enters via the merge branch (StockTxn now exists from the
+            // first write) and reports false — that must not un-mark rows this session
+            // already inserted, or Clear stops deleting them.
+            stockCountViewModel.sessionCreatedStockTxn = stockCountViewModel.sessionCreatedStockTxn || pillScanViewModel.lastScanCreatedStockTxn
+            stockCountViewModel.sessionCreatedBottleInfo = stockCountViewModel.sessionCreatedBottleInfo || pillScanViewModel.lastScanCreatedBottleInfo
         }
         // editableTxn (used by Edit) falls back to selectedGroupedTransaction — refresh it here
         // since groupedTransactions itself stays frozen (suppressListReload) until dismiss.
@@ -1738,12 +1758,29 @@ extension UnifiedCameraView {
         cameraService.enableBarcodeScanning()
     }
 
-    /// Called by the Clear button — clears the detail slot and refreshes the list.
+    /// Undoes whatever the current scan session freshly created (bottle row / stock txn),
+    /// shared by Clear and by Back/scenePhase-backgrounding so a scan abandoned any of
+    /// those ways doesn't leave a stranded 0-qty row behind for the next matching scan
+    /// to collide with. A scan that merged into an already-existing NDC/lot is left
+    /// as-is (kept simple: no revert-to-previous-value).
+    func discardUncommittedSessionRows() {
+        if stockCountViewModel.sessionCreatedBottleInfo, let bottleId = stockCountViewModel.committedBottleId {
+            stockCountViewModel.bottleInfoDAO.softDelete(bottleId: bottleId)
+        }
+        if stockCountViewModel.sessionCreatedStockTxn, let stockTxnId = stockCountViewModel.committedStockTxnId {
+            stockCountViewModel.stockTxnDAO.softDelete(stockTxnId: stockTxnId)
+        }
+    }
+
+    /// Called by the Clear button — undoes whatever this scan session freshly created,
+    /// then clears the detail slot and refreshes the list.
     func clearScannedDetails() {
+        discardUncommittedSessionRows()
         stockCountViewModel.scannedDrugData = nil
         stockCountViewModel.selectedGroupedTransaction = nil
         stockCountViewModel.showStockCountScannedDetails = false
         stockCountViewModel.suppressListReload = false
+        stockCountViewModel.reset()
         stockCountViewModel.reloadAllState()
         btScannerFocusTrigger += 1
     }
@@ -1983,6 +2020,11 @@ extension UnifiedCameraView {
             stockCountViewModel.reloadAllState()
             showStockCountPanel = true
         } else {
+            // Direct Back with no Add/Clear tapped — a sealed/opened scan may already
+            // have committed a fresh row this session; discard it the same way Clear
+            // would, or it strands at 0/qty for the next matching scan to collide with.
+            discardUncommittedSessionRows()
+            stockCountViewModel.reset()
             // True entry state — nothing scanned yet on this screen, so back
             // should actually leave (single pop of the navigation stack).
             router.navigateBack()

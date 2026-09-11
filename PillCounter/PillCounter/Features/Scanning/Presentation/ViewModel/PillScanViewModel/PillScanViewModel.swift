@@ -53,6 +53,12 @@ class PillScanViewModel: ObservableObject {
     @Published var currentStockTxn: StockTxnEntity?
     @Published var currentBottleInfo: BottleInfoEntity?
 
+    /// Whether the most recent createTxnForBatchFromScan call inserted a brand-new
+    /// StockTxnEntity/BottleInfoEntity row, vs. merging into one that already existed for
+    /// this NDC/lot. Cancel uses this to delete only rows this scan session actually created.
+    var lastScanCreatedStockTxn = false
+    var lastScanCreatedBottleInfo = false
+
     /// Lot/expiry/serial from the barcode scanned to start an open-pill count.
     /// No BottleInfoEntity row is written until the count is confirmed (Proceed) —
     /// see `createOpenedBottleFromPendingScan`.

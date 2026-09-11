@@ -114,14 +114,31 @@ final class StockTxnStore {
 
     // MARK: - Delete
 
-    func softDelete(stockTxnId: Int64) {
-        guard let stockTxn = fetchById(stockTxnId) else { return }
+    /// BottleInfoStore shares this same viewContext, so staging the flag flip here first
+    /// and letting softDeleteByStockTxn's save carry both changes keeps this one atomic
+    /// transaction (matching the original single-`save()` behavior) instead of splitting
+    /// into two saves with a partial-failure window between them.
+    @discardableResult
+    func softDelete(stockTxnId: Int64) -> Bool {
+        guard let stockTxn = fetchById(stockTxnId) else { return false }
         stockTxn.is_deleted = true
         stockTxn.updated_at = isoFormatter.string(from: Date())
-        BottleInfoStore.shared.softDeleteByStockTxn(stockTxnId: stockTxnId)
-        CoreDataManager.shared.save(context: context)
+        // softDeleteByStockTxn already reverts its own bottle-row deletes on failure —
+        // only this object's two fields are left dirty here, so refresh just this one.
+        guard BottleInfoStore.shared.softDeleteByStockTxn(stockTxnId: stockTxnId) else {
+            context.refresh(stockTxn, mergeChanges: false)
+            return false
+        }
+        guard CoreDataManager.shared.saveReturningSuccess(context: context) else {
+            // Bottle rows were already deleted+saved successfully by softDeleteByStockTxn
+            // (that succeeded, or we wouldn't be here) — only this StockTxn's two fields
+            // are still dirty and unsaved, so only they need reverting.
+            context.refresh(stockTxn, mergeChanges: false)
+            return false
+        }
         StoreLogger.debug("📦 [StockTxnDAO] SOFT DELETED — stockTxnId: \(stockTxnId)")
         stockTxnsDidChange.send()
+        return true
     }
 
     func deleteAll() {

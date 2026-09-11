@@ -32,18 +32,23 @@ extension PillScanViewModel {
         if let existingStockTxn = stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: ndc) {
 
             print("Existing stock txn found → merging")
+            lastScanCreatedStockTxn = false
 
-            // MARK: 2️⃣ Write the bottle info (absolute-set for sealed, new row for opened)
+            // Ask the write itself whether it inserted or reused a row — bottle_qty/
+            // loose_qty == 0 reads identically for "no row yet" and "existing row
+            // zeroed out", so probing the quantity beforehand can't tell those apart.
             switch containerStatus {
             case .sealed:
-                self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
+                let result = bottleInfoDAO.setSealedBottleQtyTracked(
                     stockTxnId: existingStockTxn.stock_txn_id,
                     bottleQty: Int32(bottleCount),
                     lotNo: decoded.lotNumber,
                     expNo: expiryString
                 )
+                self.currentBottleInfo = result.entity
+                lastScanCreatedBottleInfo = result.created
             case .opened:
-                self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+                let result = bottleInfoDAO.addOpenedBottleTracked(
                     stockTxnId: existingStockTxn.stock_txn_id,
                     looseQty: 0,
                     lotNo: decoded.lotNumber,
@@ -51,6 +56,8 @@ extension PillScanViewModel {
                     serialNo: decoded.serialNumber,
                     images: []
                 )
+                self.currentBottleInfo = result.entity
+                lastScanCreatedBottleInfo = result.created
             }
 
             // MARK: 3️⃣ Update current stock txn
@@ -135,6 +142,11 @@ extension PillScanViewModel {
 
         // MARK: 6️⃣ Create StockTxnEntity for this NDC in this batch
         let stockTxn = stockTxnDAO.fetchOrCreate(batch: batch, drugId: drugIdToUse, bucketId: batch.bucket_id)
+        // We already know (line 32 found nothing) no StockTxn existed for this NDC —
+        // fetchOrCreate here always inserts, and the fresh StockTxn has no sealed/opened
+        // bottle rows yet, so the bottle-info write below is always an insert too.
+        lastScanCreatedStockTxn = true
+        lastScanCreatedBottleInfo = true
 
         // MARK: 7️⃣ Set initial bottle info (absolute-set for sealed, new row for opened)
         switch containerStatus {
@@ -324,13 +336,19 @@ extension PillScanViewModel {
         }
     }
     
+    /// Returns whether this call inserted a fresh bottle row — the StockTxn itself is
+    /// always pre-existing on the PMS path (required line item, never Cancel-eligible),
+    /// but the bottle row underneath it can still be a first-time insert for a lot/exp
+    /// never counted before, and Cancel must be able to undo exactly that row.
+    @discardableResult
     func updatePmsTxnCount(
         stockTxn: StockTxnEntity,
         containerStatus: StockCountOptionContainerStatus,
         scannedQty: Int,
         lotNo: String? = nil,
         expNo: String? = nil
-    ) {
+    ) -> Bool {
+        let createdBottleInfo: Bool
         switch containerStatus {
         case .sealed:
             // Fetch-or-create by the scanned lot+exp, same key every other sealed write
@@ -338,17 +356,18 @@ extension PillScanViewModel {
             let existingQty = bottleInfoDAO.sealedBottleQty(
                 stockTxnId: stockTxn.stock_txn_id, lotNo: lotNo, expNo: expNo
             )
-            self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
+            let result = bottleInfoDAO.setSealedBottleQtyTracked(
                 stockTxnId: stockTxn.stock_txn_id,
                 bottleQty: existingQty + 1,
                 lotNo: lotNo,
                 expNo: expNo
             )
+            self.currentBottleInfo = result.entity
+            createdBottleInfo = result.created
             handlePostScanUI(containerStatus: containerStatus)
 
         case .opened:
-            // every opened scan is a new bottle row
-            self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+            let result = bottleInfoDAO.addOpenedBottleTracked(
                 stockTxnId: stockTxn.stock_txn_id,
                 looseQty: Int32(scannedQty),
                 lotNo: lotNo,
@@ -356,9 +375,12 @@ extension PillScanViewModel {
                 serialNo: nil,
                 images: []
             )
+            self.currentBottleInfo = result.entity
+            createdBottleInfo = result.created
             handlePostScanUI(containerStatus: containerStatus)
         }
         self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
+        return createdBottleInfo
     }
 
     @MainActor

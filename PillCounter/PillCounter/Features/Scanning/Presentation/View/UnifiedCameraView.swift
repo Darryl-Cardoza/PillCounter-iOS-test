@@ -1647,7 +1647,7 @@ extension UnifiedCameraView {
         stockCountViewModel.suppressListReload = true
         if stockCountViewModel.currentBatch?.req_id_from_pms != nil,
            let stockTxn = stockCountViewModel.stockTxnDAO.fetchByBatchAndNdc(batchId: batchId, ndc: drug.ndc) {
-            pillScanViewModel.updatePmsTxnCount(
+            let createdBottleInfo = pillScanViewModel.updatePmsTxnCount(
                 stockTxn: stockTxn,
                 containerStatus: scannedBottleContainerStatus,
                 scannedQty: Int(drug.quantity),
@@ -1658,10 +1658,13 @@ extension UnifiedCameraView {
             stockCountViewModel.committedBottleId = pillScanViewModel.currentBottleInfo?.bottle_id
             stockCountViewModel.committedLotNo = pillScanViewModel.currentBottleInfo?.lot_no ?? ""
             stockCountViewModel.committedExpNo = pillScanViewModel.currentBottleInfo?.exp_no ?? ""
-            // PMS-linked path always merges into a StockTxn that already existed
-            // (fetched above) — never eligible for Cancel to delete.
+            // The StockTxn itself always pre-existed (fetched above) — it's a required
+            // PMS line item and never Cancel-eligible. The bottle row underneath it can
+            // still be a fresh insert for a lot/exp never counted before, so Cancel must
+            // be able to undo exactly that row — sticky OR-in for the same repeat-scan
+            // reason as the non-PMS branch below.
             stockCountViewModel.sessionCreatedStockTxn = false
-            stockCountViewModel.sessionCreatedBottleInfo = false
+            stockCountViewModel.sessionCreatedBottleInfo = stockCountViewModel.sessionCreatedBottleInfo || createdBottleInfo
         } else {
             await pillScanViewModel.createTxnForBatchFromScan(
                 rawValueFromBarcodeOrQr: drug.rawBarcode,
@@ -1678,9 +1681,12 @@ extension UnifiedCameraView {
             stockCountViewModel.committedExpNo = pillScanViewModel.currentBottleInfo?.exp_no ?? ""
             // createTxnForBatchFromScan itself knows whether it inserted fresh rows or
             // merged into an existing NDC/lot — surface that so Cancel only ever deletes
-            // what this scan session actually created.
-            stockCountViewModel.sessionCreatedStockTxn = pillScanViewModel.lastScanCreatedStockTxn
-            stockCountViewModel.sessionCreatedBottleInfo = pillScanViewModel.lastScanCreatedBottleInfo
+            // what this scan session actually created. OR-in, not assign: a repeat scan
+            // of the same NDC re-enters via the merge branch (StockTxn now exists from the
+            // first write) and reports false — that must not un-mark rows this session
+            // already inserted, or Clear stops deleting them.
+            stockCountViewModel.sessionCreatedStockTxn = stockCountViewModel.sessionCreatedStockTxn || pillScanViewModel.lastScanCreatedStockTxn
+            stockCountViewModel.sessionCreatedBottleInfo = stockCountViewModel.sessionCreatedBottleInfo || pillScanViewModel.lastScanCreatedBottleInfo
         }
         // editableTxn (used by Edit) falls back to selectedGroupedTransaction — refresh it here
         // since groupedTransactions itself stays frozen (suppressListReload) until dismiss.

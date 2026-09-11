@@ -34,29 +34,21 @@ extension PillScanViewModel {
             print("Existing stock txn found → merging")
             lastScanCreatedStockTxn = false
 
-            // A sealed row is an insert only if this exact (stockTxnId, lot, exp) has no
-            // row yet — setSealedBottleQty itself updates in place otherwise. An opened row
-            // is always a fresh insert (addOpenedBottle's contract).
+            // Ask the write itself whether it inserted or reused a row — bottle_qty/
+            // loose_qty == 0 reads identically for "no row yet" and "existing row
+            // zeroed out", so probing the quantity beforehand can't tell those apart.
             switch containerStatus {
             case .sealed:
-                lastScanCreatedBottleInfo = bottleInfoDAO.sealedBottleQty(
-                    stockTxnId: existingStockTxn.stock_txn_id, lotNo: decoded.lotNumber, expNo: expiryString
-                ) == 0
-            case .opened:
-                lastScanCreatedBottleInfo = true
-            }
-
-            // MARK: 2️⃣ Write the bottle info (absolute-set for sealed, new row for opened)
-            switch containerStatus {
-            case .sealed:
-                self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
+                let result = bottleInfoDAO.setSealedBottleQtyTracked(
                     stockTxnId: existingStockTxn.stock_txn_id,
                     bottleQty: Int32(bottleCount),
                     lotNo: decoded.lotNumber,
                     expNo: expiryString
                 )
+                self.currentBottleInfo = result.entity
+                lastScanCreatedBottleInfo = result.created
             case .opened:
-                self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+                let result = bottleInfoDAO.addOpenedBottleTracked(
                     stockTxnId: existingStockTxn.stock_txn_id,
                     looseQty: 0,
                     lotNo: decoded.lotNumber,
@@ -64,6 +56,8 @@ extension PillScanViewModel {
                     serialNo: decoded.serialNumber,
                     images: []
                 )
+                self.currentBottleInfo = result.entity
+                lastScanCreatedBottleInfo = result.created
             }
 
             // MARK: 3️⃣ Update current stock txn
@@ -342,13 +336,19 @@ extension PillScanViewModel {
         }
     }
     
+    /// Returns whether this call inserted a fresh bottle row — the StockTxn itself is
+    /// always pre-existing on the PMS path (required line item, never Cancel-eligible),
+    /// but the bottle row underneath it can still be a first-time insert for a lot/exp
+    /// never counted before, and Cancel must be able to undo exactly that row.
+    @discardableResult
     func updatePmsTxnCount(
         stockTxn: StockTxnEntity,
         containerStatus: StockCountOptionContainerStatus,
         scannedQty: Int,
         lotNo: String? = nil,
         expNo: String? = nil
-    ) {
+    ) -> Bool {
+        let createdBottleInfo: Bool
         switch containerStatus {
         case .sealed:
             // Fetch-or-create by the scanned lot+exp, same key every other sealed write
@@ -356,17 +356,18 @@ extension PillScanViewModel {
             let existingQty = bottleInfoDAO.sealedBottleQty(
                 stockTxnId: stockTxn.stock_txn_id, lotNo: lotNo, expNo: expNo
             )
-            self.currentBottleInfo = bottleInfoDAO.setSealedBottleQty(
+            let result = bottleInfoDAO.setSealedBottleQtyTracked(
                 stockTxnId: stockTxn.stock_txn_id,
                 bottleQty: existingQty + 1,
                 lotNo: lotNo,
                 expNo: expNo
             )
+            self.currentBottleInfo = result.entity
+            createdBottleInfo = result.created
             handlePostScanUI(containerStatus: containerStatus)
 
         case .opened:
-            // every opened scan is a new bottle row
-            self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+            let result = bottleInfoDAO.addOpenedBottleTracked(
                 stockTxnId: stockTxn.stock_txn_id,
                 looseQty: Int32(scannedQty),
                 lotNo: lotNo,
@@ -374,9 +375,12 @@ extension PillScanViewModel {
                 serialNo: nil,
                 images: []
             )
+            self.currentBottleInfo = result.entity
+            createdBottleInfo = result.created
             handlePostScanUI(containerStatus: containerStatus)
         }
         self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
+        return createdBottleInfo
     }
 
     @MainActor

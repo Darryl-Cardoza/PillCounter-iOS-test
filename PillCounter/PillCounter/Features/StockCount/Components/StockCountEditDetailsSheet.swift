@@ -601,12 +601,14 @@ struct StockCountEditDetailsSheet: View {
 
         let bottles = stockCountViewModel.bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
         for bottle in bottles where bottle.bottle_qty == 0 && bottle.loose_qty == 0 {
-            stockCountViewModel.bottleInfoDAO.softDelete(bottleId: bottle.bottle_id)
+            // A row whose delete didn't actually persist must not be treated as gone —
+            // fall through to the remaining-rows check below, which will then correctly
+            // see it still there and refuse to delete the parent StockTxn.
+            guard stockCountViewModel.bottleInfoDAO.softDelete(bottleId: bottle.bottle_id) else { continue }
         }
 
         let remaining = stockCountViewModel.bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
         guard remaining.isEmpty else { return false }
-        stockCountViewModel.stockTxnDAO.softDelete(stockTxnId: stockTxn.stock_txn_id)
-        return true
+        return stockCountViewModel.stockTxnDAO.softDelete(stockTxnId: stockTxn.stock_txn_id)
     }
 }

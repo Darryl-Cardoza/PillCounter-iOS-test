@@ -19,6 +19,25 @@ extension PillScanViewModel {
             && status != CountStatus.FORCE_COMPLETED.rawValue
     }
 
+    /// Transaction-wide (not step-scoped) mirror of what `resetCurrentTransaction()` wipes.
+    /// Recomputes `hasResettableWork`. Called from `currentTransaction`'s `didSet` plus
+    /// every other mutation site that can change this answer (detail rows added/removed,
+    /// bottle list changed, NDC verified, pending image paths set/cleared, reset) —
+    /// never from view `body`, which is why this does real Core Data fetches.
+    func refreshResettableWork() {
+        guard let txnId = currentTransaction?.txn_id else {
+            hasResettableWork = false
+            return
+        }
+
+        hasResettableWork =
+            !transactionDetailDAO.fetchAll(txnId: txnId).isEmpty ||
+            !transactionDAO.getBottleList(txnId: txnId).isEmpty ||
+            currentTransaction?.is_ndc_verfied == true ||
+            pendingBarcodeImagePath != nil ||
+            vialCapturedImagePath != nil
+    }
+
     /// Hard-deletes every detail row (and its backing image file) for the
     /// current transaction, clears its NDC-verified flag and persisted
     /// workflow step, and clears in-memory count state — same "not yet
@@ -84,7 +103,9 @@ extension PillScanViewModel {
         isNdcAdded = false
         ndcMismatchRestartFlow = false
         shouldAutoProceedToCount = false
-        showCompletionPopup = false
+        showSkipBackCountPopup = false
+
+        refreshResettableWork()
 
         return true
     }

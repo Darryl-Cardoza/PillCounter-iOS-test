@@ -190,7 +190,6 @@ struct PillScanViewModelResetTests {
         vm.isNdcAdded = true
         vm.ndcMismatchRestartFlow = true
         vm.shouldAutoProceedToCount = true
-        vm.showCompletionPopup = true
 
         vm.resetCurrentTransaction()
 
@@ -206,7 +205,6 @@ struct PillScanViewModelResetTests {
         #expect(vm.isNdcAdded == false)
         #expect(vm.ndcMismatchRestartFlow == false)
         #expect(vm.shouldAutoProceedToCount == false)
-        #expect(vm.showCompletionPopup == false)
     }
 
     @Test func resetReturnsFalseAndDoesNotDeleteAnythingWhenHardDeleteFails() {

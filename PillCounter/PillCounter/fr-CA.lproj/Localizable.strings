@@ -66,15 +66,14 @@
 "pillCount.deleteAllTransactionsMessage" = "Êtes-vous sûr de vouloir supprimer toutes les transactions de la transaction en cours ?";
 "pillCount.invalidCount" = "COMPTAGE INVALIDE";
 "pillCount.zeroPillsMessage" = "Impossible d’ajouter un lot avec 0 comprimé.\nVeuillez vous assurer que les comprimés sont détectés par la caméra.";
-"pillCount.confirmCompletionTitle" = "Confirmer l’achèvement";
 "pillCount.countMismatchTitle" = "Comptage incohérent";
 "pillCount.countMismatchMessage" = "La quantité comptée ne correspond pas au comptage cible. Voulez-vous continuer ?";
 "pillCount.confirmStepCompletionTitle" = "Confirmer l’achèvement de l’étape";
 "pillCount.confirmStepCompletionMessage" = "Êtes-vous sûr de vouloir terminer cette étape ?";
 "pillCount.addNote" = "AJOUTER UNE NOTE";
 "pillCount.pleaseAddNote" = "Veuillez ajouter une note";
-"pillCount.skipStepTitle" = "Passer l’étape";
-"pillCount.skipStepMessage" = "Le comptage restant est 0. Voulez-vous passer l’étape en attente du contenant ?";
+"pillCount.skipStepTitle" = "Rien à compter";
+"pillCount.skipStepMessage" = "Le contenant n’a aucun comptage restant, l’étape de contre-comptage n’est donc pas requise. Touchez Passer pour terminer cette transaction.";
 "pillCount.totalCountExceedsTarget" = "Le comptage total de la transaction dépasse la cible.";
 "pillCount.imageAlreadyCaptured" = "Image déjà capturée. Appuyez sur Refaire pour capturer à nouveau.";
 "pillCount.countLessThanTarget" = "Le comptage est inférieur à la cible.";

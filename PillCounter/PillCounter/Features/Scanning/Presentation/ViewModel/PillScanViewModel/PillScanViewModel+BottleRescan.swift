@@ -33,6 +33,7 @@ extension PillScanViewModel {
         )
         transactionDAO.setBottleList(txnId: txn.txn_id, [bottle])
         pendingBarcodeImagePath = nil
+        refreshResettableWork()
     }
 
     // MARK: - Rescan during counting

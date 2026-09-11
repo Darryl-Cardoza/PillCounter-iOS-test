@@ -22,6 +22,13 @@ struct EditableLotRow: Identifiable {
     var openPills: Int            // editable
     let packageQty: Int32
     let field: LotField           // which section this row belongs to — sealed and open never share a row
+    /// The value this row's owned field (sealedBottles for .sealed, openPills for .open)
+    /// currently holds in the DB. Save diffs against this so an untouched row — most
+    /// rows, on any given edit — issues no DB write at all. Starts as the value loaded
+    /// in buildRows(), but deleteRow() writes the DB immediately (bypassing Save), so it
+    /// must re-sync this to 0 there too — otherwise trash-then-restore-to-the-same-value
+    /// looks "unchanged" to Save and the zero from deleteRow never gets overwritten.
+    var originalValue: Int
 }
 
 // MARK: - Edit Details Sheet
@@ -42,6 +49,7 @@ struct StockCountEditDetailsSheet: View {
 
     private var isIPad: Bool { hSizeClass == .regular && vSizeClass == .regular }
     private var isLandscape: Bool { UIScreen.main.bounds.width > UIScreen.main.bounds.height }
+    private var isIPhone: Bool { !isIPad }
 
     @State private var lotRows: [EditableLotRow] = []
     @State private var isInitialized = false
@@ -125,7 +133,11 @@ struct StockCountEditDetailsSheet: View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
-                    portraitDrugInfoSection
+                    if isIPhone {
+                        iPhoneDrugInfoSection
+                    } else {
+                        portraitDrugInfoSection
+                    }
                     sealedBottlesSection
                     openPillsSection
                 }
@@ -189,6 +201,19 @@ struct StockCountEditDetailsSheet: View {
         }
     }
 
+    // MARK: - Drug Info Section (iPhone)
+    /// iPhone-only variant: Drug Name alone on its own row — no NDC/Bucket.
+    private var iPhoneDrugInfoSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel(L10n.StockCountSheet.scannedDrugDetails)
+                .padding(.top, 8)
+
+            infoRow(label: L10n.StockCountSheet.drugName, value: txn.drugName, valueColor: appColors.secondary)
+
+            Divider()
+        }
+    }
+
     // MARK: - Sealed Bottles Section
 
     private var sealedBottlesSection: some View {
@@ -216,10 +241,18 @@ struct StockCountEditDetailsSheet: View {
 
     private func lotColumnHeader() -> some View {
         HStack(spacing: columnGap) {
-            Text(L10n.StockCountSheet.batchNo)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(L10n.StockCountSheet.expiryDate)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if isIPhone {
+                // iPhone: Batch No. and Exp Dt stack in the same column the
+                // row below mirrors, so one combined header label replaces
+                // the two side-by-side columns used on iPad.
+                Text(L10n.StockCountSheet.batchNoExpiryDate)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(L10n.StockCountSheet.batchNo)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(L10n.StockCountSheet.expiryDate)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             // Mirror the row layout: reserve the stepper width, then a spacer
             // pushes the delete column to the trailing edge.
             Color.clear.frame(width: stepperWidth, height: 0)
@@ -237,15 +270,29 @@ struct StockCountEditDetailsSheet: View {
     // Shared row used by both sections — keeps spacing/alignment identical.
     private func lotRow(row: Binding<EditableLotRow>, value: Binding<Int>, field: LotField) -> some View {
         HStack(spacing: columnGap) {
-            Text(row.wrappedValue.lot.isEmpty ? "—" : row.wrappedValue.lot)
-                .font(.system(size: 15))
-                .foregroundColor(appColors.text)
+            if isIPhone {
+                // iPhone: Batch No. and Exp Dt stack in two lines within their
+                // shared column, matching the combined header above.
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.wrappedValue.lot.isEmpty ? "—" : row.wrappedValue.lot)
+                        .font(.system(size: 15))
+                        .foregroundColor(appColors.text)
+                    Text(row.wrappedValue.expiry.isEmpty ? "—" : row.wrappedValue.expiry)
+                        .font(.system(size: 13))
+                        .foregroundColor(appColors.text.opacity(0.6))
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(row.wrappedValue.lot.isEmpty ? "—" : row.wrappedValue.lot)
+                    .font(.system(size: 15))
+                    .foregroundColor(appColors.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(row.wrappedValue.expiry.isEmpty ? "—" : row.wrappedValue.expiry)
-                .font(.system(size: 15))
-                .foregroundColor(appColors.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(row.wrappedValue.expiry.isEmpty ? "—" : row.wrappedValue.expiry)
+                    .font(.system(size: 15))
+                    .foregroundColor(appColors.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             inlineStepper(value: value, minValue: 0)
 
@@ -430,7 +477,8 @@ struct StockCountEditDetailsSheet: View {
                 sealedBottles: sealedQty,
                 openPills: 0,
                 packageQty: pkgQty,
-                field: .sealed
+                field: .sealed,
+                originalValue: sealedQty
             ))
         }
 
@@ -449,7 +497,8 @@ struct StockCountEditDetailsSheet: View {
                 sealedBottles: 0,
                 openPills: openPills,
                 packageQty: pkgQty,
-                field: .open
+                field: .open,
+                originalValue: openPills
             ))
         }
 
@@ -475,10 +524,19 @@ struct StockCountEditDetailsSheet: View {
             case .open:   lotRows[idx].openPills = 0
             }
         }
+        // deleteRow just wrote 0 to the DB directly — keep originalValue in sync so
+        // Save's unchanged-row guard doesn't skip a later restore back to 0.
+        lotRows[idx].originalValue = 0
     }
 
     private func saveChanges() {
         for row in lotRows {
+            let currentValue = row.field == .sealed ? row.sealedBottles : row.openPills
+            // Untouched row — its owned field is exactly what buildRows() loaded from
+            // the DB. Skip it entirely: no write, no touch to its sibling bottles either.
+            // Only a lot the user actually edited should hit the DB on Save.
+            guard currentValue != row.originalValue else { continue }
+
             // A lot row aggregates the counts of every bottle row in the group (see
             // buildRows — both sealed and opened rows are now grouped by lot|expiry and
             // summed across bottleIds). Writing that summed value onto only the first row
@@ -487,13 +545,26 @@ struct StockCountEditDetailsSheet: View {
             // primary row and zero the rest, so the saved group total equals exactly what
             // the user sees.
             let primaryBottleId = row.bottleIds.first
+            // A row owns exactly ONE physical field — bottle_qty for a sealed row,
+            // loose_qty for an open-pills row. The other field on this struct is a
+            // placeholder that was never read from the DB; passing nil for it leaves
+            // the real DB value alone instead of stomping whatever it currently is.
             for bottleId in row.bottleIds {
                 let isPrimary = bottleId == primaryBottleId
-                stockCountViewModel.bottleInfoDAO.setAbsolute(
-                    bottleId: bottleId,
-                    bottleQty: isPrimary ? Int32(row.sealedBottles) : 0,
-                    looseQty:  isPrimary ? Int32(row.openPills)     : 0
-                )
+                switch row.field {
+                case .sealed:
+                    stockCountViewModel.bottleInfoDAO.setAbsolute(
+                        bottleId: bottleId,
+                        bottleQty: isPrimary ? Int32(row.sealedBottles) : 0,
+                        looseQty: nil
+                    )
+                case .open:
+                    stockCountViewModel.bottleInfoDAO.setAbsolute(
+                        bottleId: bottleId,
+                        bottleQty: nil,
+                        looseQty: isPrimary ? Int32(row.openPills) : 0
+                    )
+                }
             }
         }
         // Counts were written straight to the DAO — pull them back into the detail

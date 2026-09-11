@@ -29,6 +29,9 @@ struct StockCountBatchBottomSheet: View {
 
     @Binding var containerStatus: StockCountOptionContainerStatus
     @Binding var isExpanded: Bool
+    /// Owned by the parent so a new barcode scan can force the edit sheet closed
+    /// instead of leaving it open underneath the freshly scanned drug details.
+    @Binding var showEditSheet: Bool
     let onPortraitDragChanged: (CGFloat) -> Void
     let onPortraitDragEnded: () -> Void
     let onLandscapeDragChanged: (CGFloat) -> Void
@@ -40,8 +43,6 @@ struct StockCountBatchBottomSheet: View {
 
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.verticalSizeClass)   private var vSizeClass
-
-    @State private var showEditSheet = false
 
     private var isIPad: Bool { hSizeClass == .regular && vSizeClass == .regular }
     private var isLandscape: Bool { UIScreen.main.bounds.width > UIScreen.main.bounds.height }
@@ -228,38 +229,43 @@ struct StockCountBatchBottomSheet: View {
         let fullHeight = UIScreen.main.bounds.height * 0.90
 
         return VStack(spacing: 0) {
-            // ── Header (drag target) ────────────────────────────
-            HStack(spacing: 8) {
-                Text(L10n.StockCountSheet.batchStockCount)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(appColors.text)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                scanPillsButtonView.fixedSize()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-            .contentShape(Rectangle())
-            .gesture(iPhonePortraitDragGesture)
-
-            // ── Drug detail card ────────────────────────────────
-            Group {
+            if showEditSheet {
+                // ── Edit Details takes over the entire sheet — no header, no list ──
                 detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
-            }
-            .background(appColors.secondaryBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: Color.black.opacity(0.10), radius: 12, x: 0, y: 2)
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-            .gesture(iPhonePortraitDragGesture)
+            } else {
+                // ── Header (drag target) ────────────────────────────
+                HStack(spacing: 8) {
+                    Text(L10n.StockCountSheet.batchStockCount)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(appColors.text)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    scanPillsButtonView.fixedSize()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+                .contentShape(Rectangle())
+                .gesture(iPhonePortraitDragGesture)
 
-            // ── List — always in layout below details, revealed when sheet expands ──
-            StockCountBatchPanel(hideHeader: true, showScanPillsButton: false, onScanPills: onScanPills) {
-                EmptyView()
+                // ── Drug detail card ────────────────────────────────
+                Group {
+                    detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
+                }
+                .background(appColors.secondaryBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Color.black.opacity(0.10), radius: 12, x: 0, y: 2)
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .gesture(iPhonePortraitDragGesture)
+
+                // ── List — always in layout below details, revealed when sheet expands ──
+                StockCountBatchPanel(hideHeader: true, showScanPillsButton: false, onScanPills: onScanPills) {
+                    EmptyView()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 8)
         }
         // Anchor content to top so it never compresses — frame clips the bottom portion
         .frame(width: UIScreen.main.bounds.width, height: fullHeight, alignment: .top)
@@ -288,39 +294,46 @@ struct StockCountBatchBottomSheet: View {
         let listColWidth   = fullWidth / 2
 
         return HStack(spacing: 0) {
-            // ── Detail column — LEFT, fixed size, always fully visible ───────
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(L10n.StockCountSheet.batchStockCount)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(appColors.text)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    scanPillsButtonView.fixedSize()
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 10)
-                .contentShape(Rectangle())
-                .gesture(iPhoneLandscapeDragGesture)
+            if showEditSheet {
+                // ── Edit Details takes over the entire sheet — no header, no list ──
+                detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
+                    .frame(width: fullWidth, height: screenH, alignment: .top)
+                    .background(appColors.primaryBackground)
+            } else {
+                // ── Detail column — LEFT, fixed size, always fully visible ───────
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Text(L10n.StockCountSheet.batchStockCount)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(appColors.text)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        scanPillsButtonView.fixedSize()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 10)
+                    .contentShape(Rectangle())
+                    .gesture(iPhoneLandscapeDragGesture)
 
-                Group {
-                    detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
+                    Group {
+                        detailSlot(isIpadPortrait: false, isIPhone: true, applyBottomSheetStyle: false)
+                    }
+                    .background(appColors.secondaryBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 2)
+                    .padding(.horizontal, 12)
+                    .gesture(iPhoneLandscapeDragGesture)
                 }
-                .background(appColors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 2)
-                .padding(.horizontal, 12)
-                .gesture(iPhoneLandscapeDragGesture)
-            }
-            .frame(width: detailColWidth, height: screenH, alignment: .top)
-            .background(appColors.primaryBackground)
+                .frame(width: detailColWidth, height: screenH, alignment: .top)
+                .background(appColors.primaryBackground)
 
-            // ── List — RIGHT, fixed size, clipped until widthBinding grows ──
-            StockCountBatchPanel(hideHeader: true, showScanPillsButton: false, onScanPills: onScanPills) {
-                EmptyView()
+                // ── List — RIGHT, fixed size, clipped until widthBinding grows ──
+                StockCountBatchPanel(hideHeader: true, showScanPillsButton: false, onScanPills: onScanPills) {
+                    EmptyView()
+                }
+                .frame(width: listColWidth, height: screenH)
             }
-            .frame(width: listColWidth, height: screenH)
         }
         // Total content is fullWidth wide, anchored to leading/top.
         // The BottomSheet frame (widthBinding) clips from the right — list hidden until expanded.
@@ -334,7 +347,14 @@ struct StockCountBatchBottomSheet: View {
     @ViewBuilder
     private func detailSlot(isIpadPortrait: Bool, isIPhone: Bool = false, applyBottomSheetStyle: Bool = true) -> some View {
         if showEditSheet, let txn = editableTxn {
-            StockCountEditDetailsSheet(txn: txn, onDismiss: { showEditSheet = false })
+            StockCountEditDetailsSheet(txn: txn, onDismiss: {
+                // Animated so the sheet frame (grown/shrunk by onEditSheetChanged in the
+                // parent) resizes in lockstep with this content swap instead of the two
+                // visibly stepping apart — one instant, the other springing in later.
+                withAnimation(.stockSheetResize) {
+                    showEditSheet = false
+                }
+            })
                 .environmentObject(appColors)
                 .environmentObject(stockCountViewModel)
         } else if showDrugDetails {
@@ -342,7 +362,11 @@ struct StockCountBatchBottomSheet: View {
                 containerStatus: $containerStatus,
                 onCancel: onCancel,
                 onAdd: onAdd,
-                onEditTapped: { showEditSheet = true },
+                onEditTapped: {
+                    withAnimation(.stockSheetResize) {
+                        showEditSheet = true
+                    }
+                },
                 isIpadPortrait: isIpadPortrait,
                 applyBottomSheetStyle: applyBottomSheetStyle,
                 isIPhone: isIPhone

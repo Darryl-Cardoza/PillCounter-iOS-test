@@ -138,7 +138,12 @@ final class MockTransactionDetailDataSource: TransactionDetailDataSource {
     /// Set false to simulate the underlying save failing.
     var hardDeleteAllShouldSucceed: Bool = true
 
-    func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32 { 0 }
+    /// (txnId, step) -> total for that step; defaults to 0 when unset.
+    var stepTotals: [Int64: [ControlledStep: Int32]] = [:]
+
+    func totalCountForStep(txnId: Int64, step: ControlledStep) -> Int32 {
+        stepTotals[txnId]?[step] ?? 0
+    }
     func totalCountsForSteps(txnIds: [Int64], step: ControlledStep) -> [Int64: Int32] {
         Dictionary(uniqueKeysWithValues: txnIds.map { ($0, 0) })
     }

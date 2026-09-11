@@ -30,7 +30,6 @@ struct UnifiedCameraLayout: View {
     /// (.barcode, .stockCount, .resumeCount) rely on PillCountLayout's own bar.
     let scanType: ScanType
     let onBack: () -> Void
-    let onResume: () -> Void
 
     var body: some View {
         ZStack {
@@ -106,11 +105,6 @@ struct UnifiedCameraLayout: View {
                 || (!cameraService.isAuthorized && !cameraService.isPermissionCheckComplete) {
                 Color.black.opacity(0.5).ignoresSafeArea()
                 PillCountingLoader()
-            }
-
-            // ── Inactivity pause overlay ──────────────────────────────────────
-            if cameraService.isPausedDueToInactivity {
-                inactivityOverlay
             }
 
             // ── Header row ────────────────────────────────────────────────────
@@ -200,9 +194,6 @@ struct UnifiedCameraLayout: View {
             // .showToastMessage). No local toast here to avoid duplicate toasts.
         }
         .ignoresSafeArea()
-        .onTapGesture {
-            if cameraService.isPausedDueToInactivity { onResume() }
-        }
         // Any touch on the screen counts as activity — reset the idle clock without
         // consuming the touch, so buttons/gestures underneath still work normally.
         .simultaneousGesture(
@@ -215,26 +206,6 @@ struct UnifiedCameraLayout: View {
     }
 
     // MARK: - Sub-views
-
-    private var inactivityOverlay: some View {
-        Color.black.opacity(0.6)
-            .ignoresSafeArea()
-            .overlay(
-                VStack(spacing: 16) {
-                    Text(L10n.PillCount.pausedDueToInactivity)
-                        .foregroundStyle(appColors.text)
-                    Button(action: onResume) {
-                        Text(L10n.PillCount.resume)
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, 20)
-                            .background(appColors.primary)
-                            .cornerRadius(30)
-                    }
-                }
-            )
-    }
 
     private var controlledStepRow: some View {
         VStack(spacing: 0) {

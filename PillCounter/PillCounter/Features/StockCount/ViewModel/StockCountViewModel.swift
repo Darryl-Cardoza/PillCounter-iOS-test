@@ -563,6 +563,17 @@ class StockCountViewModel: ObservableObject {
         selectedGroupedTransaction = txn
     }
 
+    /// Refreshes `selectedGroupedTransaction` for one NDC without touching `groupedTransactions`,
+    /// which stays frozen while `suppressListReload` is true. Called right after a scan-and-add
+    /// commits, so Edit (which reads `selectedGroupedTransaction`) sees the just-written row
+    /// instead of resolving nil against the stale list — the sheet would otherwise resize
+    /// without ever swapping to the edit content.
+    func refreshSelectedTransaction(ndc: String) {
+        guard let batchId = currentBatch?.batch_id else { return }
+        let stockTxns = stockTxnDAO.fetchByBatch(batchId: batchId).filter { $0.drug?.ndc == ndc }
+        selectedGroupedTransaction = mapGroupedStockTxns(stockTxns: stockTxns).first
+    }
+
     // MARK: - Mapper
 
     func mapGroupedStockTxns(stockTxns: [StockTxnEntity]) -> [GroupedTransaction] {

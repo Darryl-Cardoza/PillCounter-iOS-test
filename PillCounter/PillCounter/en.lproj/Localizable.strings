@@ -250,6 +250,12 @@
 "faceAuth.poseCenterAgain" = "Look straight ahead again";
 "faceAuth.poseHoldStill" = "Hold still…";
 "faceAuth.poseCaptured" = "Got it!";
+"faceAuth.faceOffCenter" = "Move your face into the oval";
+
+"faceAuth.spokenPoseCenter" = "Place your face inside the oval";
+"faceAuth.spokenPoseTurnLeft" = "Tilt face to your left";
+"faceAuth.spokenPoseTurnRight" = "Tilt face to your right";
+"faceAuth.spokenEnrollmentComplete" = "Face detection completed";
 
 "faceAuth.failureNoFace" = "No face detected. Position your face in the oval.";
 "faceAuth.failureMultipleFaces" = "Multiple faces detected. Ask others to step away.";

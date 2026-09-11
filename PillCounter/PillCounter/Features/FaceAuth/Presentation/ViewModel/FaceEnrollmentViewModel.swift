@@ -41,6 +41,15 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// arrow unlit rather than pointing from a stale pose estimate — the row
     /// itself stays on screen either way.
     @Published private(set) var hasLiveFace: Bool = false
+    /// Reason the most recent frame was rejected by FaceQualityChecker, nil
+    /// when the last frame was acceptable or had no usable face. Drives an
+    /// override of the step's default instruction text (e.g. "center your
+    /// face") for reasons the user can act on.
+    @Published private(set) var liveRejectionReason: FaceQualityRejectionReason?
+    /// Steps whose sample has already been captured — once a direction lands
+    /// here, EnrollmentPoseGuidance freezes that arrow to a done mark instead
+    /// of following live pose. Session-scoped; reset on every new attempt.
+    @Published private(set) var completedSteps: Set<EnrollmentPoseStep> = []
 
     private let poseSteps = EnrollmentPoseStep.allCases
 
@@ -87,9 +96,11 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private nonisolated(unsafe) var stepStartedAt: TimeInterval = 0
     private nonisolated(unsafe) var enrollmentStartedAt: TimeInterval = 0
     private nonisolated(unsafe) var relaxedThisStep = false
-    /// Best candidate seen so far in the current step's window (frame +
-    /// detection + quality), replaced whenever a higher-scoring one arrives.
-    private nonisolated(unsafe) var bestCandidate: (pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, quality: FaceQualityResult)?
+    /// Best candidate seen so far THAT ALSO SATISFIED the step's pose range.
+    /// Captured at the soft window deadline; if the hard timeout arrives with
+    /// this still nil, the step is skipped rather than recording a
+    /// mismatched-pose embedding (e.g. a centered frame for "turn left").
+    private nonisolated(unsafe) var bestPoseMatchedCandidate: (pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, quality: FaceQualityResult)?
     /// Thumbnail rendered from the `.center` step's accepted frame, persisted
     /// once enrollment succeeds and shown in the Quick Access Users row. Held
     /// as a rendered UIImage rather than the raw CVPixelBuffer because the
@@ -153,7 +164,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         collectedEmbeddings = []
         currentStepIndex = 0
         poseHoldFrames = 0
-        bestCandidate = nil
+        bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         relaxedThisStep = false
         pendingUserId = nil
@@ -161,6 +172,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
         hasLiveFace = false
         liveYawDegrees = 0
         livePitchDegrees = 0
+        liveRejectionReason = nil
+        completedSteps = []
         state = .preparing
 
         let user = repository.registerUser(firstName: trimmedFirstName, lastName: trimmedLastName)
@@ -193,9 +206,11 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
         pendingUserId = nil
         collectedEmbeddings = []
-        bestCandidate = nil
+        bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         hasLiveFace = false
+        liveRejectionReason = nil
+        completedSteps = []
         state = .idle
     }
 
@@ -222,9 +237,11 @@ final class FaceEnrollmentViewModel: ObservableObject {
         cameraService.onFrame = nil
         pendingUserId = nil
         collectedEmbeddings = []
-        bestCandidate = nil
+        bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         hasLiveFace = false
+        liveRejectionReason = nil
+        completedSteps = []
         firstName = ""
         lastName = ""
         state = .idle
@@ -246,14 +263,20 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
         guard detections.count == 1 else {
             Log("Enrollment: frame skipped — \(detections.count) face(s) detected")
-            DispatchQueue.main.async { self.hasLiveFace = false }
+            DispatchQueue.main.async {
+                self.hasLiveFace = false
+                self.liveRejectionReason = nil
+            }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
 
         let quality = qualityChecker.check(detection: detections[0], pixelBuffer: pixelBuffer)
         guard quality.isAcceptable else {
-            DispatchQueue.main.async { self.hasLiveFace = false }
+            DispatchQueue.main.async {
+                self.hasLiveFace = false
+                self.liveRejectionReason = quality.reason
+            }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
@@ -262,7 +285,10 @@ final class FaceEnrollmentViewModel: ObservableObject {
         // check, before this frame is eligible as a capture candidate. See
         // FaceCaptureValidator.swift for what this catches and why.
         guard FaceCaptureValidator.isFaceCaptureValid(face: detections[0], frame: pixelBuffer) == nil else {
-            DispatchQueue.main.async { self.hasLiveFace = false }
+            DispatchQueue.main.async {
+                self.hasLiveFace = false
+                self.liveRejectionReason = nil
+            }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
@@ -274,6 +300,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             self.liveYawDegrees = quality.yawDegrees
             self.livePitchDegrees = quality.pitchDegrees
             self.hasLiveFace = true
+            self.liveRejectionReason = nil
         }
 
         if poseMatches {
@@ -282,11 +309,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
             poseHoldFrames = 0
         }
 
-        // Track the best-scoring candidate seen this window regardless of
-        // exact pose match — guarantees the window always has *something*
-        // to fall back on when the deadline hits.
-        if bestCandidate == nil || quality.qualityScore > bestCandidate!.quality.qualityScore {
-            bestCandidate = (pixelBuffer, detections[0], quality)
+        if poseMatches, bestPoseMatchedCandidate == nil || quality.qualityScore > bestPoseMatchedCandidate!.quality.qualityScore {
+            bestPoseMatchedCandidate = (pixelBuffer, detections[0], quality)
         }
 
         if poseHoldFrames >= poseHoldFrameThreshold {
@@ -323,24 +347,17 @@ final class FaceEnrollmentViewModel: ObservableObject {
             relaxQualityThresholds()
         }
 
-        if elapsed >= stepWindowSeconds, let candidate = bestCandidate {
+        if elapsed >= stepWindowSeconds, let candidate = bestPoseMatchedCandidate {
             captureStep(using: candidate)
             return
         }
 
         if elapsed >= stepHardTimeoutSeconds {
-            if let candidate = bestCandidate {
-                captureStep(using: candidate)
-            } else {
-                // Nothing usable at all for this whole step — fail the step
-                // explicitly rather than spinning forever.
-                DispatchQueue.main.async {
-                    self.state = .failed(.poorQuality(.lowConfidence))
-                }
-                isCapturingFrames = false
-                cameraService.stop()
-                cameraService.onFrame = nil
-            }
+            // No pose-matched candidate for the whole step budget — skip it
+            // rather than recording a mismatched-pose embedding (e.g. a
+            // centered frame for the "turn left" step); minimumUsableSamples
+            // is the floor that keeps overall enrollment viable.
+            advanceToNextStep()
         }
     }
 
@@ -376,11 +393,12 @@ final class FaceEnrollmentViewModel: ObservableObject {
             // let the window keep running; evaluateStepDeadlines will retry
             // or eventually hard-timeout the step.
             Log("Enrollment: step \(currentStepIndex) (\(step)) — embedding generation failed, retrying")
-            bestCandidate = nil
+            bestPoseMatchedCandidate = nil
             return
         }
 
         collectedEmbeddings.append(embedding)
+        DispatchQueue.main.async { self.completedSteps.insert(step) }
 
         // Render the row thumbnail from the frontal step only — the turned and
         // chin-up poses make for a poor portrait. Done here rather than in
@@ -401,7 +419,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
     }
 
     private nonisolated func advanceToNextStep() {
-        bestCandidate = nil
+        bestPoseMatchedCandidate = nil
         poseHoldFrames = 0
         relaxedThisStep = false
         resetQualityThresholds()
@@ -461,11 +479,18 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private nonisolated func resetQualityThresholds() {
         qualityChecker.minFaceWidthPx = 240
         qualityChecker.maxFaceWidthRatio = 0.85
+        qualityChecker.maxCenterOffsetXRatio = 0.30
+        qualityChecker.maxCenterOffsetYRatio = 0.30
     }
 
     private nonisolated func relaxQualityThresholds() {
         qualityChecker.minFaceWidthPx = 180
         qualityChecker.maxFaceWidthRatio = 0.9
+        // Without relaxing this too, a user stuck slightly off-center could
+        // burn the entire step window with no escape hatch — width/ratio
+        // relaxation alone doesn't help them.
+        qualityChecker.maxCenterOffsetXRatio = 0.40
+        qualityChecker.maxCenterOffsetYRatio = 0.40
     }
 
     private nonisolated static func monotonicNow() -> TimeInterval {
@@ -483,7 +508,9 @@ final class FaceEnrollmentViewModel: ObservableObject {
         switch state {
         case .idle: return L10n.FaceAuth.instructionIdle
         case .preparing: return L10n.FaceAuth.instructionPreparing
-        case .awaitingPose(let step, _, _): return step.instructionKey
+        case .awaitingPose(let step, _, _):
+            if liveRejectionReason == .faceCropIncomplete { return L10n.FaceAuth.faceOffCenter }
+            return step.instructionKey
         case .poseHeld: return L10n.FaceAuth.poseHoldStill
         case .capturingSample: return L10n.FaceAuth.poseCaptured
         case .enrollmentComplete: return L10n.FaceAuth.instructionComplete

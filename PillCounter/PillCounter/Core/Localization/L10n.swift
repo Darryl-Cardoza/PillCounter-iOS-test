@@ -296,6 +296,20 @@ enum L10n {
         static let poseCenterAgain = NSLocalizedString("faceAuth.poseCenterAgain", comment: "")
         static let poseHoldStill = NSLocalizedString("faceAuth.poseHoldStill", comment: "")
         static let poseCaptured = NSLocalizedString("faceAuth.poseCaptured", comment: "")
+        static let faceOffCenter = NSLocalizedString("faceAuth.faceOffCenter", comment: "")
+
+        // Voiceover-only copy for center/turnLeft/turnRight, deliberately
+        // separate from the pose* display strings above, which read
+        // differently on screen. turnLeft/turnRight match Android's
+        // spoken-strings-reference.md verbatim; spokenPoseCenter deviates
+        // from it ("oval" not "square") to match this app's actual capture
+        // shape (an Ellipse, see FaceScanScreen) instead of Android's.
+        // chinUp/centerAgain have no Android equivalent, so they speak their
+        // existing poseChinUp/poseCenterAgain display text directly instead.
+        static let spokenPoseCenter = NSLocalizedString("faceAuth.spokenPoseCenter", comment: "")
+        static let spokenPoseTurnLeft = NSLocalizedString("faceAuth.spokenPoseTurnLeft", comment: "")
+        static let spokenPoseTurnRight = NSLocalizedString("faceAuth.spokenPoseTurnRight", comment: "")
+        static let spokenEnrollmentComplete = NSLocalizedString("faceAuth.spokenEnrollmentComplete", comment: "")
 
         static let failureNoFace = NSLocalizedString("faceAuth.failureNoFace", comment: "")
         static let failureMultipleFaces = NSLocalizedString("faceAuth.failureMultipleFaces", comment: "")

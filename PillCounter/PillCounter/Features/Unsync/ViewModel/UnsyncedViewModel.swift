@@ -106,17 +106,13 @@ final class UnsyncedViewModel: ObservableObject {
         isSyncing = true
         syncError = nil
 
-        // TODO: Replace with your actual sync API call
-        // Example:
-        // do {
-        //     try await SyncService.shared.syncBatches(batches)
-        //     for batch in localStorage.fetchCompletedUnsyncedBatches() {
-        //         localStorage.markBatchSynced(batchId: batch.batch_id)
-        //     }
-        //     loadAll()
-        // } catch {
-        //     syncError = error.localizedDescription
-        // }
+        // Reuses the same path a live PMS reconnect already drives: unparks
+        // anything parked from a prior failed send and re-enqueues both sync
+        // queues. If already connected, `processNext()` sends right away; if
+        // not, the queue's own drop-and-retry (see `sendHL7ToPMS`) kicks off
+        // a reconnect and the item is re-driven once `.ready` fires — no
+        // separate connect-then-send logic needed here.
+        Hl7ServiceController.shared.onClientConnected()
 
         isSyncing = false
     }

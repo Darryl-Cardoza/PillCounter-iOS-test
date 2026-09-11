@@ -125,17 +125,17 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
                 // (queue not empty) skips re-driving this item entirely.
                 self?.processingQueue.async {
                     guard let self, self.pendingRequestId == item.requestId else { return }
+                    // Reset only — do NOT call processNext() here. The manager
+                    // is still disconnected right now (that's why we're in this
+                    // branch), so an immediate retry would just drop again and
+                    // spin in a tight synchronous loop until a real `.ready`
+                    // happens. Leave the item at `queue.first` with isSending
+                    // false; `Hl7ServiceController.onClientConnected()` re-drives
+                    // it once the connection genuinely comes back.
                     self.cancelAckTimeout()
                     self.isSending = false
                     self.pendingRequestId = nil
                     self.pendingAckMessageId = nil
-                    // enqueueUnsynced()'s re-fetch guard (`queue.isEmpty` check in
-                    // loadAndEnqueuePending) skips calling processNext() whenever
-                    // the queue is non-empty, on the assumption something is
-                    // already draining it — true right up until this drop, but
-                    // false the instant we reset isSending above. Must kick it
-                    // ourselves or the item (still at queue.first) sits forever.
-                    self.processNext()
                 }
                 return
             }

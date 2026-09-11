@@ -106,6 +106,20 @@ class HL7SyncQueue<Item: HL7QueueItem> {
         }
     }
 
+    /// Re-drives the queue after a real reconnect. Unlike `enqueueUnsynced()`
+    /// (whose `loadAndEnqueuePending` skips the DB re-fetch — and the
+    /// `processNext()` call that comes with it — whenever `queue` already has
+    /// items, to avoid re-fetching a large backlog on every ACK), this calls
+    /// `processNext()` directly: exactly what's needed when a prior send was
+    /// dropped (not connected) and left an item sitting at `queue.first` with
+    /// `isSending` already reset back to `false`. Safe to call whenever —
+    /// `processNext()` itself no-ops if already sending or the queue is empty.
+    func kickIfIdle() {
+        processingQueue.async { [weak self] in
+            self?.processNext()
+        }
+    }
+
     func handleAck(messageId: String?, hl7 ackMessage: String) {
         processingQueue.async { [weak self] in
             guard let self, self.pendingAckMessageId != nil, messageId == self.pendingAckMessageId else { return }

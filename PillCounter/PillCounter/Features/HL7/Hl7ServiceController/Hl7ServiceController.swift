@@ -164,6 +164,15 @@ final class Hl7ServiceController: ObservableObject {
         txnSyncQueue?.resetParkedState()
         batchSyncQueue?.enqueueUnsynced()
         txnSyncQueue?.enqueueUnsynced()
+        // `enqueueUnsynced()` skips its DB re-fetch (and the `processNext()`
+        // call bundled with it) whenever `queue` already has items — correct
+        // for a mid-drain ACK, but it also means an item left sitting at
+        // `queue.first` after a dropped send (isSending reset to false, no
+        // active retry scheduled) never gets picked back up by that call
+        // alone. `kickIfIdle()` calls `processNext()` directly to cover
+        // exactly that case; harmless no-op otherwise.
+        batchSyncQueue?.kickIfIdle()
+        txnSyncQueue?.kickIfIdle()
     }
 
     func onAckReceived(messageId: String?, ackCode: String, hl7: String) {

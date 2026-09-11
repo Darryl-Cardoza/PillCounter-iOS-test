@@ -123,8 +123,19 @@ final class StockTxnStore {
         guard let stockTxn = fetchById(stockTxnId) else { return false }
         stockTxn.is_deleted = true
         stockTxn.updated_at = isoFormatter.string(from: Date())
-        guard BottleInfoStore.shared.softDeleteByStockTxn(stockTxnId: stockTxnId) else { return false }
-        guard CoreDataManager.shared.saveReturningSuccess(context: context) else { return false }
+        // softDeleteByStockTxn already reverts its own bottle-row deletes on failure —
+        // only this object's two fields are left dirty here, so refresh just this one.
+        guard BottleInfoStore.shared.softDeleteByStockTxn(stockTxnId: stockTxnId) else {
+            context.refresh(stockTxn, mergeChanges: false)
+            return false
+        }
+        guard CoreDataManager.shared.saveReturningSuccess(context: context) else {
+            // Bottle rows were already deleted+saved successfully by softDeleteByStockTxn
+            // (that succeeded, or we wouldn't be here) — only this StockTxn's two fields
+            // are still dirty and unsaved, so only they need reverting.
+            context.refresh(stockTxn, mergeChanges: false)
+            return false
+        }
         StoreLogger.debug("📦 [StockTxnDAO] SOFT DELETED — stockTxnId: \(stockTxnId)")
         stockTxnsDidChange.send()
         return true

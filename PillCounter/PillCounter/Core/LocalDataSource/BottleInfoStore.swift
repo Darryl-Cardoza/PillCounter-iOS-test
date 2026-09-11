@@ -63,6 +63,10 @@ final class BottleInfoStore {
     static let shared = BottleInfoStore()
     private init() {}
 
+    /// Minimum age (ms) an isEmpty row must have before addOpenedBottleTracked will
+    /// reclaim it — see the reclaim guard's comment for why isEmpty alone isn't safe.
+    private static let reclaimGraceWindowMs: Int64 = 60_000
+
     let bottleInfosDidChange = PassthroughSubject<Void, Never>()
 
     private var context: NSManagedObjectContext {
@@ -76,8 +80,10 @@ final class BottleInfoStore {
 
     private func fetchSealedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
         let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
+        let reclaimCutoff = nowMs() - Self.reclaimGraceWindowMs
         return fetchByStockTxn(stockTxnId: stockTxnId).first {
-            ($0.isSealed || $0.isEmpty) && $0.sealedLotKey == targetKey
+            $0.sealedLotKey == targetKey &&
+            ($0.isSealed || ($0.isEmpty && $0.updated_at < reclaimCutoff))
         }
     }
 
@@ -188,8 +194,15 @@ final class BottleInfoStore {
         guard let stockTxn = StockTxnStore.shared.fetchById(stockTxnId) else { return (nil, false) }
 
         let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
+        // isEmpty alone can't tell a genuinely pruned row from one this same
+        // scan flow just created and hasn't finished counting yet — the PMS
+        // path never sets serial_no, so its rows have no other escape from
+        // isEmpty until the real count lands. Require the row to be older
+        // than the reclaim grace window so an in-flight row from the current
+        // scan is never mistaken for a stale, safely-reusable one.
+        let reclaimCutoff = nowMs() - Self.reclaimGraceWindowMs
         if let existing = fetchByStockTxn(stockTxnId: stockTxnId).first(where: {
-            $0.isEmpty && $0.sealedLotKey == targetKey
+            $0.isEmpty && $0.sealedLotKey == targetKey && $0.updated_at < reclaimCutoff
         }) {
             existing.loose_qty = looseQty
             existing.serial_no = serialNo
@@ -302,7 +315,14 @@ final class BottleInfoStore {
         do {
             guard let bottle = try context.fetch(request).first else { return false }
             context.delete(bottle)
-            guard CoreDataManager.shared.saveReturningSuccess(context: context) else { return false }
+            guard CoreDataManager.shared.saveReturningSuccess(context: context) else {
+                // Save failed — bottle is still pending-deleted in this shared context,
+                // so any later unrelated save would silently commit it. refresh(mergeChanges:
+                // false) reverts it to its last-saved state without touching anything else
+                // pending in the context (unlike rollback(), which would).
+                context.refresh(bottle, mergeChanges: false)
+                return false
+            }
             StoreLogger.debug("🧴 [BottleInfoDAO] DELETED — bottleId: \(bottleId)")
             bottleInfosDidChange.send()
             return true
@@ -320,7 +340,12 @@ final class BottleInfoStore {
             let bottles = try context.fetch(request)
             guard !bottles.isEmpty else { return true }
             bottles.forEach { context.delete($0) }
-            guard CoreDataManager.shared.saveReturningSuccess(context: context) else { return false }
+            guard CoreDataManager.shared.saveReturningSuccess(context: context) else {
+                // Same as softDelete(bottleId:) — undo each pending delete individually so
+                // a later unrelated save on this shared context can't silently commit them.
+                bottles.forEach { context.refresh($0, mergeChanges: false) }
+                return false
+            }
             StoreLogger.debug("🧴 [BottleInfoDAO] DELETED all rows for stockTxnId: \(stockTxnId)")
             return true
         } catch {

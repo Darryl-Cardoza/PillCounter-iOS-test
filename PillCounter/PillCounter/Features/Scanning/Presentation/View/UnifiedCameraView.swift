@@ -1758,16 +1758,24 @@ extension UnifiedCameraView {
         cameraService.enableBarcodeScanning()
     }
 
-    /// Called by the Clear button — undoes whatever this scan session freshly created,
-    /// then clears the detail slot and refreshes the list. A scan that merged into an
-    /// already-existing NDC/lot is left as-is (kept simple: no revert-to-previous-value).
-    func clearScannedDetails() {
+    /// Undoes whatever the current scan session freshly created (bottle row / stock txn),
+    /// shared by Clear and by Back/scenePhase-backgrounding so a scan abandoned any of
+    /// those ways doesn't leave a stranded 0-qty row behind for the next matching scan
+    /// to collide with. A scan that merged into an already-existing NDC/lot is left
+    /// as-is (kept simple: no revert-to-previous-value).
+    func discardUncommittedSessionRows() {
         if stockCountViewModel.sessionCreatedBottleInfo, let bottleId = stockCountViewModel.committedBottleId {
             stockCountViewModel.bottleInfoDAO.softDelete(bottleId: bottleId)
         }
         if stockCountViewModel.sessionCreatedStockTxn, let stockTxnId = stockCountViewModel.committedStockTxnId {
             stockCountViewModel.stockTxnDAO.softDelete(stockTxnId: stockTxnId)
         }
+    }
+
+    /// Called by the Clear button — undoes whatever this scan session freshly created,
+    /// then clears the detail slot and refreshes the list.
+    func clearScannedDetails() {
+        discardUncommittedSessionRows()
         stockCountViewModel.scannedDrugData = nil
         stockCountViewModel.selectedGroupedTransaction = nil
         stockCountViewModel.showStockCountScannedDetails = false
@@ -2012,6 +2020,11 @@ extension UnifiedCameraView {
             stockCountViewModel.reloadAllState()
             showStockCountPanel = true
         } else {
+            // Direct Back with no Add/Clear tapped — a sealed/opened scan may already
+            // have committed a fresh row this session; discard it the same way Clear
+            // would, or it strands at 0/qty for the next matching scan to collide with.
+            discardUncommittedSessionRows()
+            stockCountViewModel.reset()
             // True entry state — nothing scanned yet on this screen, so back
             // should actually leave (single pop of the navigation stack).
             router.navigateBack()

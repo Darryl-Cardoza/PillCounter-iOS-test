@@ -505,6 +505,12 @@ extension PillScanViewModel {
         let currentUser = userDataLocalStorage.fetchByUserId(userId)
         var isNewTxn = true
 
+        // A txn arriving from PMS must never silently take over the screen from
+        // whatever the user is actively working on — it only becomes current if
+        // it's correcting the Rx already active (see below). Otherwise it's saved
+        // and left for the user to pick from the transaction list.
+        let activeTxnIdBeforeReceive = self.currentTransaction?.txn_id
+
         if let rxNo, !rxNo.isEmpty, let user = currentUser,
            let existing = transactionDAO.fetchByRxNo(rxNo, for: user).first {
             // Already exists — update in place, do NOT create a duplicate
@@ -521,11 +527,11 @@ extension PillScanViewModel {
                 messageControlId: messageControlId,
                 transactionOrderId: transactionOrderId
             )
-            self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
+            if existing.txn_id == activeTxnIdBeforeReceive {
+                self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
+            }
             Log("HL7: Rx \(rxNo) already exists (txnId=\(existing.txn_id)) — updated in place, no new txn created")
         } else {
-            self.currentTransaction = nil
-
             await createTransaction(
                 drugId: drugIdToUse,
                 isDispense: isDispense,
@@ -538,7 +544,14 @@ extension PillScanViewModel {
                 workFlowStep: initialWorkFlowStep
             )
 
-            guard currentTransaction != nil else {
+            // createTransaction sets currentTransaction as a side effect to hand
+            // back the created row — capture it, then restore whatever the user
+            // was actively working on (nil included — an idle screen must stay
+            // idle, not auto-jump into the just-received PMS txn).
+            let createdTxn = self.currentTransaction
+            defer { self.currentTransaction = activeTxnIdBeforeReceive.flatMap { transactionDAO.fetchById($0) } }
+
+            guard let createdTxn else {
                 Log("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)")
                 HL7NotificationManager.show(
                     title: L10n.BarcodeScan.drugNotFound,
@@ -547,17 +560,14 @@ extension PillScanViewModel {
                 return
             }
 
-            if let txnId = currentTransaction?.txn_id {
-                TransactionStore.shared.setHl7Identifiers(
-                    txnId: txnId,
-                    messageControlId: messageControlId,
-                    transactionOrderId: transactionOrderId
-                )
-            }
+            let txnId = createdTxn.txn_id
+            TransactionStore.shared.setHl7Identifiers(
+                txnId: txnId,
+                messageControlId: messageControlId,
+                transactionOrderId: transactionOrderId
+            )
 
-            if isControlled, hasInventory, let invCount = inventoryCount,
-               let txnId = currentTransaction?.txn_id {
-
+            if isControlled, hasInventory, let invCount = inventoryCount {
                 transactionDetailDAO.add(
                     txnId: txnId,
                     pillCount: invCount,

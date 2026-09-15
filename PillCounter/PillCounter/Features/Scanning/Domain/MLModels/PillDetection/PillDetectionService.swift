@@ -108,6 +108,10 @@ struct DetectionResult: Identifiable, Equatable {
     let rect: CGRect
     let confidence: Float
     let originalFrameSize: CGSize
+    /// True when a tracked pill had no matching raw detection this exact frame
+    /// (occlusion/motion blur) and is being coasted by PillTracker rather than
+    /// freshly seen. Lets counting tell real hits from hysteresis apart.
+    var isCoasting: Bool = false
 
     var center: CGPoint { CGPoint(x: rect.midX, y: rect.midY) }
 

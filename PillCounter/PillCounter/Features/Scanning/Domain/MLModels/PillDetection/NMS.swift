@@ -20,7 +20,7 @@ final class NMS {
             var shouldKeep = true
 
             for kept in keep {
-                if iou(det.rect, kept.rect) > iouThreshold {
+                if CGRectGeometry.iou(det.rect, kept.rect) > iouThreshold {
                     shouldKeep = false
                     break
                 }
@@ -31,16 +31,4 @@ final class NMS {
 
         return keep
     }
-
-    private static func iou(_ a: CGRect, _ b: CGRect) -> Float {
-        let intersection = a.intersection(b).area
-        if intersection <= 0 { return 0 }
-
-        let union = a.area + b.area - intersection
-        return Float(intersection / union)
-    }
-}
-
-private extension CGRect {
-    var area: CGFloat { width * height }
 }

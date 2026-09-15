@@ -95,6 +95,12 @@ final class CameraService: NSObject, ObservableObject {
     /// segmented rim doesn't blink in and out as the boundary jitters.
     private static let maskDilatePillFraction: CGFloat = 0.5
 
+    /// Median pill side from the previous frame's confirmed tracks, used as the
+    /// floor for the crop margin so the crop (computed before this frame's
+    /// pills are known) is never narrower than the mask dilation radius that
+    /// will test them. 0 until pills have been seen at least once.
+    private var lastMedianPillSide: CGFloat = 0
+
     /// Cross-frame pill state (deploy contract). The tracker decides which
     /// detections are real (enter/keep/exit); the stabilizer decides what number
     /// is displayed. Both live on the session queue.
@@ -442,8 +448,9 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.barcodeEnabled = false
-            // Only stop re-arming if the rescan listener isn't also relying on it.
-            if !self.bottleRescanEnabled { self.focusController.stopReArming() }
+            // Ref-counted: only actually stops once the rescan listener (if
+            // active) also stops re-arming.
+            self.focusController.stopReArming()
             // Intentionally preserve barcodeLock.lockedValue. If scanning is
             // re-enabled while the same physical barcode is still in frame, the
             // lock prevents it from immediately re-firing. The lock is only
@@ -497,8 +504,9 @@ final class CameraService: NSObject, ObservableObject {
             self.bottleRescanEnabled = false
             print("📷 [CameraService] bottle rescan listening DISABLED")
             self.bottleRescanLock.forceRelease()
-            // Only stop re-arming if the primary barcode scanner isn't also relying on it.
-            if !self.barcodeEnabled { self.focusController.stopReArming() }
+            // Ref-counted: only actually stops once the primary barcode scanner
+            // (if active) also stops re-arming.
+            self.focusController.stopReArming()
             // Metadata delegate intentionally left attached — see the comment in
             // `disableBarcodeScanning()`. It is only ever detached in `stop()`.
             // Re-lock 3A so the pill count settles back down once rescan listening ends.
@@ -650,7 +658,7 @@ final class CameraService: NSObject, ObservableObject {
             // Release the 3A lock before stopping so the next start() re-meters the
             // scene from scratch (lighting/tray may differ after a long pause).
             self.unlock3A()
-            self.focusController.stopReArming()
+            self.focusController.forceStopReArming()
             self.session.stopRunning()
             // Session is fully stopped — no barcodes are visible. Clear both
             // locks so the next start() begins fresh rather than blocking on a
@@ -736,6 +744,7 @@ final class CameraService: NSObject, ObservableObject {
             self.incompleteFrames = 0
             self.pillTracker.reset()
             self.countStabilizer.reset()
+            self.lastMedianPillSide = 0
             self.motionEstimator.reset()
             self.unlock3A()
         }
@@ -994,7 +1003,10 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         // cropped away, and the pills fill the 640 canvas at the scale the model
         // was trained on (deploy contract: "feed the detector the tray crop, not
         // the whole frame"). Otherwise the full frame is used.
-        let cropRect = gateOpen ? Self.trayCropRegion(gateTrayDets, frameSize: frameSz) : nil
+        let cropRect = gateOpen
+            ? Self.trayCropRegion(gateTrayDets, frameSize: frameSz,
+                                   minInset: Self.maskDilatePillFraction * lastMedianPillSide)
+            : nil
         let cameraShift = cameraMotion.map { CGVector(dx: $0.dx, dy: $0.dy) }
 
         detector.detect(pixelBuffer: pixelBuffer, cropRect: cropRect) { [weak self] afterNms, _ in
@@ -1004,6 +1016,7 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             // at 0.35, exit after three misses, one pill per track, camera motion
             // compensated. Runs every frame so pills confirm while the gate opens.
             let confirmed = self.pillTracker.update(afterNms, cameraShift: cameraShift)
+            if !confirmed.isEmpty { self.lastMedianPillSide = Self.medianSide(confirmed) }
 
             // Counting GATE: only count while the (hysteretic) gate is open. Then
             // keep a pill only if its CENTRE lands on the TRAY mask dilated by half
@@ -1022,17 +1035,18 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
                         && !gateChuteDets.contains { $0.containsPoint(c.x, c.y) }
                 }
                 filtered = confirmed.filter(onTray)
-                // What the detector actually sees on the tray this frame, at the
-                // score a track can survive on. A coasting or duplicate track has no
-                // detection under it, so the count is never allowed above this.
+                // For debug telemetry only: what the detector actually sees on the
+                // tray this frame. Not used to cap the count — a track legitimately
+                // coasting through occlusion has no detection under it by design.
                 visibleOnTray = afterNms.filter { $0.confidence >= PillTracker.keepScore && onTray($0) }.count
             }
 
             // Displayed count is smoothed twice: median over the recent window,
             // then a latch requiring consecutive agreement. Per-frame count =
-            // confirmed tracks on the tray, capped by the detections visible on the
-            // tray: tracks add hysteresis, never pills.
-            let counted = self.countStabilizer.update(rawCount: min(filtered.count, visibleOnTray))
+            // confirmed tracks on the tray. PillTracker already owns hysteresis
+            // (enter/keep/exit), so a coasting track is trusted, not clamped down
+            // to this frame's raw visible count.
+            let counted = self.countStabilizer.update(rawCount: filtered.count)
 
             #if DEBUG
             self.pipelineFrameIndex += 1
@@ -1096,11 +1110,15 @@ extension CameraService {
     /// chute is a separate class and lies outside it), grown by `trayCropMargin`
     /// per side and clamped to the frame. Nil when there is no tray or the crop is
     /// too small to be worth upscaling.
-    fileprivate static func trayCropRegion(_ trays: [TrayResult], frameSize: CGSize) -> CGRect? {
+    fileprivate static func trayCropRegion(_ trays: [TrayResult], frameSize: CGSize, minInset: CGFloat = 0) -> CGRect? {
         guard let tray = trays.max(by: { $0.rect.width * $0.rect.height < $1.rect.width * $1.rect.height })
         else { return nil }
-        let mx = tray.rect.width * trayCropMargin
-        let my = tray.rect.height * trayCropMargin
+        // The mask test later dilates the tray by maskDilatePillFraction × pill
+        // side, so the crop must reach at least as far or a rim pill is clipped
+        // before the mask ever sees it — the percentage margin alone can't
+        // guarantee that for a small tray with large pills.
+        let mx = max(tray.rect.width * trayCropMargin, minInset)
+        let my = max(tray.rect.height * trayCropMargin, minInset)
         let frame = CGRect(origin: .zero, size: frameSize)
         let region = tray.rect.insetBy(dx: -mx, dy: -my).integral.intersection(frame)
         guard !region.isNull, region.width >= trayCropMinSide, region.height >= trayCropMinSide
@@ -1110,9 +1128,7 @@ extension CameraService {
 
     /// Median of sqrt(w·h) over `dets`; 0 when there are none.
     fileprivate static func medianSide(_ dets: [DetectionResult]) -> CGFloat {
-        guard !dets.isEmpty else { return 0 }
-        let sides = dets.map { ($0.rect.width * $0.rect.height).squareRoot() }.sorted()
-        return sides[sides.count / 2]
+        dets.map { ($0.rect.width * $0.rect.height).squareRoot() }.median()
     }
 }
 

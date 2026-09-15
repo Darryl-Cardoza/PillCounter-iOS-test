@@ -8,32 +8,19 @@
 import CoreGraphics
 import Foundation
 
-/// Per-track state machine over the post-NMS pill detections.
-///
-/// A track must be seen on `enterFrames` consecutive frames at or above
-/// `enterScore` before it is confirmed (and counted), stays alive while it keeps
-/// matching at or above `keepScore`, and only exits after `exitUnmatchedFrames`
-/// consecutive misses. Confirmed tracks are still returned while coasting
-/// through those misses — that grace is what stops a one-frame drop from moving
-/// the count.
-///
-/// One pill, one track. NMS (IoU 0.5) still lets a second box on the same pill
-/// through when it overlaps 0.3–0.5 or is a small partial box, and a box that
-/// jumps between frames re-associates elsewhere while its old track coasts.
-/// Both used to yield a second confirmed track on one pill for a few frames —
-/// the count briefly reading too many. So a leftover detection that lands on a
-/// pill whose track was matched this frame never starts a track, and an
-/// unmatched track lying on a pill another track claimed this frame is dropped
-/// instead of coasting.
-///
-/// Camera motion. A hand-held pan moves every pill in frame coordinates at
-/// once; past the association IoU every track would miss while every detection
-/// spawned a new one. Before association each frame the tracks are shifted by
-/// the camera motion: the image-registration estimate the caller passes in
-/// (`CameraMotionEstimator`), validated against the detections, or a median
-/// displacement vote when that is unavailable.
-///
-/// Not thread-safe; drive it from one queue.
+/// Per-track state machine over the post-NMS pill detections: a track confirms
+/// (and counts) after `enterFrames` consecutive hits at `enterScore`, coasts
+/// through up to `exitUnmatchedFrames` misses (still returned, so a one-frame
+/// drop can't move the count) while matching at `keepScore`, then exits — one
+/// pill per track, so a leftover detection or unmatched track that lands on a
+/// pill another track already claimed this frame is dropped rather than
+/// spawning/coasting a duplicate (NMS alone lets 0.3-0.5 IoU or partial boxes
+/// through, and a box that jumps frames would otherwise get a second track
+/// while its old one coasts). Before association each frame, tracks are
+/// shifted by the camera motion — the passed-in `CameraMotionEstimator`
+/// estimate validated against detections, or a median displacement vote when
+/// unavailable — so a hand-held pan doesn't miss every track and spawn a
+/// duplicate for every detection. Not thread-safe; drive it from one queue.
 final class PillTracker {
 
     static let trackIoU: Float = 0.30
@@ -94,7 +81,7 @@ final class PillTracker {
             var bestIdx = -1
             var bestIou: Float = -1
             for i in 0..<existingCount where !matched[i] {
-                let overlap = Self.iou(det.rect, tracks[i].rect)
+                let overlap = CGRectGeometry.iou(det.rect, tracks[i].rect)
                 if overlap >= Self.trackIoU && overlap > bestIou {
                     bestIou = overlap
                     bestIdx = i
@@ -158,7 +145,8 @@ final class PillTracker {
         let frameSize = lastFrameSize
         return tracks
             .filter { $0.confirmed }
-            .map { DetectionResult(rect: $0.rect, confidence: $0.confidence, originalFrameSize: frameSize) }
+            .map { DetectionResult(rect: $0.rect, confidence: $0.confidence, originalFrameSize: frameSize,
+                                    isCoasting: $0.missedFrames > 0) }
     }
 
     /// Drops all tracks so the next frame starts confirmation from scratch.
@@ -205,7 +193,7 @@ final class PillTracker {
         var n = 0
         for det in detections where det.confidence >= Self.keepScore {
             let r = det.rect.offsetBy(dx: -shift.dx, dy: -shift.dy)
-            if tracks.contains(where: { Self.iou(r, $0.rect) >= Self.trackIoU }) { n += 1 }
+            if tracks.contains(where: { CGRectGeometry.iou(r, $0.rect) >= Self.trackIoU }) { n += 1 }
         }
         return n
     }
@@ -217,7 +205,7 @@ final class PillTracker {
     private func shiftFromDetections(_ detections: [DetectionResult]) -> CGVector? {
         guard detections.count >= Self.minShiftVotes else { return nil }
         let radius = Self.shiftSearchRadiusPills
-            * Self.median(detections.map { ($0.rect.width * $0.rect.height).squareRoot() })
+            * detections.map { ($0.rect.width * $0.rect.height).squareRoot() }.median()
         var dxs: [CGFloat] = []
         var dys: [CGFloat] = []
         for det in detections where det.confidence >= Self.keepScore {
@@ -236,36 +224,17 @@ final class PillTracker {
             dys.append(c.y - n.rect.midY)
         }
         guard dxs.count >= Self.minShiftVotes else { return nil }
-        return CGVector(dx: Self.median(dxs), dy: Self.median(dys))
+        return CGVector(dx: dxs.median(), dy: dys.median())
     }
 
     // MARK: - Geometry
 
-    private static func median(_ values: [CGFloat]) -> CGFloat {
-        guard !values.isEmpty else { return 0 }
-        let sorted = values.sorted()
-        return sorted[sorted.count / 2]
-    }
-
-    private static func intersection(_ a: CGRect, _ b: CGRect) -> CGFloat {
-        let inter = a.intersection(b)
-        guard !inter.isNull, inter.width > 0, inter.height > 0 else { return 0 }
-        return inter.width * inter.height
-    }
-
-    private static func iou(_ a: CGRect, _ b: CGRect) -> Float {
-        let inter = intersection(a, b)
-        if inter <= 0 { return 0 }
-        let union = a.width * a.height + b.width * b.height - inter
-        return union > 0 ? Float(inter / union) : 0
-    }
-
     /// Two boxes describe the same pill when they overlap at the association
     /// threshold, or when the smaller box is mostly inside the larger one.
     private static func samePill(_ a: CGRect, _ b: CGRect) -> Bool {
-        let inter = intersection(a, b)
+        let inter = CGRectGeometry.intersectionArea(a, b)
         if inter <= 0 { return false }
-        if iou(a, b) >= trackIoU { return true }
+        if CGRectGeometry.iou(a, b) >= trackIoU { return true }
         let smaller = min(a.width * a.height, b.width * b.height)
         return smaller > 0 && Float(inter / smaller) >= duplicateContainment
     }

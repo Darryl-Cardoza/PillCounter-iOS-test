@@ -11,18 +11,12 @@ import CoreVideo
 import Vision
 
 /// Global camera motion between consecutive frames, in frame pixels: a pan that
-/// moves every pill 12 px to the right yields dx ≈ +12.
-///
-/// Both frames are downscaled uniformly into a reused `side`×`side` buffer and
-/// registered with `VNTranslationalImageRegistrationRequest`. Registration is
-/// insensitive to the repeating pill pattern that defeats nearest-neighbour
-/// voting in a dense tray, because the tray edges, chute and background carry
-/// the structure that fixes the alignment.
-///
-/// The tracker validates the sign of the returned shift against its detections
-/// (`PillTracker.resolveShift`), so the exact axis convention of the alignment
-/// transform can never make association worse than applying no shift.
-///
+/// moves every pill 12 px to the right yields dx ≈ +12. Registers two frames
+/// downscaled into a reused buffer via `VNTranslationalImageRegistrationRequest`
+/// — insensitive to the repeating pill pattern that defeats nearest-neighbour
+/// voting in a dense tray, since tray edges/chute/background fix the alignment.
+/// `PillTracker.resolveShift` validates the sign against its own detections, so
+/// the axis convention here can never make association worse than no shift.
 /// Not thread-safe; the camera pipeline calls it once per frame.
 final class CameraMotionEstimator {
 
@@ -33,7 +27,6 @@ final class CameraMotionEstimator {
 
     private static let side = 256
 
-    private let context = CIContext()
     private var buffers: [CVPixelBuffer] = []
     private var current = 0
     private var hasPrevious = false
@@ -57,7 +50,7 @@ final class CameraMotionEstimator {
         let image = CIImage(cvPixelBuffer: frame)
         let scale = CGFloat(Self.side) / max(image.extent.width, image.extent.height)
         let bounds = CGRect(x: 0, y: 0, width: Self.side, height: Self.side)
-        context.render(image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
+        Letterbox.context.render(image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
                        to: buffers[curIdx],
                        bounds: bounds,
                        colorSpace: CGColorSpaceCreateDeviceRGB())

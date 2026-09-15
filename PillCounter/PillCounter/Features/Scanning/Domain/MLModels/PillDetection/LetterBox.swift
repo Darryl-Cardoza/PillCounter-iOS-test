@@ -40,8 +40,9 @@ final class Letterbox {
     /// returns instead, so two detectors can never race on it.
     static var currentScaleInfo: ScaleInfo?
 
-    // CIContext is thread-safe and expensive to create; share one.
-    private static let context = CIContext()
+    // CIContext is thread-safe and expensive to create; share one across the
+    // scanning feature (CameraMotionEstimator reuses this too).
+    static let context = CIContext()
 
     /// Letterbox the whole frame to `targetSize`×`targetSize`.
     static func preprocess(_ px: CVPixelBuffer, targetSize: Int) -> CVPixelBuffer? {

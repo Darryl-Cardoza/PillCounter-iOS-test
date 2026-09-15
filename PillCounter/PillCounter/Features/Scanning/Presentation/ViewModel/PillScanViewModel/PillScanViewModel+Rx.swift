@@ -25,8 +25,11 @@ extension PillScanViewModel {
         let mappedData = BarcodeFormatParser.mappedData(format: barcodeFormat, actualValue: actualValue)
 
         guard !mappedData.isEmpty else {
+            print("[RxScan] Barcode did not parse into any known field — unparseable format")
             scannedRxData   = ParsedScanData()
             showRxFlowPopup = false
+            showToastMessage(text: L10n.BarcodeScan.invalidRxBarcode)
+            rxScanFailed = true
             return
         }
 
@@ -67,9 +70,10 @@ extension PillScanViewModel {
 
             let allStoredRxNos = transactionDAO.fetchAllRxNos(for: currentUser)
             print("[RxScan] All rx_no values in DB: \(allStoredRxNos)")
-            print("[RxScan] Looking up rxNo: '\(rxNo)'")
+            let scannedRefilForLookup = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces)
+            print("[RxScan] Looking up rxNo: '\(rxNo)' refillNo: '\(scannedRefilForLookup ?? "nil")'")
 
-            let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser)
+            let existingTxn = fetchRxTransaction(rxNo: rxNo, refillNo: scannedRefilForLookup, for: currentUser)
             print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
 
             guard let existingTxn else {
@@ -95,17 +99,8 @@ extension PillScanViewModel {
                 return
             }
 
-            let scannedRefil = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces) ?? ""
-            let ndcMismatch  = !ndc.isEmpty && ndc != (existingTxn.drug?.ndc ?? "")
-            let refilMismatch = !scannedRefil.isEmpty && scannedRefil != (existingTxn.refill_no ?? "")
-
-            if ndcMismatch || refilMismatch {
-                print("[RxScan] Rx \(rxNo) mismatch — scanned ndc: \(ndc) vs stored: \(existingTxn.drug?.ndc ?? "nil"), scanned refil: \(scannedRefil) vs stored: \(existingTxn.refill_no ?? "nil")")
-                let mismatchMessage = ndcMismatch ? L10n.BarcodeScan.rxNdcMismatch : L10n.BarcodeScan.rxRefillMismatch
-                showToastMessage(text: mismatchMessage)
-                rxScanFailed = true
-                return
-            }
+            // NDC is intentionally NOT validated here — rx_label scan only confirms
+            // rx_no + refill (already matched by fetchRxTransaction above).
 
             if existingTxn.status == CountStatus.ON_HOLD.rawValue {
                 print("[RxScan] Rx \(rxNo) is ON HOLD — showing hold popup")
@@ -136,13 +131,24 @@ extension PillScanViewModel {
         }
     }
 
-    /// Looks up the transaction for the given Rx number. Checks active transactions first;
-    /// falls back to the most-recently deleted one (which can be restored).
-    func fetchRxTransaction(rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
-        if let txn = transactionDAO.fetchByRxNo(rxNo, for: user).first {
+    /// Looks up the transaction for the given Rx number AND refill. A single rx_no can have
+    /// multiple stored transactions (one per refill cycle), so `refillNo` is required to pick
+    /// the right one — falling back to `.first` (as HL7 processing used to) silently returns
+    /// whichever refill happened to be fetched first, which reads as a false NDC/refill
+    /// mismatch against the correct txn. Checks active transactions first; falls back to the
+    /// most-recently deleted one (which can be restored).
+    func fetchRxTransaction(rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity? {
+        let refillNo = refillNo?.trimmingCharacters(in: .whitespaces)
+        let matchesRefill: (PillCountTransactionEntity) -> Bool = {
+            ($0.refill_no ?? "") == (refillNo ?? "")
+        }
+        if let txn = transactionDAO.fetchByRxNo(rxNo, for: user).first(where: matchesRefill) {
             return txn
         }
-        return transactionDAO.fetchDeletedByRxNo(rxNo, for: user)
+        if let deleted = transactionDAO.fetchDeletedByRxNo(rxNo, for: user), matchesRefill(deleted) {
+            return deleted
+        }
+        return nil
     }
 
     // MARK: Proceed with Rx Transaction
@@ -164,7 +170,7 @@ extension PillScanViewModel {
             return
         }
 
-        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, refillNo: scannedRxData?.refil, for: currentUser) else {
             print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB, creating new txn")
             await createTransactionFromRxScan()
             return
@@ -209,7 +215,7 @@ extension PillScanViewModel {
             return
         }
 
-        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, refillNo: rxData.refil, for: currentUser) else {
             guard AppStorageManager.shared.isStandalone else {
                 print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
                 showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)

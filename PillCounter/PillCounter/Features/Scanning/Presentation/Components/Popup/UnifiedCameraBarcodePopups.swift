@@ -172,18 +172,6 @@ extension UnifiedCameraView {
         }
     }
 
-    var ndcMismatchPopup: some View {
-        ConfirmationDialogue(
-            title: L10n.BarcodeScan.incorrectNdc,
-            message: L10n.BarcodeScan.incorrectNdcMessage,
-            cancelButtonText: L10n.Common.cancel,
-            confirmButtonText: L10n.BarcodeScan.rescan,
-            showSingleConfirmButton: true,
-            onCancel: { restartFlow() },
-            onConfirm: { restartFlow() }
-        )
-    }
-
     var rxOnHoldPopup: some View {
         ConfirmationDialogue(
             title: L10n.BarcodeScan.rxOnHoldTitle,

@@ -226,7 +226,7 @@ final class MockStockTxnDataSource: StockTxnDataSource {
     func fetchByBatch(batchId: Int64) -> [StockTxnEntity] { [] }
     func fetchByBatchAndNdc(batchId: Int64, ndc: String) -> StockTxnEntity? { nil }
     func updateStatus(stockTxnId: Int64, status: CountStatus) {}
-    func softDelete(stockTxnId: Int64) {}
+    func softDelete(stockTxnId: Int64) -> Bool { true }
 }
 
 // MARK: - MockBottleInfoDataSource
@@ -234,11 +234,18 @@ final class MockStockTxnDataSource: StockTxnDataSource {
 final class MockBottleInfoDataSource: BottleInfoDataSource {
     var bottleInfosDidChange = PassthroughSubject<Void, Never>()
     func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity? { nil }
+    func setSealedBottleQtyTracked(
+        stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?
+    ) -> (entity: BottleInfoEntity?, created: Bool) { (nil, false) }
     func sealedBottleQty(stockTxnId: Int64, lotNo: String?, expNo: String?) -> Int32 {
         let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
         return fetchByStockTxn(stockTxnId: stockTxnId).first { $0.isSealed && $0.sealedLotKey == targetKey }?.bottle_qty ?? 0
     }
     func addOpenedBottle(stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?, images: [BottleImageRecord]) -> BottleInfoEntity? { nil }
+    func addOpenedBottleTracked(
+        stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
+        images: [BottleImageRecord]
+    ) -> (entity: BottleInfoEntity?, created: Bool) { (nil, false) }
     func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? { nil }
     func appendImages(bottleId: Int64, images: [BottleImageRecord]) {}
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32) {}
@@ -246,7 +253,7 @@ final class MockBottleInfoDataSource: BottleInfoDataSource {
     func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity] { [] }
     func fetchByBatch(batchId: Int64) -> [BottleInfoEntity] { [] }
     func setAbsolute(bottleId: Int64, bottleQty: Int32?, looseQty: Int32?) {}
-    func softDelete(bottleId: Int64) {}
+    func softDelete(bottleId: Int64) -> Bool { true }
 }
 
 // MARK: - MockUserDataSource

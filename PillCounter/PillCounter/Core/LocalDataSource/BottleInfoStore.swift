@@ -30,6 +30,16 @@ extension BottleInfoEntity {
     /// Sealed heuristic: a sealed row has bottle_qty > 0 and loose_qty == 0.
     var isSealed: Bool { bottle_qty > 0 && loose_qty == 0 }
 
+    /// A row zeroed out (e.g. edited/pruned down to nothing) carries no sealed-vs-opened
+    /// identity anymore — isSealed reads false for it same as a genuine opened row counted
+    /// at 0 loose pills, so callers matching by lot/exp normally treat it as reclaimable by
+    /// either kind. serial_no/images are only ever written by addOpenedBottle (setSealedBottleQty
+    /// never touches them) — their presence means this 0/0 row is a real counted-empty opened
+    /// bottle, not a pruned one, so it must NOT be reclaimed as a sealed row. This is a
+    /// best-effort signal, not a full fix: an opened scan with no serial and no images still
+    /// collides with a pruned row indistinguishably.
+    var isEmpty: Bool { bottle_qty == 0 && loose_qty == 0 && serial_no == nil && images.isEmpty }
+
     var sealedLotKey: SealedLotKey { SealedLotKey(lotNo: lot_no, expNo: exp_no) }
 
     /// Snapshots captured during open-pill counting for this row, decoded from
@@ -53,6 +63,10 @@ final class BottleInfoStore {
     static let shared = BottleInfoStore()
     private init() {}
 
+    /// Minimum age (ms) an isEmpty row must have before addOpenedBottleTracked will
+    /// reclaim it — see the reclaim guard's comment for why isEmpty alone isn't safe.
+    private static let reclaimGraceWindowMs: Int64 = 60_000
+
     let bottleInfosDidChange = PassthroughSubject<Void, Never>()
 
     private var context: NSManagedObjectContext {
@@ -66,8 +80,10 @@ final class BottleInfoStore {
 
     private func fetchSealedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
         let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
+        let reclaimCutoff = nowMs() - Self.reclaimGraceWindowMs
         return fetchByStockTxn(stockTxnId: stockTxnId).first {
-            $0.isSealed && $0.sealedLotKey == targetKey
+            $0.sealedLotKey == targetKey &&
+            ($0.isSealed || ($0.isEmpty && $0.updated_at < reclaimCutoff))
         }
     }
 
@@ -82,17 +98,29 @@ final class BottleInfoStore {
 
     @discardableResult
     func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
+        setSealedBottleQtyTracked(stockTxnId: stockTxnId, bottleQty: bottleQty, lotNo: lotNo, expNo: expNo).entity
+    }
+
+    /// Same as `setSealedBottleQty`, but also reports whether this call inserted a fresh
+    /// row (vs merging into one that already existed) — callers that track "did this
+    /// session actually create a row" (e.g. Cancel eligibility) must use this signal
+    /// rather than re-deriving it from bottle_qty == 0, which reads the same for "no row"
+    /// and "existing row zeroed out". A distinct name (not an overload) avoids ambiguity
+    /// at every existing call site that discards the result via `if let`.
+    func setSealedBottleQtyTracked(
+        stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?
+    ) -> (entity: BottleInfoEntity?, created: Bool) {
         if let existing = fetchSealedRow(stockTxnId: stockTxnId, lotNo: lotNo, expNo: expNo) {
             existing.bottle_qty = bottleQty
             existing.updated_at = nowMs()
             CoreDataManager.shared.save(context: context)
             StoreLogger.debug("🧴 [BottleInfoDAO] SET sealed bottle_qty — bottleId: \(existing.bottle_id), stockTxnId: \(stockTxnId), bottleQty: \(bottleQty)")
             bottleInfosDidChange.send()
-            return existing
+            return (existing, false)
         }
 
-        guard bottleQty > 0 else { return nil }
-        guard let stockTxn = StockTxnStore.shared.fetchById(stockTxnId) else { return nil }
+        guard bottleQty > 0 else { return (nil, false) }
+        guard let stockTxn = StockTxnStore.shared.fetchById(stockTxnId) else { return (nil, false) }
 
         let entity = BottleInfoEntity(context: context)
         entity.bottle_id = generateUniqueId()
@@ -111,7 +139,7 @@ final class BottleInfoStore {
         CoreDataManager.shared.save(context: context)
         StoreLogger.debug("🧴 [BottleInfoDAO] CREATED sealed row — bottleId: \(entity.bottle_id), stockTxnId: \(stockTxnId), bottleQty: \(bottleQty)")
         bottleInfosDidChange.send()
-        return entity
+        return (entity, true)
     }
 
     // MARK: - Opened bottle writes (new row every call)
@@ -140,12 +168,51 @@ final class BottleInfoStore {
         bottleInfosDidChange.send()
     }
 
+    /// Reclaims a zeroed row at the same (stockTxnId, lot, exp) key rather than always
+    /// inserting: a lot pruned down to 0/0 (edit) or zeroed out (pill-count correction)
+    /// has no remaining sealed-vs-opened identity, so re-scanning it as opened should
+    /// reuse that row exactly like the sealed write path already does — otherwise a
+    /// re-scan of a zeroed lot leaves the old 0/0 row plus a new one.
     @discardableResult
     func addOpenedBottle(
         stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
         images: [BottleImageRecord] = []
     ) -> BottleInfoEntity? {
-        guard let stockTxn = StockTxnStore.shared.fetchById(stockTxnId) else { return nil }
+        addOpenedBottleTracked(
+            stockTxnId: stockTxnId, looseQty: looseQty, lotNo: lotNo, expNo: expNo,
+            serialNo: serialNo, images: images
+        ).entity
+    }
+
+    /// Same as `addOpenedBottle`, but also reports whether this call inserted a fresh
+    /// row vs reclaimed a zeroed one — see `setSealedBottleQtyTracked`'s doc for why
+    /// callers tracking Cancel-eligibility need this signal instead of an overload.
+    func addOpenedBottleTracked(
+        stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
+        images: [BottleImageRecord] = []
+    ) -> (entity: BottleInfoEntity?, created: Bool) {
+        guard let stockTxn = StockTxnStore.shared.fetchById(stockTxnId) else { return (nil, false) }
+
+        let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
+        // isEmpty alone can't tell a genuinely pruned row from one this same
+        // scan flow just created and hasn't finished counting yet — the PMS
+        // path never sets serial_no, so its rows have no other escape from
+        // isEmpty until the real count lands. Require the row to be older
+        // than the reclaim grace window so an in-flight row from the current
+        // scan is never mistaken for a stale, safely-reusable one.
+        let reclaimCutoff = nowMs() - Self.reclaimGraceWindowMs
+        if let existing = fetchByStockTxn(stockTxnId: stockTxnId).first(where: {
+            $0.isEmpty && $0.sealedLotKey == targetKey && $0.updated_at < reclaimCutoff
+        }) {
+            existing.loose_qty = looseQty
+            existing.serial_no = serialNo
+            existing.image_paths_json = BottleInfoEntity.encodeImages(images)
+            existing.updated_at = nowMs()
+            CoreDataManager.shared.save(context: context)
+            StoreLogger.debug("🧴 [BottleInfoDAO] REUSED zeroed row as opened — bottleId: \(existing.bottle_id), stockTxnId: \(stockTxnId), looseQty: \(looseQty)")
+            bottleInfosDidChange.send()
+            return (existing, false)
+        }
 
         let entity = BottleInfoEntity(context: context)
         entity.bottle_id = generateUniqueId()
@@ -169,7 +236,7 @@ final class BottleInfoStore {
         CoreDataManager.shared.save(context: context)
         StoreLogger.debug("🧴 [BottleInfoDAO] CREATED opened row — bottleId: \(entity.bottle_id), stockTxnId: \(stockTxnId), looseQty: \(looseQty)")
         bottleInfosDidChange.send()
-        return entity
+        return (entity, true)
     }
 
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32) {
@@ -234,26 +301,56 @@ final class BottleInfoStore {
 
     // MARK: - Delete
 
-    func softDelete(bottleId: Int64) {
-        let request: NSFetchRequest<NSFetchRequestResult> = BottleInfoEntity.fetchRequest()
+    /// NSBatchDeleteRequest bypasses `context`'s object graph and can collide with an
+    /// unrelated save in flight on the same context ("Could not merge changes", silently
+    /// swallowed) — delete through the context instead so removal is part of its normal save cycle.
+    ///
+    /// Returns whether the delete actually persisted — `save` alone swallows the error,
+    /// so a caller that reacts to "row is gone" (e.g. pruning the parent StockTxn once its
+    /// last bottle row is deleted) must not treat a failed save as a successful delete.
+    @discardableResult
+    func softDelete(bottleId: Int64) -> Bool {
+        let request: NSFetchRequest<BottleInfoEntity> = BottleInfoEntity.fetchRequest()
         request.predicate = NSPredicate(format: "bottle_id == %lld", bottleId)
         do {
-            try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            guard let bottle = try context.fetch(request).first else { return false }
+            context.delete(bottle)
+            guard CoreDataManager.shared.saveReturningSuccess(context: context) else {
+                // Save failed — bottle is still pending-deleted in this shared context,
+                // so any later unrelated save would silently commit it. refresh(mergeChanges:
+                // false) reverts it to its last-saved state without touching anything else
+                // pending in the context (unlike rollback(), which would).
+                context.refresh(bottle, mergeChanges: false)
+                return false
+            }
             StoreLogger.debug("🧴 [BottleInfoDAO] DELETED — bottleId: \(bottleId)")
             bottleInfosDidChange.send()
+            return true
         } catch {
             StoreLogger.debug("Failed to delete BottleInfoEntity: \(error)")
+            return false
         }
     }
 
-    func softDeleteByStockTxn(stockTxnId: Int64) {
-        let request: NSFetchRequest<NSFetchRequestResult> = BottleInfoEntity.fetchRequest()
+    @discardableResult
+    func softDeleteByStockTxn(stockTxnId: Int64) -> Bool {
+        let request: NSFetchRequest<BottleInfoEntity> = BottleInfoEntity.fetchRequest()
         request.predicate = NSPredicate(format: "stock_txn_id == %lld", stockTxnId)
         do {
-            try context.execute(NSBatchDeleteRequest(fetchRequest: request))
+            let bottles = try context.fetch(request)
+            guard !bottles.isEmpty else { return true }
+            bottles.forEach { context.delete($0) }
+            guard CoreDataManager.shared.saveReturningSuccess(context: context) else {
+                // Same as softDelete(bottleId:) — undo each pending delete individually so
+                // a later unrelated save on this shared context can't silently commit them.
+                bottles.forEach { context.refresh($0, mergeChanges: false) }
+                return false
+            }
             StoreLogger.debug("🧴 [BottleInfoDAO] DELETED all rows for stockTxnId: \(stockTxnId)")
+            return true
         } catch {
             StoreLogger.debug("Failed to delete BottleInfoEntity for stockTxn: \(error)")
+            return false
         }
     }
 

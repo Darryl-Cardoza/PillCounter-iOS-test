@@ -18,13 +18,7 @@ struct SessionLockOverlay: View {
     @EnvironmentObject private var appColors: AppColors
 
     @StateObject private var viewModel = FaceAuthenticationViewModel()
-    @State private var scanTimeoutTask: Task<Void, Never>?
 
-    /// How long a scan attempt runs before we give up and show the failure
-    /// screen — the underlying pipeline has no terminal "no match" state by
-    /// design (see FaceAuthenticationViewModel), it just keeps retrying
-    /// frames, so this timeout is what turns that into a bounded attempt.
-    private let scanTimeout: TimeInterval = 7
     private let welcomeDismissDelay: TimeInterval = 1.5
 
     var body: some View {
@@ -39,6 +33,14 @@ struct SessionLockOverlay: View {
         }
         .onChange(of: sessionManager.lockState) { _, newState in
             handleLockStateChange(newState)
+        }
+        .onChange(of: viewModel.state) { _, newState in
+            // The VM's own scanBudgetSeconds is the sole scan timeout — it
+            // already stops the camera and publishes .failed when the budget
+            // expires (see FaceAuthenticationViewModel.failScanAsUnrecognized).
+            // This just forwards that outcome into the session's lock state.
+            guard case .failed = newState else { return }
+            sessionManager.markFailed()
         }
     }
 
@@ -86,7 +88,6 @@ struct SessionLockOverlay: View {
             state: viewModel.state,
             instructionText: viewModel.instructionText
         ) {
-            scanTimeoutTask?.cancel()
             stopScan()
             sessionManager.cancelScan()
         }
@@ -124,18 +125,9 @@ struct SessionLockOverlay: View {
 
         OrientationLock.shared.lockForFaceCapture()
         viewModel.onAuthenticated = { userId, userName in
-            scanTimeoutTask?.cancel()
             sessionManager.unlock(userId: userId, userName: userName)
         }
         viewModel.startAuthentication()
-
-        scanTimeoutTask?.cancel()
-        scanTimeoutTask = Task {
-            try? await Task.sleep(nanoseconds: UInt64(scanTimeout * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            stopScan()
-            sessionManager.markFailed()
-        }
     }
 
     private func stopScan() {
@@ -146,11 +138,9 @@ struct SessionLockOverlay: View {
     private func handleLockStateChange(_ newState: SessionLockState) {
         switch newState {
         case .locked, .failed:
-            scanTimeoutTask?.cancel()
             stopScan()
 
         case .unlocked:
-            scanTimeoutTask?.cancel()
             stopScan()
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(welcomeDismissDelay * 1_000_000_000))

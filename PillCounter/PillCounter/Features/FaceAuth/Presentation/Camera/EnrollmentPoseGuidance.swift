@@ -2,7 +2,7 @@
 //  EnrollmentPoseGuidance.swift
 //  PillCounter
 //
-//  Enrollment-only direction arrows, stacked above the shared FaceScanScreen's
+//  Enrollment-only direction arrows, stacked below the shared FaceScanScreen's
 //  instruction pill (which supplies the "Tilt face to your left" copy and the
 //  in-flight spinner).
 //
@@ -49,25 +49,50 @@ struct EnrollmentPoseGuidance: View {
     /// already on target). The arrows stay put; none of them lights up.
     let nudge: PoseNudge?
 
+    /// Steps already captured. Once a direction's step lands here, that slot
+    /// freezes to `done_icon` and stops following `nudge` — otherwise it kept
+    /// blinking on/off with live head movement after the sample was already
+    /// taken.
+    let completedSteps: Set<EnrollmentPoseStep>
+
     /// Left / up / right, matching the reference mock. Always all three, in
-    /// place; the required correction is the lit one.
+    /// place; the required correction is the lit one. Boxed together (rather
+    /// than floating loose over the preview) so the row reads as one control,
+    /// matching the instruction pill's treatment above it.
     var body: some View {
         HStack(spacing: 22) {
-            arrow(systemName: "arrow.left", isActive: nudge == .turnLeft)
-            arrow(systemName: "arrow.up", isActive: nudge == .chinUp)
-            arrow(systemName: "arrow.right", isActive: nudge == .turnRight)
+            arrow(systemName: "arrow.left", isActive: nudge == .turnLeft, isDone: completedSteps.contains(.turnLeft))
+            arrow(systemName: "arrow.up", isActive: nudge == .chinUp, isDone: completedSteps.contains(.chinUp))
+            arrow(systemName: "arrow.right", isActive: nudge == .turnRight, isDone: completedSteps.contains(.turnRight))
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.75))
+        )
         .animation(.easeInOut(duration: 0.2), value: nudge)
         .padding(.bottom, 14)
     }
 
-    private func arrow(systemName: String, isActive: Bool) -> some View {
-        Image(systemName: systemName)
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(isActive ? .white : Color.black.opacity(0.75))
-            .frame(width: 46, height: 46)
-            .background(
-                Circle().fill(isActive ? appColors.primary : Color.white.opacity(0.9))
-            )
+    private func arrow(systemName: String, isActive: Bool, isDone: Bool) -> some View {
+        Group {
+            if isDone {
+                Image("done_icon")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.white)
+                    .padding(11)
+            } else {
+                Image(systemName: systemName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isActive ? .white : Color.black.opacity(0.75))
+            }
+        }
+        .frame(width: 46, height: 46)
+        .background(
+            Circle().fill(isDone || isActive ? appColors.primary : Color.white.opacity(0.9))
+        )
     }
 }

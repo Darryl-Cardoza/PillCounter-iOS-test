@@ -127,6 +127,32 @@ struct FaceEnrollmentView: View {
             if newState == .enrollmentComplete {
                 onEnrolled?(viewModel.trimmedName)
             }
+            speakIfNeeded(for: newState)
+        }
+    }
+
+    // MARK: - Voiceover
+
+    /// Which step's prompt (by rawValue) was last spoken, -1 before any step,
+    /// Int.max once the completion string has spoken — so returning to the
+    /// same step's .awaitingPose (e.g. after a brief no-face frame) never
+    /// re-speaks it. Reset in .preparing so a retry/next-user speaks again.
+    @State private var lastSpokenStepRawValue: Int = -1
+
+    private func speakIfNeeded(for state: EnrollmentState) {
+        switch state {
+        case .preparing:
+            lastSpokenStepRawValue = -1
+        case .awaitingPose(let step, _, _):
+            guard step.rawValue != lastSpokenStepRawValue else { return }
+            lastSpokenStepRawValue = step.rawValue
+            SpeechManager.shared.speak(step.spokenKey)
+        case .enrollmentComplete:
+            guard lastSpokenStepRawValue != Int.max else { return }
+            lastSpokenStepRawValue = Int.max
+            SpeechManager.shared.speak(L10n.FaceAuth.spokenEnrollmentComplete)
+        default:
+            break
         }
     }
 
@@ -201,7 +227,7 @@ struct FaceEnrollmentView: View {
                 dismiss()
             },
             guidance: {
-                EnrollmentPoseGuidance(nudge: viewModel.poseNudge)
+                EnrollmentPoseGuidance(nudge: viewModel.poseNudge, completedSteps: viewModel.completedSteps)
             }
         )
     }

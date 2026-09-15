@@ -262,16 +262,28 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
         let sortedLine = sorted.map { "\($0.userName)=\(String(format: "%.3f", $0.score))" }.joined(separator: ", ")
         Log("DEBUG allScores (sorted): [\(sortedLine)]")
 
-        let margin = bestScore - max(runnerUpScore, 0)
         let thresholdPass = bestScore >= config.acceptanceThreshold
-        let marginPass = margin >= config.minMarginOverRunnerUp
-        Log("DEBUG gate: threshold=\(config.acceptanceThreshold) thresholdPass=\(thresholdPass) marginRequired=\(config.minMarginOverRunnerUp) marginActual=\(String(format: "%.3f", margin)) marginPass=\(marginPass)")
+        let floorPass = bestScore >= config.minAbsoluteAcceptScore
 
-        guard let bestUserId, thresholdPass, marginPass else {
-            // Highest score doesn't clear the threshold, or it isn't clearly
-            // ahead of the next-best DIFFERENT user — report "no match",
-            // never the closest-anyway user (spec section 7/10).
-            Log("Repository: identify — best=\(String(format: "%.3f", bestScore)) runnerUp=\(String(format: "%.3f", runnerUpScore)) margin=\(String(format: "%.3f", margin)) — rejected")
+        // A runner-up only exists once a SECOND different user has been
+        // scored. With a single enrolled user `runnerUpScore` is still at its
+        // -1 sentinel, and computing `bestScore - max(-1, 0)` would yield the
+        // raw score as a "margin" that always clears the requirement — the
+        // gate would silently disable itself in exactly the single-user
+        // deployment it is meant to protect. Skip it explicitly instead and
+        // let the absolute floor carry that case.
+        let hasRunnerUp = runnerUpScore >= 0
+        let margin = hasRunnerUp ? bestScore - runnerUpScore : Float.infinity
+        let marginPass = !hasRunnerUp || margin >= config.minMarginOverRunnerUp
+
+        Log("DEBUG gate: threshold=\(config.acceptanceThreshold) thresholdPass=\(thresholdPass) floor=\(config.minAbsoluteAcceptScore) floorPass=\(floorPass) hasRunnerUp=\(hasRunnerUp) marginRequired=\(config.minMarginOverRunnerUp) marginActual=\(hasRunnerUp ? String(format: "%.3f", margin) : "n/a") marginPass=\(marginPass)")
+
+        guard let bestUserId, thresholdPass, floorPass, marginPass else {
+            // Highest score doesn't clear the threshold or the absolute
+            // floor, or it isn't clearly ahead of the next-best DIFFERENT
+            // user — report "no match", never the closest-anyway user
+            // (spec section 7/10).
+            Log("Repository: identify — best=\(String(format: "%.3f", bestScore)) runnerUp=\(String(format: "%.3f", runnerUpScore)) — rejected")
             Log("DEBUG return: userId=nil (gate failed)")
             return FrameIdentification(userId: nil, score: bestScore)
         }

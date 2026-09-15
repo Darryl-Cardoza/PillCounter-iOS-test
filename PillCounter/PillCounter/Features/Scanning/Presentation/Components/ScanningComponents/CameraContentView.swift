@@ -46,6 +46,9 @@ struct CameraContentView: View {
                         ).ignoresSafeArea()
 //                        TrayOverlay(cameraService: cameraService).ignoresSafeArea()
                     }
+                    #if DEBUG
+                    FocusIndicatorOverlay(cameraService: cameraService).ignoresSafeArea()
+                    #endif
                     if pillScanViewModel.currentTransaction?.is_dispense == true {
                         VStack {
                             StepProgressRow(

@@ -81,6 +81,13 @@ final class CameraService: NSObject, ObservableObject {
     private var heldTrayDetections: [TrayResult] = []
     private var incompleteFrames: Int = 0
 
+    /// Auto-focus-on-detect presence edges (session-queue state) — see
+    /// `firePulseIfNewlyVisible`. Barcode presence is read from `barcodeLock`
+    /// directly at the call site rather than tracked here.
+    private var lastTrayVisible = false
+    private var lastChuteVisible = false
+    private var lastBarcodeVisible = false
+
     // ── Tray crop for the pill model ─────────────────────────────────────────
     /// Margin added around the tray bbox per side, as a fraction of the bbox
     /// size, so a pill sitting on the rim (the deploy contract dilates the tray
@@ -143,8 +150,22 @@ final class CameraService: NSObject, ObservableObject {
 
     // MARK: - PREVIEW
     var previewLayer: AVCaptureVideoPreviewLayer?
-    
+
     @Published private(set) var isSessionPaused = false
+
+    #if DEBUG
+    // MARK: - FOCUS INDICATOR (debug-only testing aid)
+    /// Screen-space point of the last manual tap or auto-detect focus pulse, for
+    /// UnifiedCameraView to draw a small square at. nil hides the indicator.
+    @Published var focusIndicatorScreenPoint: CGPoint?
+    /// True once isAdjustingFocus has gone false since the last pulse — the view
+    /// uses this to flip the square from "focusing" to "focused" styling.
+    @Published var isFocusIndicatorFocused = false
+    /// Device-space point of the in-flight pulse, compared against
+    /// isAdjustingFocus in captureOutput (session queue) to know when to flip
+    /// isFocusIndicatorFocused. nil once resolved.
+    private var pendingFocusIndicatorDevicePoint: CGPoint?
+    #endif
 
     // MARK: - STATE
     @Published var stableCount: Int = 0
@@ -298,6 +319,7 @@ final class CameraService: NSObject, ObservableObject {
             } catch {
                 // Intentionally silent — camera still works without this tweak.
             }
+            self.reseedCenterFocusAndExposure(on: device)
 
             if let range = device.activeFormat.videoSupportedFrameRateRanges.first {
                 let fps = min(max(30.0, range.minFrameRate), range.maxFrameRate)
@@ -392,6 +414,36 @@ final class CameraService: NSObject, ObservableObject {
             is3ALocked = true
         } catch {
             // Intentionally silent — a failed 3A lock must not break the camera.
+        }
+    }
+
+    /// Forces continuous AF/AE and re-seeds the point of interest to frame
+    /// center. Called on every configureSession()/start(), not just once at
+    /// app launch — the focus point can be left off-center by barcode re-arm
+    /// nudges or a user's focusForBarcode(at:) tap, and unlock3A() restores
+    /// continuous MODE but never resets the POINT. Without an unconditional
+    /// reseed here, re-entering the camera screen inherits whatever point the
+    /// previous session left behind, so the device sometimes settles on the
+    /// wrong depth/background and stays blurry until something else nudges
+    /// it back — the intermittent "sometimes blurry" behavior.
+    private func reseedCenterFocusAndExposure(on device: AVCaptureDevice) {
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+            }
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+            }
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // Intentionally silent — camera still works without this tweak.
         }
     }
 
@@ -557,6 +609,14 @@ final class CameraService: NSObject, ObservableObject {
     /// taps the screen while the barcode scanner is showing, so the camera can lock
     /// focus on a curved or worn label in that area.
     func focusForBarcode(at point: CGPoint) {
+        focusPulse(at: point)
+    }
+
+    /// One-shot autoFocus/autoExpose at a normalised device point (0-1, top-left
+    /// origin). Shared by manual tap-to-focus and the auto-focus-on-detect nudge
+    /// (see `firePulseIfNewlyVisible`) — both just need "point the lens here once,"
+    /// the difference is only who calls it and with what point.
+    func focusPulse(at point: CGPoint) {
         guard let device = captureDevice else { return }
         sessionQueue.async {
             do {
@@ -575,7 +635,36 @@ final class CameraService: NSObject, ObservableObject {
             } catch {
                 // Intentionally silent.
             }
+            #if DEBUG
+            // Debug-only visual aid: show a small square at the tapped/pulsed
+            // point, flipping to "focused" once isAdjustingFocus next reads
+            // false in captureOutput. Testing tool only — never shown in release.
+            self.pendingFocusIndicatorDevicePoint = point
+            DispatchQueue.main.async {
+                self.focusIndicatorScreenPoint = self.previewLayer?
+                    .layerPointConverted(fromCaptureDevicePoint: point)
+                self.isFocusIndicatorFocused = false
+            }
+            #endif
         }
+    }
+
+    /// Fires one `focusPulse` on the none→visible edge of a detection type, at
+    /// its own rect center (falls back to frame center if no rect given, e.g.
+    /// barcode presence). Called every frame from the session queue; `wasVisible`
+    /// is updated in place so the caller's own state tracks the edge.
+    private func firePulseIfNewlyVisible(_ wasVisible: inout Bool, isVisible: Bool,
+                                          rect: CGRect?, frameSize: CGSize) {
+        defer { wasVisible = isVisible }
+        guard isVisible, !wasVisible else { return }
+
+        let point: CGPoint
+        if let rect, frameSize.width > 0, frameSize.height > 0 {
+            point = CGPoint(x: rect.midX / frameSize.width, y: rect.midY / frameSize.height)
+        } else {
+            point = CGPoint(x: 0.5, y: 0.5)
+        }
+        focusPulse(at: point)
     }
 
     func resetBarcodeScanState() {
@@ -890,6 +979,14 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         lastPixelBuffer = pixelBuffer
 
+        #if DEBUG
+        if pendingFocusIndicatorDevicePoint != nil,
+           let device = captureDevice, !device.isAdjustingFocus {
+            pendingFocusIndicatorDevicePoint = nil
+            DispatchQueue.main.async { self.isFocusIndicatorFocused = true }
+        }
+        #endif
+
         // Skip ML inference on a frame captured while the device is still
         // hunting for focus/exposure — using it would feed the pipeline a
         // frame that's blurred mid-adjustment. lastPixelBuffer above is
@@ -937,6 +1034,15 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         // NOT fill the frame (that would be the background surface, not a tray).
         let trayDets  = allTrays.filter { $0.trayClass == .tray }
         let chuteDets = allTrays.filter { $0.trayClass == .chute }
+
+        // Auto-focus-on-detect: pulse once on the none→visible edge for tray/chute,
+        // at that detection's own center — not every frame it stays visible, which
+        // would spam lockForConfiguration. Barcode's edge is handled separately in
+        // the metadata delegate (it has its own presence signal already).
+        firePulseIfNewlyVisible(&lastTrayVisible, isVisible: !trayDets.isEmpty,
+                                 rect: trayDets.first?.rect, frameSize: pixelBuffer.size)
+        firePulseIfNewlyVisible(&lastChuteVisible, isVisible: !chuteDets.isEmpty,
+                                 rect: chuteDets.first?.rect, frameSize: pixelBuffer.size)
 
         let frameSz = pixelBuffer.size
         let frameArea = max(1, frameSz.width * frameSz.height)
@@ -1353,6 +1459,12 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
         // would never release. See `BarcodeScanLock`.
         let barcodeFired = barcodeLock.processFrame(visibleValues: visibleValues, candidateValue: candidateValue)
         let rescanFired = bottleRescanLock.processFrame(visibleValues: visibleValues, candidateValue: candidateValue)
+
+        // Auto-focus-on-detect: pulse once on the none→visible edge, at the
+        // code's own bounds center. AVMetadataMachineReadableCodeObject.bounds
+        // is already normalised device coordinates, so no conversion needed.
+        firePulseIfNewlyVisible(&lastBarcodeVisible, isVisible: !codeObjects.isEmpty,
+                                 rect: object?.bounds, frameSize: CGSize(width: 1, height: 1))
 
         // The delegate now runs on sessionQueue (not .main) so presence
         // tracking above is never starved by MainActor work — @Published

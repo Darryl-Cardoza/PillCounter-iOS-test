@@ -45,7 +45,17 @@ jobs:
     with:
       # ---- core ----
       xcode_version: "latest-stable"
-      scheme: ""       # auto-detected via `xcodebuild -list`
+      # Pinned explicitly (not auto-detected) as a temporary workaround: the
+      # project's local Swift package reference to Hl7Core (relativePath
+      # ../../swiftpackage, from https://github.com/Rite-Technologies-23/
+      # mobrite_hl7_parser_builder) isn't resolvable in CI yet, and
+      # `xcodebuild -list` fails outright while trying to resolve it just to
+      # enumerate schemes. Passing the scheme explicitly skips that call.
+      # Remove this pin (revert to "") once Hl7Core is published as a
+      # resolvable package. Actual compilation (test/build) will still fail
+      # until then -- this only prevents that unrelated crash from also
+      # blocking lint/format, which don't need the project to build at all.
+      scheme: "PillCounter"
       workspace: ""    # auto-detected (PillCounter.xcworkspace)
       project: ""      # auto-detected (PillCounter.xcodeproj)
       configuration: "Release"
@@ -98,7 +108,7 @@ jobs:
       whats_new_file: ""
 
       xcode_version: "latest-stable"
-      scheme: ""       # auto-detected
+      scheme: "PillCounter"  # see the `ci` job above for why this is pinned
       workspace: ""    # auto-detected
       project: ""      # auto-detected
       configuration: "Release"

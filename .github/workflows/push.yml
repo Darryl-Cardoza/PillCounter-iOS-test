@@ -1,0 +1,114 @@
+name: "iOS CI + CD (Calling Repo)"
+
+on:
+  push:
+    tags:
+      - '*build*'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+
+  extract-version:
+    name: Extract App Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract MARKETING_VERSION from Xcode project
+        id: version
+        run: |
+          set -euo pipefail
+
+          # Assumes MARKETING_VERSION = 1.0 (or similar) in project.pbxproj.
+          raw_version=$(grep -m1 'MARKETING_VERSION' PillCounter/PillCounter.xcodeproj/project.pbxproj \
+            | sed -E 's/.*MARKETING_VERSION = ([^;]+);.*/\1/' | tr -d ' ')
+
+          # release.yml requires strict x.y.z semver; MARKETING_VERSION is
+          # often just "1.0" or "1", so pad any missing components with 0.
+          IFS='.' read -r major minor patch <<< "$raw_version"
+          version="${major:-0}.${minor:-0}.${patch:-0}"
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Extracted version: ${version} (from MARKETING_VERSION=${raw_version})"
+
+  # CI for PRs and branch pushes
+  ci:
+    uses: Rite-Technologies-23/ops-rite-ios-pipeline/.github/workflows/push.yml@main
+    needs: extract-version
+    with:
+      # ---- core ----
+      xcode_version: "latest-stable"
+      scheme: ""       # auto-detected via `xcodebuild -list`
+      workspace: ""    # auto-detected (PillCounter.xcworkspace)
+      project: ""      # auto-detected (PillCounter.xcodeproj)
+      configuration: "Release"
+      coverage_threshold: "30.00"
+      build_archive: true
+
+      run_tests: true
+      run_coverage: true
+      run_static_analysis: true
+
+      # ---- formatting ----
+      run_formatting: true
+
+      # ---- dead code ----
+      run_dead_code: true
+      run_clang_analyzer: false
+
+      # ---- security ----
+      run_security: true
+      run_dependency_audit: true
+
+      # ---- static typing strictness ----
+      swift_warnings_as_errors: false
+      swift_strict_concurrency: "targeted"
+
+      # ---- gates ----
+      # Warn-only while first adopting these tools on this codebase; flip on
+      # once the initial backlog of findings is triaged.
+      fail_on_lint: false
+      fail_on_formatting: false
+      fail_on_security: false
+      fail_on_vulnerabilities: false
+      fail_on_dead_code: false
+      fail_on_clang_analyzer: false
+    secrets:
+      PIPELINE_TOKEN: ${{ secrets.PIPELINE_TOKEN }}
+
+  # CD for version tags
+  cd:
+    uses: Rite-Technologies-23/ops-rite-ios-pipeline/.github/workflows/release.yml@main
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, 'release')
+    needs: [ extract-version, ci ]
+    with:
+      version: ${{ needs.extract-version.outputs.version }}
+
+      deploy_to_testflight: false
+      ios_bundle_id: "com.ritetechnologies.PillCounting"
+
+      enable_whats_new: false
+      whats_new_file: ""
+
+      xcode_version: "latest-stable"
+      scheme: ""       # auto-detected
+      workspace: ""    # auto-detected
+      project: ""      # auto-detected
+      configuration: "Release"
+      coverage_threshold: "30.00"
+    secrets:
+      IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      IOS_CERT_P12_BASE64: ${{ secrets.IOS_CERT_P12_BASE64 }}
+      IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+      IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+      APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+      APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+      PIPELINE_TOKEN: ${{ secrets.PIPELINE_TOKEN }}

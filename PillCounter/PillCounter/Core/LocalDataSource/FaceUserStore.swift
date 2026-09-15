@@ -58,10 +58,10 @@ final class FaceUserStore {
         request.predicate = NSPredicate(format: "id == %@", id)
         request.fetchLimit = 1
         let result = try? context.fetch(request).first
-        // `photo_path` is a registered encrypted field, and a refaulted object
-        // can hand back the ciphertext snapshot willSave wrote rather than
-        // re-running awakeFromFetch — decrypt deterministically instead (same
-        // reasoning as UserStore/FaceEmbeddingStore).
+        // No-op today — FaceUserEntity's encrypted-field registry is empty
+        // (photo_path is plaintext, see NsManagedObject+Encryption.swift).
+        // Kept so any future encrypted field on this entity is covered
+        // automatically, same as UserStore/FaceEmbeddingStore.
         result?.decryptEncryptedFieldsInPlace()
         return result
     }

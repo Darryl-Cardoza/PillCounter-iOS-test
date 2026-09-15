@@ -94,16 +94,18 @@ struct HamburgerMenuView: View {
             showLogoutPopup = false
         } onConfirm: {
             Task {
-                router.setRoot(
-                    to: .authentication(.login(.LoginEmail)))
                 await loginViewModel.logout()
-                
+
                 showLogoutPopup = false
                 AppLogoutManager.performLogout(
                     userVM: userViewModel,
                     pillScanVM: pillScanViewModel,
                     loginViewModel: loginViewModel
                 )
+                // isLoggedIn is now false, so AppNavigation's root Group already
+                // swaps to LoginEmailView — just clear the stack underneath it
+                // instead of pushing a second login destination on top.
+                router.navigateToRoot()
             }
         }
     }

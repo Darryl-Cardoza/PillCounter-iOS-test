@@ -54,11 +54,13 @@ private let encryptedFieldRegistry: [String: [String]] = [
         "serial_no"
     ],
     "FaceUserEntity": [
-        // Filename of the enrollment avatar on disk, same treatment as
-        // PillCountTransactionDetailsEntity.image_path. Unlike `embedding`
-        // below, a failed decrypt here is recoverable — the row simply falls
-        // back to the placeholder avatar, and the image on disk is untouched.
-        "photo_path"
+        // photo_path intentionally NOT encrypted — same reasoning as
+        // FaceEmbeddingEntity.embedding below: a wiped/rotated field-DEK
+        // orphaned the stored filename, permanently blanking the avatar even
+        // though the underlying image file (separately encrypted via
+        // PhotoFileManager/image-DEK) was untouched. This is just a filename
+        // reference, not the photo content, so plaintext storage exposes
+        // nothing beyond a local file path.
     ]
     // FaceEmbeddingEntity.embedding intentionally NOT encrypted — field
     // encryption caused permanent decrypt failures whenever the Keychain

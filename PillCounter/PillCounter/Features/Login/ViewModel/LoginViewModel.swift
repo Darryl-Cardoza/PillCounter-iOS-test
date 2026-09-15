@@ -172,6 +172,7 @@ class LoginViewModel: ObservableObject {
                 await MainActor.run {
                     SessionManager.shared.reset()
                     Hl7ServiceController.shared.evaluate()
+                    FaceSessionManager.shared.lockOnLogin()
                 }
                 print("IsPmsIntegrated \(store.isPmsIntegrated)")
                 print("allowLocalStorage \(store.allowLocalStorage)")
@@ -214,6 +215,16 @@ class LoginViewModel: ObservableObject {
         } catch {
             Log("logout error: \(error)")
         }
+
+        // LoginViewModel is a single app-scoped instance (PillCounterApp.swift)
+        // reused across logout->login, so typed-in fields must be cleared
+        // explicitly here or they resurface pre-filled on the next login.
+        userEmail = ""
+        isChecked = false
+        otp = Array(repeating: "", count: 6)
+        isOtpSent = false
+        isOtpVerificationSuccess = false
+        resendOTPSent = false
     }
 
     // MARK: - Resend OTP

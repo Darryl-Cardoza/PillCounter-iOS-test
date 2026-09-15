@@ -34,6 +34,21 @@ struct SessionLockOverlay: View {
         .onChange(of: sessionManager.lockState) { _, newState in
             handleLockStateChange(newState)
         }
+        .onChange(of: sessionManager.shouldAutoStartScan) { _, shouldStart in
+            guard shouldStart else { return }
+            sessionManager.consumeAutoStartScan()
+            startScan()
+        }
+        .onAppear {
+            // The overlay window is torn down and rebuilt fresh on every
+            // `isOverlayVisible` transition (SessionLockWindowController), so
+            // `shouldAutoStartScan` can already be true at mount time — the
+            // .onChange above only sees value CHANGES, not the initial value,
+            // so a login-triggered lock would otherwise never call startScan().
+            guard sessionManager.shouldAutoStartScan else { return }
+            sessionManager.consumeAutoStartScan()
+            startScan()
+        }
         .onChange(of: viewModel.state) { _, newState in
             // The VM's own scanBudgetSeconds is the sole scan timeout — it
             // already stops the camera and publishes .failed when the budget

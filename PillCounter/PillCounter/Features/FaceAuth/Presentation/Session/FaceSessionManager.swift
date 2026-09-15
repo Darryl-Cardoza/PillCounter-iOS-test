@@ -121,6 +121,35 @@ final class FaceSessionManager: ObservableObject {
         stopIdleTimer()
     }
 
+    /// Set by `lockOnLogin()`, consumed once by `SessionLockOverlay` to start
+    /// the camera immediately instead of waiting for the manual "Unlock" tap.
+    /// `beginScanning()` alone only flips `lockState` — it doesn't know how to
+    /// wire up `FaceAuthenticationViewModel`/the camera, which only
+    /// `SessionLockOverlay.startScan()` can do, so the overlay needs its own
+    /// signal to call that for us instead of the manager driving `.scanning`
+    /// directly (that left the camera never actually started).
+    @Published private(set) var shouldAutoStartScan: Bool = false
+
+    func consumeAutoStartScan() {
+        shouldAutoStartScan = false
+    }
+
+    /// Freshly logged in — skips the "Session Locked" tap-to-scan screen
+    /// entirely and renders straight into the camera, since the user just
+    /// went through login and a second manual step here would be redundant.
+    /// Skipped entirely when nobody is enrolled.
+    func lockOnLogin() {
+        guard hasEnrolledUsers else {
+            releaseLockIfNoUsersEnrolled()
+            return
+        }
+        lockState = .scanning
+        isOverlayVisible = true
+        idleDurationAtLock = nil
+        stopIdleTimer()
+        shouldAutoStartScan = true
+    }
+
     /// App entered background — always lock; resuming to foreground with a
     /// stale session is exactly the gap this feature closes.
     func lockOnBackground() {

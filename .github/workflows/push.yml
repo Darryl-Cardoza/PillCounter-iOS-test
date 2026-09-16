@@ -93,7 +93,11 @@ jobs:
     secrets:
       PIPELINE_TOKEN: ${{ secrets.PIPELINE_TOKEN }}
 
-  # CD for version tags
+  # CD for version tags. `ci` above already builds configuration: "Release"
+  # with build_archive: true on every push, so `cd` just downloads, signs and
+  # ships that same archive -- ops-rite-ios-pipeline's release.yml runs no
+  # CI/build of its own (see that pipeline's README "Consolidated CI+CD
+  # build" section).
   cd:
     uses: Rite-Technologies-23/ops-rite-ios-pipeline/.github/workflows/release.yml@main
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, 'release')

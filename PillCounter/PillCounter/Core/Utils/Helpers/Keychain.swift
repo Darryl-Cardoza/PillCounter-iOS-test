@@ -27,7 +27,7 @@ import CryptoKit
 final class Keychain {
 
     /// Default service used by the string password API.
-    static let defaultService = "com.ritetechnologies.PillCounting"
+    static let defaultService = Bundle.main.bundleIdentifier ?? "com.dispensesure.retail"
 
     // MARK: - Data layer (generic)
 

@@ -256,13 +256,28 @@ extension PillScanViewModel {
                 return (status?.isEmpty ?? true) ? nil : status
             }()
             let isStatusOnlyUpdate = (orderStatusRaw == "HD" || orderStatusRaw == "CM" || orderStatusRaw == "CA")
+
+            // rxNo exists under a different refill — an XO for the wrong fill cycle,
+            // not "Rx not on this device" at all. Distinct toast so the mismatch is
+            // visible instead of silently falling through as a no-op.
+            let rxKnownUnderOtherRefill = currentUser
+                .map { transactionDAO.fetchByRxNo(rxNo, for: $0) }?
+                .isEmpty == false
+
             if !isStatusOnlyUpdate {
-                HL7NotificationManager.show(
-                    title: "Edit Rx Failed",
-                    body: "No transaction found for Rx \(rxNo)"
-                )
+                if rxKnownUnderOtherRefill {
+                    HL7NotificationManager.show(
+                        title: "Edit Rx Failed",
+                        body: "Rx \(rxNo) found but refill \(refillNo ?? "—") does not match any stored transaction"
+                    )
+                } else {
+                    HL7NotificationManager.show(
+                        title: "Edit Rx Failed",
+                        body: "No transaction found for Rx \(rxNo)"
+                    )
+                }
             }
-            Log("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), orderStatus=\(orderStatusRaw ?? "nil") — ignoring")
+            Log("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), refillNo=\(refillNo ?? "nil"), refillMismatch=\(rxKnownUnderOtherRefill), orderStatus=\(orderStatusRaw ?? "nil") — ignoring")
             callback?(false)
             return
         }

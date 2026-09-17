@@ -34,6 +34,17 @@ struct SessionLockOverlay: View {
         .onChange(of: sessionManager.lockState) { _, newState in
             handleLockStateChange(newState)
         }
+        .onChange(of: sessionManager.shouldAutoStartScan) { _, _ in
+            autoStartScanIfNeeded()
+        }
+        .onAppear {
+            // The overlay window is torn down and rebuilt fresh on every
+            // `isOverlayVisible` transition (SessionLockWindowController), so
+            // `shouldAutoStartScan` can already be true at mount time — the
+            // .onChange above only sees value CHANGES, not the initial value,
+            // so a login-triggered lock would otherwise never call startScan().
+            autoStartScanIfNeeded()
+        }
         .onChange(of: viewModel.state) { _, newState in
             // The VM's own scanBudgetSeconds is the sole scan timeout — it
             // already stops the camera and publishes .failed when the budget
@@ -120,6 +131,12 @@ struct SessionLockOverlay: View {
 
     // MARK: - Scan lifecycle
 
+    private func autoStartScanIfNeeded() {
+        guard sessionManager.shouldAutoStartScan else { return }
+        sessionManager.consumeAutoStartScan()
+        startScan()
+    }
+
     private func startScan() {
         sessionManager.beginScanning()
 
@@ -137,8 +154,14 @@ struct SessionLockOverlay: View {
 
     private func handleLockStateChange(_ newState: SessionLockState) {
         switch newState {
-        case .locked, .failed:
+        case .locked:
             stopScan()
+
+        case .failed:
+            // Camera is already stopped (scan-budget timeout stops it
+            // internally), but orientation was never released — unlock it
+            // here so rotation works on the failure screen.
+            OrientationLock.shared.unlock()
 
         case .unlocked:
             stopScan()

@@ -118,7 +118,10 @@ final class HL7BatchSyncQueue: HL7SyncQueue<BatchSyncQueueItem> {
         pendingAckMessageId  = ackMessageId
 
         DispatchQueue.main.async { [weak self] in
-            self?.hl7Manager?.sendHL7ToPMS(hl7, orderId: item.batchId.description)
+            guard self?.hl7Manager?.sendHL7ToPMS(hl7, orderId: item.batchId.description) == true else {
+                self?.handleSendDropped(requestId: item.requestId)
+                return
+            }
             StoreLogger.debug("📤 [HL7] Sent to server for batch: \(item.batchId)")
         }
 
@@ -150,6 +153,10 @@ final class HL7BatchSyncQueue: HL7SyncQueue<BatchSyncQueueItem> {
     /// the UI thread.
     override func markCurrentItemSynced() {
         guard let item = queue.first else { return }
+        markItemSynced(item)
+    }
+
+    override func markItemSynced(_ item: BatchSyncQueueItem) {
         let bgContext = CoreDataManager.shared.backgroundContext
         batchDAO.markSynced(batchId: item.batchId, in: bgContext)
     }

@@ -107,10 +107,13 @@ final class DatabaseKeyProvider {
     /// longer be recovered. Cheap after the first call per slot — see
     /// `cachedDeks`.
     ///
-    /// A recovery re-key (fresh DEK) invalidates every previously encrypted
-    /// value under this slot — callers on that path must wipe/discard the
-    /// affected local data, mirroring Android's "fresh DEK needs a fresh DB
-    /// file" rule. See `recoverFromUnrecoverableDek`.
+    /// A recovery re-key (fresh DEK) leaves every previously encrypted value
+    /// under this slot undecryptable — each consumer degrades on its own
+    /// terms rather than the store being wiped wholesale: field-encrypted
+    /// CoreData columns blank themselves in place on decrypt failure
+    /// (`decryptEncryptedFieldsInPlace`), same as the `.image` slot already
+    /// orphans undecryptable photo files instead of deleting anything. See
+    /// `recoverFromUnrecoverableDek`.
     @discardableResult
     func getOrCreateDek(for slot: DekSlot = .field) -> SymmetricKey {
         lock.lock()
@@ -130,7 +133,7 @@ final class DatabaseKeyProvider {
                 cachedDeks[slot.bootstrapAlias] = dek
                 return dek
             } catch {
-                Log("❌ DatabaseKeyProvider: DEK unwrap failed for \(slot.bootstrapAlias) (\(error.localizedDescription)) — re-keying")
+                Log("❌ DatabaseKeyProvider: DEK unwrap failed for \(slot.bootstrapAlias) (\(error)) — re-keying, affected fields will blank on next decrypt")
                 return recoverFromUnrecoverableDek(slot: slot, storage: storage)
             }
         }
@@ -170,21 +173,18 @@ final class DatabaseKeyProvider {
         return dek
     }
 
-    /// The stored DEK could not be recovered — its wrapper key is gone or
-    /// invalidated. Any value already encrypted under the old DEK is now
-    /// permanently unreadable. Field DEK recovery destroys the local CoreData
-    /// store (see `CoreDataManager.destroyAndReloadStore`); image DEK
-    /// recovery only orphans existing encrypted photo files on disk — there
-    /// is no bulk store to wipe, so old files are simply left undecryptable
-    /// (matches `PhotoFileManager.loadDecryptedData`'s existing nil-on-failure
-    /// behavior; no plaintext ever leaks).
+    /// Wrapper key is gone/invalidated (Secure Enclave key evicted, passcode
+    /// reset, reinstall) — generates and persists a brand-new DEK, so
+    /// anything encrypted under the old one is permanently unreadable. Each
+    /// consumer degrades on its own read instead of the whole store being
+    /// wiped (the old behavior here, which deleted every enrolled face,
+    /// transaction, and user profile over one field that couldn't decrypt):
+    /// `decryptEncryptedFieldsInPlace` blanks a field it can't open, and
+    /// `PhotoFileManager.loadDecryptedData` returns nil for an orphaned photo.
     private func recoverFromUnrecoverableDek(slot: DekSlot, storage: AppStorageManager) -> SymmetricKey {
         storage.setString(nil, forKey: slot.wrappedStorageKey)
         storage.setString(nil, forKey: slot.kekIdStorageKey)
         storage.setInt(-1, forKey: slot.kekVersionStorageKey)
-        if slot.bootstrapAlias == DekSlot.field.bootstrapAlias {
-            CoreDataManager.shared.destroyAndReloadStore()
-        }
         return generateAndBootstrapWrapDek(slot: slot, storage: storage)
     }
 

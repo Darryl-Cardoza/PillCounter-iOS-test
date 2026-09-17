@@ -54,16 +54,28 @@ private let encryptedFieldRegistry: [String: [String]] = [
         "serial_no"
     ],
     "FaceUserEntity": [
-        // Filename of the enrollment avatar on disk, same treatment as
-        // PillCountTransactionDetailsEntity.image_path. Unlike `embedding`
-        // below, a failed decrypt here is recoverable — the row simply falls
-        // back to the placeholder avatar, and the image on disk is untouched.
-        "photo_path"
+        // photo_path intentionally NOT encrypted — same reasoning as
+        // FaceEmbeddingEntity.embedding below: a wiped/rotated field-DEK
+        // orphaned the stored filename, permanently blanking the avatar even
+        // though the underlying image file (separately encrypted via
+        // PhotoFileManager/image-DEK) was untouched. This is just a filename
+        // reference, not the photo content, so plaintext storage exposes
+        // nothing beyond a local file path.
     ]
     // FaceEmbeddingEntity.embedding intentionally NOT encrypted — field
     // encryption caused permanent decrypt failures whenever the Keychain
     // key was wiped/rotated (logout, fresh install), orphaning stored
     // embeddings. Store as plain base64 for now.
+]
+
+/// Fields that were previously registered above and have since been removed
+/// (see the entity's own comment in `encryptedFieldRegistry` for why). Rows
+/// written while a field was registered still hold ciphertext on disk that
+/// `decryptEncryptedFieldsInPlace()` no longer touches — `repairOneTimeLegacyEncryption()`
+/// walks this registry so a future de-registration gets the same one-time
+/// cleanup for free instead of a bespoke hardcoded repair method.
+private let legacyEncryptedFieldRegistry: [String: [String]] = [
+    "FaceUserEntity": ["photo_path"]
 ]
 
 // MARK: - NSManagedObject extension
@@ -169,6 +181,32 @@ extension NSManagedObject {
                 setPrimitiveValue("", forKey: field)
             }
         }
+    }
+
+    /// Repairs fields de-registered from `encryptedFieldRegistry` (see
+    /// `legacyEncryptedFieldRegistry`) whose old ciphertext `decryptEncryptedFieldsInPlace()`
+    /// no longer touches. Only overwrites on a successful decrypt — a failed
+    /// one leaves the ciphertext untouched, so a row this can't fix is never
+    /// made worse.
+    @discardableResult
+    func repairOneTimeLegacyEncryption() -> Bool {
+        guard let entityName = entity.name,
+              let fields = legacyEncryptedFieldRegistry[entityName],
+              !fields.isEmpty
+        else { return false }
+
+        var repairedAny = false
+        for field in fields {
+            guard let stored = primitiveValue(forKey: field) as? String,
+                  !stored.isEmpty,
+                  looksEncrypted(stored),
+                  let plaintext = FieldEncryptionManager.shared.decrypt(stored)
+            else { continue }
+
+            setPrimitiveValue(plaintext, forKey: field)
+            repairedAny = true
+        }
+        return repairedAny
     }
 
     // MARK: - Helpers

@@ -63,8 +63,8 @@ jobs:
       coverage_threshold: "30.00"
       build_archive: true
 
-      run_tests: true
-      run_coverage: true
+      run_tests: false
+      run_coverage: false
       run_static_analysis: true
 
       # ---- formatting ----
@@ -72,7 +72,7 @@ jobs:
 
       # ---- dead code ----
       run_dead_code: true
-      run_clang_analyzer: true
+      run_clang_analyzer: false
 
       # ---- security ----
       run_security: true

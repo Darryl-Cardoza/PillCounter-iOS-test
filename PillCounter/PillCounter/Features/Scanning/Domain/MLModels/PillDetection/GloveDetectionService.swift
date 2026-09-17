@@ -318,8 +318,8 @@ final class GloveDetectionService {
                 guard finalConf >= confThreshold else { continue }
 
                 // ── Un-letterbox: 512×512 → original frame space ──────────
-                // Letterbox.preprocess stored (scale, padX, padY) used during
-                // preprocessing. Reverse the same transform:
+                // (scale, padX, padY) came from Letterbox.letterbox's returned
+                // ScaleInfo during preprocessing. Reverse the same transform:
                 //   original_coord = (letterbox_coord − pad) / scale
                 let x1 = (cx - w / 2 - padX) / scale
                 let y1 = (cy - h / 2 - padY) / scale
@@ -483,10 +483,7 @@ final class GloveDetectionService {
     }
 
     private func iou(_ a: CGRect, _ b: CGRect) -> Float {
-        let inter = a.intersection(b)
-        guard !inter.isNull, inter.width > 0, inter.height > 0 else { return 0 }
-        let ia = inter.width * inter.height
-        return Float(ia / (a.width * a.height + b.width * b.height - ia))
+        CGRectGeometry.iou(a, b)
     }
 
     /// Fills every pixel of a BGRA CVPixelBuffer with a single grey value.

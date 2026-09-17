@@ -321,6 +321,11 @@ struct UnifiedCameraView: View {
                 onDismiss: {
                     pillScanViewModel.showRxFlowPopup = false
                     pillScanViewModel.fetchedRxTransaction = nil
+                    // Operator explicitly dismissed this Rx — the physical barcode
+                    // may still be sitting in frame, so force-release the lock rather
+                    // than waiting for it to leave/re-enter (BarcodeScanLock otherwise
+                    // only releases on genuine absence).
+                    cameraService.forceReleaseBarcodeLock()
                     restartFlow()
                 }
             ) {
@@ -334,6 +339,7 @@ struct UnifiedCameraView: View {
                     onCancel: {
                         pillScanViewModel.showRxFlowPopup = false
                         pillScanViewModel.fetchedRxTransaction = nil
+                        cameraService.forceReleaseBarcodeLock()
                         restartFlow()
                     },
                     onProceed: {

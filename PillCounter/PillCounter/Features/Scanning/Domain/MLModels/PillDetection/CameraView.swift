@@ -197,3 +197,33 @@ struct DetectionOverlay: View {
         )
     }
 }
+
+#if DEBUG
+/// Testing-only visual aid: a small square at the last manual tap or
+/// auto-focus-on-detect pulse point. Red while the device is still adjusting
+/// focus, green once `isAdjustingFocus` reads false, then fades out. Never
+/// compiled into release — CameraView.Coordinator.handleTap (tap-to-focus
+/// itself) ships in all builds regardless.
+struct FocusIndicatorOverlay: View {
+    @ObservedObject var cameraService: CameraService
+
+    var body: some View {
+        if let point = cameraService.focusIndicatorScreenPoint {
+            let focused = cameraService.isFocusIndicatorFocused
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(focused ? Color.green : Color.red, lineWidth: 2)
+                .frame(width: 64, height: 64)
+                .position(point)
+                .allowsHitTesting(false)
+                .animation(.easeOut(duration: 0.2), value: focused)
+                .onChange(of: focused) { _, isFocused in
+                    guard isFocused else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        guard cameraService.focusIndicatorScreenPoint == point else { return }
+                        cameraService.focusIndicatorScreenPoint = nil
+                    }
+                }
+        }
+    }
+}
+#endif

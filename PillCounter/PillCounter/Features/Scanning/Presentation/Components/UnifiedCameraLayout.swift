@@ -65,6 +65,10 @@ struct UnifiedCameraLayout: View {
                 }
             }
 
+            #if DEBUG
+            FocusIndicatorOverlay(cameraService: cameraService).ignoresSafeArea()
+            #endif
+
             // ── Vial captured still (full screen) ─────────────────────────────
             // During the vial step, once the operator captures the vial image we show
             // that still full-screen, fully covering the live feed (opaque black

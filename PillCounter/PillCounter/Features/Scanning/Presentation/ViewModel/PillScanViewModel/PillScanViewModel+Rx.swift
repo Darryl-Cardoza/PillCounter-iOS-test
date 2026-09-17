@@ -41,10 +41,17 @@ extension PillScanViewModel {
         self.selectedBucket = bucket
         print("[RxScan] Bucket: \(selectedBucket)")
 
+        // Shown while the NDC/Rx lookup below (local DB + possible network call) is
+        // in flight — reuses the same loader/flag as the NDC-equivalence check
+        // (see PillScanViewModel+Equivalence.swift) so a slow lookup gives visible
+        // feedback instead of looking like the scan did nothing.
+        isCheckingNdc = true
+
         Task {
             let resolvedDrugName = await resolveDrugName(for: ndc)
 
             guard let drugName = resolvedDrugName else {
+                isCheckingNdc = false
                 showToastMessage(text: L10n.BarcodeScan.invalidNdc)
                 rxScanFailed = true
                 return
@@ -56,6 +63,7 @@ extension PillScanViewModel {
             // Rx must exist in local DB — if not found, abort with a toast
             guard let rxNo, !rxNo.isEmpty else {
                 print("[RxScan] No RXNO in barcode — cannot proceed")
+                isCheckingNdc = false
                 showToastMessage(text: L10n.BarcodeScan.rxNotFound)
                 rxScanFailed = true
                 return
@@ -64,6 +72,7 @@ extension PillScanViewModel {
             let currentUser = userDataLocalStorage.fetchByUserId(userId)
             guard let currentUser else {
                 print("[RxScan] No current user — cannot look up Rx")
+                isCheckingNdc = false
                 rxScanFailed = true
                 return
             }
@@ -79,6 +88,7 @@ extension PillScanViewModel {
             guard let existingTxn else {
                 guard AppStorageManager.shared.isStandalone else {
                     print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
+                    isCheckingNdc = false
                     showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)
                     rxScanFailed = true
                     return
@@ -95,12 +105,14 @@ extension PillScanViewModel {
                     rawMap:   mappedData
                 )
                 fetchedRxTransaction = nil
+                isCheckingNdc = false
                 showRxFlowPopup = true
                 return
             }
 
             if existingTxn.status == CountStatus.ON_HOLD.rawValue {
                 print("[RxScan] Rx \(rxNo) is ON HOLD — showing hold popup")
+                isCheckingNdc = false
                 showRxOnHoldPopup = true
                 return
             }
@@ -114,6 +126,7 @@ extension PillScanViewModel {
                 rawMap:   mappedData
             )
             fetchedRxTransaction = existingTxn
+            isCheckingNdc = false
 
             if existingTxn.is_ndc_verfied {
                 print("[RxScan] Rx \(rxNo) is_ndc_verfied=true — resuming inline")

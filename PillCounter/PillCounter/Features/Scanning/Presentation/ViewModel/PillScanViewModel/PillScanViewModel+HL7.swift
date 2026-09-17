@@ -239,12 +239,9 @@ extension PillScanViewModel {
 
         // 1. Find active transaction; restore soft-deleted one if needed
         let currentUser = userDataLocalStorage.fetchByUserId(userId)
-        var existingTxn = currentUser.flatMap { transactionDAO.fetchByRxNo(rxNo, for: $0).first {
-            ($0.refill_no ?? "") == (refillNo ?? "")
-        } }
+        var existingTxn = currentUser.flatMap { transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: $0) }
         if existingTxn == nil {
-            if let currentUser, let deleted = transactionDAO.fetchDeletedByRxNo(rxNo, for: currentUser),
-               (deleted.refill_no ?? "") == (refillNo ?? "") {
+            if let currentUser, let deleted = transactionDAO.fetchDeletedByRxNo(rxNo, refillNo: refillNo, for: currentUser) {
                 Log("HL7 ORC|XO: restoring deleted txnId=\(deleted.txn_id) for rxNo=\(rxNo)")
                 transactionDAO.restoreDeleted(txnId: deleted.txn_id)
                 existingTxn = transactionDAO.fetchById(deleted.txn_id)
@@ -530,9 +527,7 @@ extension PillScanViewModel {
         // create branch below like any other new txn.
         let existingSameRxRefill = { () -> PillCountTransactionEntity? in
             guard let rxNo, !rxNo.isEmpty, let user = currentUser else { return nil }
-            return transactionDAO.fetchByRxNo(rxNo, for: user).first {
-                ($0.refill_no ?? "") == (refillNo ?? "")
-            }
+            return transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: user)
         }()
 
         if let existing = existingSameRxRefill {
@@ -573,7 +568,6 @@ extension PillScanViewModel {
             // was actively working on (nil included — an idle screen must stay
             // idle, not auto-jump into the just-received PMS txn).
             let createdTxn = self.currentTransaction
-            defer { self.currentTransaction = activeTxnIdBeforeReceive.flatMap { transactionDAO.fetchById($0) } }
 
             guard let createdTxn else {
                 Log("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)")
@@ -581,8 +575,10 @@ extension PillScanViewModel {
                     title: L10n.BarcodeScan.drugNotFound,
                     body: L10n.BarcodeScan.drugNotFoundMessage
                 )
+                self.currentTransaction = activeTxnIdBeforeReceive.flatMap { transactionDAO.fetchById($0) }
                 return
             }
+            self.currentTransaction = activeTxnIdBeforeReceive.flatMap { transactionDAO.fetchById($0) }
 
             let txnId = createdTxn.txn_id
             TransactionStore.shared.setHl7Identifiers(

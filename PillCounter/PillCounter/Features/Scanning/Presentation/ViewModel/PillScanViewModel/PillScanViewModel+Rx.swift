@@ -70,10 +70,10 @@ extension PillScanViewModel {
 
             let allStoredRxNos = transactionDAO.fetchAllRxNos(for: currentUser)
             print("[RxScan] All rx_no values in DB: \(allStoredRxNos)")
-            let scannedRefilForLookup = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces)
-            print("[RxScan] Looking up rxNo: '\(rxNo)' refillNo: '\(scannedRefilForLookup ?? "nil")'")
+            let scannedRefillForLookup = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces)
+            print("[RxScan] Looking up rxNo: '\(rxNo)' refillNo: '\(scannedRefillForLookup ?? "nil")'")
 
-            let existingTxn = fetchRxTransaction(rxNo: rxNo, refillNo: scannedRefilForLookup, for: currentUser)
+            let existingTxn = fetchRxTransaction(rxNo: rxNo, refillNo: scannedRefillForLookup, for: currentUser)
             print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
 
             guard let existingTxn else {
@@ -98,9 +98,6 @@ extension PillScanViewModel {
                 showRxFlowPopup = true
                 return
             }
-
-            // NDC is intentionally NOT validated here — rx_label scan only confirms
-            // rx_no + refill (already matched by fetchRxTransaction above).
 
             if existingTxn.status == CountStatus.ON_HOLD.rawValue {
                 print("[RxScan] Rx \(rxNo) is ON HOLD — showing hold popup")
@@ -138,17 +135,10 @@ extension PillScanViewModel {
     /// mismatch against the correct txn. Checks active transactions first; falls back to the
     /// most-recently deleted one (which can be restored).
     func fetchRxTransaction(rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity? {
-        let refillNo = refillNo?.trimmingCharacters(in: .whitespaces)
-        let matchesRefill: (PillCountTransactionEntity) -> Bool = {
-            ($0.refill_no ?? "") == (refillNo ?? "")
-        }
-        if let txn = transactionDAO.fetchByRxNo(rxNo, for: user).first(where: matchesRefill) {
+        if let txn = transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: user) {
             return txn
         }
-        if let deleted = transactionDAO.fetchDeletedByRxNo(rxNo, for: user), matchesRefill(deleted) {
-            return deleted
-        }
-        return nil
+        return transactionDAO.fetchDeletedByRxNo(rxNo, refillNo: refillNo, for: user)
     }
 
     // MARK: Proceed with Rx Transaction

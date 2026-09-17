@@ -107,14 +107,6 @@ final class CameraService: NSObject, ObservableObject {
     /// counting pause/resume so a new scene re-meters before locking again.
     private var is3ALocked = false
 
-    /// True once continuous AF/AE has already been activated for the current
-    /// barcode-scan session. Guards `activateBarcodeAutoFocus()` so repeat calls
-    /// (rescans, re-entering the scanner) don't reseed the centre focus/exposure
-    /// point and retrigger a fresh 3A convergence hunt on an already-continuous,
-    /// already-converged device — that hunt was the source of the perceived
-    /// per-scan lag. Reset whenever barcode/rescan mode is left.
-    private var barcodeAFActive = false
-
     private let ciContext = CIContext()
     private(set) var lastPixelBuffer: CVPixelBuffer?
 
@@ -486,15 +478,22 @@ final class CameraService: NSObject, ObservableObject {
             // `disableBarcodeScanning()`. It is only ever detached in `stop()`.
             // Re-lock 3A so the pill count settles back down once rescan listening ends.
             self.is3ALocked = false
-            self.barcodeAFActive = false
             self.lock3AIfNeeded()
         }
     }
 
     /// Activates continuous auto-focus + auto-exposure for barcode scanning.
     /// Called on the session queue; safe to call even when the device is not locked.
+    /// Reads live device state rather than a cached flag — 3A mode is mutated
+    /// from several other places (tray-count lock, tap-to-focus), so a cached
+    /// "already active" bit would go stale and skip re-activation when needed.
     private func activateBarcodeAutoFocus() {
-        guard !barcodeAFActive, let device = captureDevice else { return }
+        guard let device = captureDevice else { return }
+        // Already continuous on both axes: skip re-seeding the centre point,
+        // which would retrigger a fresh 3A convergence hunt for no benefit.
+        guard device.focusMode != .continuousAutoFocus || device.exposureMode != .continuousAutoExposure else {
+            return
+        }
         do {
             try device.lockForConfiguration()
             // Interest-point focus at screen centre. For bottle / curved labels the
@@ -517,7 +516,6 @@ final class CameraService: NSObject, ObservableObject {
                 device.whiteBalanceMode = .continuousAutoWhiteBalance
             }
             device.unlockForConfiguration()
-            barcodeAFActive = true
         } catch {
             // Intentionally silent — barcode scanning still works without focus assist.
         }

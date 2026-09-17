@@ -75,7 +75,9 @@ protocol TransactionDataSource: AnyObject {
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity?
     func fetchAllRxNos(for user: UserEntity) -> [String]
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity]
+    func fetchByRxNo(_ rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity?
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity?
+    func fetchDeletedByRxNo(_ rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity?
     func countTransactions(for user: UserEntity, isDispense: Bool, status: CountStatus) -> Int
     func getWorkflowStep(txn: PillCountTransactionEntity) -> ControlledStep?
     func restoreDeleted(txnId: Int64)

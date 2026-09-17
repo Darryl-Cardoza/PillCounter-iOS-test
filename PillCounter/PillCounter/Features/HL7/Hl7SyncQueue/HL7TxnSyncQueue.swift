@@ -116,8 +116,11 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
         pendingRequestId = item.requestId
         pendingAckMessageId = ackMessageId
 
-        DispatchQueue.main.async {
-            manager.sendHL7ToPMS(hl7, orderId: item.requestId)
+        DispatchQueue.main.async { [weak self] in
+            guard manager.sendHL7ToPMS(hl7, orderId: item.requestId) else {
+                self?.handleSendDropped(requestId: item.requestId)
+                return
+            }
         }
 
         scheduleAckTimeout(for: item.requestId)
@@ -139,6 +142,10 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
     /// reaches UI observers via their own `.receive(on: .main)`.
     override func markCurrentItemSynced() {
         guard let item = queue.first else { return }
+        markItemSynced(item)
+    }
+
+    override func markItemSynced(_ item: TxnSyncQueueItem) {
         let bgContext = CoreDataManager.shared.backgroundContext
         TransactionStore.shared.updateSynced(txnId: item.txnId, in: bgContext)
     }

@@ -128,17 +128,25 @@ extension PillScanViewModel {
         }
     }
 
-    /// Looks up the transaction for the given Rx number AND refill. A single rx_no can have
-    /// multiple stored transactions (one per refill cycle), so `refillNo` is required to pick
-    /// the right one — falling back to `.first` (as HL7 processing used to) silently returns
-    /// whichever refill happened to be fetched first, which reads as a false NDC/refill
-    /// mismatch against the correct txn. Checks active transactions first; falls back to the
-    /// most-recently deleted one (which can be restored).
+    /// Looks up the transaction for the given Rx number AND refill among active
+    /// (non-deleted, non-completed) transactions only. A single rx_no can have
+    /// multiple stored transactions (one per refill cycle), so `refillNo` is
+    /// required to pick the right one — falling back to `.first` (as HL7
+    /// processing used to) silently returns whichever refill happened to be
+    /// fetched first, which reads as a false NDC/refill mismatch against the
+    /// correct txn.
+    ///
+    /// A deleted transaction must never be resurrected by a fresh scan of the
+    /// same Rx label — the device scanning a barcode is not evidence the PMS
+    /// wants that Rx active again. This is scoped to local scans only. It does
+    /// NOT apply to an inbound PMS edit (ORC|XO) for the same rxNo —
+    /// `editFixedHl7Transaction` (see PillScanViewModel+HL7.swift) deliberately
+    /// restores a soft-deleted txn there via `fetchDeletedByRxNo`/`restoreDeleted`,
+    /// because an ORC|XO is the PMS explicitly telling this device the Rx is
+    /// active again — the PMS is authoritative over local delete state, unlike
+    /// a stray scan.
     func fetchRxTransaction(rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity? {
-        if let txn = transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: user) {
-            return txn
-        }
-        return transactionDAO.fetchDeletedByRxNo(rxNo, refillNo: refillNo, for: user)
+        transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: user)
     }
 
     // MARK: Proceed with Rx Transaction
@@ -252,11 +260,6 @@ extension PillScanViewModel {
                 self.selectedBucket  = ""
             }
             return
-        }
-
-        // Restore soft-deleted transaction if needed
-        if existingTxn.is_deleted {
-            transactionDAO.restoreDeleted(txnId: existingTxn.txn_id)
         }
 
         let txnId = existingTxn.txn_id

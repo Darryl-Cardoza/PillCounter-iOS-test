@@ -237,7 +237,11 @@ extension PillScanViewModel {
         let medRefillNo = medication.numberOfRefills.trimmingCharacters(in: .whitespacesAndNewlines)
         let refillNo: String? = medRefillNo.isEmpty ? nil : medRefillNo
 
-        // 1. Find active transaction; restore soft-deleted one if needed
+        // 1. Find active transaction; restore soft-deleted one if needed.
+        // Deliberate exception to fetchRxTransaction's "never resurrect a
+        // deleted txn" rule (PillScanViewModel+Rx.swift) — that rule guards
+        // against a stray local scan; here the PMS itself is issuing the
+        // edit, so it's authoritative over local delete state.
         let currentUser = userDataLocalStorage.fetchByUserId(userId)
         var existingTxn = currentUser.flatMap { transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: $0) }
         if existingTxn == nil {

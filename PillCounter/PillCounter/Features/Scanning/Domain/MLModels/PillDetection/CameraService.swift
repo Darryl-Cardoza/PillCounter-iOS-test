@@ -1090,22 +1090,44 @@ extension CameraService {
             )
         }
 
-        // 3. Renderz
+        // 3. One badge size for all pills — median of detected pill sizes,
+        // so one unusually large/small detection doesn't skew every badge.
+        // Doesn't depend on the render context, so computed before it.
+        let minBadgeSize = imageSize.width * 0.012
+        let maxBadgeSize = imageSize.width * 0.08
+        let badgeSize: CGFloat = {
+            guard !transformedDetections.isEmpty else { return minBadgeSize }
+
+            let sortedSizes = transformedDetections
+                .map { min($0.rect.width, $0.rect.height) }
+                .sorted()
+            let middle = sortedSizes.count / 2
+            let medianPillSize = sortedSizes.count % 2 == 0
+                ? (sortedSizes[middle - 1] + sortedSizes[middle]) / 2
+                : sortedSizes[middle]
+
+            return min(max(medianPillSize * 0.55, minBadgeSize), maxBadgeSize)
+        }()
+
+        // 4. Render
         let renderer = UIGraphicsImageRenderer(size: imageSize)
+
         return renderer.image { ctx in
             let context = ctx.cgContext
 
             // Draw oriented image (no flip needed — CIImage already handled it)
-            UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: imageSize))
+            UIImage(cgImage: cgImage).draw(
+                in: CGRect(origin: .zero, size: imageSize)
+            )
 
-            // Badge size scales with each pill's own detected box so it never
-            // covers pills bigger/smaller than average, clamped to stay legible.
-            let minBadgeSize = imageSize.width * 0.012
-            let maxBadgeSize = imageSize.width * 0.08
+            // Draw all badges using the same size
             transformedDetections.enumerated().forEach { index, detection in
-                let pillDiameter = min(detection.rect.width, detection.rect.height)
-                let badgeSize = min(max(pillDiameter * 0.55, minBadgeSize), maxBadgeSize)
-                drawBadge(context: context, index: index, rect: detection.rect, badgeSize: badgeSize)
+                drawBadge(
+                    context: context,
+                    index: index,
+                    rect: detection.rect,
+                    badgeSize: badgeSize
+                )
             }
         }
     }

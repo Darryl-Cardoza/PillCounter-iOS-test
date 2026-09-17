@@ -47,6 +47,16 @@ class HL7SyncQueue<Item: HL7QueueItem> {
     /// `loadAndEnqueuePending` until `resetParkedState()` runs.
     var parkedRequestIds: Set<String> = []
 
+    /// Items whose ACK timeout just fired, keyed by the `pendingAckMessageId`
+    /// they were sent with — kept around briefly so a real AA that was
+    /// already in flight and loses the race against `scheduleAckTimeout`
+    /// (static-IP RTT is less predictable than local Bonjour LAN, so this
+    /// isn't rare there) still marks the item synced instead of being
+    /// silently dropped by `handleAck`'s now-stale `pendingAckMessageId`
+    /// guard. Bounded to a handful of entries — cleared as each is either
+    /// claimed by a late ACK or evicted by `resetParkedState()`.
+    private var recentlyTimedOutByAckMessageId: [String: Item] = [:]
+
     private var ackTimeoutWork: DispatchWorkItem?
 
     let ackTimeoutSeconds: TimeInterval = 10
@@ -90,6 +100,14 @@ class HL7SyncQueue<Item: HL7QueueItem> {
         fatalError("markCurrentItemSynced() must be overridden by \(type(of: self))")
     }
 
+    /// Subclass MUST override — same write `markCurrentItemSynced()` does,
+    /// but for a specific item rather than `queue.first`. Needed for a late
+    /// ACK arriving after that item was already timed-out/removed from
+    /// `queue` — see `recentlyTimedOutByAckMessageId`.
+    func markItemSynced(_ item: Item) {
+        fatalError("markItemSynced(_:) must be overridden by \(type(of: self))")
+    }
+
     /// Subclass MUST override — builds and sends the next queued item (or
     /// returns immediately if `isSending` or `queue` is empty). Called once
     /// after the first page loads, and again after every ACK/NACK/timeout
@@ -103,13 +121,42 @@ class HL7SyncQueue<Item: HL7QueueItem> {
     func resetParkedState() {
         processingQueue.async { [weak self] in
             self?.parkedRequestIds.removeAll()
+            // New session's resends carry new MSH-10s, so entries stashed
+            // under the old session's messageIds can never be claimed by a
+            // legit late ACK past this point — clear them too or they leak.
+            self?.recentlyTimedOutByAckMessageId.removeAll()
+        }
+    }
+
+    /// Re-drives the queue after a real reconnect — unlike `enqueueUnsynced()`,
+    /// which skips its `processNext()` call whenever `queue` already has
+    /// items. Unconditional; `processNext()` itself no-ops if already
+    /// sending or the queue is empty, so this is safe to call anytime.
+    func drainNow() {
+        processingQueue.async { [weak self] in
+            self?.processNext()
         }
     }
 
     func handleAck(messageId: String?, hl7 ackMessage: String) {
         processingQueue.async { [weak self] in
-            guard let self, self.pendingAckMessageId != nil, messageId == self.pendingAckMessageId else { return }
-            self.processAck(ackMessage)
+            guard let self else { return }
+
+            if let messageId, self.pendingAckMessageId != nil, messageId == self.pendingAckMessageId {
+                self.processAck(ackMessage)
+                return
+            }
+
+            // Not the currently in-flight item — check whether this is a
+            // real AA that arrived just after its own ACK timeout already
+            // fired and moved the queue on without it (see
+            // `recentlyTimedOutByAckMessageId`).
+            if let messageId, let item = self.recentlyTimedOutByAckMessageId.removeValue(forKey: messageId) {
+                if self.isPositiveAck(ackMessage) {
+                    self.parkedRequestIds.remove(item.requestId)
+                    self.markItemSynced(item)
+                }
+            }
         }
     }
 
@@ -176,12 +223,34 @@ class HL7SyncQueue<Item: HL7QueueItem> {
         processNext()
     }
 
+    /// Called from `processNext()` when `sendHL7ToPMS` returns false (not
+    /// connected — nothing was sent, no ACK will ever arrive). Resets
+    /// in-flight state without calling `processNext()`: retrying immediately
+    /// would just drop again while still disconnected. The item stays at
+    /// `queue.first`; `Hl7ServiceController.onClientConnected()` re-drives it
+    /// once the connection genuinely comes back.
+    func handleSendDropped(requestId: String) {
+        processingQueue.async { [weak self] in
+            guard let self, self.pendingRequestId == requestId else { return }
+            self.cancelAckTimeout()
+            self.isSending = false
+            self.pendingRequestId = nil
+            self.pendingAckMessageId = nil
+        }
+    }
+
     // MARK: - Timeout
 
     func scheduleAckTimeout(for requestId: String) {
         let work = DispatchWorkItem { [weak self] in
             self?.processingQueue.async {
                 guard let self, self.pendingRequestId == requestId else { return }
+                // Stash the item under its ack messageId before advanceQueue()
+                // removes it from `queue` — a real AA already in flight when
+                // this timeout fired can still claim it via `handleAck`.
+                if let ackMessageId = self.pendingAckMessageId, let item = self.queue.first {
+                    self.recentlyTimedOutByAckMessageId[ackMessageId] = item
+                }
                 self.parkedRequestIds.insert(requestId)
                 self.advanceQueue()
             }

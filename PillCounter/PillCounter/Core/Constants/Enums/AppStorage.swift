@@ -185,6 +185,7 @@ final class AppStorageManager {
         }
     }
 
+
     /// Same keychain slot as `DeviceKeyProvider.shared.getDeviceKey()` — exposed
     /// here too so callers that already hold `AppStorageManager.shared` (and
     /// tests) can read/reset it without pulling in `DeviceKeyProvider`.

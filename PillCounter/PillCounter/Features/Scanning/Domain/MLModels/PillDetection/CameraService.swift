@@ -45,6 +45,14 @@ final class CameraService: NSObject, ObservableObject {
     /// which showed isAdjustingFocus=true frames landing mid-100ms+ ML passes
     /// on iPad before this queue existed.
     private let barcodeFocusQueue = DispatchQueue(label: "camera.barcodeFocus.queue", qos: .userInteractive)
+    /// Serializes `device.lockForConfiguration()` 3A changes between
+    /// `sessionQueue` (lock3AIfNeeded/unlock3A) and `barcodeFocusQueue`
+    /// (activateBarcodeAutoFocus) — `is3ALocked`'s own SynchronizedBox only
+    /// protects the flag's memory, not the device call + flag write together,
+    /// so without this the two queues could interleave their device
+    /// configuration and leave is3ALocked disagreeing with the device's
+    /// actual AF/AE mode.
+    private let device3ALock = NSLock()
 
     // MARK: - CAMERA CORE
     private let session = AVCaptureSession()
@@ -129,10 +137,20 @@ final class CameraService: NSObject, ObservableObject {
     /// crop and the mask filter.
     private static let gateCloseFrames: Int = 6
 
+    /// Same hold idea as gateCloseFrames, but for a pure pill-tracker miss: gate
+    /// stays open (tray/chute still fine) yet the tracker reports zero confirmed
+    /// pills for a frame or two (e.g. a hand transiently occludes all pills).
+    /// Feeding that zero straight into CountStabilizer's median can flip the
+    /// displayed count to 0 sooner than the old countHoldFrames-based hold did.
+    /// While the tray last had pills and only a short burst of empties has
+    /// elapsed, skip feeding the zero so the stabilizer's window isn't polluted.
+    private static let pillMissHoldFrames: Int = 5
+
     /// Last COMPLETE tray set (tray + chute, with masks) and how many consecutive
     /// frames have failed to reproduce it. Session-queue state.
     private var heldTrayDetections: [TrayResult] = []
     private var incompleteFrames: Int = 0
+    private var emptyPillFrames: Int = 0
 
 
     /// Auto-focus-on-detect presence edges (session-queue state) — see
@@ -497,24 +515,26 @@ final class CameraService: NSObject, ObservableObject {
     /// actually supports. Called from the frame delegate the first time the
     /// complete-product gate opens.
     private func lock3AIfNeeded() {
-        guard !is3ALocked, let device = captureDevice else { return }
+        device3ALock.withLock {
+            guard !is3ALocked, let device = captureDevice else { return }
 
-        do {
-            try device.lockForConfiguration()
-            if device.isExposureModeSupported(.locked) {
-                device.exposureMode = .locked
+            do {
+                try device.lockForConfiguration()
+                if device.isExposureModeSupported(.locked) {
+                    device.exposureMode = .locked
+                }
+                if device.isFocusModeSupported(.locked) {
+                    device.focusMode = .locked
+                }
+                if device.isWhiteBalanceModeSupported(.locked) {
+                    device.whiteBalanceMode = .locked
+                }
+                focusController.applyFastFocusDefaults(on: device)
+                device.unlockForConfiguration()
+                is3ALocked = true
+            } catch {
+                // Intentionally silent — a failed 3A lock must not break the camera.
             }
-            if device.isFocusModeSupported(.locked) {
-                device.focusMode = .locked
-            }
-            if device.isWhiteBalanceModeSupported(.locked) {
-                device.whiteBalanceMode = .locked
-            }
-            focusController.applyFastFocusDefaults(on: device)
-            device.unlockForConfiguration()
-            is3ALocked = true
-        } catch {
-            // Intentionally silent — a failed 3A lock must not break the camera.
         }
     }
 
@@ -552,25 +572,27 @@ final class CameraService: NSObject, ObservableObject {
     /// session re-meters a fresh scene before locking again. Called on counting
     /// pause/resume (the operator may point at a different tray/lighting).
     private func unlock3A() {
-        guard is3ALocked, let device = captureDevice else { is3ALocked = false; return }
+        device3ALock.withLock {
+            guard is3ALocked, let device = captureDevice else { is3ALocked = false; return }
 
-        do {
-            try device.lockForConfiguration()
-            if device.isExposureModeSupported(.continuousAutoExposure) {
-                device.exposureMode = .continuousAutoExposure
+            do {
+                try device.lockForConfiguration()
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposureMode = .continuousAutoExposure
+                }
+                if device.isFocusModeSupported(.continuousAutoFocus) {
+                    device.focusMode = .continuousAutoFocus
+                }
+                if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                    device.whiteBalanceMode = .continuousAutoWhiteBalance
+                }
+                focusController.applyFastFocusDefaults(on: device)
+                device.unlockForConfiguration()
+            } catch {
+                // Intentionally silent.
             }
-            if device.isFocusModeSupported(.continuousAutoFocus) {
-                device.focusMode = .continuousAutoFocus
-            }
-            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
-                device.whiteBalanceMode = .continuousAutoWhiteBalance
-            }
-            focusController.applyFastFocusDefaults(on: device)
-            device.unlockForConfiguration()
-        } catch {
-            // Intentionally silent.
+            is3ALocked = false
         }
-        is3ALocked = false
     }
 
     // MARK: - BARCODE CONTROL
@@ -687,38 +709,40 @@ final class CameraService: NSObject, ObservableObject {
     /// Called on barcodeFocusQueue; safe to call even when the device is not locked.
     private func activateBarcodeAutoFocus() {
         guard let device = captureDevice else { return }
-        // A prior counting session on this same CameraService instance may have
-        // left is3ALocked=true. This call always puts the device back into
-        // continuous mode below, so the flag must follow — otherwise the next
-        // real complete-tray frame during actual counting sees is3ALocked still
-        // true and lock3AIfNeeded() silently no-ops despite the device no longer
-        // being locked.
-        is3ALocked = false
-        do {
-            try device.lockForConfiguration()
-            // Interest-point focus at screen centre. For bottle / curved labels the
-            // default continuous-AF tends to focus at infinity (background). Seeding the
-            // focus point at (0.5, 0.5) nudges it toward the near object in frame so the
-            // first sharp frame arrives faster. After the initial lock it stays continuous.
-            if device.isFocusModeSupported(.continuousAutoFocus) {
-                if device.isFocusPointOfInterestSupported {
-                    device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+        device3ALock.withLock {
+            // A prior counting session on this same CameraService instance may have
+            // left is3ALocked=true. This call always puts the device back into
+            // continuous mode below, so the flag must follow — otherwise the next
+            // real complete-tray frame during actual counting sees is3ALocked still
+            // true and lock3AIfNeeded() silently no-ops despite the device no longer
+            // being locked.
+            is3ALocked = false
+            do {
+                try device.lockForConfiguration()
+                // Interest-point focus at screen centre. For bottle / curved labels the
+                // default continuous-AF tends to focus at infinity (background). Seeding the
+                // focus point at (0.5, 0.5) nudges it toward the near object in frame so the
+                // first sharp frame arrives faster. After the initial lock it stays continuous.
+                if device.isFocusModeSupported(.continuousAutoFocus) {
+                    if device.isFocusPointOfInterestSupported {
+                        device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                    }
+                    device.focusMode = .continuousAutoFocus
                 }
-                device.focusMode = .continuousAutoFocus
-            }
-            if device.isExposureModeSupported(.continuousAutoExposure) {
-                if device.isExposurePointOfInterestSupported {
-                    device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    if device.isExposurePointOfInterestSupported {
+                        device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                    }
+                    device.exposureMode = .continuousAutoExposure
                 }
-                device.exposureMode = .continuousAutoExposure
+                if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                    device.whiteBalanceMode = .continuousAutoWhiteBalance
+                }
+                focusController.applyFastFocusDefaults(on: device)
+                device.unlockForConfiguration()
+            } catch {
+                // Intentionally silent — barcode scanning still works without focus assist.
             }
-            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
-                device.whiteBalanceMode = .continuousAutoWhiteBalance
-            }
-            focusController.applyFastFocusDefaults(on: device)
-            device.unlockForConfiguration()
-        } catch {
-            // Intentionally silent — barcode scanning still works without focus assist.
         }
 
         // Continuous-AF alone can drift onto the background and stay there;
@@ -738,39 +762,44 @@ final class CameraService: NSObject, ObservableObject {
     /// One-shot autoFocus/autoExpose at a normalised device point (0-1, top-left
     /// origin). Shared by manual tap-to-focus and the auto-focus-on-detect nudge
     /// (see `firePulseIfNewlyVisible`) — both just need "point the lens here once,"
-    /// the difference is only who calls it and with what point. Dispatches onto
-    /// barcodeFocusQueue (not sessionQueue) — this is device focus/exposure
-    /// configuration, which must never wait behind a slow ML pass.
+    /// the difference is only who calls it and with what point. Hops through
+    /// sessionQueue before barcodeFocusQueue, same ordering as
+    /// `enableBarcodeScanning()` — otherwise a tap landing at the same moment as
+    /// enable can reach barcodeFocusQueue first and have its one-shot focus point
+    /// immediately overwritten by `activateBarcodeAutoFocus()`'s continuous-AF reset.
     func focusPulse(at point: CGPoint) {
         guard let device = captureDevice else { return }
-        barcodeFocusQueue.async {
-            do {
-                try device.lockForConfiguration()
-                if device.isFocusPointOfInterestSupported,
-                   device.isFocusModeSupported(.autoFocus) {
-                    device.focusPointOfInterest = point
-                    device.focusMode = .autoFocus
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.barcodeFocusQueue.async {
+                do {
+                    try device.lockForConfiguration()
+                    if device.isFocusPointOfInterestSupported,
+                       device.isFocusModeSupported(.autoFocus) {
+                        device.focusPointOfInterest = point
+                        device.focusMode = .autoFocus
+                    }
+                    if device.isExposurePointOfInterestSupported,
+                       device.isExposureModeSupported(.autoExpose) {
+                        device.exposurePointOfInterest = point
+                        device.exposureMode = .autoExpose
+                    }
+                    device.unlockForConfiguration()
+                } catch {
+                    // Intentionally silent.
                 }
-                if device.isExposurePointOfInterestSupported,
-                   device.isExposureModeSupported(.autoExpose) {
-                    device.exposurePointOfInterest = point
-                    device.exposureMode = .autoExpose
+                #if DEBUG
+                // Debug-only visual aid: show a small square at the tapped/pulsed
+                // point, flipping to "focused" once isAdjustingFocus next reads
+                // false in captureOutput. Testing tool only — never shown in release.
+                self.pendingFocusIndicatorDevicePoint = point
+                DispatchQueue.main.async {
+                    self.focusIndicatorScreenPoint = self.previewLayer?
+                        .layerPointConverted(fromCaptureDevicePoint: point)
+                    self.isFocusIndicatorFocused = false
                 }
-                device.unlockForConfiguration()
-            } catch {
-                // Intentionally silent.
+                #endif
             }
-            #if DEBUG
-            // Debug-only visual aid: show a small square at the tapped/pulsed
-            // point, flipping to "focused" once isAdjustingFocus next reads
-            // false in captureOutput. Testing tool only — never shown in release.
-            self.pendingFocusIndicatorDevicePoint = point
-            DispatchQueue.main.async {
-                self.focusIndicatorScreenPoint = self.previewLayer?
-                    .layerPointConverted(fromCaptureDevicePoint: point)
-                self.isFocusIndicatorFocused = false
-            }
-            #endif
         }
     }
 
@@ -961,6 +990,7 @@ final class CameraService: NSObject, ObservableObject {
             guard let self else { return }
             self.heldTrayDetections.removeAll()
             self.incompleteFrames = 0
+            self.emptyPillFrames = 0
             self.pillTracker.reset()
             self.countStabilizer.reset()
             self.lastMedianPillSide = 0
@@ -1338,7 +1368,22 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             // confirmed tracks on the tray. PillTracker already owns hysteresis
             // (enter/keep/exit), so a coasting track is trusted, not clamped down
             // to this frame's raw visible count.
-            let counted = self.countStabilizer.update(rawCount: filtered.count)
+            //
+            // Hold a pure pill-miss (filtered.count == 0 while stableCount > 0)
+            // for pillMissHoldFrames before letting the zero reach the median —
+            // see pillMissHoldFrames doc comment.
+            let holdingEmptyPills: Bool
+            if filtered.isEmpty {
+                self.emptyPillFrames += 1
+                holdingEmptyPills = self.stableCount > 0
+                    && self.emptyPillFrames <= Self.pillMissHoldFrames
+            } else {
+                self.emptyPillFrames = 0
+                holdingEmptyPills = false
+            }
+            let counted = holdingEmptyPills
+                ? self.stableCount
+                : self.countStabilizer.update(rawCount: filtered.count)
 
             #if DEBUG
             self.pipelineFrameIndex += 1
@@ -1464,7 +1509,8 @@ extension CameraService {
             return DetectionResult(
                 rect: transformed,
                 confidence: detection.confidence,
-                originalFrameSize: detection.originalFrameSize
+                originalFrameSize: detection.originalFrameSize,
+                isCoasting: detection.isCoasting
             )
         }
 

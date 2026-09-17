@@ -190,7 +190,7 @@
 "settings.clearHistoryTitle" = "Are you sure want to clear all history?";
 "settings.clearHistoryMessage" = "This will delete all your saved data permanently.";
 "settings.hazardousDrugSetting" = "Hazardous Pill Counting";
-"settings.connectionInfo" = "PMS Connection Info";
+"settings.connectionInfo" = "PMS Configuration";
 "settings.connectionInfoScreenTitle" = "CONNECTION INFO";
 "settings.deviceSectionTitle" = "This Device (Dispenser Server)";
 "settings.deviceIpAddressLabel" = "IP Address";
@@ -218,6 +218,11 @@
 "settings.faceSessionTimeout2m" = "2 Minutes (Default)";
 "settings.faceSessionTimeout5m" = "5 Minutes";
 "settings.faceSessionTimeout10m" = "10 Minutes";
+"settings.sectionGeneral" = "General";
+"settings.sectionDispenseControlledDrug" = "Dispense Controlled Drug";
+"settings.sectionFaceDetection" = "Face Detection";
+"settings.sectionVoiceHapticFeedback" = "Voice and Haptic Feedback";
+"settings.sectionHazardousPillCounting" = "Hazardous Pill Counting";
 
 "faceAuth.enrollmentTitle" = "Add New User";
 "faceAuth.setupIntroTitle" = "Setup Quick Access";

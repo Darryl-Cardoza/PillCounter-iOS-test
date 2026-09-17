@@ -617,6 +617,13 @@ struct HamburgerMenuView: View {
 //            showStockCountPopup = true
 //            selectedStockCountOption = .newBatch
 
+        case .LockNow:
+            guard FaceSessionManager.shared.hasEnrolledUsers else {
+                ToastManager.shared.show(message: "No enrolled users")
+                return
+            }
+            FaceSessionManager.shared.lockDueToInactivity()
+
         case .Logout:
             Task {
                 showLogoutPopup = true

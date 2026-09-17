@@ -154,8 +154,20 @@ struct SessionLockOverlay: View {
 
     private func handleLockStateChange(_ newState: SessionLockState) {
         switch newState {
-        case .locked, .failed:
+        case .locked:
             stopScan()
+
+        case .failed:
+            // The camera is already stopped by this point: either
+            // FaceAuthenticationViewModel.failScanAsUnrecognized() stopped it
+            // internally (scan-budget timeout), or the user tapped Cancel
+            // from the scanning screen, which calls stopScan() itself before
+            // sessionManager.cancelScan()/markFailed() ever runs. A second,
+            // independent stopScan() call here raced the next startScan() on
+            // retry — both dispatch onto FaceCameraService's serial session
+            // queue, but this extra stop-then-immediately-restart pair made
+            // the preview intermittently fail to reattach every other retry.
+            break
 
         case .unlocked:
             stopScan()

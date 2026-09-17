@@ -484,8 +484,16 @@ final class CameraService: NSObject, ObservableObject {
 
     /// Activates continuous auto-focus + auto-exposure for barcode scanning.
     /// Called on the session queue; safe to call even when the device is not locked.
+    /// Reads live device state rather than a cached flag — 3A mode is mutated
+    /// from several other places (tray-count lock, tap-to-focus), so a cached
+    /// "already active" bit would go stale and skip re-activation when needed.
     private func activateBarcodeAutoFocus() {
         guard let device = captureDevice else { return }
+        // Already continuous on both axes: skip re-seeding the centre point,
+        // which would retrigger a fresh 3A convergence hunt for no benefit.
+        guard device.focusMode != .continuousAutoFocus || device.exposureMode != .continuousAutoExposure else {
+            return
+        }
         do {
             try device.lockForConfiguration()
             // Interest-point focus at screen centre. For bottle / curved labels the

@@ -59,7 +59,9 @@ final class MockTransactionDataSource: TransactionDataSource {
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity? { nil }
     func fetchAllRxNos(for user: UserEntity) -> [String] { [] }
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity] { [] }
+    func fetchByRxNo(_ rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity? { nil }
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? { nil }
+    func fetchDeletedByRxNo(_ rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity? { nil }
     func countTransactions(for user: UserEntity, isDispense: Bool, status: CountStatus) -> Int { 0 }
     func getWorkflowStep(txn: PillCountTransactionEntity) -> ControlledStep? { nil }
     func restoreDeleted(txnId: Int64) {}

@@ -162,6 +162,9 @@ extension PillScanViewModel {
 
             let orderId = order.placerOrderNumber
 
+            // RXE-12 — distinguishes a refill of the same Rx from a correction to it.
+            let refillNo = medication.numberOfRefills.trimmingCharacters(in: .whitespacesAndNewlines)
+
             if ndc.isEmpty || qty == nil {
                 hasError = true
                 break
@@ -179,6 +182,7 @@ extension PillScanViewModel {
                 isDispense: inboundType,
                 targetCount: targetCount,
                 rxNo: orderId,
+                refillNo: refillNo.isEmpty ? nil : refillNo,
                 priority: priority,
                 inventoryCount: inventoryCount,
                 messageControlId: message.messageControlId
@@ -228,11 +232,16 @@ extension PillScanViewModel {
             return
         }
 
+        // RXE-12 — an edit only applies to the exact refill it names; a different
+        // refill of the same Rx is a separate dispense cycle, not this one's edit.
+        let medRefillNo = medication.numberOfRefills.trimmingCharacters(in: .whitespacesAndNewlines)
+        let refillNo: String? = medRefillNo.isEmpty ? nil : medRefillNo
+
         // 1. Find active transaction; restore soft-deleted one if needed
         let currentUser = userDataLocalStorage.fetchByUserId(userId)
-        var existingTxn = currentUser.flatMap { transactionDAO.fetchByRxNo(rxNo, for: $0).first }
+        var existingTxn = currentUser.flatMap { transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: $0) }
         if existingTxn == nil {
-            if let currentUser, let deleted = transactionDAO.fetchDeletedByRxNo(rxNo, for: currentUser) {
+            if let currentUser, let deleted = transactionDAO.fetchDeletedByRxNo(rxNo, refillNo: refillNo, for: currentUser) {
                 Log("HL7 ORC|XO: restoring deleted txnId=\(deleted.txn_id) for rxNo=\(rxNo)")
                 transactionDAO.restoreDeleted(txnId: deleted.txn_id)
                 existingTxn = transactionDAO.fetchById(deleted.txn_id)
@@ -247,13 +256,28 @@ extension PillScanViewModel {
                 return (status?.isEmpty ?? true) ? nil : status
             }()
             let isStatusOnlyUpdate = (orderStatusRaw == "HD" || orderStatusRaw == "CM" || orderStatusRaw == "CA")
+
+            // rxNo exists under a different refill — an XO for the wrong fill cycle,
+            // not "Rx not on this device" at all. Distinct toast so the mismatch is
+            // visible instead of silently falling through as a no-op.
+            let rxKnownUnderOtherRefill = currentUser
+                .map { transactionDAO.fetchByRxNo(rxNo, for: $0) }?
+                .isEmpty == false
+
             if !isStatusOnlyUpdate {
-                HL7NotificationManager.show(
-                    title: "Edit Rx Failed",
-                    body: "No transaction found for Rx \(rxNo)"
-                )
+                if rxKnownUnderOtherRefill {
+                    HL7NotificationManager.show(
+                        title: "Edit Rx Failed",
+                        body: "Rx \(rxNo) found but refill \(refillNo ?? "—") does not match any stored transaction"
+                    )
+                } else {
+                    HL7NotificationManager.show(
+                        title: "Edit Rx Failed",
+                        body: "No transaction found for Rx \(rxNo)"
+                    )
+                }
             }
-            Log("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), orderStatus=\(orderStatusRaw ?? "nil") — ignoring")
+            Log("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), refillNo=\(refillNo ?? "nil"), refillMismatch=\(rxKnownUnderOtherRefill), orderStatus=\(orderStatusRaw ?? "nil") — ignoring")
             callback?(false)
             return
         }
@@ -323,7 +347,7 @@ extension PillScanViewModel {
             drugId: resolvedDrugId,
             targetCount: newTargetCount,
             priority: newPriority,
-            refillNo: nil
+            refillNo: refillNo
         )
 
         Log("HL7 ORC|XO applied: txnId=\(txnId), rxNo=\(rxNo), drugId=\(resolvedDrugId), targetCount=\(newTargetCount), priority=\(newPriority ?? "nil")")
@@ -403,6 +427,7 @@ extension PillScanViewModel {
         isDispense: Bool,
         targetCount: Int32? = nil,
         rxNo: String? = nil,
+        refillNo: String? = nil,
         priority: String? = nil,
         inventoryCount: Int32? = nil,
         messageControlId: String? = nil,
@@ -505,8 +530,22 @@ extension PillScanViewModel {
         let currentUser = userDataLocalStorage.fetchByUserId(userId)
         var isNewTxn = true
 
-        if let rxNo, !rxNo.isEmpty, let user = currentUser,
-           let existing = transactionDAO.fetchByRxNo(rxNo, for: user).first {
+        // A txn arriving from PMS must never silently take over the screen from
+        // whatever the user is actively working on — it only becomes current if
+        // it's correcting the Rx already active (see below). Otherwise it's saved
+        // and left for the user to pick from the transaction list.
+        let activeTxnIdBeforeReceive = self.currentTransaction?.txn_id
+
+        // Same Rx AND same refill = a correction to the txn already in progress.
+        // Same Rx but a DIFFERENT refill is a new dispense cycle, not a correction —
+        // it must not touch the existing txn's progress, so it falls through to the
+        // create branch below like any other new txn.
+        let existingSameRxRefill = { () -> PillCountTransactionEntity? in
+            guard let rxNo, !rxNo.isEmpty, let user = currentUser else { return nil }
+            return transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: user)
+        }()
+
+        if let existing = existingSameRxRefill {
             // Already exists — update in place, do NOT create a duplicate
             isNewTxn = false
             transactionDAO.updateFromHL7Edit(
@@ -514,18 +553,18 @@ extension PillScanViewModel {
                 drugId: drugIdToUse,
                 targetCount: targetCount ?? existing.target_count,
                 priority: priority ?? existing.txn_priority,
-                refillNo: nil
+                refillNo: refillNo
             )
             TransactionStore.shared.setHl7Identifiers(
                 txnId: existing.txn_id,
                 messageControlId: messageControlId,
                 transactionOrderId: transactionOrderId
             )
-            self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
+            if existing.txn_id == activeTxnIdBeforeReceive {
+                self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
+            }
             Log("HL7: Rx \(rxNo) already exists (txnId=\(existing.txn_id)) — updated in place, no new txn created")
         } else {
-            self.currentTransaction = nil
-
             await createTransaction(
                 drugId: drugIdToUse,
                 isDispense: isDispense,
@@ -535,29 +574,35 @@ extension PillScanViewModel {
                 drugName: resolvedName,
                 rxNo: rxNo,
                 priority: priority,
-                workFlowStep: initialWorkFlowStep
+                workFlowStep: initialWorkFlowStep,
+                refillNo: refillNo
             )
 
-            guard currentTransaction != nil else {
+            // createTransaction sets currentTransaction as a side effect to hand
+            // back the created row — capture it, then restore whatever the user
+            // was actively working on (nil included — an idle screen must stay
+            // idle, not auto-jump into the just-received PMS txn).
+            let createdTxn = self.currentTransaction
+
+            guard let createdTxn else {
                 Log("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)")
                 HL7NotificationManager.show(
                     title: L10n.BarcodeScan.drugNotFound,
                     body: L10n.BarcodeScan.drugNotFoundMessage
                 )
+                self.currentTransaction = activeTxnIdBeforeReceive.flatMap { transactionDAO.fetchById($0) }
                 return
             }
+            self.currentTransaction = activeTxnIdBeforeReceive.flatMap { transactionDAO.fetchById($0) }
 
-            if let txnId = currentTransaction?.txn_id {
-                TransactionStore.shared.setHl7Identifiers(
-                    txnId: txnId,
-                    messageControlId: messageControlId,
-                    transactionOrderId: transactionOrderId
-                )
-            }
+            let txnId = createdTxn.txn_id
+            TransactionStore.shared.setHl7Identifiers(
+                txnId: txnId,
+                messageControlId: messageControlId,
+                transactionOrderId: transactionOrderId
+            )
 
-            if isControlled, hasInventory, let invCount = inventoryCount,
-               let txnId = currentTransaction?.txn_id {
-
+            if isControlled, hasInventory, let invCount = inventoryCount {
                 transactionDetailDAO.add(
                     txnId: txnId,
                     pillCount: invCount,
@@ -621,6 +666,8 @@ extension PillScanViewModel {
 
         let targetCount = Int32(Double(zui.orderDispenseQuantity) ?? 0)
         let rxNo = zui.orderRxNumber.isEmpty ? nil : zui.orderRxNumber
+        // ZUI field 7 — same refill/correction distinction as RXE-12 for DispenseSure.
+        let refillNo = zui.orderFillNumber.isEmpty ? nil : zui.orderFillNumber
 
         await processHl7DrugAndCreateTransaction(
             ndc: ndc,
@@ -628,6 +675,7 @@ extension PillScanViewModel {
             isDispense: true,
             targetCount: targetCount,
             rxNo: rxNo,
+            refillNo: refillNo,
             messageControlId: message.messageControlId,
             transactionOrderId: zui.orderTransactionOrderId.isEmpty ? nil : zui.orderTransactionOrderId
         )
@@ -656,6 +704,8 @@ extension PillScanViewModel {
 
         let targetCount = Int32(Double(zni.dispenseAmount) ?? 0)
         let rxNo = zni.prescriptionNumber.isEmpty ? nil : zni.prescriptionNumber
+        // ZNI field 15 — same refill/correction distinction as RXE-12 for DispenseSure.
+        let refillNo = zni.fillNumber.isEmpty ? nil : zni.fillNumber
 
         await processHl7DrugAndCreateTransaction(
             ndc: ndc,
@@ -663,6 +713,7 @@ extension PillScanViewModel {
             isDispense: true,
             targetCount: targetCount,
             rxNo: rxNo,
+            refillNo: refillNo,
             messageControlId: message.messageControlId,
             transactionOrderId: zni.fillerOrderNumber.isEmpty ? nil : zni.fillerOrderNumber
         )

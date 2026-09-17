@@ -433,8 +433,6 @@ enum L10n {
         static let rxOnHoldTitle = NSLocalizedString("barcodeScan.rxOnHoldTitle", comment: "")
         static let rxOnHoldMessage = NSLocalizedString("barcodeScan.rxOnHoldMessage", comment: "")
         static let rxNotSentByPms = NSLocalizedString("barcodeScan.rxNotSentByPms", comment: "")
-        static let rxNdcMismatch = NSLocalizedString("barcodeScan.rxNdcMismatch", comment: "")
-        static let rxRefillMismatch = NSLocalizedString("barcodeScan.rxRefillMismatch", comment: "")
         static let invalidNdc = NSLocalizedString("barcodeScan.invalidNdc", comment: "")
         static let rxInProgressTitle = NSLocalizedString("barcodeScan.rxInProgressTitle", comment: "")
         static let rxInProgressMessage = NSLocalizedString("barcodeScan.rxInProgressMessage", comment: "")

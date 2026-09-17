@@ -192,14 +192,22 @@ class LoginViewModel: ObservableObject {
     }
 
     // MARK: - Logout
-    /// `refreshToken` must be captured by the caller BEFORE
-    /// `AppLogoutManager.performLogout()` wipes it from the Keychain — this
-    /// method is a `Task { }` racing that synchronous wipe, so reading
-    /// `store.refreshToken` internally here is not reliably before-or-after.
-    func logout(refreshToken: String) async {
-        isLoading = true
-        defer { isLoading = false }
+    /// Sync half of logout — must run before the login screen shows, not
+    /// after the network call in `logout(refreshToken:)` below.
+    func resetStateOnLogout() {
+        resendTimer?.invalidate()
+        userEmail = ""
+        isChecked = false
+        otp = Array(repeating: "", count: 6)
+        isOtpSent = false
+        isOtpVerificationSuccess = false
+        resendOTPSent = false
+        errorMessage = nil
+    }
 
+    /// `refreshToken` must be captured by the caller BEFORE
+    /// `AppLogoutManager.performLogout()` wipes it from the Keychain.
+    func logout(refreshToken: String) async {
         do {
             let result = try await loginrepo.logout(
                 refreshToken: refreshToken,
@@ -217,18 +225,6 @@ class LoginViewModel: ObservableObject {
         } catch {
             Log("logout error: \(error)")
         }
-
-        // LoginViewModel is a single app-scoped instance (PillCounterApp.swift)
-        // reused across logout->login, so typed-in fields must be cleared
-        // explicitly here or they resurface pre-filled on the next login.
-        resendTimer?.invalidate()
-        userEmail = ""
-        isChecked = false
-        otp = Array(repeating: "", count: 6)
-        isOtpSent = false
-        isOtpVerificationSuccess = false
-        resendOTPSent = false
-        errorMessage = nil
     }
 
     // MARK: - Resend OTP

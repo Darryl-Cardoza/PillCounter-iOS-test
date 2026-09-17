@@ -105,6 +105,8 @@ struct HamburgerMenuView: View {
                 pillScanVM: pillScanViewModel,
                 loginViewModel: loginViewModel
             )
+            // Must run before navigateToRoot(), not inside the Task below.
+            loginViewModel.resetStateOnLogout()
             // isLoggedIn is now false, so AppNavigation's root Group already
             // swaps to LoginEmailView — just clear the stack underneath it
             // instead of pushing a second login destination on top.

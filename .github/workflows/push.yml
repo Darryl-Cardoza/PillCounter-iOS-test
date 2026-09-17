@@ -45,19 +45,20 @@ jobs:
     with:
       # ---- core ----
       xcode_version: "latest-stable"
-      # Pinned explicitly (not auto-detected) as a temporary workaround: the
-      # project's local Swift package reference to Hl7Core (relativePath
-      # ../../swiftpackage, from https://github.com/Rite-Technologies-23/
-      # mobrite_hl7_parser_builder) isn't resolvable in CI yet, and
-      # `xcodebuild -list` fails outright while trying to resolve it just to
-      # enumerate schemes. Passing the scheme explicitly skips that call.
-      # Remove this pin (revert to "") once Hl7Core is published as a
-      # resolvable package. Actual compilation (test/build) will still fail
-      # until then -- this only prevents that unrelated crash from also
-      # blocking lint/format, which don't need the project to build at all.
+      # The project has a LOCAL Swift package reference to Hl7Core
+      # (relativePath ../../swiftpackage) because Hl7Core's Package.swift
+      # lives at hl7Core/swiftpackage inside its repo, not at the repo root --
+      # SPM remote-package resolution can't target a subdirectory. checkout_hl7core
+      # below has the pipeline fetch that folder fresh for each job and stage
+      # it as a sibling directory (then delete it again once the job's
+      # xcodebuild steps finish) -- nothing is vendored into this repo or
+      # committed anywhere. Scheme is kept pinned explicitly (not
+      # auto-detected) since the repo also has a LOAD_TEST scheme and
+      # auto-detection isn't guaranteed to pick PillCounter first.
       scheme: "PillCounter"
       workspace: ""    # auto-detected (PillCounter.xcworkspace)
       project: ""      # auto-detected (PillCounter.xcodeproj)
+      checkout_hl7core: true
       configuration: "Release"
       coverage_threshold: "30.00"
       build_archive: true

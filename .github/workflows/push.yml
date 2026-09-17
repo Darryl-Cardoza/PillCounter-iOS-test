@@ -72,7 +72,7 @@ jobs:
 
       # ---- dead code ----
       run_dead_code: true
-      run_clang_analyzer: false
+      run_clang_analyzer: true
 
       # ---- security ----
       run_security: true

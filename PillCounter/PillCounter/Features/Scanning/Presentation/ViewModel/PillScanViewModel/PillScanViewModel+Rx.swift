@@ -25,8 +25,11 @@ extension PillScanViewModel {
         let mappedData = BarcodeFormatParser.mappedData(format: barcodeFormat, actualValue: actualValue)
 
         guard !mappedData.isEmpty else {
+            print("[RxScan] Barcode did not parse into any known field — unparseable format")
             scannedRxData   = ParsedScanData()
             showRxFlowPopup = false
+            showToastMessage(text: L10n.BarcodeScan.invalidRxBarcode)
+            rxScanFailed = true
             return
         }
 
@@ -67,9 +70,10 @@ extension PillScanViewModel {
 
             let allStoredRxNos = transactionDAO.fetchAllRxNos(for: currentUser)
             print("[RxScan] All rx_no values in DB: \(allStoredRxNos)")
-            print("[RxScan] Looking up rxNo: '\(rxNo)'")
+            let scannedRefillForLookup = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces)
+            print("[RxScan] Looking up rxNo: '\(rxNo)' refillNo: '\(scannedRefillForLookup ?? "nil")'")
 
-            let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser)
+            let existingTxn = fetchRxTransaction(rxNo: rxNo, refillNo: scannedRefillForLookup, for: currentUser)
             print("[RxScan] fetchByRxNo('\(rxNo)') → \(existingTxn == nil ? "nil" : "txnId=\(existingTxn!.txn_id) status=\(existingTxn!.status ?? "nil")")")
 
             guard let existingTxn else {
@@ -92,18 +96,6 @@ extension PillScanViewModel {
                 )
                 fetchedRxTransaction = nil
                 showRxFlowPopup = true
-                return
-            }
-
-            let scannedRefil = mappedData["REFILLNO"]?.trimmingCharacters(in: .whitespaces) ?? ""
-            let ndcMismatch  = !ndc.isEmpty && ndc != (existingTxn.drug?.ndc ?? "")
-            let refilMismatch = !scannedRefil.isEmpty && scannedRefil != (existingTxn.refill_no ?? "")
-
-            if ndcMismatch || refilMismatch {
-                print("[RxScan] Rx \(rxNo) mismatch — scanned ndc: \(ndc) vs stored: \(existingTxn.drug?.ndc ?? "nil"), scanned refil: \(scannedRefil) vs stored: \(existingTxn.refill_no ?? "nil")")
-                let mismatchMessage = ndcMismatch ? L10n.BarcodeScan.rxNdcMismatch : L10n.BarcodeScan.rxRefillMismatch
-                showToastMessage(text: mismatchMessage)
-                rxScanFailed = true
                 return
             }
 
@@ -136,19 +128,25 @@ extension PillScanViewModel {
         }
     }
 
-    /// Looks up the transaction for the given Rx number among active (non-deleted,
-    /// non-completed) transactions only. A deleted transaction must never be
-    /// resurrected by a fresh scan of the same Rx label — the device scanning
-    /// a barcode is not evidence the PMS wants that Rx active again.
+    /// Looks up the transaction for the given Rx number AND refill among active
+    /// (non-deleted, non-completed) transactions only. A single rx_no can have
+    /// multiple stored transactions (one per refill cycle), so `refillNo` is
+    /// required to pick the right one — falling back to `.first` (as HL7
+    /// processing used to) silently returns whichever refill happened to be
+    /// fetched first, which reads as a false NDC/refill mismatch against the
+    /// correct txn.
     ///
-    /// This is scoped to local scans only. It does NOT apply to an inbound
-    /// PMS edit (ORC|XO) for the same rxNo — `editFixedHl7Transaction` (see
-    /// PillScanViewModel+HL7.swift) deliberately restores a soft-deleted txn
-    /// there via `fetchDeletedByRxNo`/`restoreDeleted`, because an ORC|XO is
-    /// the PMS explicitly telling this device the Rx is active again — the
-    /// PMS is authoritative over local delete state, unlike a stray scan.
-    func fetchRxTransaction(rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
-        transactionDAO.fetchByRxNo(rxNo, for: user).first
+    /// A deleted transaction must never be resurrected by a fresh scan of the
+    /// same Rx label — the device scanning a barcode is not evidence the PMS
+    /// wants that Rx active again. This is scoped to local scans only. It does
+    /// NOT apply to an inbound PMS edit (ORC|XO) for the same rxNo —
+    /// `editFixedHl7Transaction` (see PillScanViewModel+HL7.swift) deliberately
+    /// restores a soft-deleted txn there via `fetchDeletedByRxNo`/`restoreDeleted`,
+    /// because an ORC|XO is the PMS explicitly telling this device the Rx is
+    /// active again — the PMS is authoritative over local delete state, unlike
+    /// a stray scan.
+    func fetchRxTransaction(rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity? {
+        transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: user)
     }
 
     // MARK: Proceed with Rx Transaction
@@ -170,7 +168,7 @@ extension PillScanViewModel {
             return
         }
 
-        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, refillNo: scannedRxData?.refil, for: currentUser) else {
             print("[RxScan] proceedFromRxScan — Rx \(rxNo) not found in DB, creating new txn")
             await createTransactionFromRxScan()
             return
@@ -215,7 +213,7 @@ extension PillScanViewModel {
             return
         }
 
-        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, for: currentUser) else {
+        guard let existingTxn = fetchRxTransaction(rxNo: rxNo, refillNo: rxData.refil, for: currentUser) else {
             guard AppStorageManager.shared.isStandalone else {
                 print("[RxScan] Rx \(rxNo) not found in DB — isStandalone false, showing rx not found")
                 showToastMessage(text: L10n.BarcodeScan.rxNotSentByPms)

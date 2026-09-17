@@ -229,10 +229,9 @@ struct StockCountEditDetailsSheet: View {
             // Column header
             lotColumnHeader()
 
-            // Rows — sealed rows only, and only while the count is still > 0
-            // (a zeroed row is dropped from view entirely, not shown as an editable 0).
+            // Rows — sealed rows only. Stays visible down to 0 so the user can restore it.
             ForEach($lotRows) { $row in
-                if row.field == .sealed && row.sealedBottles > 0 {
+                if row.field == .sealed {
                     sealedLotRow(row: $row)
                 }
             }
@@ -326,10 +325,9 @@ struct StockCountEditDetailsSheet: View {
             // Column header
             lotColumnHeader()
 
-            // Rows — open rows only, and only while the count is still > 0
-            // (a zeroed row is dropped from view entirely, not shown as an editable 0).
+            // Rows — open rows only. Stays visible down to 0 so the user can restore it.
             ForEach($lotRows) { $row in
-                if row.field == .open && row.openPills > 0 {
+                if row.field == .open {
                     lotRow(row: $row, value: $row.openPills, field: .open)
                 }
             }
@@ -469,7 +467,6 @@ struct StockCountEditDetailsSheet: View {
         for (_, lotBottles) in sealedGrouped {
             guard let first = lotBottles.first else { continue }
             let sealedQty = lotBottles.reduce(0) { $0 + Int($1.bottle_qty) }
-            guard sealedQty > 0 else { continue }
             rows.append(EditableLotRow(
                 bottleIds: lotBottles.map { $0.bottle_id },
                 lot: first.lot_no ?? "",
@@ -489,7 +486,6 @@ struct StockCountEditDetailsSheet: View {
         for (_, lotBottles) in openedGrouped {
             guard let first = lotBottles.first else { continue }
             let openPills = lotBottles.reduce(0) { $0 + Int($1.loose_qty) }
-            guard openPills > 0 else { continue }
             rows.append(EditableLotRow(
                 bottleIds: lotBottles.map { $0.bottle_id },
                 lot: first.lot_no ?? "",
@@ -567,9 +563,52 @@ struct StockCountEditDetailsSheet: View {
                 }
             }
         }
+
+        let stockTxnDeleted = pruneZeroedRowsAndEmptyTxn()
+
         // Counts were written straight to the DAO — pull them back into the detail
         // card's stepper state so it reflects the edit instead of the stale scan value.
         stockCountViewModel.resyncScannedDrugCounts()
+
+        // groupedTransactions (item list) is normally rebuilt by the reactive DB-change
+        // publisher, but that publisher no-ops while suppressListReload is set (true for
+        // the whole time a scan's detail card is showing behind this sheet). Rebuild it
+        // directly here instead of touching that flag.
+        stockCountViewModel.reloadAllState()
+
+        // The scanned-drug-details card behind this sheet has no reactive link to the
+        // delete above — close it directly whenever it's still showing the NDC just emptied.
+        if stockTxnDeleted, stockCountViewModel.scannedDrugData?.ndc == txn.ndc {
+            stockCountViewModel.scannedDrugData = nil
+            stockCountViewModel.selectedGroupedTransaction = nil
+            stockCountViewModel.showStockCountScannedDetails = false
+        }
+
         onDismiss()
+    }
+
+    /// A lot edited down to 0/0 should disappear entirely rather than linger as a visible
+    /// zero-qty row — deletes any bottle row now at 0/0, and the StockTxn itself once that
+    /// empties it completely. Returns whether the StockTxn was deleted.
+    @discardableResult
+    private func pruneZeroedRowsAndEmptyTxn() -> Bool {
+        guard let batch = stockCountViewModel.currentBatch,
+              let stockTxn = stockCountViewModel.stockTxnDAO.fetchByBatchAndNdc(batchId: batch.batch_id, ndc: txn.ndc) else { return false }
+
+        // A PMS-requested NDC is a required line item for this batch — it must stay
+        // visible (and re-editable) even at 0/0, not disappear once zeroed out.
+        guard batch.req_id_from_pms == nil else { return false }
+
+        let bottles = stockCountViewModel.bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+        for bottle in bottles where bottle.bottle_qty == 0 && bottle.loose_qty == 0 {
+            // A row whose delete didn't actually persist must not be treated as gone —
+            // fall through to the remaining-rows check below, which will then correctly
+            // see it still there and refuse to delete the parent StockTxn.
+            guard stockCountViewModel.bottleInfoDAO.softDelete(bottleId: bottle.bottle_id) else { continue }
+        }
+
+        let remaining = stockCountViewModel.bottleInfoDAO.fetchByStockTxn(stockTxnId: stockTxn.stock_txn_id)
+        guard remaining.isEmpty else { return false }
+        return stockCountViewModel.stockTxnDAO.softDelete(stockTxnId: stockTxn.stock_txn_id)
     }
 }

@@ -101,7 +101,7 @@ struct UnifiedCameraLayout: View {
             }
 
             // ── Loading spinner ───────────────────────────────────────────────
-            if pillScanViewModel.isCheckingNdc || stockCountViewModel.isLoading
+            if pillScanViewModel.isCheckingNdc
                 || (!cameraService.isAuthorized && !cameraService.isPermissionCheckComplete) {
                 Color.black.opacity(0.5).ignoresSafeArea()
                 PillCountingLoader()

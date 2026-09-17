@@ -75,7 +75,9 @@ protocol TransactionDataSource: AnyObject {
     func fetchLatest(for user: UserEntity) -> PillCountTransactionEntity?
     func fetchAllRxNos(for user: UserEntity) -> [String]
     func fetchByRxNo(_ rxNo: String, for user: UserEntity) -> [PillCountTransactionEntity]
+    func fetchByRxNo(_ rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity?
     func fetchDeletedByRxNo(_ rxNo: String, for user: UserEntity) -> PillCountTransactionEntity?
+    func fetchDeletedByRxNo(_ rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity?
     func countTransactions(for user: UserEntity, isDispense: Bool, status: CountStatus) -> Int
     func getWorkflowStep(txn: PillCountTransactionEntity) -> ControlledStep?
     func restoreDeleted(txnId: Int64)
@@ -118,7 +120,8 @@ protocol StockTxnDataSource: AnyObject {
     func fetchByBatch(batchId: Int64) -> [StockTxnEntity]
     func fetchByBatchAndNdc(batchId: Int64, ndc: String) -> StockTxnEntity?
     func updateStatus(stockTxnId: Int64, status: CountStatus)
-    func softDelete(stockTxnId: Int64)
+    @discardableResult
+    func softDelete(stockTxnId: Int64) -> Bool
 }
 
 // MARK: - BottleInfo store seam
@@ -128,12 +131,19 @@ protocol BottleInfoDataSource: AnyObject {
 
     @discardableResult
     func setSealedBottleQty(stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?) -> BottleInfoEntity?
+    func setSealedBottleQtyTracked(
+        stockTxnId: Int64, bottleQty: Int32, lotNo: String?, expNo: String?
+    ) -> (entity: BottleInfoEntity?, created: Bool)
     func sealedBottleQty(stockTxnId: Int64, lotNo: String?, expNo: String?) -> Int32
     @discardableResult
     func addOpenedBottle(
         stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
         images: [BottleImageRecord]
     ) -> BottleInfoEntity?
+    func addOpenedBottleTracked(
+        stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
+        images: [BottleImageRecord]
+    ) -> (entity: BottleInfoEntity?, created: Bool)
     func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity?
     func appendImages(bottleId: Int64, images: [BottleImageRecord])
     func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32)
@@ -141,7 +151,8 @@ protocol BottleInfoDataSource: AnyObject {
     func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity]
     func fetchByBatch(batchId: Int64) -> [BottleInfoEntity]
     func setAbsolute(bottleId: Int64, bottleQty: Int32?, looseQty: Int32?)
-    func softDelete(bottleId: Int64)
+    @discardableResult
+    func softDelete(bottleId: Int64) -> Bool
 }
 
 // MARK: - Transaction-detail store seam

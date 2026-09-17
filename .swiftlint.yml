@@ -1,0 +1,8 @@
+# Overrides only `included` from the shared pipeline config -- this repo's
+# source lives under PillCounter/, not the generic Sources/App/Shared/Modules
+# names ops-rite-ios-pipeline's default .swiftlint.yml assumes. Everything
+# else (opt_in_rules, custom_rules, thresholds) is inherited from parent_config.
+parent_config: .pipeline/.github/tool/.swiftlint.yml
+
+included:
+  - PillCounter

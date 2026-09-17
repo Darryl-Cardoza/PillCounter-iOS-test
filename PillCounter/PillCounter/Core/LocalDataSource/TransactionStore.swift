@@ -46,7 +46,7 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
             entity.drug_id = drugId
             entity.batch_id = batchId
             entity.rx_no = rxNo
-            entity.refill_no = refillNo
+            entity.refill_no = Self.normalizedRefillNo(refillNo)
             entity.txn_priority = Self.normalizedPriority(priority)
             entity.is_dispense = isDispense
             entity.status = CountStatus.PARTIAL.rawValue
@@ -264,8 +264,19 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
                 sort: nil,
                 in: context
             )
-            return results.filter { $0.rx_no == rxNo }
+            return results
+                .filter { $0.rx_no == rxNo }
+                .sorted { $0.created_at > $1.created_at }
         }
+    }
+
+    /// Refill-scoped counterpart of `fetchByRxNo(_:for:)`. Centralizes the
+    /// normalized refill compare so callers matching "same Rx AND same fill"
+    /// (HL7 dedup-by-rxNo, Rx-label rescan lookup) share one definition instead
+    /// of each re-deriving `TransactionStore.normalizedRefillNo(...) == ...`.
+    func fetchByRxNo(_ rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity? {
+        let target = Self.normalizedRefillNo(refillNo)
+        return fetchByRxNo(rxNo, for: user).first { Self.normalizedRefillNo($0.refill_no) == target }
     }
 
     /// Convenience overload for callers without a UserEntity reference (e.g. the image web server).
@@ -313,9 +324,10 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
     /// than via NSPredicate (which would compare against ciphertext).
     func getByRxNoAndFillNo(_ rxNo: String, fillNo: String) -> PillCountTransactionEntity? {
         sync {
+            let normalizedFillNo = Self.normalizedRefillNo(fillNo)
             let results = fetchAllMatching(predicate: NSPredicate(format: "is_deleted == false"), sort: nil, in: context)
             return results
-                .filter { $0.rx_no == rxNo && $0.refill_no == fillNo }
+                .filter { $0.rx_no == rxNo && Self.normalizedRefillNo($0.refill_no) == normalizedFillNo }
                 .sorted { $0.created_at > $1.created_at }
                 .first
         }
@@ -354,6 +366,26 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
             )
             return results
                 .filter { $0.rx_no == rxNo }
+                .sorted { $0.updated_at > $1.updated_at }
+                .first
+        }
+    }
+
+    /// Refill-scoped counterpart of `fetchDeletedByRxNo(_:for:)`. Filtering by
+    /// refill BEFORE taking `.first` matters because a single rx_no can have
+    /// several deleted rows (one per refill cycle) — collapsing to the single
+    /// most-recently-updated row first, then checking its refill, silently
+    /// drops any other refill's restorable transaction.
+    func fetchDeletedByRxNo(_ rxNo: String, refillNo: String?, for user: UserEntity) -> PillCountTransactionEntity? {
+        sync {
+            let normalizedTarget = Self.normalizedRefillNo(refillNo)
+            let results = fetchAllMatching(
+                predicate: NSPredicate(format: "user == %@ AND is_deleted == true", user),
+                sort: nil,
+                in: context
+            )
+            return results
+                .filter { $0.rx_no == rxNo && Self.normalizedRefillNo($0.refill_no) == normalizedTarget }
                 .sorted { $0.updated_at > $1.updated_at }
                 .first
         }
@@ -407,7 +439,7 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
             txn.drug = drug
             txn.target_count = targetCount
             txn.txn_priority = Self.normalizedPriority(priority)
-            if let refillNo { txn.refill_no = refillNo }
+            if let refillNo { txn.refill_no = Self.normalizedRefillNo(refillNo) }
             txn.is_synced = false
             txn.updated_at = Int64(Date().timeIntervalSince1970 * 1000)
             CoreDataManager.shared.save(context: context)
@@ -1100,5 +1132,17 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
     private static func normalizedPriority(_ priority: String?) -> String? {
         guard let priority else { return nil }
         return priority.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Trims and strips leading zeros so every refill source — RXE-12
+    /// (`numberOfRefills`), ZUI-7 (`orderFillNumber`), ZNI-15 (`fillNumber`), the
+    /// barcode `refillno` field (`\d{1,3}`), and rows created before refill
+    /// tracking existed (`nil`) — collapse to the same identity. Without this,
+    /// "0", "00", "" and nil compare as four different transactions even though
+    /// they all mean "no refill" (see `fetchRxTransaction`, `getByRxNoAndFillNo`).
+    static func normalizedRefillNo(_ refillNo: String?) -> String {
+        let trimmed = refillNo?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let stripped = trimmed.drop { $0 == "0" }
+        return stripped.isEmpty ? "0" : String(stripped)
     }
 }

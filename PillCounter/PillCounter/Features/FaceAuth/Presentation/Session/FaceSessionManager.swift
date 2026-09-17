@@ -27,7 +27,12 @@ final class FaceSessionManager: ObservableObject {
     /// (FaceSessionTimeoutOption); seeded from that persisted value here.
     var inactivityTimeout: TimeInterval = AppStorageManager.shared.faceSessionTimeoutOption.seconds
 
-    @Published private(set) var lockState: SessionLockState = .locked
+    // Defaults to `.locked`/visible only when a session is actually logged
+    // in — a logged-out cold launch must never show the lock overlay over
+    // LoginEmailView, and `lockOnColdLaunch()` (called from `init()` right
+    // after these properties are set) already no-ops when logged out, so it
+    // can never flip a wrong `.locked` default back to `.unlocked` itself.
+    @Published private(set) var lockState: SessionLockState = AppStorageManager.shared.isLoggedIn ? .locked : .unlocked(userName: "")
     @Published private(set) var currentUserId: String?
     @Published private(set) var currentUserName: String?
 
@@ -47,7 +52,7 @@ final class FaceSessionManager: ObservableObject {
     /// even though `isLocked` is already false, so the transition reads as
     /// one continuous motion instead of the underlying app flashing in
     /// mid-animation. `dismissOverlay()` ends this window.
-    @Published private(set) var isOverlayVisible: Bool = true
+    @Published private(set) var isOverlayVisible: Bool = AppStorageManager.shared.isLoggedIn
 
     /// True once the cold-launch lock has been dismissed at least once. The
     /// app's root view uses this to switch presentation mechanisms: the
@@ -61,13 +66,23 @@ final class FaceSessionManager: ObservableObject {
     /// camera sessions simultaneously, so exactly one is ever active.
     @Published private(set) var hasCompletedFirstUnlock: Bool = false
 
+    /// Set by `lockOnLogin()`, consumed once by `SessionLockOverlay` to start
+    /// the camera immediately instead of waiting for the manual "Unlock" tap.
+    /// `beginScanning()` alone only flips `lockState` — it doesn't know how to
+    /// wire up `FaceAuthenticationViewModel`/the camera, which only
+    /// `SessionLockOverlay.startScan()` can do, so the overlay needs its own
+    /// signal to call that for us instead of the manager driving `.scanning`
+    /// directly (that left the camera never actually started).
+    @Published private(set) var shouldAutoStartScan: Bool = false
+
     private var lastActiveAt: Date = Date()
     private var idleTimer: Timer?
 
     private init() {
         // Display-only continuity across relaunches (spec 7: resume in place
-        // once unlocked) — does not affect lockState, which always starts
-        // `.locked` per `lockOnColdLaunch`.
+        // once unlocked) — does not affect lockState, which starts `.locked`
+        // (logged in) or `.unlocked` (logged out) per the property defaults
+        // above, then `lockOnColdLaunch()` confirms/no-ops accordingly.
         currentUserId = AppStorageManager.shared.faceLockCurrentUserId
         currentUserName = AppStorageManager.shared.faceLockCurrentUserName
     }
@@ -87,6 +102,20 @@ final class FaceSessionManager: ObservableObject {
         !FaceUserStore.shared.getAllUsers(activeOnly: true).isEmpty
     }
 
+    /// Every lock entry point's shared preamble: no-op when logged out,
+    /// release any existing lock when nobody's enrolled, otherwise let the
+    /// caller proceed. Centralized so a future lock entry point can't be
+    /// added without going through this same check. Returns whether the
+    /// caller should continue locking.
+    private func canProceedToLock() -> Bool {
+        guard AppStorageManager.shared.isLoggedIn else { return false }
+        guard hasEnrolledUsers else {
+            releaseLockIfNoUsersEnrolled()
+            return false
+        }
+        return true
+    }
+
     /// Drops any active lock when the roster is empty — called on app
     /// foreground/launch and right after user deletion, so deleting the last
     /// enrolled user can never leave the app stuck behind the overlay.
@@ -102,6 +131,7 @@ final class FaceSessionManager: ObservableObject {
         idleDurationAtLock = nil
         lockState = .unlocked(userName: "")
         isOverlayVisible = false
+        shouldAutoStartScan = false
         stopIdleTimer()
     }
 
@@ -111,24 +141,12 @@ final class FaceSessionManager: ObservableObject {
     /// fresh scan — call once at app start, before the first frame renders.
     /// Skipped entirely when nobody is enrolled.
     func lockOnColdLaunch() {
-        guard hasEnrolledUsers else {
-            releaseLockIfNoUsersEnrolled()
-            return
-        }
+        guard canProceedToLock() else { return }
         lockState = .locked
         isOverlayVisible = true
         idleDurationAtLock = nil
         stopIdleTimer()
     }
-
-    /// Set by `lockOnLogin()`, consumed once by `SessionLockOverlay` to start
-    /// the camera immediately instead of waiting for the manual "Unlock" tap.
-    /// `beginScanning()` alone only flips `lockState` — it doesn't know how to
-    /// wire up `FaceAuthenticationViewModel`/the camera, which only
-    /// `SessionLockOverlay.startScan()` can do, so the overlay needs its own
-    /// signal to call that for us instead of the manager driving `.scanning`
-    /// directly (that left the camera never actually started).
-    @Published private(set) var shouldAutoStartScan: Bool = false
 
     func consumeAutoStartScan() {
         shouldAutoStartScan = false
@@ -139,10 +157,7 @@ final class FaceSessionManager: ObservableObject {
     /// went through login and a second manual step here would be redundant.
     /// Skipped entirely when nobody is enrolled.
     func lockOnLogin() {
-        guard hasEnrolledUsers else {
-            releaseLockIfNoUsersEnrolled()
-            return
-        }
+        guard canProceedToLock() else { return }
         lockState = .scanning
         isOverlayVisible = true
         idleDurationAtLock = nil
@@ -153,10 +168,7 @@ final class FaceSessionManager: ObservableObject {
     /// App entered background — always lock; resuming to foreground with a
     /// stale session is exactly the gap this feature closes.
     func lockOnBackground() {
-        guard hasEnrolledUsers else {
-            releaseLockIfNoUsersEnrolled()
-            return
-        }
+        guard canProceedToLock() else { return }
         // Not an idle-timeout lock, so don't show "Idle for X min" — that
         // text should only describe lockDueToInactivity.
         idleDurationAtLock = isLocked ? idleDurationAtLock : nil
@@ -166,6 +178,7 @@ final class FaceSessionManager: ObservableObject {
     }
 
     func lockDueToInactivity() {
+        guard AppStorageManager.shared.isLoggedIn else { return }
         guard !isLocked else { return }
         guard hasEnrolledUsers else {
             releaseLockIfNoUsersEnrolled()
@@ -221,7 +234,26 @@ final class FaceSessionManager: ObservableObject {
     /// after the brief auto-dismiss delay on the unlocked screen.
     func dismissOverlay() {
         isOverlayVisible = false
+        shouldAutoStartScan = false
         hasCompletedFirstUnlock = true
+    }
+
+    /// Call from `AppLogoutManager.performLogout` — without this, the prior
+    /// operator's `currentUserId`/`.unlocked` state survives logout, so the
+    /// global drag gesture keeps calling `recordActivity()` for a logged-out
+    /// user and a subsequent idle timeout locks the (now-visible) login
+    /// screen behind a face-scan overlay.
+    func resetOnLogout() {
+        currentUserId = nil
+        currentUserName = nil
+        AppStorageManager.shared.faceLockCurrentUserId = nil
+        AppStorageManager.shared.faceLockCurrentUserName = nil
+
+        lockState = .unlocked(userName: "")
+        isOverlayVisible = false
+        shouldAutoStartScan = false
+        idleDurationAtLock = nil
+        stopIdleTimer()
     }
 
     // MARK: - Activity tracking
@@ -230,6 +262,11 @@ final class FaceSessionManager: ObservableObject {
     /// idle clock and persists the current owner's last-active timestamp so
     /// it's accurate even if the app is killed a moment later.
     func recordActivity() {
+        // No separate isLoggedIn check needed: resetOnLogout() clears
+        // currentUserId, so this guard already excludes a logged-out
+        // session — worth keeping this the single check since it runs on
+        // every drag-gesture sample (PillCounterApp.swift), not just lock
+        // entry points.
         guard !isLocked, let userId = currentUserId else { return }
         lastActiveAt = Date()
         FaceUserStore.shared.updateLastAuthenticatedAt(id: userId, date: lastActiveAt)

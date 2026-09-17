@@ -169,11 +169,9 @@ class LoginViewModel: ObservableObject {
                 store.tokenExpiryTimestamp =
                     Date().addingTimeInterval(expiresIn).timeIntervalSince1970
 
-                await MainActor.run {
-                    SessionManager.shared.reset()
-                    Hl7ServiceController.shared.evaluate()
-                    FaceSessionManager.shared.lockOnLogin()
-                }
+                SessionManager.shared.reset()
+                Hl7ServiceController.shared.evaluate()
+                FaceSessionManager.shared.lockOnLogin()
                 print("IsPmsIntegrated \(store.isPmsIntegrated)")
                 print("allowLocalStorage \(store.allowLocalStorage)")
             } else {
@@ -194,13 +192,17 @@ class LoginViewModel: ObservableObject {
     }
 
     // MARK: - Logout
-    func logout() async {
+    /// `refreshToken` must be captured by the caller BEFORE
+    /// `AppLogoutManager.performLogout()` wipes it from the Keychain — this
+    /// method is a `Task { }` racing that synchronous wipe, so reading
+    /// `store.refreshToken` internally here is not reliably before-or-after.
+    func logout(refreshToken: String) async {
         isLoading = true
         defer { isLoading = false }
 
         do {
             let result = try await loginrepo.logout(
-                refreshToken: store.refreshToken ?? "",
+                refreshToken: refreshToken,
                 deviceKey: DeviceKeyProvider.shared.getDeviceKey()
             )
 
@@ -219,12 +221,14 @@ class LoginViewModel: ObservableObject {
         // LoginViewModel is a single app-scoped instance (PillCounterApp.swift)
         // reused across logout->login, so typed-in fields must be cleared
         // explicitly here or they resurface pre-filled on the next login.
+        resendTimer?.invalidate()
         userEmail = ""
         isChecked = false
         otp = Array(repeating: "", count: 6)
         isOtpSent = false
         isOtpVerificationSuccess = false
         resendOTPSent = false
+        errorMessage = nil
     }
 
     // MARK: - Resend OTP

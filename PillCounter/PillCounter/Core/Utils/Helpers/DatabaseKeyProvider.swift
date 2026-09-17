@@ -173,21 +173,14 @@ final class DatabaseKeyProvider {
         return dek
     }
 
-    /// The stored DEK could not be recovered — its wrapper key is gone or
-    /// invalidated (e.g. the Secure Enclave key was evicted by a biometric
-    /// re-enrollment, passcode reset, or reinstall). Any value already
-    /// encrypted under the old DEK is now permanently unreadable, but that is
-    /// scoped to individual encrypted fields, not the whole local store: both
-    /// slots leave existing rows/files in place and let each consumer
-    /// degrade on read — field DEK recovery relies on
-    /// `decryptEncryptedFieldsInPlace` blanking a field it can't open (row
-    /// stays, ciphertext on disk untouched for a future successful key
-    /// load); image DEK recovery orphans existing encrypted photo files the
-    /// same way (`PhotoFileManager.loadDecryptedData`'s nil-on-failure).
-    /// Previously this destroyed and recreated the entire CoreData store for
-    /// the `.field` slot — that deleted unrelated undamaged data (every
-    /// enrolled face, transaction, user profile) over a single field that
-    /// could no longer decrypt.
+    /// Wrapper key is gone/invalidated (Secure Enclave key evicted, passcode
+    /// reset, reinstall) — generates and persists a brand-new DEK, so
+    /// anything encrypted under the old one is permanently unreadable. Each
+    /// consumer degrades on its own read instead of the whole store being
+    /// wiped (the old behavior here, which deleted every enrolled face,
+    /// transaction, and user profile over one field that couldn't decrypt):
+    /// `decryptEncryptedFieldsInPlace` blanks a field it can't open, and
+    /// `PhotoFileManager.loadDecryptedData` returns nil for an orphaned photo.
     private func recoverFromUnrecoverableDek(slot: DekSlot, storage: AppStorageManager) -> SymmetricKey {
         storage.setString(nil, forKey: slot.wrappedStorageKey)
         storage.setString(nil, forKey: slot.kekIdStorageKey)

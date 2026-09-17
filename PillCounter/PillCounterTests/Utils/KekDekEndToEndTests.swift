@@ -326,6 +326,68 @@ struct KekDekEndToEndTests {
 
     // MARK: - Failure-path realism: corrupted/unreadable ciphertext never leaks
 
+    // MARK: - Field-DEK recovery preserves the store
+
+    /// Regression test for a real bug found in review: `recoverFromUnrecoverableDek`
+    /// used to call `CoreDataManager.shared.destroyAndReloadStore()`, wiping every
+    /// row in the local database over a single field that could no longer decrypt.
+    /// It now only re-keys the DEK and lets `decryptEncryptedFieldsInPlace` blank
+    /// the affected field on read — this proves the store, its other rows, and the
+    /// undecryptable ciphertext bytes themselves all survive the recovery.
+    @Test func fieldDekRecoveryDoesNotDestroyTheStoreOrOtherRows() throws {
+        resetAllDekState()
+        defer {
+            AppStorageManager.shared.string(forKey: DekSlot.field.kekIdStorageKey).map {
+                KekDekManager.shared.deleteKey(alias: $0 == "local-bootstrap"
+                    ? DekSlot.field.bootstrapAlias
+                    : DekSlot.field.serverAliasPrefix + $0)
+            }
+            resetAllDekState()
+        }
+
+        let survivorId = "test-user-\(TestIds.unique())"
+        let victimId = "test-user-\(TestIds.unique())"
+        defer { cleanUp(userIds: [survivorId, victimId]) }
+
+        // Encrypt and save two rows under the current (bootstrap) DEK.
+        let survivor = makeUser(userId: survivorId, email: "survivor@example.com", fname: "Survivor")
+        _ = makeUser(userId: victimId, email: "victim@example.com", fname: "Victim")
+        let survivorRawCiphertextBefore = survivor.primitiveValue(forKey: "email") as? String
+
+        // Simulate the wrapper key becoming unrecoverable (e.g. Secure Enclave
+        // key evicted by biometric re-enrollment) while the wrapped DEK blob
+        // and kekId are left in place — exactly what getOrCreateDek sees right
+        // before it calls recoverFromUnrecoverableDek.
+        KekDekManager.shared.deleteKey(alias: DekSlot.field.bootstrapAlias)
+        DatabaseKeyProvider.shared.resetCacheForTesting()
+
+        let dekAfterRecovery = DatabaseKeyProvider.shared.getOrCreateDek(for: .field)
+        #expect(AppStorageManager.shared.string(forKey: DekSlot.field.kekIdStorageKey) == "local-bootstrap")
+
+        // The store itself must still exist and be fully usable — not wiped.
+        context.reset()
+        let survivorAfter = UserStore.shared.fetchByUserId(survivorId)
+        let victimAfter = UserStore.shared.fetchByUserId(victimId)
+        #expect(survivorAfter != nil)
+        #expect(victimAfter != nil)
+
+        // The old rows' ciphertext bytes on disk are untouched by recovery —
+        // only the wrapper (KEK) changed, never already-written field data —
+        // even though neither row can decrypt under the brand-new DEK.
+        let survivorRawCiphertextAfter = survivorAfter?.primitiveValue(forKey: "email") as? String
+        #expect(survivorRawCiphertextAfter == survivorRawCiphertextBefore)
+        #expect(FieldEncryptionManager.shared.decrypt(survivorRawCiphertextAfter) == nil)
+
+        // A fresh write under the recovered DEK still round-trips normally —
+        // recovery isn't a dead end, just a one-time loss of pre-recovery data.
+        let newUserId = "test-user-\(TestIds.unique())"
+        defer { cleanUp(userIds: [newUserId]) }
+        _ = makeUser(userId: newUserId, email: "after-recovery@example.com")
+        context.reset()
+        #expect(UserStore.shared.fetchByUserId(newUserId)?.email == "after-recovery@example.com")
+        #expect(dekAfterRecovery == DatabaseKeyProvider.shared.getOrCreateDek(for: .field))
+    }
+
     @Test func corruptedCiphertextDecryptsToNilNotGarbagePlaintext() throws {
         resetAllDekState()
         defer { resetAllDekState() }

@@ -34,10 +34,8 @@ struct SessionLockOverlay: View {
         .onChange(of: sessionManager.lockState) { _, newState in
             handleLockStateChange(newState)
         }
-        .onChange(of: sessionManager.shouldAutoStartScan) { _, shouldStart in
-            guard shouldStart else { return }
-            sessionManager.consumeAutoStartScan()
-            startScan()
+        .onChange(of: sessionManager.shouldAutoStartScan) { _, _ in
+            autoStartScanIfNeeded()
         }
         .onAppear {
             // The overlay window is torn down and rebuilt fresh on every
@@ -45,9 +43,7 @@ struct SessionLockOverlay: View {
             // `shouldAutoStartScan` can already be true at mount time — the
             // .onChange above only sees value CHANGES, not the initial value,
             // so a login-triggered lock would otherwise never call startScan().
-            guard sessionManager.shouldAutoStartScan else { return }
-            sessionManager.consumeAutoStartScan()
-            startScan()
+            autoStartScanIfNeeded()
         }
         .onChange(of: viewModel.state) { _, newState in
             // The VM's own scanBudgetSeconds is the sole scan timeout — it
@@ -134,6 +130,12 @@ struct SessionLockOverlay: View {
     }
 
     // MARK: - Scan lifecycle
+
+    private func autoStartScanIfNeeded() {
+        guard sessionManager.shouldAutoStartScan else { return }
+        sessionManager.consumeAutoStartScan()
+        startScan()
+    }
 
     private func startScan() {
         sessionManager.beginScanning()

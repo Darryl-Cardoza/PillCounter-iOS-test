@@ -121,6 +121,10 @@ class HL7SyncQueue<Item: HL7QueueItem> {
     func resetParkedState() {
         processingQueue.async { [weak self] in
             self?.parkedRequestIds.removeAll()
+            // New session's resends carry new MSH-10s, so entries stashed
+            // under the old session's messageIds can never be claimed by a
+            // legit late ACK past this point — clear them too or they leak.
+            self?.recentlyTimedOutByAckMessageId.removeAll()
         }
     }
 

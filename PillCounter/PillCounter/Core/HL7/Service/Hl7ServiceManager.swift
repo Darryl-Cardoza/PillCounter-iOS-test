@@ -175,17 +175,28 @@ final class Hl7ServiceManager {
     func stop() {
         print("[HL7][SERVER] Stopping all services")
         stopBrowsing()
-        disconnectClientInternal(notifyListener: true)
-        // Must run AFTER disconnectClientInternal — it unconditionally
-        // (re)starts the static reconnect timer on every disconnect, which
-        // would otherwise undo this stop and leave the timer running.
-        stopStaticReconnectTimer()
+        // Hops onto clientQueue because disconnectClientInternal/
+        // startStaticReconnectTimerIfNeeded/staticReconnectTimer are also
+        // mutated from handleClientStateChange, which always runs on
+        // clientQueue — without this, stop() (called from an arbitrary
+        // caller thread) races that handler on the same timer/connection
+        // state.
+        clientQueue.sync { [weak self] in
+            guard let self else { return }
+            self.disconnectClientInternal(notifyListener: true)
+            // Must run AFTER disconnectClientInternal — it unconditionally
+            // (re)starts the static reconnect timer on every disconnect, which
+            // would otherwise undo this stop and leave the timer running.
+            self.stopStaticReconnectTimer()
+        }
         stopServerIfRunning()
     }
 
     func disconnectClient() {
         print("[HL7][CLIENT] External disconnect requested")
-        disconnectClientInternal(notifyListener: true)
+        clientQueue.sync { [weak self] in
+            self?.disconnectClientInternal(notifyListener: true)
+        }
     }
 
     private func disconnectClientInternal(notifyListener: Bool) {
@@ -634,10 +645,22 @@ final class Hl7ServiceManager {
     /// is intentional: PMS integrations use self-signed certs, so this trades cert
     /// validation for encryption-only TLS. Centralized here so that tradeoff is
     /// visible and changeable in exactly one place.
+    /// Without this, a connection that never gets a SYN-ACK (PMS unplugged/
+    /// firewalled) parks in `.waiting` forever — Network.framework keeps
+    /// retrying internally but never promotes it to `.failed`, so
+    /// `isConnectingOrConnected` never clears and every reconnect path
+    /// (browser results, static timer, `reconnectIfNeeded`) stays gated off.
+    /// Set above the 10s ACK timeout since static-IP RTT is less predictable
+    /// than local Bonjour LAN.
+    private static let connectTimeoutSeconds: Int = 15
+
     private static func makeConnectionParameters() -> NWParameters {
+        let tcpOptions = NWProtocolTCP.Options()
+        tcpOptions.connectionTimeout = connectTimeoutSeconds
+
         let parameters: NWParameters
         if AppStorageManager.shared.bypassSSL {
-            parameters = NWParameters.tcp
+            parameters = NWParameters(tls: nil, tcp: tcpOptions)
         } else {
             let tlsOptions = NWProtocolTLS.Options()
             sec_protocol_options_set_min_tls_protocol_version(
@@ -648,7 +671,7 @@ final class Hl7ServiceManager {
                 { _, _, completion in completion(true) },
                 DispatchQueue.global()
             )
-            parameters = NWParameters(tls: tlsOptions)
+            parameters = NWParameters(tls: tlsOptions, tcp: tcpOptions)
         }
         parameters.includePeerToPeer = true
         return parameters

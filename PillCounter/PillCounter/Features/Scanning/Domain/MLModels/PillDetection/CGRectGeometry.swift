@@ -28,7 +28,8 @@ enum CGRectGeometry {
 }
 
 extension Array where Element == CGFloat {
-    /// Lower-middle element of the sorted array; 0 when empty.
+    /// Upper-middle element of the sorted array (for an even count, `count / 2`
+    /// integer-divides up to the higher of the two middle values); 0 when empty.
     func median() -> CGFloat {
         guard !isEmpty else { return 0 }
         return sorted()[count / 2]

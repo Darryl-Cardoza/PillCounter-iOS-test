@@ -48,7 +48,7 @@ final class AppColors: ObservableObject {
     }
 
     var secondary: Color {
-        hexColor(currentPalette?.secondary, fallback: "E63950")
+        hexColor(currentPalette?.secondary, fallback: "F05169")
     }
 
     var tertiary: Color {

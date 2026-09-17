@@ -318,8 +318,8 @@ final class GloveDetectionService {
                 guard finalConf >= confThreshold else { continue }
 
                 // ── Un-letterbox: 512×512 → original frame space ──────────
-                // Letterbox.preprocess stored (scale, padX, padY) used during
-                // preprocessing. Reverse the same transform:
+                // (scale, padX, padY) came from Letterbox.letterbox's returned
+                // ScaleInfo during preprocessing. Reverse the same transform:
                 //   original_coord = (letterbox_coord − pad) / scale
                 let x1 = (cx - w / 2 - padX) / scale
                 let y1 = (cy - h / 2 - padY) / scale

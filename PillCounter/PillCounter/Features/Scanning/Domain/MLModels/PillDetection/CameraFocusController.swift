@@ -35,28 +35,41 @@ final class CameraFocusController {
     // MARK: - PERIODIC FOCUS RE-ARM (barcode scanning)
 
     private let reArmQueue: DispatchQueue
+    private let device3ALock: NSLock
     private var reArmTimer: DispatchSourceTimer?
     private var restoreContinuousAFWorkItem: DispatchWorkItem?
-    /// Number of active callers relying on the re-arm timer (barcode scanning,
-    /// bottle rescan listening — either can start/stop independently of the
-    /// other), so the timer only tears down once nobody needs it.
-    private var reArmRefCount = 0
 
-    /// - Parameter queue: the session queue the caller already serializes
-    ///   device access on. Timer fires and touches `device` on this queue.
-    init(reArmQueue: DispatchQueue) {
+    /// - Parameters:
+    ///   - reArmQueue: the session queue the caller already serializes device
+    ///     access on. Timer fires and touches `device` on this queue.
+    ///   - device3ALock: the SAME lock `CameraService` takes around its own
+    ///     `lockForConfiguration()` calls (`lock3AIfNeeded`/`unlock3A`/
+    ///     `activateBarcodeAutoFocus`). The re-arm timer fires asynchronously
+    ///     on its own schedule, independent of any caller — of every writer
+    ///     touching the device's 3A modes, it's the one most likely to land
+    ///     mid-transaction against one of those, so it must serialize through
+    ///     the same lock rather than a private one.
+    init(reArmQueue: DispatchQueue, device3ALock: NSLock) {
         self.reArmQueue = reArmQueue
+        self.device3ALock = device3ALock
     }
 
     /// Starts periodically re-centering the focus point of interest while
     /// barcode scanning is active. Continuous-AF alone can drift onto the
     /// background and stay there if the operator repositions the barcode —
     /// re-seeding the center point + a one-shot nudge every 1.5s pulls focus
-    /// back onto whatever the operator is actually holding up. Ref-counted:
-    /// a second caller starting re-arm while the first is still active does
-    /// not reset the timer's phase.
+    /// back onto whatever the operator is actually holding up.
+    ///
+    /// Idempotent, NOT ref-counted: callers (`enableBarcodeScanning`,
+    /// `enableBottleRescanListening`) call this as "make sure re-arm is on,"
+    /// not "acquire one re-arm token" — one fires far more often than the
+    /// other calls `stopReArming()`. A counter that only reset at zero could
+    /// get stuck above zero forever, leaving the timer running (and forcing
+    /// `.autoFocus`) straight through pill counting after a 3A lock — the
+    /// exact "breathing" this controller exists to stop. `stopReArming()`
+    /// callers instead pass the OR of every flag that still wants re-arming,
+    /// so the timer's on/off state can never drift from the real feature state.
     func startReArming(device: AVCaptureDevice) {
-        reArmRefCount += 1
         guard reArmTimer == nil else { return }
 
         consecutiveStableTicks = 0
@@ -70,20 +83,19 @@ final class CameraFocusController {
         reArmTimer = timer
     }
 
-    /// Balances one `startReArming` call. Only tears the timer down once every
-    /// caller has stopped, so one listener stopping never kills the timer a
-    /// second, still-active listener relies on.
-    func stopReArming() {
-        reArmRefCount = max(0, reArmRefCount - 1)
-        guard reArmRefCount == 0 else { return }
+    /// Stops re-arming unless another feature still needs it.
+    /// - Parameter stillNeeded: true if some other flag (barcode scanning or
+    ///   bottle rescan listening) is still active and relies on the timer —
+    ///   the caller derives this from live state, not a call-count.
+    func stopReArming(stillNeeded: Bool) {
+        guard !stillNeeded else { return }
         tearDownReArmTimer()
     }
 
-    /// Unconditionally stops re-arming regardless of how many callers are
-    /// still "active" — for full session teardown (`stop()`), where nothing
-    /// should keep running no matter what state the feature flags are in.
+    /// Unconditionally stops re-arming regardless of what any feature flag
+    /// says — for full session teardown (`stop()`), where nothing should
+    /// keep running no matter what.
     func forceStopReArming() {
-        reArmRefCount = 0
         tearDownReArmTimer()
     }
 
@@ -115,35 +127,39 @@ final class CameraFocusController {
         // genuine operator reposition is still caught quickly.
         guard consecutiveStableTicks < Self.stableTicksBeforeSkip else { return }
 
-        do {
-            try device.lockForConfiguration()
-            if device.isFocusPointOfInterestSupported {
-                device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+        device3ALock.withLock {
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusPointOfInterestSupported {
+                    device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                }
+                // One-shot nudge toward the center point, then fall back to
+                // continuous so normal tracking resumes between re-arms.
+                if device.isFocusModeSupported(.autoFocus) {
+                    device.focusMode = .autoFocus
+                } else if device.isFocusModeSupported(.continuousAutoFocus) {
+                    device.focusMode = .continuousAutoFocus
+                }
+                device.unlockForConfiguration()
+            } catch {
+                // Intentionally silent — a failed re-arm must not break scanning.
             }
-            // One-shot nudge toward the center point, then fall back to
-            // continuous so normal tracking resumes between re-arms.
-            if device.isFocusModeSupported(.autoFocus) {
-                device.focusMode = .autoFocus
-            } else if device.isFocusModeSupported(.continuousAutoFocus) {
-                device.focusMode = .continuousAutoFocus
-            }
-            device.unlockForConfiguration()
-        } catch {
-            // Intentionally silent — a failed re-arm must not break scanning.
         }
 
         // Restore continuous tracking shortly after the nudge so the device
         // isn't left in one-shot .autoFocus between timer firings. Tracked so
         // stopReArming() can cancel it if scanning stops within the 0.3s window.
         restoreContinuousAFWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak device] in
-            guard let device, device.isFocusModeSupported(.continuousAutoFocus) else { return }
-            do {
-                try device.lockForConfiguration()
-                device.focusMode = .continuousAutoFocus
-                device.unlockForConfiguration()
-            } catch {
-                // Intentionally silent.
+        let workItem = DispatchWorkItem { [weak self, weak device] in
+            guard let self, let device, device.isFocusModeSupported(.continuousAutoFocus) else { return }
+            self.device3ALock.withLock {
+                do {
+                    try device.lockForConfiguration()
+                    device.focusMode = .continuousAutoFocus
+                    device.unlockForConfiguration()
+                } catch {
+                    // Intentionally silent.
+                }
             }
         }
         restoreContinuousAFWorkItem = workItem

@@ -35,21 +35,9 @@ final class Letterbox {
         }
     }
 
-    /// Scale info of the most recent whole-frame `preprocess` call. Kept for
-    /// callers that still read it; the pill path uses the value `letterbox`
-    /// returns instead, so two detectors can never race on it.
-    static var currentScaleInfo: ScaleInfo?
-
     // CIContext is thread-safe and expensive to create; share one across the
     // scanning feature (CameraMotionEstimator reuses this too).
     static let context = CIContext()
-
-    /// Letterbox the whole frame to `targetSize`×`targetSize`.
-    static func preprocess(_ px: CVPixelBuffer, targetSize: Int) -> CVPixelBuffer? {
-        guard let result = letterbox(px, targetSize: targetSize, cropRect: nil) else { return nil }
-        currentScaleInfo = result.info
-        return result.buffer
-    }
 
     /// Letterbox `cropRect` (top-left pixel coordinates; nil = whole frame) to a
     /// square buffer. Pixels outside the rect never reach the output — the

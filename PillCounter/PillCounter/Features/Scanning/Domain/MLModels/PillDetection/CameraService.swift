@@ -24,7 +24,7 @@ private final class SynchronizedBox<T> {
     }
 }
 
-private extension NSLock {
+extension NSLock {
     func withLock<T>(_ body: () -> T) -> T {
         lock()
         defer { unlock() }
@@ -45,13 +45,15 @@ final class CameraService: NSObject, ObservableObject {
     /// which showed isAdjustingFocus=true frames landing mid-100ms+ ML passes
     /// on iPad before this queue existed.
     private let barcodeFocusQueue = DispatchQueue(label: "camera.barcodeFocus.queue", qos: .userInteractive)
-    /// Serializes `device.lockForConfiguration()` 3A changes between
-    /// `sessionQueue` (lock3AIfNeeded/unlock3A) and `barcodeFocusQueue`
-    /// (activateBarcodeAutoFocus) — `is3ALocked`'s own SynchronizedBox only
-    /// protects the flag's memory, not the device call + flag write together,
-    /// so without this the two queues could interleave their device
-    /// configuration and leave is3ALocked disagreeing with the device's
-    /// actual AF/AE mode.
+    /// Serializes every `device.lockForConfiguration()` 3A change across every
+    /// queue that can issue one: `sessionQueue` (lock3AIfNeeded/unlock3A),
+    /// `barcodeFocusQueue` (activateBarcodeAutoFocus, focusPulse, and —
+    /// injected into `CameraFocusController` — the periodic re-arm timer and
+    /// its restore work item), and reseedCenterFocusAndExposure. Without this,
+    /// two of these could interleave their lockForConfiguration/unlock
+    /// transactions and leave the device's actual AF/AE mode disagreeing with
+    /// `is3ALocked` (whose own SynchronizedBox only protects the flag's
+    /// memory, not the device call + flag write together) or with each other.
     private let device3ALock = NSLock()
 
     // MARK: - CAMERA CORE
@@ -61,6 +63,12 @@ final class CameraService: NSObject, ObservableObject {
     private var videoInput: AVCaptureDeviceInput?
     private var captureDevice: AVCaptureDevice?
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+
+    /// Captured once at init. `UIDevice.current` is a main-thread-affine
+    /// UIKit singleton; `captureOutput` reads this every frame on
+    /// `sessionQueue`, so it must not touch `UIDevice.current` directly —
+    /// the device idiom never changes at runtime anyway.
+    private let isPad = UIDevice.current.userInterfaceIdiom == .pad
 
     // MARK: - BARCODE SCANNING
     @Published var scannedCode: String = ""
@@ -116,7 +124,7 @@ final class CameraService: NSObject, ObservableObject {
     // frame gate, and periodic re-arm during barcode scanning. Re-arm timer
     // runs on barcodeFocusQueue (not sessionQueue) so its 1.5s cadence never
     // depends on how long the current ML pass takes.
-    private lazy var focusController = CameraFocusController(reArmQueue: barcodeFocusQueue)
+    private lazy var focusController = CameraFocusController(reArmQueue: barcodeFocusQueue, device3ALock: device3ALock)
 
     /// Reject a "tray" whose bbox covers at least this fraction of the frame — a
     /// background surface (e.g. the table) fills the frame, whereas a real tray is
@@ -151,6 +159,14 @@ final class CameraService: NSObject, ObservableObject {
     private var heldTrayDetections: [TrayResult] = []
     private var incompleteFrames: Int = 0
     private var emptyPillFrames: Int = 0
+    /// Session-queue-owned mirror of the published `stableCount`, read by the
+    /// pill-miss hold logic below. `stableCount` is `@Published` and only
+    /// ever written on main (one `DispatchQueue.main.async` hop behind this
+    /// frame's pipeline), so reading it directly here — on sessionQueue —
+    /// would be both a data race and a frame or two stale. This field is
+    /// written synchronously right after `counted` is computed, so it is
+    /// always this frame's true value by the time the next frame reads it.
+    private var lastCounted: Int = 0
 
 
     /// Auto-focus-on-detect presence edges (session-queue state) — see
@@ -548,23 +564,25 @@ final class CameraService: NSObject, ObservableObject {
     /// wrong depth/background and stays blurry until something else nudges
     /// it back — the intermittent "sometimes blurry" behavior.
     private func reseedCenterFocusAndExposure(on device: AVCaptureDevice) {
-        do {
-            try device.lockForConfiguration()
-            if device.isFocusPointOfInterestSupported {
-                device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+        device3ALock.withLock {
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusPointOfInterestSupported {
+                    device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                }
+                if device.isFocusModeSupported(.continuousAutoFocus) {
+                    device.focusMode = .continuousAutoFocus
+                }
+                if device.isExposurePointOfInterestSupported {
+                    device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                }
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposureMode = .continuousAutoExposure
+                }
+                device.unlockForConfiguration()
+            } catch {
+                // Intentionally silent — camera still works without this tweak.
             }
-            if device.isFocusModeSupported(.continuousAutoFocus) {
-                device.focusMode = .continuousAutoFocus
-            }
-            if device.isExposurePointOfInterestSupported {
-                device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
-            }
-            if device.isExposureModeSupported(.continuousAutoExposure) {
-                device.exposureMode = .continuousAutoExposure
-            }
-            device.unlockForConfiguration()
-        } catch {
-            // Intentionally silent — camera still works without this tweak.
         }
     }
 
@@ -630,9 +648,9 @@ final class CameraService: NSObject, ObservableObject {
         }
         barcodeFocusQueue.async { [weak self] in
             guard let self else { return }
-            // Ref-counted: only actually stops once the rescan listener (if
-            // active) also stops re-arming.
-            self.focusController.stopReArming()
+            // Derived from live state, not a call-count: only actually stops
+            // once the rescan listener (if active) also no longer needs it.
+            self.focusController.stopReArming(stillNeeded: self.bottleRescanEnabled)
             // Intentionally preserve barcodeLock.lockedValue. If scanning is
             // re-enabled while the same physical barcode is still in frame, the
             // lock prevents it from immediately re-firing. The lock is only
@@ -691,15 +709,22 @@ final class CameraService: NSObject, ObservableObject {
             print("📷 [CameraService] bottle rescan listening DISABLED")
             self.bottleRescanLock.forceRelease()
             // Re-lock 3A so the pill count settles back down once rescan listening ends.
-            self.is3ALocked = false
+            // Both statements under device3ALock — see the lock's doc comment: a bare
+            // `is3ALocked = false` here without it would let another queue (re-arm
+            // timer, activateBarcodeAutoFocus) observe the flag mid-transition, before
+            // lock3AIfNeeded() has actually put the device back in locked mode.
+            self.device3ALock.withLock {
+                self.is3ALocked = false
+            }
             self.lock3AIfNeeded()
         }
         barcodeFocusQueue.async { [weak self] in
             guard let self else { return }
-            // Ref-counted: only actually stops once the primary barcode scanner
-            // (if active) also stops re-arming. Runs on barcodeFocusQueue since
-            // the re-arm timer itself now lives there.
-            self.focusController.stopReArming()
+            // Derived from live state, not a call-count: only actually stops
+            // once the primary barcode scanner (if active) also no longer
+            // needs it. Runs on barcodeFocusQueue since the re-arm timer
+            // itself lives there.
+            self.focusController.stopReArming(stillNeeded: self.barcodeEnabled)
             // Metadata delegate intentionally left attached — see the comment in
             // `disableBarcodeScanning()`. It is only ever detached in `stop()`.
         }
@@ -772,21 +797,23 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.barcodeFocusQueue.async {
-                do {
-                    try device.lockForConfiguration()
-                    if device.isFocusPointOfInterestSupported,
-                       device.isFocusModeSupported(.autoFocus) {
-                        device.focusPointOfInterest = point
-                        device.focusMode = .autoFocus
+                self.device3ALock.withLock {
+                    do {
+                        try device.lockForConfiguration()
+                        if device.isFocusPointOfInterestSupported,
+                           device.isFocusModeSupported(.autoFocus) {
+                            device.focusPointOfInterest = point
+                            device.focusMode = .autoFocus
+                        }
+                        if device.isExposurePointOfInterestSupported,
+                           device.isExposureModeSupported(.autoExpose) {
+                            device.exposurePointOfInterest = point
+                            device.exposureMode = .autoExpose
+                        }
+                        device.unlockForConfiguration()
+                    } catch {
+                        // Intentionally silent.
                     }
-                    if device.isExposurePointOfInterestSupported,
-                       device.isExposureModeSupported(.autoExpose) {
-                        device.exposurePointOfInterest = point
-                        device.exposureMode = .autoExpose
-                    }
-                    device.unlockForConfiguration()
-                } catch {
-                    // Intentionally silent.
                 }
                 #if DEBUG
                 // Debug-only visual aid: show a small square at the tapped/pulsed
@@ -991,6 +1018,7 @@ final class CameraService: NSObject, ObservableObject {
             self.heldTrayDetections.removeAll()
             self.incompleteFrames = 0
             self.emptyPillFrames = 0
+            self.lastCounted = 0
             self.pillTracker.reset()
             self.countStabilizer.reset()
             self.lastMedianPillSide = 0
@@ -1179,13 +1207,6 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
         lastInferenceTimestamp = ts
 
-        #if DEBUG
-        // [DEBUG-ipadperf] temporary per-model timing for the iPad pipeline-latency
-        // investigation. iPad-gated, DEBUG-only. Remove once root-caused.
-        let isPad = UIDevice.current.userInterfaceIdiom == .pad
-        let gloveStart = isPad ? CFAbsoluteTimeGetCurrent() : 0
-        #endif
-
         // ── Model 1: Glove safety detection (YOLOX-Nano 320×320) ──────────────
         // Only runs when the current drug is hazardous (isGloveDetectionEnabled) AND
         // gloves haven't been confirmed yet for this session (glovesConfirmed) AND
@@ -1198,29 +1219,15 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             ? gloveDetector.detect(pixelBuffer: pixelBuffer)
             : []
 
-        #if DEBUG
-        let gloveMs = isPad ? (CFAbsoluteTimeGetCurrent() - gloveStart) * 1000 : 0
-        let motionStart = isPad ? CFAbsoluteTimeGetCurrent() : 0
-        #endif
-
         // ── Camera motion (frame-to-frame registration) ──────────────────────
         // Registers this frame against the previous one so the pill tracker can
         // move its tracks by the pan before matching (see PillTracker).
         let cameraMotion = motionEstimator.estimate(pixelBuffer)
 
-        #if DEBUG
-        let motionMs = isPad ? (CFAbsoluteTimeGetCurrent() - motionStart) * 1000 : 0
-        let trayStart = isPad ? CFAbsoluteTimeGetCurrent() : 0
-        #endif
-
         // ── Model 2: Tray / chute segmentation (MobileNetV2-UNet 384×384) ────
         // Returns .tray and .chute regions, each carrying a per-pixel mask. Pills
         // are tested against the masks (not bounding boxes) — 1:1 with Android.
         let allTrays = trayDetector.detect(pixelBuffer: pixelBuffer)
-
-        #if DEBUG
-        let trayMs = isPad ? (CFAbsoluteTimeGetCurrent() - trayStart) * 1000 : 0
-        #endif
 
         // ── "Complete product" test (mirrors Android TrayGate) ───────────────
         // A valid scene requires BOTH a tray AND a chute, and the largest tray must
@@ -1323,16 +1330,8 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             : nil
         let cameraShift = cameraMotion.map { CGVector(dx: $0.dx, dy: $0.dy) }
 
-        #if DEBUG
-        let pillDetectStart = isPad ? CFAbsoluteTimeGetCurrent() : 0
-        #endif
-
         detector.detect(pixelBuffer: pixelBuffer, cropRect: cropRect) { [weak self] afterNms, _ in
             guard let self else { return }
-
-            #if DEBUG
-            let pillDetectMs = isPad ? (CFAbsoluteTimeGetCurrent() - pillDetectStart) * 1000 : 0
-            #endif
 
             // Tracker (deploy contract): enter 0.50 on two consecutive frames, keep
             // at 0.35, exit after three misses, one pill per track, camera motion
@@ -1346,7 +1345,9 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             // bounding boxes) is what makes counting correct at any angle/height
             // and keeps chute pills out.
             let filtered: [DetectionResult]
+            #if DEBUG
             var visibleOnTray = 0
+            #endif
             if !gateOpen {
                 filtered = []
             } else {
@@ -1357,10 +1358,12 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
                         && !gateChuteDets.contains { $0.containsPoint(c.x, c.y) }
                 }
                 filtered = confirmed.filter(onTray)
+                #if DEBUG
                 // For debug telemetry only: what the detector actually sees on the
                 // tray this frame. Not used to cap the count — a track legitimately
                 // coasting through occlusion has no detection under it by design.
                 visibleOnTray = afterNms.filter { $0.confidence >= PillTracker.keepScore && onTray($0) }.count
+                #endif
             }
 
             // Displayed count is smoothed twice: median over the recent window,
@@ -1375,15 +1378,16 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             let holdingEmptyPills: Bool
             if filtered.isEmpty {
                 self.emptyPillFrames += 1
-                holdingEmptyPills = self.stableCount > 0
+                holdingEmptyPills = self.lastCounted > 0
                     && self.emptyPillFrames <= Self.pillMissHoldFrames
             } else {
                 self.emptyPillFrames = 0
                 holdingEmptyPills = false
             }
             let counted = holdingEmptyPills
-                ? self.stableCount
+                ? self.lastCounted
                 : self.countStabilizer.update(rawCount: filtered.count)
+            self.lastCounted = counted
 
             #if DEBUG
             self.pipelineFrameIndex += 1
@@ -1393,16 +1397,6 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
                 print("🧮 [PIPELINE] gateOpen=\(gateOpen) incomplete=\(self.incompleteFrames) "
                       + "pillInput=\(crop) afterNMS=\(afterNms.count) tracked=\(filtered.count) "
                       + "visible=\(visibleOnTray) counted=\(counted) motion=\(motion)")
-            }
-            if isPad {
-                let af = self.captureDevice?.isAdjustingFocus ?? false
-                let ae = self.captureDevice?.isAdjustingExposure ?? false
-                print("⏱️ [DEBUG-ipadperf] glove=\(String(format: "%.1f", gloveMs))ms "
-                      + "motion=\(String(format: "%.1f", motionMs))ms "
-                      + "tray=\(String(format: "%.1f", trayMs))ms "
-                      + "pillDetect=\(String(format: "%.1f", pillDetectMs))ms "
-                      + "total=\(String(format: "%.1f", gloveMs + motionMs + trayMs + pillDetectMs))ms "
-                      + "isAdjustingFocus=\(af) isAdjustingExposure=\(ae)")
             }
             #endif
 

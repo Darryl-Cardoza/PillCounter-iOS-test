@@ -150,7 +150,7 @@ struct DetectionOverlay: View {
                             using: layer
                         )
 
-                        let badgeSize: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 16 : 10
+                        let badgeSize: CGFloat = 16
                         let isNearChute = highlightedIDs.contains(det.id)
 
                         Circle()

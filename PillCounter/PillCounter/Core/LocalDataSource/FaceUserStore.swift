@@ -58,11 +58,7 @@ final class FaceUserStore {
         request.predicate = NSPredicate(format: "id == %@", id)
         request.fetchLimit = 1
         let result = try? context.fetch(request).first
-        // `photo_path` is a registered encrypted field, and a refaulted object
-        // can hand back the ciphertext snapshot willSave wrote rather than
-        // re-running awakeFromFetch — decrypt deterministically instead (same
-        // reasoning as UserStore/FaceEmbeddingStore).
-        result?.decryptEncryptedFieldsInPlace()
+        decryptAndRepair(result.map { [$0] } ?? [])
         return result
     }
 
@@ -73,8 +69,22 @@ final class FaceUserStore {
         }
         request.sortDescriptors = [NSSortDescriptor(key: "created_at", ascending: true)]
         let results = (try? context.fetch(request)) ?? []
-        results.forEach { $0.decryptEncryptedFieldsInPlace() }
+        decryptAndRepair(results)
         return results
+    }
+
+    /// Shared post-fetch step for every read above: decrypt registered
+    /// fields in place (no-op today for `FaceUserEntity`, kept for parity
+    /// with UserStore/FaceEmbeddingStore), then repair any field left over
+    /// from a since-removed encryption registration — see
+    /// `repairOneTimeLegacyEncryption()`. Saves once for the whole batch,
+    /// only if something was actually repaired.
+    private func decryptAndRepair(_ users: [FaceUserEntity]) {
+        users.forEach { $0.decryptEncryptedFieldsInPlace() }
+        let repairedAny = users.reduce(false) { $0 || $1.repairOneTimeLegacyEncryption() }
+        if repairedAny {
+            CoreDataManager.shared.save(context: context)
+        }
     }
 
     /// Case-insensitive active-name check, used to reject duplicate enrollment names.

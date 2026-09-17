@@ -93,17 +93,27 @@ struct HamburgerMenuView: View {
         ) {
             showLogoutPopup = false
         } onConfirm: {
+            showLogoutPopup = false
+            // Local state clears and navigation happen immediately — the
+            // server-side logout call below has no timeout of its own
+            // (URLSessionConfiguration.default's 60s) and offline should
+            // never make the UI hang on a confirmation popup. performLogout
+            // returns the refresh token it captured before wiping the
+            // Keychain, so there's no risk of reading it too late here.
+            let refreshToken = AppLogoutManager.performLogout(
+                userVM: userViewModel,
+                pillScanVM: pillScanViewModel,
+                loginViewModel: loginViewModel
+            )
+            // Must run before navigateToRoot(), not inside the Task below.
+            loginViewModel.resetStateOnLogout()
+            // isLoggedIn is now false, so AppNavigation's root Group already
+            // swaps to LoginEmailView — just clear the stack underneath it
+            // instead of pushing a second login destination on top.
+            router.navigateToRoot()
+
             Task {
-                router.setRoot(
-                    to: .authentication(.login(.LoginEmail)))
-                await loginViewModel.logout()
-                
-                showLogoutPopup = false
-                AppLogoutManager.performLogout(
-                    userVM: userViewModel,
-                    pillScanVM: pillScanViewModel,
-                    loginViewModel: loginViewModel
-                )
+                await loginViewModel.logout(refreshToken: refreshToken)
             }
         }
     }

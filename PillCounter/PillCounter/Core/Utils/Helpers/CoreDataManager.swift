@@ -161,8 +161,15 @@ final class CoreDataManager {
     /// Destroys every persistent store file backing this container and
     /// reloads a fresh, empty one at the same URL. Unlike `resetContext()`
     /// (which only clears the in-memory context), this actually deletes the
-    /// on-disk data — used when the field-encryption DEK is unrecoverable,
-    /// so existing rows contain permanently undecryptable ciphertext.
+    /// on-disk data.
+    ///
+    /// Not called from any production path — field-DEK recovery
+    /// (`DatabaseKeyProvider.recoverFromUnrecoverableDek`) used to call this
+    /// on every unrecoverable-key event, wiping the whole database over one
+    /// undecryptable field. That was disproportionate, so recovery now
+    /// blanks only the affected fields in place instead. Retained here as a
+    /// manual/emergency recovery mechanism for a genuinely corrupted store —
+    /// exercised only by `CoreDataManagerTests`.
     ///
     /// Only safe to call when nothing else is actively fetching/saving on
     /// this coordinator — `destroyPersistentStore` is not documented as safe

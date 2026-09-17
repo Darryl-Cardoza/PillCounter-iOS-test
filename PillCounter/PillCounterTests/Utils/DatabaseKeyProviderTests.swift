@@ -159,12 +159,14 @@ struct DatabaseKeyProviderTests {
         #expect(DatabaseKeyProvider.shared.getOrCreateDek(for: .field) == dekBefore)
     }
 
-    // Recovery from an unrecoverable field DEK calls CoreDataManager.shared
-    // .destroyAndReloadStore(), which wipes the real on-disk app database —
-    // deliberately not exercised here against the production singleton.
-    // Covered instead at the primitive level by KekDekManagerTests
-    // (unwrap-with-missing-key throws, never auto-creates a substitute key)
-    // and by CoreDataManagerTests for destroyAndReloadStore itself.
+    // Recovery from an unrecoverable field DEK (recoverFromUnrecoverableDek)
+    // no longer destroys the store — it re-keys in place and lets each
+    // encrypted-field consumer degrade on read. That behavior is covered
+    // end-to-end (real store, real rows, real swizzled encrypt/decrypt) by
+    // `KekDekEndToEndTests.fieldDekRecoveryDoesNotDestroyTheStoreOrOtherRows`,
+    // which needs `CoreDataManager.shared` (willSave/awakeFromFetch don't fire
+    // for in-memory stores — see that file's header) rather than this suite's
+    // hardwired-but-isolated Keychain/AppStorage setup.
 
     /// Regression test for a real bug found in review: bootstrap sets
     /// kekVersionStorageKey to 0, so a strict `>` comparison meant a

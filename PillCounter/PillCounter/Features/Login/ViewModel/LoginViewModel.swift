@@ -169,10 +169,9 @@ class LoginViewModel: ObservableObject {
                 store.tokenExpiryTimestamp =
                     Date().addingTimeInterval(expiresIn).timeIntervalSince1970
 
-                await MainActor.run {
-                    SessionManager.shared.reset()
-                    Hl7ServiceController.shared.evaluate()
-                }
+                SessionManager.shared.reset()
+                Hl7ServiceController.shared.evaluate()
+                FaceSessionManager.shared.lockOnLogin()
                 print("IsPmsIntegrated \(store.isPmsIntegrated)")
                 print("allowLocalStorage \(store.allowLocalStorage)")
             } else {
@@ -193,13 +192,25 @@ class LoginViewModel: ObservableObject {
     }
 
     // MARK: - Logout
-    func logout() async {
-        isLoading = true
-        defer { isLoading = false }
+    /// Sync half of logout — must run before the login screen shows, not
+    /// after the network call in `logout(refreshToken:)` below.
+    func resetStateOnLogout() {
+        resendTimer?.invalidate()
+        userEmail = ""
+        isChecked = false
+        otp = Array(repeating: "", count: 6)
+        isOtpSent = false
+        isOtpVerificationSuccess = false
+        resendOTPSent = false
+        errorMessage = nil
+    }
 
+    /// `refreshToken` must be captured by the caller BEFORE
+    /// `AppLogoutManager.performLogout()` wipes it from the Keychain.
+    func logout(refreshToken: String) async {
         do {
             let result = try await loginrepo.logout(
-                refreshToken: store.refreshToken ?? "",
+                refreshToken: refreshToken,
                 deviceKey: DeviceKeyProvider.shared.getDeviceKey()
             )
 

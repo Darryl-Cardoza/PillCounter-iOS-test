@@ -1082,7 +1082,26 @@ extension CameraService {
             )
         }
 
-        // 3. Render
+        // 3. One badge size for all pills — median of detected pill sizes,
+        // so one unusually large/small detection doesn't skew every badge.
+        // Doesn't depend on the render context, so computed before it.
+        let minBadgeSize = imageSize.width * 0.012
+        let maxBadgeSize = imageSize.width * 0.08
+        let badgeSize: CGFloat = {
+            guard !transformedDetections.isEmpty else { return minBadgeSize }
+
+            let sortedSizes = transformedDetections
+                .map { min($0.rect.width, $0.rect.height) }
+                .sorted()
+            let middle = sortedSizes.count / 2
+            let medianPillSize = sortedSizes.count % 2 == 0
+                ? (sortedSizes[middle - 1] + sortedSizes[middle]) / 2
+                : sortedSizes[middle]
+
+            return min(max(medianPillSize * 0.55, minBadgeSize), maxBadgeSize)
+        }()
+
+        // 4. Render
         let renderer = UIGraphicsImageRenderer(size: imageSize)
 
         return renderer.image { ctx in
@@ -1093,41 +1112,7 @@ extension CameraService {
                 in: CGRect(origin: .zero, size: imageSize)
             )
 
-            // MARK: - Calculate ONE badge size for all pills
-            //
-            // Use the median detected pill size so one unusually large/small
-            // detection does not affect the badge size for every pill.
-            let pillSizes = transformedDetections.map {
-                min($0.rect.width, $0.rect.height)
-            }
-
-            let minBadgeSize = imageSize.width * 0.012
-            let maxBadgeSize = imageSize.width * 0.08
-
-            let badgeSize: CGFloat
-
-            if pillSizes.isEmpty {
-                badgeSize = minBadgeSize
-            } else {
-                let sortedSizes = pillSizes.sorted()
-                let middle = sortedSizes.count / 2
-
-                let medianPillSize: CGFloat
-
-                if sortedSizes.count % 2 == 0 {
-                    medianPillSize =
-                        (sortedSizes[middle - 1] + sortedSizes[middle]) / 2
-                } else {
-                    medianPillSize = sortedSizes[middle]
-                }
-
-                badgeSize = min(
-                    max(medianPillSize * 0.55, minBadgeSize),
-                    maxBadgeSize
-                )
-            }
-
-            // MARK: - Draw all badges using the SAME size
+            // Draw all badges using the same size
             transformedDetections.enumerated().forEach { index, detection in
                 drawBadge(
                     context: context,

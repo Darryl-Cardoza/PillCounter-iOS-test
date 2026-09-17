@@ -219,7 +219,7 @@ private extension UnsyncedTransactionView {
                 )
                 .cornerRadius(24)
             }
-            .disabled(viewModel.isSyncing)
+            .disabled(viewModel.isSyncing || userViewModel.pmsConnectionState == .disconnected)
             .opacity(viewModel.isSyncing ? 0.7 : 1.0)
 
             if let error = viewModel.syncError {

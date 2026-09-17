@@ -119,25 +119,7 @@ final class HL7BatchSyncQueue: HL7SyncQueue<BatchSyncQueueItem> {
 
         DispatchQueue.main.async { [weak self] in
             guard self?.hl7Manager?.sendHL7ToPMS(hl7, orderId: item.batchId.description) == true else {
-                // Not connected — nothing was sent, so no ACK will ever arrive.
-                // Reset in-flight state now instead of stalling until the ACK
-                // timeout; otherwise a reconnect landing inside that window
-                // finds `queue` non-empty and `enqueueUnsynced()`'s early-return
-                // (queue not empty) skips re-driving this item entirely.
-                self?.processingQueue.async {
-                    guard let self, self.pendingRequestId == item.requestId else { return }
-                    // Reset only — do NOT call processNext() here. The manager
-                    // is still disconnected right now (that's why we're in this
-                    // branch), so an immediate retry would just drop again and
-                    // spin in a tight synchronous loop until a real `.ready`
-                    // happens. Leave the item at `queue.first` with isSending
-                    // false; `Hl7ServiceController.onClientConnected()` re-drives
-                    // it once the connection genuinely comes back.
-                    self.cancelAckTimeout()
-                    self.isSending = false
-                    self.pendingRequestId = nil
-                    self.pendingAckMessageId = nil
-                }
+                self?.handleSendDropped(requestId: item.requestId)
                 return
             }
             StoreLogger.debug("📤 [HL7] Sent to server for batch: \(item.batchId)")
@@ -171,6 +153,10 @@ final class HL7BatchSyncQueue: HL7SyncQueue<BatchSyncQueueItem> {
     /// the UI thread.
     override func markCurrentItemSynced() {
         guard let item = queue.first else { return }
+        markItemSynced(item)
+    }
+
+    override func markItemSynced(_ item: BatchSyncQueueItem) {
         let bgContext = CoreDataManager.shared.backgroundContext
         batchDAO.markSynced(batchId: item.batchId, in: bgContext)
     }

@@ -8,8 +8,16 @@ import SwiftUI
 import Combine
 import Hl7Core
 
+/// Narrow surface `UnsyncedViewModel.syncAll()` needs — lets it inject a mock
+/// instead of reaching for `Hl7ServiceController.shared` directly.
 @MainActor
-final class Hl7ServiceController: ObservableObject {
+protocol Hl7SyncTrigger: AnyObject {
+    var isPMSConnected: Bool { get }
+    func onClientConnected()
+}
+
+@MainActor
+final class Hl7ServiceController: ObservableObject, Hl7SyncTrigger {
 
     static let shared = Hl7ServiceController()
 
@@ -28,13 +36,6 @@ final class Hl7ServiceController: ObservableObject {
     // MARK: - HL7 Layer
     var hl7Manager: Hl7ServiceManager?
     private var hl7Handler: Hl7EventHandler?
-
-    // MARK: - Legacy Send Queue
-    private var sendingQueue: [PillCountTransactionEntity] = []
-    private var currentTxn: PillCountTransactionEntity?
-    private var currentMessageId: String?
-    private var retryCount = 0
-    private let maxRetries = 3
 
     // MARK: - Bind (called once from SwiftUI root)
     func bind(pillScanViewModel: PillScanViewModel, userViewModel: UserViewModel) {
@@ -114,7 +115,6 @@ final class Hl7ServiceController: ObservableObject {
     private func stopService() {
         hl7Manager?.stop()
         hl7Manager = nil
-        resetQueueState()
     }
 
     // MARK: - Observe Pending Transactions
@@ -156,6 +156,17 @@ final class Hl7ServiceController: ObservableObject {
     /// completes — see TransactionStore.sweepStaleSyncedTransactions.
     private static let retentionMaxAge: TimeInterval = 24 * 60 * 60
 
+    /// Source of truth for "can Sync All actually do anything right now" —
+    /// `hl7Manager` is nil whenever `shouldStartService` was false at launch
+    /// (not logged in / not PMS-integrated / device compromised), and even
+    /// with a manager, sends are silently dropped unless the client
+    /// connection is actually `.ready`. `UnsyncedViewModel.syncAll()` checks
+    /// this before doing anything, so a disconnected tap surfaces `syncError`
+    /// instead of silently no-oping.
+    var isPMSConnected: Bool {
+        hl7Manager?.isClientConnected ?? false
+    }
+
     // MARK: - Events from Hl7EventHandler
 
     func onClientConnected() {
@@ -164,15 +175,10 @@ final class Hl7ServiceController: ObservableObject {
         txnSyncQueue?.resetParkedState()
         batchSyncQueue?.enqueueUnsynced()
         txnSyncQueue?.enqueueUnsynced()
-        // `enqueueUnsynced()` skips its DB re-fetch (and the `processNext()`
-        // call bundled with it) whenever `queue` already has items — correct
-        // for a mid-drain ACK, but it also means an item left sitting at
-        // `queue.first` after a dropped send (isSending reset to false, no
-        // active retry scheduled) never gets picked back up by that call
-        // alone. `kickIfIdle()` calls `processNext()` directly to cover
-        // exactly that case; harmless no-op otherwise.
-        batchSyncQueue?.kickIfIdle()
-        txnSyncQueue?.kickIfIdle()
+        // Covers an item left at queue.first after a dropped send — enqueueUnsynced()
+        // alone won't re-drive it since queue isn't empty.
+        batchSyncQueue?.drainNow()
+        txnSyncQueue?.drainNow()
     }
 
     func onAckReceived(messageId: String?, ackCode: String, hl7: String) {
@@ -180,67 +186,4 @@ final class Hl7ServiceController: ObservableObject {
         txnSyncQueue?.handleAck(messageId: messageId, hl7: hl7)
     }
 
-    func onAckTimeout() {
-        handleSendFailure()
-    }
-
-    // MARK: - Legacy Queue Logic
-
-    private func resendPendingHl7Transactions() {
-        let pending = transactionDAO.fetchCompletedUnsynced()
-
-        guard !pending.isEmpty else {
-            Log("⚠️ [HL7] No pending transactions found")
-            return
-        }
-        sendingQueue   = pending
-        currentTxn     = nil
-        currentMessageId = nil
-        retryCount     = 0
-        sendNextIfPossible()
-    }
-
-    private func sendNextIfPossible() {
-        guard currentTxn == nil, !sendingQueue.isEmpty else { return }
-        sendTransaction(sendingQueue.first!)
-    }
-
-    func sendTransaction(_ txn: PillCountTransactionEntity) {
-        currentTxn = txn
-        retryCount += 1
-        let messageId = "TXN_\(txn.txn_id)_\(Int(Date().timeIntervalSince1970))"
-        currentMessageId = messageId
-        hl7Manager?.sendHL7ToPMS(buildHl7Message(txn: txn), orderId: txn.rx_no ?? "\(txn.txn_id)")
-    }
-
-    private func handleSendFailure() {
-        guard let txn = currentTxn else { return }
-        if retryCount < maxRetries {
-            sendTransaction(txn)
-            return
-        }
-        sendingQueue.removeFirst()
-        sendingQueue.append(txn)
-        currentTxn       = nil
-        currentMessageId = nil
-        retryCount       = 0
-        sendNextIfPossible()
-    }
-
-    private func resetQueueState() {
-        sendingQueue.removeAll()
-        currentTxn       = nil
-        currentMessageId = nil
-        retryCount       = 0
-    }
-
-    // MARK: - HL7 Message Builder
-
-    private func buildHl7Message(txn: PillCountTransactionEntity) -> String {
-        guard let user = txn.user else {
-            Log("❌ [HL7] Missing user for txn: \(txn.txn_id)")
-            return ""
-        }
-        return HL7CompletionBuilder().buildCompletionMessage(txn: txn, user: user)
-    }
 }

@@ -33,6 +33,7 @@ final class UnsyncedViewModel: ObservableObject {
     private let batchStore: BatchDataSource
     private let transactionStore: TransactionDataSource
     private let transactionDetailStore: TransactionDetailDataSource
+    private let hl7Controller: Hl7SyncTrigger
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Init
@@ -42,11 +43,13 @@ final class UnsyncedViewModel: ObservableObject {
     init(
         batchStore: BatchDataSource = BatchStore.shared,
         transactionStore: TransactionDataSource = TransactionStore.shared,
-        transactionDetailStore: TransactionDetailDataSource = TransactionDetailStore.shared
+        transactionDetailStore: TransactionDetailDataSource = TransactionDetailStore.shared,
+        hl7Controller: Hl7SyncTrigger = Hl7ServiceController.shared
     ) {
         self.batchStore = batchStore
         self.transactionStore = transactionStore
         self.transactionDetailStore = transactionDetailStore
+        self.hl7Controller = hl7Controller
 
         // Debounced so a burst of writes (e.g. bulk data generation, HL7
         // sync catching up) triggers one reload instead of one per write.
@@ -106,13 +109,25 @@ final class UnsyncedViewModel: ObservableObject {
         isSyncing = true
         syncError = nil
 
+        guard hl7Controller.isPMSConnected else {
+            isSyncing = false
+            syncError = L10n.Unsync.pmsNotConnected
+            return
+        }
+
         // Reuses the same path a live PMS reconnect already drives: unparks
         // anything parked from a prior failed send and re-enqueues both sync
-        // queues. If already connected, `processNext()` sends right away; if
-        // not, the queue's own drop-and-retry (see `sendHL7ToPMS`) kicks off
-        // a reconnect and the item is re-driven once `.ready` fires — no
-        // separate connect-then-send logic needed here.
-        Hl7ServiceController.shared.onClientConnected()
+        // queues, then `drainNow()` sends right away since we already know
+        // the client is connected.
+        hl7Controller.onClientConnected()
+
+        // `onClientConnected()` only kicks the queues off — actual sends and
+        // ACKs land later, asynchronously, on the sync queues' own
+        // background processing queue, so there is no synchronous "done"
+        // signal to await here. This yield just gives SwiftUI a render pass
+        // so the spinner is actually visible for a beat instead of flipping
+        // on/off within the same run loop tick.
+        try? await Task.sleep(nanoseconds: 400_000_000)
 
         isSyncing = false
     }

@@ -138,7 +138,15 @@ extension PillScanViewModel {
 
     /// Looks up the transaction for the given Rx number among active (non-deleted,
     /// non-completed) transactions only. A deleted transaction must never be
-    /// resurrected by a fresh scan of the same Rx label.
+    /// resurrected by a fresh scan of the same Rx label — the device scanning
+    /// a barcode is not evidence the PMS wants that Rx active again.
+    ///
+    /// This is scoped to local scans only. It does NOT apply to an inbound
+    /// PMS edit (ORC|XO) for the same rxNo — `editFixedHl7Transaction` (see
+    /// PillScanViewModel+HL7.swift) deliberately restores a soft-deleted txn
+    /// there via `fetchDeletedByRxNo`/`restoreDeleted`, because an ORC|XO is
+    /// the PMS explicitly telling this device the Rx is active again — the
+    /// PMS is authoritative over local delete state, unlike a stray scan.
     func fetchRxTransaction(rxNo: String, for user: UserEntity) -> PillCountTransactionEntity? {
         transactionDAO.fetchByRxNo(rxNo, for: user).first
     }
@@ -254,11 +262,6 @@ extension PillScanViewModel {
                 self.selectedBucket  = ""
             }
             return
-        }
-
-        // Restore soft-deleted transaction if needed
-        if existingTxn.is_deleted {
-            transactionDAO.restoreDeleted(txnId: existingTxn.txn_id)
         }
 
         let txnId = existingTxn.txn_id

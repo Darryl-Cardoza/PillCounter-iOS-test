@@ -118,25 +118,7 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
 
         DispatchQueue.main.async { [weak self] in
             guard manager.sendHL7ToPMS(hl7, orderId: item.requestId) else {
-                // Not connected — nothing was sent, so no ACK will ever arrive.
-                // Reset in-flight state now instead of stalling until the ACK
-                // timeout; otherwise a reconnect landing inside that window
-                // finds `queue` non-empty and `enqueueUnsynced()`'s early-return
-                // (queue not empty) skips re-driving this item entirely.
-                self?.processingQueue.async {
-                    guard let self, self.pendingRequestId == item.requestId else { return }
-                    // Reset only — do NOT call processNext() here. The manager
-                    // is still disconnected right now (that's why we're in this
-                    // branch), so an immediate retry would just drop again and
-                    // spin in a tight synchronous loop until a real `.ready`
-                    // happens. Leave the item at `queue.first` with isSending
-                    // false; `Hl7ServiceController.onClientConnected()` re-drives
-                    // it once the connection genuinely comes back.
-                    self.cancelAckTimeout()
-                    self.isSending = false
-                    self.pendingRequestId = nil
-                    self.pendingAckMessageId = nil
-                }
+                self?.handleSendDropped(requestId: item.requestId)
                 return
             }
         }
@@ -160,6 +142,10 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
     /// reaches UI observers via their own `.receive(on: .main)`.
     override func markCurrentItemSynced() {
         guard let item = queue.first else { return }
+        markItemSynced(item)
+    }
+
+    override func markItemSynced(_ item: TxnSyncQueueItem) {
         let bgContext = CoreDataManager.shared.backgroundContext
         TransactionStore.shared.updateSynced(txnId: item.txnId, in: bgContext)
     }

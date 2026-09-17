@@ -80,6 +80,16 @@ final class Hl7ServiceManager {
     private var currentInterface: NWInterface?
     private var currentServiceName: String?
 
+    /// Static-IP mode's only self-healing mechanism. Bonjour mode gets a free
+    /// retry from `NWBrowser` (re-browses every ~3s, `browseResultsChangedHandler`
+    /// reconnects once the PMS reappears). Static mode has no discovery to
+    /// retry on, so a dropped connection previously stayed dropped until the
+    /// user manually hit "Sync All" — see PR review: "Static-IP mode loses its
+    /// only automatic retry mechanism". Started on every disconnect while in
+    /// static mode, stopped on `.ready` or `stop()`.
+    private var staticReconnectTimer: DispatchSourceTimer?
+    private static let staticReconnectInterval: TimeInterval = 5
+
     // MARK: - Events
     weak var listener: Hl7EventListener?
 
@@ -166,6 +176,10 @@ final class Hl7ServiceManager {
         print("[HL7][SERVER] Stopping all services")
         stopBrowsing()
         disconnectClientInternal(notifyListener: true)
+        // Must run AFTER disconnectClientInternal — it unconditionally
+        // (re)starts the static reconnect timer on every disconnect, which
+        // would otherwise undo this stop and leave the timer running.
+        stopStaticReconnectTimer()
         stopServerIfRunning()
     }
 
@@ -191,7 +205,35 @@ final class Hl7ServiceManager {
         // here would take down the one thing that lets it reconnect.
         if notifyListener { listener?.onClientDisconnected() }
 
+        startStaticReconnectTimerIfNeeded()
+
         print("[HL7][CLIENT] Disconnected. Server keeps running.")
+    }
+
+    /// Static-IP mode has no Bonjour browser to retry the dial for it, so a
+    /// dropped connection needs its own repeating retry — same self-healing
+    /// role `startBrowsing()`'s 3s restart-on-failure plays for Bonjour mode.
+    /// No-op in Bonjour mode (the browser already does this) and while a
+    /// connect attempt is already in flight.
+    private func startStaticReconnectTimerIfNeeded() {
+        guard AppStorageManager.shared.useStaticPMSConnection else { return }
+        guard staticReconnectTimer == nil else { return }
+
+        print("[HL7][STATIC] Starting reconnect timer (every \(Self.staticReconnectInterval)s)")
+        let timer = DispatchSource.makeTimerSource(queue: clientQueue)
+        timer.schedule(deadline: .now() + Self.staticReconnectInterval, repeating: Self.staticReconnectInterval)
+        timer.setEventHandler { [weak self] in
+            guard let self, !self.isConnectingOrConnected else { return }
+            print("[HL7][STATIC] Reconnect timer tick — retrying")
+            self.connectDirectToPMS()
+        }
+        timer.resume()
+        staticReconnectTimer = timer
+    }
+
+    private func stopStaticReconnectTimer() {
+        staticReconnectTimer?.cancel()
+        staticReconnectTimer = nil
     }
 
     private func stopServerIfRunning() {
@@ -362,6 +404,7 @@ final class Hl7ServiceManager {
         switch state {
         case .ready:
             isClientConnected = true
+            stopStaticReconnectTimer()
             AppStorageManager.shared.resolvedPMSServiceName = currentServiceName
             if let path = clientConnection?.currentPath,
                let endpoint = path.remoteEndpoint,
@@ -381,8 +424,16 @@ final class Hl7ServiceManager {
             disconnectClientInternal(notifyListener: true)
 
         case .waiting(let error):
-            print("[HL7][CLIENT] Waiting (unreachable): \(error) — cancelling")
-            disconnectClientInternal(notifyListener: false)
+            // `.waiting` is NOT terminal — Network.framework keeps retrying
+            // this same connection internally and will transition it to
+            // `.ready` or `.failed` on its own once the path resolves.
+            // Cancelling here (as this used to) tore down the connection
+            // and, combined with the static-mode reconnect timer, could race
+            // a fresh `connectDirectToPMS()` dial against the original
+            // connection's own recovery — two independent `NWConnection`s
+            // both reaching `.ready` and each firing `onClientConnected()`,
+            // sending every queued message twice. Just log and leave it.
+            print("[HL7][CLIENT] Waiting (unreachable): \(error) — letting it retry internally")
 
         case .cancelled:
             print("[HL7][CLIENT] Cancelled")
@@ -489,24 +540,18 @@ final class Hl7ServiceManager {
         return true
     }
 
-    /// Sends an MLLP-framed HL7 message to the PMS over the same `clientConnection`
-    /// used by both Bonjour and static-IP modes — ACKs flow back through the normal
-    /// `startReceiving`/`processReceiveBuffer`/`handleIncomingHL7` pipeline into
-    /// `listener?.onAckReceived`, so batch/txn sync-queue retry and ack-tracking apply
-    /// identically regardless of connection mode.
+    /// Sends an MLLP-framed HL7 message to the PMS. Not connected → drops
+    /// `hl7` and kicks off a reconnect; the caller (a DB-backed sync queue)
+    /// re-sends once `Hl7ServiceController.onClientConnected()` fires.
     ///
-    /// If already connected, sends immediately on the live connection. If not,
-    /// drops `hl7` and kicks off a (re)connect via `startPMSConnection()` —
-    /// respecting the same static-IP vs Bonjour flag used at launch. This message
-    /// is NOT buffered/replayed here: the caller is always a DB-backed sync queue
-    /// (`HL7TxnSyncQueue`/`HL7BatchSyncQueue`), which already resends everything
-    /// still unsynced via `Hl7ServiceController.onClientConnected()` once the
-    /// connection reaches `.ready` — buffering it here too previously caused the
-    /// same transaction to be sent twice on reconnect.
-    /// - Returns: `true` if handed to the live connection, `false` if dropped
-    ///   (not connected) — the caller MUST reset its own in-flight/`isSending`
-    ///   state on `false`, otherwise the queue stalls waiting on an ACK that
-    ///   will never arrive for a message that was never sent.
+    /// `true` means `sendClientHL7` enqueued the payload on `NWConnection` —
+    /// not that the PMS received it. `NWConnection.send`'s completion only
+    /// logs a failure; it doesn't surface one here, so a post-enqueue send
+    /// failure still falls through to the caller's ACK timeout.
+    /// - Returns: `true` if enqueued on the live connection, `false` if
+    ///   dropped (not connected) — the caller MUST reset its own in-flight/
+    ///   `isSending` state on `false`, otherwise the queue stalls waiting on
+    ///   an ACK that will never arrive for a message that was never sent.
     @discardableResult
     func sendHL7ToPMS(_ hl7: String, orderId: String? = nil) -> Bool {
         guard isClientConnected, clientConnection != nil else {

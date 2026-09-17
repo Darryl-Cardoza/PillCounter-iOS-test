@@ -604,7 +604,6 @@ class UserViewModel: ObservableObject {
         transactionDAO.softDelete(txnId: transactionId)
 
         if isDispense {
-            await sendCompletionHL7(txnId: transactionId)
             await getAllPartialTransactions(isDispense: true)
         } else {
             await getAllPartialTransactions(isDispense: false)
@@ -612,21 +611,7 @@ class UserViewModel: ObservableObject {
         getAllTransactionsAndFilterByCountType()
     }
 
-    /// Sends the RDS^O13 dispense-completion message for `txnId` to the connected PMS.
-    /// Delegates to `Hl7ServiceController`, which builds the message via
-    /// `HL7CompletionBuilder.buildCompletionMessage` (new Hl7Core DSL) and owns the
-    /// send queue + retry logic.
-    private func sendCompletionHL7(txnId: Int64) async {
-        guard let txn = transactionDAO.fetchById(txnId) else {
-            print("[HL7] Txn not found")
-            return
-        }
-        await MainActor.run {
-            Hl7ServiceController.shared.sendTransaction(txn)
-        }
-    }
-    
-    
+
     // MARK: - SOFT DELETE ALL TRANSACTIONS FOR A DATE
     func softDeleteTransactionsForSelectedDate(
         startDate: Date,
@@ -666,11 +651,14 @@ class UserViewModel: ObservableObject {
         txnId: Int64,
         isDispense: Bool
     ) async {
-        // update the statuse
+        // update the statuse — transactionsDidChange fires from updateStatus,
+        // which HL7TxnSyncQueue picks up and sends via its own queue; this
+        // used to also call Hl7ServiceController.sendTransaction(_:) directly
+        // (a legacy pre-queue send path), causing every completed txn to be
+        // sent twice with two different MSH-10 ids.
         transactionDAO.updateStatus(txnId: txnId, status: .COMPLETED)
         //  Refresh Partial Transactions
         if isDispense {
-            await sendCompletionHL7(txnId: txnId)
             await getAllPartialTransactions(isDispense: true)
         } else {
             await getAllPartialTransactions(isDispense: false)

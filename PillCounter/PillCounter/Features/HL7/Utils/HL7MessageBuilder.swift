@@ -414,7 +414,9 @@ final class HL7CompletionBuilder {
     // INV-1/2/3/7/8/9/16 per the official HL7 spec), `zad` for the batch's
     // adjustment note (this app's only structured note today), and `obx` for the
     // operator-identification and per-INV SEALED_QTY/OPEN_QTY rows (OBX-4 subId
-    // links each pair back to its INV's setId).
+    // links each pair back to its INV's setId). Each row's OBX-5 carries pill
+    // qty in component 1 and physical bottle count in component 2
+    // (observationValue2 — sealed row's bottle_qty sum / count of opened rows).
     //
     // No serial number / GTIN sent (not tracked by BottleInfoEntity/DrugMasterEntity
     // today — grouping stays keyed on ndc+name+lot+expiry, same as before).
@@ -440,7 +442,7 @@ final class HL7CompletionBuilder {
         struct Key: Hashable {
             let ndc: String; let name: String; let lot: String; let expiry: String
         }
-        var grouped: [Key: (opened: Int32, sealed: Int32, images: [BottleImageRecord])] = [:]
+        var grouped: [Key: (opened: Int32, sealed: Int32, sealedBottles: Int32, openBottles: Int32, images: [BottleImageRecord])] = [:]
 
         for stockTxn in stockTxns {
             guard let drug = stockTxn.drug else { continue }
@@ -450,7 +452,7 @@ final class HL7CompletionBuilder {
                     ndc: drug.ndc ?? "", name: drug.drug_name ?? "",
                     lot: bottle.lot_no ?? "", expiry: bottle.exp_no ?? ""
                 )
-                var e = grouped[key] ?? (0, 0, [])
+                var e = grouped[key] ?? (0, 0, 0, 0, [])
                 // Use the same isSealed discriminator as the rest of the app
                 // (BottleInfoStore.fetchSealedRow, StockCountViewModel, HistoryViewModel)
                 // rather than loose_qty == 0 alone — addOpenedBottle sets bottle_qty=0
@@ -458,8 +460,13 @@ final class HL7CompletionBuilder {
                 // still correctly seen as opened, not sealed.
                 if bottle.isSealed {
                     e.sealed += bottle.bottle_qty * drug.package_qty
+                    // bottle.bottle_qty IS the physical sealed-bottle count for this row
+                    // (a sealed row can represent multiple bottles of the same lot/expiry).
+                    e.sealedBottles += bottle.bottle_qty
                 } else {
                     e.opened += bottle.loose_qty
+                    // Each opened row is exactly one physical bottle.
+                    e.openBottles += 1
                     e.images += bottle.images
                 }
                 grouped[key] = e
@@ -549,6 +556,7 @@ final class HL7CompletionBuilder {
                     obx.observationId = "SEALED_QTY"
                     obx.subId = "\(invSetId)"
                     obx.observationValue = "\(value.sealed)"
+                    obx.observationValue2 = "\(value.sealedBottles)"
                     obx.resultStatus = "F"
                 }
                 setId += 1
@@ -559,6 +567,7 @@ final class HL7CompletionBuilder {
                     obx.observationId = "OPEN_QTY"
                     obx.subId = "\(invSetId)"
                     obx.observationValue = "\(value.opened)"
+                    obx.observationValue2 = "\(value.openBottles)"
                     obx.resultStatus = "F"
                 }
                 setId += 1

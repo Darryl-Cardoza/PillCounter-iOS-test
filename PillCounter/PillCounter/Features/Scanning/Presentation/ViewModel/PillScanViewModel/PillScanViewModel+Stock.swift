@@ -274,8 +274,21 @@ extension PillScanViewModel {
     /// the very first count of the session), the StockTxnEntity, and the BottleInfoEntity row,
     /// all at once, using the drug/lot/expiry/serial stashed at scan time and the final
     /// counted qty. Nothing is persisted before this point.
-    func createOpenedBottleFromPendingScan(existingBatch: BatchCountEntity?, bucketId: String?, loosePillCount: Int) {
-        guard let drugId = pendingOpenBottleDrugId else { return }
+    ///
+    /// Every completed Proceed always inserts a fresh row, even for a NDC/lot/expiry
+    /// already counted earlier in this batch — a second bottle of the same drug and lot
+    /// is a distinct physical bottle and must not be merged into the first one's row.
+    /// Returns false, and persists nothing, when `loosePillCount` is 0 — an opened bottle
+    /// counted empty is not a valid open-pill entry.
+    @discardableResult
+    func createOpenedBottleFromPendingScan(existingBatch: BatchCountEntity?, bucketId: String?, loosePillCount: Int) -> Bool {
+        guard let drugId = pendingOpenBottleDrugId else { return false }
+
+        guard loosePillCount > 0 else {
+            toastMessage = "Count at least 1 pill before completing an open bottle."
+            showToast = true
+            return false
+        }
 
         let batch: BatchCountEntity?
         if let existingBatch {
@@ -283,31 +296,18 @@ extension PillScanViewModel {
         } else {
             batch = batchDAO.create(bucketId: bucketId ?? "")
         }
-        guard let batch else { return }
+        guard let batch else { return false }
 
         let stockTxn = stockTxnDAO.fetchOrCreate(batch: batch, drugId: drugId, bucketId: batch.bucket_id)
 
-        // Merge by (stockTxnId, lot, exp) — a controlled-drug open-pill count that
-        // spans multiple Add taps for the same bottle accumulates loose_qty and
-        // image_paths on one row instead of creating a new row per tap.
-        if let existing = bottleInfoDAO.fetchOpenedRow(
-            stockTxnId: stockTxn.stock_txn_id, lotNo: pendingOpenBottleLot, expNo: pendingOpenBottleExpiry
-        ) {
-            bottleInfoDAO.updateOpenedBottleLooseQty(
-                bottleId: existing.bottle_id, looseQty: existing.loose_qty + Int32(loosePillCount)
-            )
-            bottleInfoDAO.appendImages(bottleId: existing.bottle_id, images: pendingOpenBottleDbImages)
-            self.currentBottleInfo = bottleInfoDAO.fetchById(existing.bottle_id)
-        } else {
-            self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
-                stockTxnId: stockTxn.stock_txn_id,
-                looseQty: Int32(loosePillCount),
-                lotNo: pendingOpenBottleLot,
-                expNo: pendingOpenBottleExpiry,
-                serialNo: pendingOpenBottleSerial,
-                images: pendingOpenBottleDbImages
-            )
-        }
+        self.currentBottleInfo = bottleInfoDAO.addOpenedBottle(
+            stockTxnId: stockTxn.stock_txn_id,
+            looseQty: Int32(loosePillCount),
+            lotNo: pendingOpenBottleLot,
+            expNo: pendingOpenBottleExpiry,
+            serialNo: pendingOpenBottleSerial,
+            images: pendingOpenBottleDbImages
+        )
         self.currentStockTxn = stockTxnDAO.fetchById(stockTxn.stock_txn_id)
 
         // Non-controlled-drug snapshots never get referenced by the BottleInfoEntity
@@ -322,6 +322,7 @@ extension PillScanViewModel {
         pendingOpenBottleDrug = nil
         pendingOpenBottleDrugId = nil
         openBottleImageRecords = []
+        return true
     }
 
     func formatExpiry(_ date: Date?) -> String? {

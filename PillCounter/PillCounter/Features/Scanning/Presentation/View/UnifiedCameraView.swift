@@ -2041,11 +2041,16 @@ extension UnifiedCameraView {
         guard isOpenPillScanMode,
               pillScanViewModel.pendingOpenBottleDrugId != nil else { return }
         let loosePills = pillScanViewModel.addCurrentOpenPillCount
-        pillScanViewModel.createOpenedBottleFromPendingScan(
+        let didCreate = pillScanViewModel.createOpenedBottleFromPendingScan(
             existingBatch: stockCountViewModel.currentBatch,
             bucketId: stockCountViewModel.pendingBucketId,
             loosePillCount: loosePills
         )
+        // A 0-pill count is invalid (toast already shown) — stay on the counting
+        // screen so the user can add pills before completing, instead of tearing
+        // down the in-progress open-pill session.
+        guard didCreate else { return }
+
         // The batch may have just been created for real (first count of the session with
         // no prior sealed scan) — make sure stockCountViewModel tracks it from here on.
         if stockCountViewModel.currentBatch == nil {

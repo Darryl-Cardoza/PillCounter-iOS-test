@@ -54,8 +54,10 @@ extension PillScanViewModel {
             print("📦 [BottleRescan] ignored — no active dispense transaction")
             return
         }
-        guard currentControlledStep == .containerInitiate || currentControlledStep == .targetVerification else {
-            print("📦 [BottleRescan] ignored — not on containerInitiate/targetVerification step")
+        guard currentControlledStep == .containerInitiate
+            || currentControlledStep == .targetVerification
+            || currentControlledStep == .containerPending else {
+            print("📦 [BottleRescan] ignored — not on containerInitiate/targetVerification/containerPending step")
             return
         }
 
@@ -71,8 +73,16 @@ extension PillScanViewModel {
             print("📦 [BottleRescan] ignored — drug not found locally for gtin/ndc")
             return
         }
-        guard resolvedDrug.drug_id == txn.drug_id else {
-            print("📦 [BottleRescan] ignored — resolved drug_id \(resolvedDrug.drug_id) does not match txn drug_id \(txn.drug_id)")
+        // Compare by NDC, not drug_id: the same physical drug can exist as more
+        // than one DrugMasterEntity row (separate imports/batches), so a second
+        // bottle of the identical NDC can resolve to a different drug_id than the
+        // transaction's — that must still count as a match. ndcNormalized (not a
+        // plain dash-strip) is used since different import paths also vary the
+        // 10-vs-11-digit segment layout (e.g. "1234-5678-90" vs "01234-567-90").
+        let resolvedNdc = (resolvedDrug.ndc ?? "").ndcNormalized
+        let txnNdc = (txn.drug?.ndc ?? "").ndcNormalized
+        guard !resolvedNdc.isEmpty, resolvedNdc == txnNdc else {
+            print("📦 [BottleRescan] ignored — resolved ndc \(resolvedDrug.ndc ?? "nil") does not match txn ndc \(txn.drug?.ndc ?? "nil")")
             return
         }
 

@@ -319,6 +319,7 @@ enum L10n {
         static let failureStorage = NSLocalizedString("faceAuth.failureStorage", comment: "")
         static let failureDuplicate = NSLocalizedString("faceAuth.failureDuplicate", comment: "")
         static let failureTimedOut = NSLocalizedString("faceAuth.failureTimedOut", comment: "")
+        static let failureDifferentFace = NSLocalizedString("faceAuth.failureDifferentFace", comment: "")
         static let retry = NSLocalizedString("faceAuth.retry", comment: "")
 
         // Authentication screen

@@ -310,16 +310,19 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
     // MARK: - Optional duplicate check (extension point)
 
     /// Compares `embeddings` (typically the just-captured enrollment set)
-    /// against every OTHER active user's stored embeddings. Returns the
-    /// matching user's id if any pairwise cosine similarity meets
-    /// `duplicateSimilarityThreshold`, else nil.
+    /// against every OTHER user's stored embeddings — active or
+    /// deactivated. Returns the matching user's id if any pairwise cosine
+    /// similarity meets `duplicateSimilarityThreshold`, else nil.
+    /// Deliberately includes deactivated users: deactivation is a soft
+    /// pause, not a release of that face for re-enrollment (see
+    /// `FaceUserStore.isNameTaken`'s comment for the same rationale).
     ///
     /// Not called automatically by `saveEnrollmentEmbeddings` — the caller
     /// (ViewModel) decides whether to run this before persisting, so this
     /// first implementation can ship without gating enrollment on it.
     func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> String? {
         guard !embeddings.isEmpty else { return nil }
-        let candidates = userStore.getAllUsers().filter { $0.id != excludingUserId }
+        let candidates = userStore.getAllUsers(activeOnly: false).filter { $0.id != excludingUserId }
 
         for user in candidates {
             guard let userId = user.id else { continue }

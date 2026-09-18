@@ -91,6 +91,36 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// Consecutive frames a pose must be held in-range before it "counts"
     /// as achieved — smooths per-frame yaw/pitch noise (~0.5s @ 15fps).
     private let poseHoldFrameThreshold = 6
+    /// Acceptable face-box width range relative to the `.center` step's
+    /// anchor box — same person at the same distance from the camera keeps
+    /// a roughly stable box size. Deliberately wide: a turned head's box
+    /// does narrow somewhat as a side profile, and that's a normal pose
+    /// change, not a person swap.
+    private let anchorBoxWidthRatio: ClosedRange<Float> = 0.7...1.4
+    /// Max fraction of frame width/height the box's center may drift from
+    /// the anchor's — catches a face that appeared somewhere else entirely
+    /// (a genuine swap-in) while tolerating the sideways drift a normal
+    /// turn produces. An earlier version compared frame-to-frame box IoU
+    /// instead, which broke on every legitimate head turn — turning IS a
+    /// box jump, so IoU couldn't tell "moved" from "different person."
+    /// Anchoring to one fixed reference (center's box) and checking
+    /// size+position tolerance instead of overlap fixes that.
+    private let anchorBoxCenterDriftRatio: Float = 0.35
+    /// Consecutive no-face frames tolerated before losing the track — grace
+    /// for a hand briefly passing in front of the lens, or the user briefly
+    /// stepping out/repositioning, without treating that the same as a
+    /// person swap. ~3s at this pipeline's documented reference rate (see
+    /// poseHoldFrameThreshold: 6 frames ≈ 0.5s @ 15fps) — was 3 frames
+    /// (~0.5s), which failed genuine users for a momentary lapse.
+    private let trackGraceFrames = 45
+    /// Consecutive anchor-mismatch frames tolerated before failing — absorbs
+    /// one noisy/blurry/motion-glitch frame without failing the same person,
+    /// while a genuinely different face keeps mismatching frame after frame
+    /// and still gets caught quickly. Deliberately much smaller than
+    /// trackGraceFrames: a face IS present here, just not matching, which is
+    /// a stronger signal than mere absence and shouldn't get the same long
+    /// grace.
+    private let anchorMismatchGraceFrames = 3
 
     // MARK: - Capture-pipeline state (camera-queue-only, see header)
 
@@ -108,6 +138,20 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// `lastName` published properties directly from `finishEnrollment()`.
     private nonisolated(unsafe) var pendingFirstName = ""
     private nonisolated(unsafe) var pendingLastName = ""
+    /// Bounding box captured once, at the moment `.center` succeeds — the
+    /// fixed reference every later frame's box is checked against (size +
+    /// position tolerance, not frame-to-frame overlap). nil until `.center`
+    /// is captured, during which every frame passes the check
+    /// unconditionally (nothing to anchor against yet). Persists ACROSS
+    /// pose steps deliberately — identity continuity must hold for the
+    /// whole enrollment, not reset per step like the pose state below does.
+    private nonisolated(unsafe) var centerAnchorBox: CGRect?
+    /// Consecutive frames with no usable detection — distinct from a person
+    /// swap (box jumps) so a brief occlusion doesn't restart the capture.
+    private nonisolated(unsafe) var consecutiveNoFaceFrames = 0
+    /// Consecutive frames where a face IS present but doesn't match
+    /// centerAnchorBox — see anchorMismatchGraceFrames's declaration.
+    private nonisolated(unsafe) var consecutiveAnchorMismatchFrames = 0
     private var backgroundObserver: NSObjectProtocol?
 
     private nonisolated(unsafe) var currentStepIndex = 0
@@ -115,6 +159,19 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private nonisolated(unsafe) var stepStartedAt: TimeInterval = 0
     private nonisolated(unsafe) var enrollmentStartedAt: TimeInterval = 0
     private nonisolated(unsafe) var relaxedThisStep = false
+    /// EMA-smoothed yaw/pitch, compared against the step's target range
+    /// instead of the raw per-frame estimate — FaceQualityChecker's yaw/pitch
+    /// proxies are explicitly documented as noisy single-frame readings, and
+    /// poseHoldFrames resets to 0 on any single miss, so unsmoothed jitter
+    /// was breaking the 6-consecutive-frame streak independent of how fast
+    /// or slow the user actually turned. nil until the first usable frame of
+    /// a step, so that frame seeds the average instead of blending against 0.
+    private nonisolated(unsafe) var smoothedYawDegrees: Float?
+    private nonisolated(unsafe) var smoothedPitchDegrees: Float?
+    /// Weight given to each new frame in the EMA above — low enough to
+    /// absorb per-frame landmark jitter, high enough to still track a
+    /// deliberate head turn within the step's time budget.
+    private let poseSmoothingAlpha: Float = 0.3
     /// Best candidate seen so far THAT ALSO SATISFIED the step's pose range.
     /// Captured at the soft window deadline; if the hard timeout arrives with
     /// this still nil, the step is skipped rather than recording a
@@ -207,7 +264,12 @@ final class FaceEnrollmentViewModel: ObservableObject {
         bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         relaxedThisStep = false
-        resetQualityThresholds()
+        smoothedYawDegrees = nil
+        smoothedPitchDegrees = nil
+        centerAnchorBox = nil
+        consecutiveNoFaceFrames = 0
+        consecutiveAnchorMismatchFrames = 0
+        resetQualityThresholds(step: .center)
         hasLiveFace = false
         liveYawDegrees = 0
         livePitchDegrees = 0
@@ -301,9 +363,38 @@ final class FaceEnrollmentViewModel: ObservableObject {
                 self.hasLiveFace = false
                 self.liveRejectionReason = nil
             }
+            handleNoUsableFaceFrame()
+            return
+        }
+
+        let step = poseSteps[currentStepIndex]
+
+        // Track continuity — same physical face as the one that captured
+        // .center? Runs before the quality/pose gates, since a person swap
+        // is an identity problem, not a quality problem: a swapped-in face
+        // can easily be well-lit, sharp, and correctly posed, and none of
+        // the checks below would ever catch it. No-op until .center is
+        // captured (centerAnchorBox nil) — nothing to anchor against yet.
+        consecutiveNoFaceFrames = 0
+        let box = detections[0].boundingBox
+        if let anchor = centerAnchorBox, !boxMatchesAnchor(box, anchor: anchor, frameSize: detections[0].frameSize) {
+            consecutiveAnchorMismatchFrames += 1
+            if consecutiveAnchorMismatchFrames > anchorMismatchGraceFrames {
+                Log("Enrollment: track lost — box mismatched the center-step anchor for \(consecutiveAnchorMismatchFrames) frames")
+                failTrackContinuity()
+                return
+            }
+            // Within grace — discard this frame like any other rejected-but-
+            // not-fatal one rather than treating it as a good capture
+            // candidate.
+            DispatchQueue.main.async {
+                self.hasLiveFace = false
+                self.liveRejectionReason = nil
+            }
             evaluateStepDeadlines(sawUsableFrame: false)
             return
         }
+        consecutiveAnchorMismatchFrames = 0
 
         let quality = qualityChecker.check(detection: detections[0], pixelBuffer: pixelBuffer)
         guard quality.isAcceptable else {
@@ -317,8 +408,14 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
         // Strict completeness gate — runs after the existing box/sharpness
         // check, before this frame is eligible as a capture candidate. See
-        // FaceCaptureValidator.swift for what this catches and why.
-        guard FaceCaptureValidator.isFaceCaptureValid(face: detections[0], frame: pixelBuffer) == nil else {
+        // FaceCaptureValidator.swift for what this catches and why. `step`
+        // lets it skip the yaw-ratio check for turnLeft/turnRight, which
+        // deliberately need an off-frontal pose that check would otherwise
+        // fight.
+        let captureRejection = FaceCaptureValidator.isFaceCaptureValid(face: detections[0], frame: pixelBuffer, step: step)
+        // TEMP DEBUG — remove once turnLeft/turnRight/chinUp reliably capture.
+        Log("DEBUG captureGate: step=\(step) rejection=\(String(describing: captureRejection))")
+        guard captureRejection == nil else {
             DispatchQueue.main.async {
                 self.hasLiveFace = false
                 self.liveRejectionReason = nil
@@ -327,8 +424,17 @@ final class FaceEnrollmentViewModel: ObservableObject {
             return
         }
 
-        let step = poseSteps[currentStepIndex]
-        let poseMatches = isPoseInRange(step: step, quality: quality)
+        // Smoothed, not raw — see smoothedYawDegrees's declaration comment.
+        // Only the pose-range comparison uses this; the live UI nudge below
+        // still publishes the raw per-frame value for responsiveness.
+        let yaw = smoothedYawDegrees.map { $0 * (1 - poseSmoothingAlpha) + quality.yawDegrees * poseSmoothingAlpha } ?? quality.yawDegrees
+        let pitch = smoothedPitchDegrees.map { $0 * (1 - poseSmoothingAlpha) + quality.pitchDegrees * poseSmoothingAlpha } ?? quality.pitchDegrees
+        smoothedYawDegrees = yaw
+        smoothedPitchDegrees = pitch
+
+        let poseMatches = isPoseInRange(step: step, yawDegrees: yaw, pitchDegrees: pitch)
+        // TEMP DEBUG — remove once turnLeft/turnRight/chinUp reliably capture.
+        Log("DEBUG poseGate: step=\(step) rawYaw=\(String(format: "%.1f", quality.yawDegrees)) smoothedYaw=\(String(format: "%.1f", yaw)) rawPitch=\(String(format: "%.1f", quality.pitchDegrees)) smoothedPitch=\(String(format: "%.1f", pitch)) targetYaw=\(String(describing: step.targetYawDegrees)) targetPitch=\(String(describing: step.targetPitchDegrees)) poseMatches=\(poseMatches) holdFrames=\(poseHoldFrames)")
 
         DispatchQueue.main.async {
             self.liveYawDegrees = quality.yawDegrees
@@ -358,17 +464,85 @@ final class FaceEnrollmentViewModel: ObservableObject {
         evaluateStepDeadlines(sawUsableFrame: true)
     }
 
-    /// True if the quality result's yaw/pitch estimate falls inside the
-    /// current step's target range. Steps with no strict target (nil range)
-    /// are satisfied by any acceptable-quality frame.
-    private nonisolated func isPoseInRange(step: EnrollmentPoseStep, quality: FaceQualityResult) -> Bool {
-        if let yawRange = step.targetYawDegrees, !yawRange.contains(quality.yawDegrees) {
+    /// True if the given yaw/pitch estimate falls inside the current step's
+    /// target range. Steps with no strict target (nil range) are satisfied
+    /// by any acceptable-quality frame. Takes smoothed values, not a raw
+    /// FaceQualityResult — see the smoothedYawDegrees declaration comment.
+    private nonisolated func isPoseInRange(step: EnrollmentPoseStep, yawDegrees: Float, pitchDegrees: Float) -> Bool {
+        if let yawRange = step.targetYawDegrees, !yawRange.contains(yawDegrees) {
             return false
         }
-        if let pitchRange = step.targetPitchDegrees, !pitchRange.contains(quality.pitchDegrees) {
+        if let pitchRange = step.targetPitchDegrees, !pitchRange.contains(pitchDegrees) {
             return false
         }
         return true
+    }
+
+    /// A frame with no single usable detection (none, or more than one) —
+    /// counts toward the track-continuity grace period as well as the
+    /// existing per-step deadline logic. Exceeding the grace fails
+    /// enrollment the same way an anchor mismatch does: from the pipeline's
+    /// perspective, "the face has been gone too long" and "a different face
+    /// is here now" are both a loss of identity continuity, and both should
+    /// surface the same explicit failure rather than one being silent.
+    private nonisolated func handleNoUsableFaceFrame() {
+        consecutiveNoFaceFrames += 1
+        if consecutiveNoFaceFrames > trackGraceFrames {
+            Log("Enrollment: track lost — no usable face for \(consecutiveNoFaceFrames) frames")
+            failTrackContinuity()
+            return
+        }
+        evaluateStepDeadlines(sawUsableFrame: false)
+    }
+
+    /// True if `box` is still plausibly the same physical face as the one
+    /// that captured `.center` (`anchor`) — size and position tolerance,
+    /// not frame-to-frame overlap. An earlier version used IoU against the
+    /// PREVIOUS frame, which broke on every legitimate head turn (turning
+    /// the head to satisfy turnLeft/turnRight IS a box jump, so IoU
+    /// couldn't tell "moved" from "different person"). Anchoring to one
+    /// fixed reference and checking size+position tolerance instead solves
+    /// that: a normal turn drifts the box somewhat but stays within these
+    /// bounds, while a genuine swap-in (different distance from camera, or
+    /// appearing somewhere else in frame) does not.
+    private nonisolated func boxMatchesAnchor(_ box: CGRect, anchor: CGRect, frameSize: CGSize) -> Bool {
+        guard anchor.width > 0 else { return true }
+        let widthRatio = Float(box.width / anchor.width)
+        let widthPass = anchorBoxWidthRatio.contains(widthRatio)
+
+        var dx: Float = 0, dy: Float = 0, driftPass = true
+        if frameSize.width > 0, frameSize.height > 0 {
+            dx = Float(abs(box.midX - anchor.midX) / frameSize.width)
+            dy = Float(abs(box.midY - anchor.midY) / frameSize.height)
+            driftPass = dx <= anchorBoxCenterDriftRatio && dy <= anchorBoxCenterDriftRatio
+        }
+
+        // TEMP DEBUG — remove once real-device numbers confirm the right
+        // thresholds. Currently failing turnLeft/turnRight/chinUp on real
+        // enrollment attempts with only small head movement.
+        Log("DEBUG trackAnchor: widthRatio=\(String(format: "%.2f", widthRatio)) (pass=\(widthPass)) dx=\(String(format: "%.2f", dx)) dy=\(String(format: "%.2f", dy)) (driftPass=\(driftPass)) anchor=\(anchor) box=\(box)")
+
+        guard widthPass else { return false }
+        return driftPass
+    }
+
+    /// Track continuity broke (person swap, or the face was gone too long)
+    /// — a terminal, explicit failure the user has to acknowledge and
+    /// retry from, rather than a silent auto-restart. An earlier version
+    /// silently reset back to `.center` here, which from the user's
+    /// perspective looked like the scan randomly restarting for no visible
+    /// reason. Nothing to delete — per the class header, nothing is
+    /// persisted until `finishEnrollment()` succeeds — so this only stops
+    /// the camera and publishes the failure; `retry()` (already a pure
+    /// in-memory reset) is what actually restarts capture, on an explicit
+    /// user tap.
+    private nonisolated func failTrackContinuity() {
+        isCapturingFrames = false
+        cameraService.stop()
+        cameraService.onFrame = nil
+        DispatchQueue.main.async {
+            self.state = .failed(.differentFaceDetected)
+        }
     }
 
     /// Applies the progressive-relaxation / best-of-window / hard-timeout
@@ -379,7 +553,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
         if !relaxedThisStep && elapsed >= relaxAfterSeconds {
             relaxedThisStep = true
-            relaxQualityThresholds()
+            relaxQualityThresholds(step: step)
         }
 
         if elapsed >= stepWindowSeconds, let candidate = bestPoseMatchedCandidate {
@@ -462,6 +636,10 @@ final class FaceEnrollmentViewModel: ObservableObject {
             if frontalAvatar == nil {
                 Log("Enrollment: frontal avatar render failed — user will show the placeholder")
             }
+            // The fixed reference every later frame's box is checked
+            // against for track continuity (see centerAnchorBox's
+            // declaration comment) — set once here, never updated again.
+            centerAnchorBox = candidate.detection.boundingBox
         }
 
         Log("Enrollment: step \(currentStepIndex) (\(step)) captured — \(collectedEmbeddings.count)/\(poseSteps.count) embeddings, quality=\(String(format: "%.2f", candidate.quality.qualityScore))")
@@ -472,7 +650,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
         bestPoseMatchedCandidate = nil
         poseHoldFrames = 0
         relaxedThisStep = false
-        resetQualityThresholds()
+        smoothedYawDegrees = nil
+        smoothedPitchDegrees = nil
 
         currentStepIndex += 1
         stepStartedAt = Self.monotonicNow()
@@ -485,6 +664,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             return
         }
 
+        resetQualityThresholds(step: poseSteps[currentStepIndex])
         DispatchQueue.main.async { self.publishAwaitingPose() }
     }
 
@@ -543,15 +723,25 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
     // MARK: - Threshold relaxation
 
-    private nonisolated func resetQualityThresholds() {
-        qualityChecker.minFaceWidthPx = 240
+    /// True for turnLeft/turnRight/chinUp — a deliberately off-frontal pose
+    /// naturally reads a smaller apparent box width than a held-still
+    /// frontal one (measured on real device logs: legitimate turned-face
+    /// widths as low as 208-230px, well under the frontal floor below).
+    /// Same rationale as FaceCaptureValidator's relaxed confidence/
+    /// sharpness floors for these same steps.
+    private nonisolated func isOffCenterStep(_ step: EnrollmentPoseStep) -> Bool {
+        step == .turnLeft || step == .turnRight || step == .chinUp
+    }
+
+    private nonisolated func resetQualityThresholds(step: EnrollmentPoseStep) {
+        qualityChecker.minFaceWidthPx = isOffCenterStep(step) ? 200 : 240
         qualityChecker.maxFaceWidthRatio = 0.85
         qualityChecker.maxCenterOffsetXRatio = 0.30
         qualityChecker.maxCenterOffsetYRatio = 0.30
     }
 
-    private nonisolated func relaxQualityThresholds() {
-        qualityChecker.minFaceWidthPx = 180
+    private nonisolated func relaxQualityThresholds(step: EnrollmentPoseStep) {
+        qualityChecker.minFaceWidthPx = isOffCenterStep(step) ? 160 : 180
         qualityChecker.maxFaceWidthRatio = 0.9
         // Without relaxing this too, a user stuck slightly off-center could
         // burn the entire step window with no escape hatch — width/ratio
@@ -633,6 +823,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         case .storageError: return L10n.FaceAuth.failureStorage
         case .duplicateFace: return L10n.FaceAuth.failureDuplicate
         case .timedOut: return L10n.FaceAuth.failureTimedOut
+        case .differentFaceDetected: return L10n.FaceAuth.failureDifferentFace
         }
     }
 }

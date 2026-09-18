@@ -265,6 +265,7 @@
 "faceAuth.failureStorage" = "Could not save enrollment. Please try again.";
 "faceAuth.failureDuplicate" = "This face is already enrolled for another user.";
 "faceAuth.failureTimedOut" = "Enrollment took too long. Please try again in good lighting.";
+"faceAuth.failureDifferentFace" = "A different face was detected, or the same face couldn't be tracked. Please retry with the same person.";
 "faceAuth.retry" = "Try Again";
 
 "faceAuth.authTitle" = "Face Authentication";

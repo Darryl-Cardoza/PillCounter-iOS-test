@@ -15,6 +15,11 @@ enum EnrollmentFailureReason {
     /// Global enrollment timeout expired with too few usable samples
     /// (spec: never loop forever — see FaceEnrollmentViewModel).
     case timedOut
+    /// The face being captured no longer matches the one that captured the
+    /// `.center` step — either a different person stepped in, or no usable
+    /// face was seen for too long. See FaceEnrollmentViewModel's
+    /// boxMatchesAnchor/failTrackContinuity.
+    case differentFaceDetected
 }
 
 /// Enrollment capture state machine, driven by a guided pose sequence

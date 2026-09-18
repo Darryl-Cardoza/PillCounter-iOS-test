@@ -17,6 +17,14 @@
 //  to publish `state`, so ML inference never blocks SwiftUI and no two
 //  frames are ever processed concurrently (spec section 14).
 //
+//  No FaceUserEntity row is created until enrollment actually succeeds —
+//  `finishEnrollment()` is the only place that persists one. Before that,
+//  `pendingUserId` is a purely local identifier. This closes a stuck-lock
+//  bug: previously the row was created at the very start of enrollment, so
+//  backgrounding mid-capture (which SwiftUI's `onDisappear` does NOT fire
+//  for) left a durable, embedding-less "enrolled" user that satisfied
+//  FaceSessionManager's lock gate but could never be matched to unlock.
+//
 
 import Foundation
 import CoreVideo
@@ -88,8 +96,19 @@ final class FaceEnrollmentViewModel: ObservableObject {
 
     private nonisolated(unsafe) var isProcessing = false
     private nonisolated(unsafe) var isCapturingFrames = false
+    /// Local identifier for the in-progress attempt only — no FaceUserEntity
+    /// row exists under this id until `finishEnrollment()` persists one.
+    /// Deferring persistence to success is what makes an orphaned,
+    /// embedding-less user row structurally impossible (see class header).
     private nonisolated(unsafe) var pendingUserId: String?
     private nonisolated(unsafe) var collectedEmbeddings: [FaceEmbedding] = []
+    private nonisolated(unsafe) var collectedSteps: [EnrollmentPoseStep] = []
+    /// Snapshot of the trimmed name taken at `startEnrollment()` — the hot
+    /// path is `nonisolated` and can't read the `@MainActor` `firstName`/
+    /// `lastName` published properties directly from `finishEnrollment()`.
+    private nonisolated(unsafe) var pendingFirstName = ""
+    private nonisolated(unsafe) var pendingLastName = ""
+    private var backgroundObserver: NSObjectProtocol?
 
     private nonisolated(unsafe) var currentStepIndex = 0
     private nonisolated(unsafe) var poseHoldFrames = 0
@@ -127,6 +146,26 @@ final class FaceEnrollmentViewModel: ObservableObject {
         cameraServiceSubscription = cameraService.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.objectWillChange.send() }
+
+        // SwiftUI's `onDisappear` (the view's other cancel path) does NOT
+        // fire when the app is merely backgrounded — the enrollment screen
+        // stays mounted underneath the lock overlay window. Without this,
+        // an in-progress capture kept running (and, before this fix's
+        // deferred-persist change, left a durable orphan user row) every
+        // time QA backgrounded the app mid-enrollment.
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.cancelEnrollment() }
+        }
+    }
+
+    deinit {
+        if let backgroundObserver {
+            NotificationCenter.default.removeObserver(backgroundObserver)
+        }
     }
 
     // MARK: - Name validation (spec section 1)
@@ -162,12 +201,12 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
 
         collectedEmbeddings = []
+        collectedSteps = []
         currentStepIndex = 0
         poseHoldFrames = 0
         bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         relaxedThisStep = false
-        pendingUserId = nil
         resetQualityThresholds()
         hasLiveFace = false
         liveYawDegrees = 0
@@ -176,12 +215,12 @@ final class FaceEnrollmentViewModel: ObservableObject {
         completedSteps = []
         state = .preparing
 
-        let user = repository.registerUser(firstName: trimmedFirstName, lastName: trimmedLastName)
-        guard let userId = user.id else {
-            state = .failed(.storageError)
-            return
-        }
+        // Not yet persisted — see class header. registerUser() only runs in
+        // finishEnrollment() once capture actually succeeds.
+        let userId = UUID().uuidString
         pendingUserId = userId
+        pendingFirstName = trimmedFirstName
+        pendingLastName = trimmedLastName
 
         let now = Self.monotonicNow()
         enrollmentStartedAt = now
@@ -200,12 +239,12 @@ final class FaceEnrollmentViewModel: ObservableObject {
         isCapturingFrames = false
         cameraService.stop()
         cameraService.onFrame = nil
-        if let userId = pendingUserId, collectedEmbeddings.count < poseSteps.count {
-            repository.deleteUser(id: userId)
-            Log("Enrollment: cancelled for user \(userId), had \(collectedEmbeddings.count) embedding(s) — deleted partial user")
-        }
+        // No DB cleanup needed — nothing is persisted until finishEnrollment()
+        // succeeds, so an in-progress attempt never has a row to delete.
+        Log("Enrollment: cancelled, had \(collectedEmbeddings.count) embedding(s) — nothing persisted")
         pendingUserId = nil
         collectedEmbeddings = []
+        collectedSteps = []
         bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         hasLiveFace = false
@@ -215,15 +254,9 @@ final class FaceEnrollmentViewModel: ObservableObject {
     }
 
     func retry() {
-        // The failed attempt's partial user record is still in the store —
-        // startEnrollment() re-registers the same name, so it must be
-        // deleted first or validateNameBeforeStarting() rejects it as a
-        // duplicate and re-fails immediately without ever reopening the
-        // camera.
-        if let userId = pendingUserId {
-            repository.deleteUser(id: userId)
-            pendingUserId = nil
-        }
+        // Nothing was ever persisted for the failed attempt (see class
+        // header) — startEnrollment() re-registering the same name can't
+        // collide with a leftover row, so retry is a pure in-memory reset.
         startEnrollment()
     }
 
@@ -237,6 +270,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         cameraService.onFrame = nil
         pendingUserId = nil
         collectedEmbeddings = []
+        collectedSteps = []
         bestPoseMatchedCandidate = nil
         frontalAvatar = nil
         hasLiveFace = false
@@ -341,6 +375,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// rules described in the header, called once per rejected-or-pending frame.
     private nonisolated func evaluateStepDeadlines(sawUsableFrame: Bool) {
         let elapsed = Self.monotonicNow() - stepStartedAt
+        let step = poseSteps[currentStepIndex]
 
         if !relaxedThisStep && elapsed >= relaxAfterSeconds {
             relaxedThisStep = true
@@ -353,6 +388,20 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
 
         if elapsed >= stepHardTimeoutSeconds {
+            // The center pose is the mandatory anchor sample (it's what
+            // finishEnrollment() now requires and what frontalAvatar renders
+            // from) — QA saw enrollment complete having silently skipped a
+            // straight-face capture because this branch used to advance
+            // unconditionally on timeout. For .center only, keep retrying
+            // (relaxQualityThresholds already ran above once, same as any
+            // other step) instead of advancing; the global 60s budget in
+            // checkGlobalTimeout is still what bounds this from running
+            // forever.
+            guard step != .center else {
+                stepStartedAt = Self.monotonicNow()
+                relaxedThisStep = true
+                return
+            }
             // No pose-matched candidate for the whole step budget — skip it
             // rather than recording a mismatched-pose embedding (e.g. a
             // centered frame for the "turn left" step); minimumUsableSamples
@@ -398,6 +447,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
 
         collectedEmbeddings.append(embedding)
+        collectedSteps.append(step)
         DispatchQueue.main.async { self.completedSteps.insert(step) }
 
         // Render the row thumbnail from the frontal step only — the turned and
@@ -445,30 +495,47 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
 
         let embeddings = collectedEmbeddings
-        guard embeddings.count >= minimumUsableSamples else {
-            DispatchQueue.main.async {
-                self.repository.deleteUser(id: userId)
-                self.state = .failed(.timedOut)
-            }
+        // Defense in depth alongside the .center timeout-skip removed above:
+        // even if some future code path reached here without a center
+        // sample, refuse to complete rather than accept a total count with
+        // no straight-face embedding among it.
+        guard embeddings.count >= minimumUsableSamples, collectedSteps.contains(.center) else {
+            DispatchQueue.main.async { self.state = .failed(.timedOut) }
             return
         }
 
-        let success = repository.saveEnrollmentEmbeddings(userId: userId, embeddings: embeddings)
-        Log("Enrollment: finishing for user \(userId) — \(embeddings.count) embeddings, persisted=\(success)")
+        if let duplicateUserId = repository.checkDuplicateFace(against: embeddings, excludingUserId: nil) {
+            Log("Enrollment: rejected — matches already-enrolled user \(duplicateUserId)")
+            DispatchQueue.main.async { self.state = .failed(.duplicateFace) }
+            return
+        }
+
+        // Nothing is persisted until this point (see class header) — the
+        // user row and its embeddings are created together, so a row can
+        // never exist without embeddings.
+        let user = repository.registerUser(firstName: pendingFirstName, lastName: pendingLastName)
+        guard let registeredUserId = user.id else {
+            DispatchQueue.main.async { self.state = .failed(.storageError) }
+            return
+        }
+
+        let success = repository.saveEnrollmentEmbeddings(userId: registeredUserId, embeddings: embeddings)
+        Log("Enrollment: finishing for user \(registeredUserId) — \(embeddings.count) embeddings, persisted=\(success)")
 
         if success {
             // Only after the embeddings are durably stored — a rolled-back
             // enrollment must not leave an avatar file behind.
             if let avatar = frontalAvatar {
-                repository.saveAvatar(userId: userId, image: avatar)
+                repository.saveAvatar(userId: registeredUserId, image: avatar)
             }
         }
 
         DispatchQueue.main.async {
             if success {
+                self.pendingUserId = registeredUserId
                 self.state = .enrollmentComplete
             } else {
-                self.repository.deleteUser(id: userId)
+                self.repository.deleteUser(id: registeredUserId)
                 self.state = .failed(.storageError)
             }
         }

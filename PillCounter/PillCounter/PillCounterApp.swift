@@ -45,6 +45,18 @@ struct PillCounterApp: App {
         // Data stack, which only exists from the line above onwards.
         AppStorageManager.shared.purgeFaceEnrollmentsIfKeychainWasWiped()
 
+        // One-time self-heal for installs stuck by the pre-fix enrollment
+        // bug: a FaceUserEntity row could be created with zero embeddings
+        // (backgrounding mid-enrollment, before capture ever produced a
+        // sample), which armed FaceSessionManager's lock but could never
+        // satisfy it — a permanently stuck lock. FaceEnrollmentViewModel no
+        // longer creates such rows, so this becomes a no-op once every
+        // device has relaunched at least once since that fix. Must run
+        // before lockOnColdLaunch() below, or a freshly-healed device would
+        // still see the stale row and briefly re-arm the lock this same
+        // launch.
+        PillCounterApp.purgeEmbeddinglessFaceUsers()
+
         Log("🔑 Device key: \(DeviceKeyProvider.shared.getDeviceKey())")
 
         // Cold launch (app was fully closed, now reopened) always requires a
@@ -326,6 +338,25 @@ extension PillCounterApp {
 
         @unknown default:
             break
+        }
+    }
+
+    /// Deletes any active FaceUserEntity with zero stored embeddings — see
+    /// the call site comment in `init()`.
+    private static func purgeEmbeddinglessFaceUsers() {
+        let repository = FaceRecognitionRepository.shared
+        let usableUserIds = Set(repository.loadActiveEnrollments().map(\.userId))
+        let orphans = FaceUserStore.shared.getAllUsers(activeOnly: true)
+            .filter { user in
+                guard let id = user.id else { return false }
+                return !usableUserIds.contains(id)
+            }
+        guard !orphans.isEmpty else { return }
+
+        Log("PillCounterApp: purging \(orphans.count) embedding-less face user row(s) from a prior stuck-enrollment bug")
+        for user in orphans {
+            guard let id = user.id else { continue }
+            repository.deleteUser(id: id)
         }
     }
 

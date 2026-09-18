@@ -117,6 +117,12 @@ final class FaceAuthenticationViewModel: ObservableObject {
         registeredUsers = loaded
         Log("Authentication: loaded \(loaded.count) registered user(s), \(loaded.reduce(0) { $0 + $1.embeddings.count }) total embeddings")
         guard !loaded.isEmpty else {
+            // Without this, a stuck lock with no usable embeddings anywhere
+            // (e.g. a legacy embedding-less row that predates the
+            // deferred-persist enrollment fix) had no way back — every
+            // retry re-hit this same empty-roster failure with nothing that
+            // could ever release the overlay.
+            FaceSessionManager.shared.releaseLockIfNoUsersEnrolled()
             state = .failed(.noRegisteredUsers)
             Log("Authentication: no registered users — aborting")
             return

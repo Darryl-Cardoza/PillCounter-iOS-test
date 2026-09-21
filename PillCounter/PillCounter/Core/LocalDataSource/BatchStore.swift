@@ -31,6 +31,14 @@ final class BatchStore: BaseDataStore<BatchCountEntity> {
             let batchId = Int64(Date().timeIntervalSince1970 * 1000)
             let batch = BatchCountEntity(context: context)
             batch.batch_id = batchId
+            // A batch created while an FTUE tour is running is a byproduct of
+            // walking through the tour, not confirmed real work — exclude it
+            // from HL7 (see HL7BatchSyncQueue). Resuming an existing batch
+            // never calls create(), so real in-progress batches are never
+            // retroactively marked even if a tour happens to be active then.
+            if FtueController.shared.state.isActive {
+                TutorialEntryRegistry.shared.markTutorialBatch(batchId)
+            }
             batch.start_date_time = batchId
             batch.status = CountStatus.PARTIAL.rawValue
             batch.is_deleted = false

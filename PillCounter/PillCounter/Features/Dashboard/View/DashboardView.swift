@@ -19,6 +19,7 @@ struct DashboardView: View {
 
     @StateObject private var viewModel = DashboardViewModel()
     @StateObject private var locationService = LocationService.shared
+    @ObservedObject private var ftueState = FtueController.shared.state
 
     // userId is stored in Keychain via AppStorageManager — @AppStorage reads UserDefaults
     // and would always return "". Read directly from the Keychain-backed store instead.
@@ -114,6 +115,9 @@ struct DashboardView: View {
         .customPopup(isPresented: $showFeatureUnavailablePopup) {
             featureUnavailablePopUp
         }
+        .overlayPreferenceValue(TourTargetPreferenceKey.self) { anchors in
+            TourGuideOverlay(state: ftueState, anchors: anchors)
+        }
     }
 
     private var featureUnavailablePopUp: some View {
@@ -195,6 +199,7 @@ struct DashboardView: View {
                             action: navigateToDispense
                         )
                         .frame(maxHeight: .infinity)
+                        .ftueQuickAction(id: DashboardFtueSteps.dispenseEntryId, state: ftueState)
                         QuickActionCardCompact(
                             iconName: "placeholder_history",
                             title: L10n.Dashboard.RegularCount.title,
@@ -202,21 +207,27 @@ struct DashboardView: View {
                             action: handleInventoryTapped
                         )
                         .frame(maxHeight: .infinity)
+                        .ftueQuickAction(id: DashboardFtueSteps.stockCountId, state: ftueState)
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
                     .frame(width: leftW)
                     .frame(height: contentHeight)
 
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 15) {
-                            ForEach(statCards) { card in
-                                statCardView(card: card)
-                                    .frame(maxWidth: .infinity)
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(spacing: 15) {
+                                ForEach(statCards) { card in
+                                    statCardView(card: card)
+                                        .frame(maxWidth: .infinity)
+                                }
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
+                        .onChange(of: ftueState.currentIndex) { _ in
+                            scrollToFtueKpiCard(proxy: proxy)
+                        }
                     }
                     .frame(width: midW)
                     .frame(height: contentHeight)
@@ -285,6 +296,7 @@ struct DashboardView: View {
                                 action: navigateToDispense
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .ftueQuickAction(id: DashboardFtueSteps.dispenseEntryId, state: ftueState)
 
                             QuickActionCardExpanded(
                                 iconName: "icon_dashboard_stock",
@@ -293,6 +305,7 @@ struct DashboardView: View {
                                 action: handleInventoryTapped
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .ftueQuickAction(id: DashboardFtueSteps.stockCountId, state: ftueState)
                         }
                         .padding(pad)
                         .frame(width: actionWidth, height: contentHeight)
@@ -366,6 +379,7 @@ struct DashboardView: View {
                 PMSConnectionButtonView(
                     pmsConnectionState: userViewModel.pmsConnectionState
                 )
+                .tourTarget(DashboardFtueSteps.pmsStatusId)
             }
 
             Button {
@@ -398,12 +412,14 @@ struct DashboardView: View {
                         iconName: "icon_dashboard_dispense",
                         title: L10n.Dashboard.FixedCount.title,
                         subtitle: L10n.Dashboard.FixedCount.subtitle,
+                        ftueId: DashboardFtueSteps.dispenseEntryId,
                         action: navigateToDispense
                     )
                     quickActionCard(
                         iconName: "icon_dashboard_stock",
                         title: L10n.Dashboard.RegularCount.title,
                         subtitle: L10n.Dashboard.RegularCount.subtitle,
+                        ftueId: DashboardFtueSteps.stockCountId,
                         action: handleInventoryTapped
                     )
                 }
@@ -413,12 +429,14 @@ struct DashboardView: View {
                         iconName: "icon_dashboard_dispense",
                         title: L10n.Dashboard.FixedCount.title,
                         subtitle: L10n.Dashboard.FixedCount.subtitle,
+                        ftueId: DashboardFtueSteps.dispenseEntryId,
                         action: navigateToDispense
                     )
                     quickActionCard(
                         iconName: "icon_dashboard_stock",
                         title: L10n.Dashboard.RegularCount.title,
                         subtitle: L10n.Dashboard.RegularCount.subtitle,
+                        ftueId: DashboardFtueSteps.stockCountId,
                         action: handleInventoryTapped
                     )
                 }
@@ -430,6 +448,7 @@ struct DashboardView: View {
         iconName: String,
         title: String,
         subtitle: String,
+        ftueId: String,
         action: @escaping () -> Void
     ) -> some View {
         QuickActionCardPortrait(
@@ -439,6 +458,7 @@ struct DashboardView: View {
             isIpad: isIpad,
             action: action
         )
+        .ftueQuickAction(id: ftueId, state: ftueState)
     }
 
     // MARK: - Stat cards section
@@ -446,7 +466,8 @@ struct DashboardView: View {
     @ViewBuilder
     private var statCardsSection: some View {
         if isIpad {
-            // All 6 in one row on iPad (portrait and landscape)
+            // All 6 in one row on iPad (portrait and landscape) — every card is
+            // already on-screen, so the FTUE tour never needs to scroll here.
             HStack(spacing: 12) {
                 ForEach(statCards) { card in
                     statCardView(card: card)
@@ -455,17 +476,32 @@ struct DashboardView: View {
             }
         } else {
             // Horizontally scrollable on phone
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(statCards) { card in
-                        statCardView(card: card)
-                            .frame(width: 100)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(statCards) { card in
+                            statCardView(card: card)
+                                .frame(width: 100)
+                        }
                     }
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 4)
                 }
-                .padding(.horizontal, 2)
-                .padding(.vertical, 4)
+                .onChange(of: ftueState.currentIndex) { _ in
+                    scrollToFtueKpiCard(proxy: proxy)
+                }
             }
         }
+    }
+
+    /// Animates the horizontal/vertical scroll position to bring the current
+    /// FTUE step's KPI card into view — not a jump-cut. No-ops for any other
+    /// step id, and iPad never calls this since every card is already visible.
+    private func scrollToFtueKpiCard(proxy: ScrollViewProxy) {
+        guard let stepId = ftueState.currentStep?.id,
+              let cardId = statCards.first(where: { DashboardFtueSteps.kpiStepId(for: $0.id) == stepId })?.id
+        else { return }
+        withAnimation { proxy.scrollTo(cardId, anchor: .center) }
     }
 
     private func statCardView(card: DashboardStatCard) -> some View {
@@ -475,6 +511,8 @@ struct DashboardView: View {
         ) {
             viewModel.toggleFilter(cardId: card.id)
         }
+        .id(card.id)
+        .tourTarget(DashboardFtueSteps.kpiStepId(for: card.id))
     }
 
     // MARK: - Queue section
@@ -607,6 +645,9 @@ struct DashboardView: View {
     }
 
     private func startDashboardLoad() {
+        FtueController.shared.configureDashboardStepsIfNeeded(isPmsIntegrated: isPmsIntegrated)
+        FtueController.shared.startDashboardTourIfNeeded()
+
         Task {
             // Load local data first — the initial-load overlay only needs to
             // cover this off-main fetch, not the network chain below.

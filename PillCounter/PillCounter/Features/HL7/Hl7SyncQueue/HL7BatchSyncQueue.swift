@@ -55,6 +55,9 @@ final class HL7BatchSyncQueue: HL7SyncQueue<BatchSyncQueueItem> {
                 after: nil,
                 fetchPage: { cursor, limit in
                     self.batchDAO.fetchCompletedUnsyncedPage(after: cursor, limit: limit)
+                        // A batch created purely by walking through the FTUE tour
+                        // must never reach HL7 — see TutorialEntryRegistry.
+                        .filter { !TutorialEntryRegistry.shared.isTutorialBatch($0.batch_id) }
                         .map { BatchSyncQueueItem(batchId: $0.batch_id, requestId: self.resolvedRequestId(for: $0), cursor: $0.start_date_time) }
                 },
                 onFirstChunk: { self.processNext() }

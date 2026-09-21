@@ -42,6 +42,13 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
 
             let entity = PillCountTransactionEntity(context: context)
             entity.txn_id = generateUniqueId()
+            // A transaction created while an FTUE tour is running is a
+            // byproduct of walking through the tour — exclude it from HL7
+            // (see HL7TxnSyncQueue). Per explicit product decision this
+            // applies even to real dispenses scanned during the tour.
+            if FtueController.shared.state.isActive {
+                TutorialEntryRegistry.shared.markTutorialDispenseTxn(entity.txn_id)
+            }
             entity.local_id = Int64(AppStorageManager.shared.userId ?? "") ?? 0
             entity.drug_id = drugId
             entity.batch_id = batchId

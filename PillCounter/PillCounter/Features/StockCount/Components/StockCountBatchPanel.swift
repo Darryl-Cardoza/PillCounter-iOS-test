@@ -9,6 +9,7 @@ struct StockCountBatchPanel<BottomContent: View>: View {
 
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    @ObservedObject private var ftueState = FtueController.shared.state
 
     let topPadding: CGFloat
     let hideHeader: Bool
@@ -72,6 +73,7 @@ struct StockCountBatchPanel<BottomContent: View>: View {
                         }
                     }
                 }
+                .tourTarget(StockCountFtueSteps.recentCountsId)
             }
 
             bottomContent()
@@ -91,6 +93,7 @@ struct StockCountBatchPanel<BottomContent: View>: View {
             action: { onScanPills?() }
         )
         .fixedSize()
+        .ftueActionTarget(id: StockCountFtueSteps.scanPillsId, state: ftueState)
     }
 
     private var recentLabel: String {

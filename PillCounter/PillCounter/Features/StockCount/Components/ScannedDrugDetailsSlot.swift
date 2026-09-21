@@ -9,6 +9,7 @@ struct ScannedDrugDetailsSlot: View {
 
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    @ObservedObject private var ftueState = FtueController.shared.state
 
     @Binding var containerStatus: StockCountOptionContainerStatus
     let onCancel:      () -> Void
@@ -36,10 +37,12 @@ struct ScannedDrugDetailsSlot: View {
                     action: onEditTapped
                 )
                 .frame(maxWidth: 80)
+                .ftueActionTarget(id: StockCountFtueSteps.editDetailsId, state: ftueState)
             }
             .padding(.top, isIpadPortrait ? 8 : 14)
 
             drugCard
+                .tourTarget(StockCountFtueSteps.activeNdcCardId)
 
             actionButtons
                 .padding(.vertical, 8)
@@ -113,6 +116,7 @@ struct ScannedDrugDetailsSlot: View {
 
             bottleStepper(newTotal: newTotal, totalPills: totalPills)
                 .padding(.vertical, isIPhone ? 0 : 6)
+                .tourTarget(StockCountFtueSteps.counterId)
 
 //            openPillsRow(openPills: openPills)
         }
@@ -212,6 +216,7 @@ struct ScannedDrugDetailsSlot: View {
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
                 action: onCancel
             )
+            .tourTarget(StockCountFtueSteps.clearId)
             PillCountingButton(
                 iconName: nil, title: L10n.StockCountSheet.add,
                 textColor: .white, backgroundColor: appColors.primary, borderColor: .clear,
@@ -219,6 +224,7 @@ struct ScannedDrugDetailsSlot: View {
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
                 action: onAdd
             )
+            .ftueActionTarget(id: StockCountFtueSteps.addId, state: ftueState)
         }
     }
 }

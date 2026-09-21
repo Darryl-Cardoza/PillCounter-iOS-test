@@ -26,6 +26,7 @@ struct StockCountBatchBottomSheet: View {
 
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    @ObservedObject private var ftueState = FtueController.shared.state
 
     @Binding var containerStatus: StockCountOptionContainerStatus
     @Binding var isExpanded: Bool
@@ -87,6 +88,12 @@ struct StockCountBatchBottomSheet: View {
         }
         .background(appColors.primaryBackground)
         .ignoresSafeArea(edges: .bottom)
+        // Reserved occupancy anchor, not a step target itself — lets
+        // TourGuideOverlay know this whole panel currently covers the bottom
+        // of the screen (across all 4 layouts), so a pinnedEdge step (e.g.
+        // scanning a container) can flip to the top instead of colliding
+        // with it.
+        .tourTarget(FtueOccupancyIds.stockCountPanel)
     }
 
     // MARK: - iPad Landscape
@@ -393,5 +400,6 @@ struct StockCountBatchBottomSheet: View {
             cornerRadius: 20, horizontalPadding: 14, verticalPadding: 10, iconSize: 0,
             action: onScanPills
         )
+        .ftueActionTarget(id: StockCountFtueSteps.scanPillsId, state: ftueState)
     }
 }

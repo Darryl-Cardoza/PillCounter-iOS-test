@@ -9,6 +9,7 @@ struct ScannedSummarySlot: View {
 
     @EnvironmentObject private var appColors: AppColors
     @EnvironmentObject private var stockCountViewModel: StockCountViewModel
+    @ObservedObject private var ftueState = FtueController.shared.state
 
     let onEndCount: () -> Void
     var isIpadPortrait: Bool = false
@@ -80,6 +81,9 @@ struct ScannedSummarySlot: View {
                         action: onEndCount
                     )
                     .fixedSize()
+                    .disabled(stockCountViewModel.groupedTransactions.isEmpty)
+                    .opacity(stockCountViewModel.groupedTransactions.isEmpty ? 0.4 : 1)
+                    .ftueActionTarget(id: StockCountFtueSteps.endCountId, state: ftueState)
                 }
             }
             .padding(.bottom, isIPhone ? 12 : 18)

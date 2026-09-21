@@ -34,7 +34,13 @@ struct NotePopupView: View {
     /// Close button in header — shown only when showClose == true
     let onClose: (() -> Void)?
 
+    /// When set, tags the button row as an FTUE .actionTap target — advances
+    /// the tour on a real tap of either button. nil (the default) leaves
+    /// every other call site of this shared popup unaffected.
+    var tourTargetId: String? = nil
+
     @EnvironmentObject private var appColors: AppColors
+    @ObservedObject private var ftueState = FtueController.shared.state
 
     // MARK: - Convenience inits
 
@@ -47,7 +53,8 @@ struct NotePopupView: View {
         errorMessage: String? = nil,
         primaryTitle: String,
         primaryAction: @escaping () -> Void,
-        onClose: (() -> Void)? = nil
+        onClose: (() -> Void)? = nil,
+        tourTargetId: String? = nil
     ) {
         self.title           = title
         self.placeholder     = placeholder
@@ -59,6 +66,7 @@ struct NotePopupView: View {
         self.secondaryTitle  = nil
         self.secondaryAction = nil
         self.onClose         = onClose
+        self.tourTargetId    = tourTargetId
     }
 
     /// Two-button variant (e.g. CANCEL + YES, or SKIP + SAVE)
@@ -72,7 +80,8 @@ struct NotePopupView: View {
         primaryAction: @escaping () -> Void,
         secondaryTitle: String?,
         secondaryAction: @escaping () -> Void,
-        onClose: (() -> Void)? = nil
+        onClose: (() -> Void)? = nil,
+        tourTargetId: String? = nil
     ) {
         self.title           = title
         self.placeholder     = placeholder
@@ -84,6 +93,7 @@ struct NotePopupView: View {
         self.secondaryTitle  = secondaryTitle
         self.secondaryAction = secondaryAction
         self.onClose         = onClose
+        self.tourTargetId    = tourTargetId
     }
 
     // MARK: - Body
@@ -164,6 +174,7 @@ struct NotePopupView: View {
                     )
                     .frame(maxWidth: .infinity)
                 }
+                .modifier(OptionalFtueTarget(id: tourTargetId, state: ftueState))
             } else {
                 // Single-button layout: full width
                 HStack{

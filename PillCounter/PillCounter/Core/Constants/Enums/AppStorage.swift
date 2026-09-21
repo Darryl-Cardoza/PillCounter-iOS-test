@@ -138,6 +138,9 @@ final class AppStorageManager {
         static let selectedTerminalName = "selected_terminal_name"
         static let storedTerminals      = "stored_terminals"
         static let isHarzardousDrugSetting = "hazardous_pill_setting"
+        /// Per-tour FTUE keys are built dynamically (ftue_seen_<tourId>,
+        /// ftue_step_<tourId>) — see AppStorageManager.ftueSeen(tourId:) etc.
+        /// No static key here since the tourId isn't known at compile time.
         static let deleteCompletedTransactions = "delete_completed_transactions"
         static let pillCountRingOffsetX = "pill_count_ring_offset_x"
         static let pillCountRingOffsetY = "pill_count_ring_offset_y"
@@ -422,7 +425,27 @@ final class AppStorageManager {
         get { defaults.bool(forKey: AppStorageKeys.isNewUser) }
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isNewUser) }
     }
-    
+
+    /// Per-tour FTUE "seen" flag, keyed by a stable tour id (e.g. "dashboard",
+    /// "stockCount") so independent tours never share persistence.
+    func ftueSeen(tourId: String) -> Bool {
+        defaults.bool(forKey: "ftue_seen_\(tourId)")
+    }
+
+    func setFtueSeen(_ seen: Bool, tourId: String) {
+        defaults.setValue(seen, forKey: "ftue_seen_\(tourId)")
+    }
+
+    /// The step id to resume a tour from if the app is killed mid-tour.
+    /// Cleared once that tour ends (skipped or completed), not just on completion.
+    func ftueStepId(tourId: String) -> String? {
+        defaults.string(forKey: "ftue_step_\(tourId)")
+    }
+
+    func setFtueStepId(_ id: String?, tourId: String) {
+        defaults.setValue(id, forKey: "ftue_step_\(tourId)")
+    }
+
     var isHazardousDrugSetting: Bool {
         get { defaults.bool(forKey: AppStorageKeys.isHarzardousDrugSetting) }
         set { defaults.setValue(newValue, forKey: AppStorageKeys.isHarzardousDrugSetting) }

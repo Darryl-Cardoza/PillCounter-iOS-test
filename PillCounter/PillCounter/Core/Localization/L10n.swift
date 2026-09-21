@@ -675,6 +675,110 @@ enum L10n {
         static let countOpenPills = NSLocalizedString("controlled.countOpenPills", comment: "")
     }
 
+    // MARK: - FTUE Spotlight Tour
+    enum Ftue {
+        static let skip = NSLocalizedString("common.skip", comment: "")
+        static let back = NSLocalizedString("ftue.back", comment: "")
+        static let next = NSLocalizedString("ftue.next", comment: "")
+        static func stepProgress(_ current: Int, _ total: Int) -> String {
+            String(format: NSLocalizedString("ftue.stepProgress", comment: ""), current, total)
+        }
+
+        enum PmsStatus {
+            static let title = NSLocalizedString("ftue.pmsStatus.title", comment: "")
+            static let description = NSLocalizedString("ftue.pmsStatus.description", comment: "")
+        }
+
+        enum StockCount {
+            static let title = NSLocalizedString("ftue.stockCount.title", comment: "")
+            static let description = NSLocalizedString("ftue.stockCount.description", comment: "")
+        }
+
+        enum Kpi {
+            static let title = NSLocalizedString("ftue.kpi.title", comment: "")
+            static let description = NSLocalizedString("ftue.kpi.description", comment: "")
+        }
+
+        enum DispenseEntry {
+            static let title = NSLocalizedString("ftue.dispenseEntry.title", comment: "")
+            static let description = NSLocalizedString("ftue.dispenseEntry.description", comment: "")
+        }
+
+        enum StockCount {
+            enum ScanContainer {
+                static let title = NSLocalizedString("ftue.stockCount.scanContainer.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.scanContainer.description", comment: "")
+            }
+
+            enum ActiveNdcCard {
+                static let title = NSLocalizedString("ftue.stockCount.activeNdcCard.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.activeNdcCard.description", comment: "")
+            }
+
+            enum Counter {
+                static let title = NSLocalizedString("ftue.stockCount.counter.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.counter.description", comment: "")
+            }
+
+            enum Clear {
+                static let title = NSLocalizedString("ftue.stockCount.clear.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.clear.description", comment: "")
+            }
+
+            enum Add {
+                static let title = NSLocalizedString("ftue.stockCount.add.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.add.description", comment: "")
+            }
+
+            enum RecentCounts {
+                static let title = NSLocalizedString("ftue.stockCount.recentCounts.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.recentCounts.description", comment: "")
+            }
+
+            enum EditDetails {
+                static let title = NSLocalizedString("ftue.stockCount.editDetails.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.editDetails.description", comment: "")
+            }
+
+            enum ScanPills {
+                static let title = NSLocalizedString("ftue.stockCount.scanPills.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.scanPills.description", comment: "")
+            }
+
+            enum EndCount {
+                static let title = NSLocalizedString("ftue.stockCount.endCount.title", comment: "")
+                static let description = NSLocalizedString("ftue.stockCount.endCount.description", comment: "")
+            }
+        }
+
+        enum Dispense {
+            enum RxScan {
+                static let title = NSLocalizedString("ftue.dispense.rxScan.title", comment: "")
+                static let description = NSLocalizedString("ftue.dispense.rxScan.description", comment: "")
+            }
+
+            enum ProceedRx {
+                static let title = NSLocalizedString("ftue.dispense.proceedRx.title", comment: "")
+                static let description = NSLocalizedString("ftue.dispense.proceedRx.description", comment: "")
+            }
+
+            enum ContainerScan {
+                static let title = NSLocalizedString("ftue.dispense.containerScan.title", comment: "")
+                static let description = NSLocalizedString("ftue.dispense.containerScan.description", comment: "")
+            }
+
+            enum PillCount {
+                static let title = NSLocalizedString("ftue.dispense.pillCount.title", comment: "")
+                static let description = NSLocalizedString("ftue.dispense.pillCount.description", comment: "")
+            }
+
+            enum Note {
+                static let title = NSLocalizedString("ftue.dispense.note.title", comment: "")
+                static let description = NSLocalizedString("ftue.dispense.note.description", comment: "")
+            }
+        }
+    }
+
     // MARK: - HL7 Notifications
     enum Hl7Notification {
         static let newRxTitle = NSLocalizedString("hl7Notification.newRxTitle", comment: "")

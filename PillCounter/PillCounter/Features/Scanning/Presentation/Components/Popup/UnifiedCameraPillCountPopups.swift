@@ -42,7 +42,8 @@ extension UnifiedCameraView {
             },
             onClose: {
                 showNoteOption = false
-            }
+            },
+            tourTargetId: DispenseFtueSteps.noteId
         )
     }
 

@@ -599,6 +599,47 @@
 "hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
 "hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
 
+// MARK: - FTUE Spotlight Tour
+"ftue.back" = "Back";
+"ftue.next" = "Next";
+"ftue.stepProgress" = "Step %d of %d";
+"ftue.pmsStatus.title" = "Pharmacy System Connection";
+"ftue.pmsStatus.description" = "Shows whether your pharmacy system is connected, so you know if dispense and inventory updates are syncing.";
+"ftue.stockCount.title" = "Start a Stock Count";
+"ftue.stockCount.description" = "Tap here to begin counting inventory you already have on hand.";
+"ftue.kpi.title" = "Track What Needs Attention";
+"ftue.kpi.description" = "Each of these shows a count worth acting on today. Tap one to filter the list below by it.";
+"ftue.dispenseEntry.title" = "Dispense a Prescription";
+"ftue.dispenseEntry.description" = "Tap here to scan a prescription and start filling it.";
+"ftue.stockCount.scanContainer.title" = "Scan a Container";
+"ftue.stockCount.scanContainer.description" = "Scan a container's barcode to fill in its details below.";
+"ftue.stockCount.activeNdcCard.title" = "Drug Details";
+"ftue.stockCount.activeNdcCard.description" = "Shows the drug you just scanned, its lot and expiration, and the bottle count — starting from any count already recorded for this batch.";
+"ftue.stockCount.counter.title" = "Adjust the Count";
+"ftue.stockCount.counter.description" = "Use these to adjust the bottle count for this drug. It saves automatically a moment after you stop.";
+"ftue.stockCount.clear.title" = "Clear";
+"ftue.stockCount.clear.description" = "Drops this entry without saving it. This is different from removing a count you've already added.";
+"ftue.stockCount.add.title" = "Add";
+"ftue.stockCount.add.description" = "Tap here to save this drug's count to your list below.";
+"ftue.stockCount.recentCounts.title" = "Your Counts";
+"ftue.stockCount.recentCounts.description" = "Tap any entry here to reopen it and make a correction.";
+"ftue.stockCount.editDetails.title" = "Edit Details";
+"ftue.stockCount.editDetails.description" = "Tap here to correct individual sealed-bottle or loose-pill counts for this entry.";
+"ftue.stockCount.scanPills.title" = "Scan Pills";
+"ftue.stockCount.scanPills.description" = "Tap here to count loose or opened pills from this container.";
+"ftue.stockCount.endCount.title" = "End Count";
+"ftue.stockCount.endCount.description" = "Tap here to close out this batch once you've added at least one count.";
+"ftue.dispense.rxScan.title" = "Scan a Prescription";
+"ftue.dispense.rxScan.description" = "Scan the prescription label to look up what needs to be filled.";
+"ftue.dispense.proceedRx.title" = "Proceed";
+"ftue.dispense.proceedRx.description" = "Tap here to confirm these details and start filling this prescription.";
+"ftue.dispense.containerScan.title" = "Scan the Container";
+"ftue.dispense.containerScan.description" = "Scan the container's barcode to confirm it matches this prescription.";
+"ftue.dispense.pillCount.title" = "Count the Pills";
+"ftue.dispense.pillCount.description" = "Tap the ring as pills are counted, and again once the count is complete.";
+"ftue.dispense.note.title" = "Add a Note";
+"ftue.dispense.note.description" = "Save a note about this fill, or skip if there's nothing to add.";
+
 
 // MARK: - COUNT HISTORY
 "countHistory.noTransactionsFound" = "No transactions found";

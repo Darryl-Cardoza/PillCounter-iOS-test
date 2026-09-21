@@ -58,6 +58,9 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
                 fetchPage: { cursor, limit in
                     self.transactionDAO.fetchCompletedUnsyncedPage(after: cursor, limit: limit)
                         .filter { !$0.is_deleted }
+                        // A dispense transaction created purely by walking through
+                        // the FTUE tour must never reach HL7 — see TutorialEntryRegistry.
+                        .filter { !TutorialEntryRegistry.shared.isTutorialDispenseTxn($0.txn_id) }
                         .map { TxnSyncQueueItem(txnId: $0.txn_id, requestId: self.resolvedRequestId(for: $0), cursor: $0.created_at) }
                 },
                 onFirstChunk: { self.processNext() }

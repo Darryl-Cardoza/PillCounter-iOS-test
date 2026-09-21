@@ -13,6 +13,7 @@ struct RxDetailsSheetContent: View {
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.verticalSizeClass)   private var vSizeClass
     @Environment(\.isLandscape) private var isLandscape
+    @ObservedObject private var ftueState = FtueController.shared.state
 
     var onCancel: () -> Void = {}
     var onProceed: () -> Void = {}
@@ -257,6 +258,7 @@ struct RxDetailsSheetContent: View {
                 cornerRadius: 30, horizontalPadding: 32, verticalPadding: 14, iconSize: 0,
                 action: onProceed
             )
+            .ftueActionTarget(id: DispenseFtueSteps.proceedRxId, state: ftueState)
         }
     }
 }

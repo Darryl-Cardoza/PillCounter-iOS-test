@@ -37,6 +37,12 @@ final class StockTxnStore {
 
         let entity = StockTxnEntity(context: context)
         entity.stock_txn_id = generateUniqueId()
+        // See BatchStore.create's matching comment — same tutorial-exclusion
+        // rule, kept per-row too in case a stock txn is ever created outside
+        // a tutorial-flagged batch while a tour happens to be active.
+        if FtueController.shared.state.isActive {
+            TutorialEntryRegistry.shared.markTutorialStockTxn(entity.stock_txn_id)
+        }
         entity.batch_id = batch.batch_id
         entity.bucket_id = bucketId
         entity.drug_id = drugId

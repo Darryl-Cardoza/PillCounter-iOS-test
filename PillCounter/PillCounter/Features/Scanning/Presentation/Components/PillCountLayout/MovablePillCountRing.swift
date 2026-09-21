@@ -14,6 +14,7 @@ import SwiftUI
 struct MovablePillCountRing: View {
 
     @EnvironmentObject private var appColors: AppColors
+    @ObservedObject private var ftueState = FtueController.shared.state
 
     let count: Int
     let isTargetReached: Bool
@@ -306,6 +307,7 @@ struct MovablePillCountRing: View {
         // The ring itself is the tap target — a tap counts as Add / All Done.
         .contentShape(Circle())
         .onTapGesture { handleTap() }
+        .ftueActionTarget(id: DispenseFtueSteps.pillCountId, state: ftueState)
         // Picked-up state — grows bigger while dragging, with a lifted shadow.
         // The scale change is animated by the gesture's withAnimation blocks.
         .scaleEffect(isDragging ? 1.18 : 1.0)

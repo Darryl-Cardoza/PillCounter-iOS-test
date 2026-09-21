@@ -193,6 +193,9 @@ struct UnifiedCameraView: View {
                         .allowsHitTesting(false)
                 }
             }
+            .overlayPreferenceValue(TourTargetPreferenceKey.self) { anchors in
+                TourGuideOverlay(state: FtueController.shared.state, anchors: anchors)
+            }
     }
 
     var pillCountSheetHeight: CGFloat {
@@ -625,6 +628,15 @@ struct UnifiedCameraView: View {
             scanType: scanType,
             onBack: { handleBack() }
         )
+        // Near-fullscreen — the FTUE tour pins its tooltip to an edge here
+        // rather than positioning it relative to this target's bounds. Same
+        // view serves three different tour steps across two tours (Batch
+        // Stock Count's container scan, Dispense's Rx scan and container
+        // scan) — chaining .tourTarget registers all three ids against the
+        // same bounds; only the active tour's current step id is ever read.
+        .tourTarget(StockCountFtueSteps.scanContainerId)
+        .tourTarget(DispenseFtueSteps.rxScanId)
+        .tourTarget(DispenseFtueSteps.containerScanId)
         .onAppear(perform: onAppear)
         .onDisappear(perform: onDisappear)
         .onChange(of: scenePhase) { _, phase in
@@ -911,6 +923,22 @@ extension UnifiedCameraView {
             router.selectedPillScanningIsDispense = false
         }
 
+        if currentScanType == .stockCount {
+            // First-time tour always starts at step 1 (scan a container),
+            // regardless of whether this is a fresh batch or resuming one
+            // that already has committed entries.
+            FtueController.shared.configureStockCountStepsIfNeeded()
+            FtueController.shared.startStockCountTourIfNeeded()
+        } else {
+            // Dispense scan types (.barcode, .rx_label, .resumeCount). First-time
+            // tour always starts at step 1 (Rx scan) even if this particular visit
+            // is a resume that skips straight past that screen state — the step's
+            // target is then transiently unresolved and the tour renders passively
+            // until the user reaches a step whose target exists.
+            FtueController.shared.configureDispenseStepsIfNeeded()
+            FtueController.shared.startDispenseTourIfNeeded()
+        }
+
         // Only clear transaction state for a truly fresh scan.
         // When resuming with .barcode (NDC not yet verified), selectedTransaction
         // is already set by the caller and must be preserved for NDC matching.
@@ -1064,6 +1092,10 @@ extension UnifiedCameraView {
                     if pillScanViewModel.matchesBarcodeFormat(newValue) {
                         cameraState = .rxDetected
                         pillScanViewModel.parseScanData(actualValue: newValue)
+                        // A real Rx label just scanned successfully (not the
+                        // PMS-unavailable failure path above) — advance the
+                        // FTUE tour's rxScan step.
+                        FtueController.shared.state.advanceIfCurrent(DispenseFtueSteps.rxScanId)
                     } else {
                         pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.invalidRxBarcode)
                         restartFlow()
@@ -1101,6 +1133,9 @@ extension UnifiedCameraView {
             scanTimeoutTask?.cancel()
             showPillCountPanel = true
             initializeTransaction()
+            // Real dispense container/NDC scan just resolved — advance the
+            // FTUE tour's containerScan step.
+            FtueController.shared.state.advanceIfCurrent(DispenseFtueSteps.containerScanId)
         case false:
             showManualEntryPopup = true
         default:
@@ -1866,6 +1901,13 @@ extension UnifiedCameraView {
                 stockCountViewModel.ensureBatchExists()
                 await performStockCountAdd()
             }
+        }
+
+        // A real container scan just resolved to a drug — advance the FTUE
+        // tour's scanContainer step (a no-op unless that's actually the
+        // current step of an active tour).
+        if stockCountViewModel.scannedDrugData != nil {
+            FtueController.shared.state.advanceIfCurrent(StockCountFtueSteps.scanContainerId)
         }
 
         // Always re-enable scanning so any barcode (including a new one) can be read.

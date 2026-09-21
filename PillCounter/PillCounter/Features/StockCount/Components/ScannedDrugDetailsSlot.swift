@@ -48,6 +48,7 @@ struct ScannedDrugDetailsSlot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(appColors.secondaryBackground)
         .modifier(BottomSheetStyle(enabled: applyBottomSheetStyle && !isIpadPortrait))
+        .padding(.bottom,8)
     }
 
     // MARK: - Drug Card

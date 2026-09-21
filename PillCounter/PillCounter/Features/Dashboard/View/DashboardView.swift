@@ -223,7 +223,6 @@ struct DashboardView: View {
                             }
                         }
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 8)
                     }
                     .frame(width: midW)
                     .frame(height: contentHeight)

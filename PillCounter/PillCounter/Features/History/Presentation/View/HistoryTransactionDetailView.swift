@@ -101,17 +101,7 @@ struct HistoryTransactionDetailView: View {
                                 )
                         }
                         .padding(.trailing, 10)
-                        
-                        
-//                        Button { generateAndSharePDF() } label: {
-//                            Image("pdf")
-//                                .resizable()
-//                                .scaledToFit()
-//                                .frame(width: 30, height: 30)
-//                                .overlay { appColors.primary }
-//                                .mask(Image("pdf").resizable().scaledToFit())
-//                                .padding(.trailing)
-//                        }
+
                     }
                 },
                 showBackButton: true,

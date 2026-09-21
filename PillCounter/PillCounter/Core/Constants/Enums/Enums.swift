@@ -63,13 +63,13 @@ public enum ScanType: Codable, Hashable {
     var instructionText: String {
         switch self {
         case .barcode:
-            return L10n.Controlled.scanBarcode
+            return L10n.Controlled.scan
         case .stockCount:
-            return L10n.Controlled.scanStockCountBarcode
+            return L10n.Controlled.scan
         case .rx_label:
             return L10n.Controlled.scanRxLabelBarcode
         case .resumeCount:
-            return L10n.Controlled.scanBarcode
+            return L10n.Controlled.scan
         }
     }
 }

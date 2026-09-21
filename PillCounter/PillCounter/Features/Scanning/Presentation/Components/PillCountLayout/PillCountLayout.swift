@@ -65,9 +65,8 @@ struct PillCountLayout: View {
     /// reads "Count Open Pills" instead of "Count Prescribed Quantity").
     private var tooltipText: String {
         guard let step = tooltipStep else { return instructionText }
-        if isOpenPillScanMode && step == .targetVerification
-            && step == pillScanViewModel.currentControlledStep {
-            return instructionText
+        if isOpenPillScanMode && step == .targetVerification {
+            return L10n.Controlled.countOpenPills
         }
         return step.displayText
     }
@@ -265,7 +264,13 @@ struct PillCountLayout: View {
                 // .overlay above the sheet (UnifiedCameraView), so it would otherwise
                 // paint on top of it; the bar's own steps row is already suppressed
                 // in portrait via showSteps.
-                if isPortrait && !pillScanViewModel.showRxFlowPopup {
+                // Landscape normally gets its steps row from inside PillCountBottomBar
+                // instead of this standalone row — except open-pill's .scan step, which
+                // suppresses that whole bar via hidesTopAndBottomBars (no drug to show
+                // yet), so fall back to this row there too, keeping both fixed open-pill
+                // steps ([.scan, .targetVerification]) visible/tappable.
+                if (isPortrait || (isOpenPillScanMode && isScanStep && hidesTopAndBottomBars))
+                    && !pillScanViewModel.showRxFlowPopup {
                     StepProgressRow(
                         activeSteps: activeSteps,
                         currentStep: pillScanViewModel.currentControlledStep,
@@ -384,9 +389,8 @@ private extension PillCountLayout {
 
         presentTooltip(for: step)
         let text: String
-        if isOpenPillScanMode && step == .targetVerification
-            && step == pillScanViewModel.currentControlledStep {
-            text = instructionText
+        if isOpenPillScanMode && step == .targetVerification {
+            text = L10n.Controlled.countOpenPills
         } else {
             text = step.displayText
         }

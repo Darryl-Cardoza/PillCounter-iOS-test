@@ -755,7 +755,7 @@ struct UnifiedCameraView: View {
             return controlledStepInstruction
         }
         if isOpenPillScanMode {
-            return L10n.Controlled.scanNdcToCountPills
+            return L10n.Controlled.scan
         }
         return scanType.instructionText
     }
@@ -1167,6 +1167,7 @@ extension UnifiedCameraView {
             }
             await MainActor.run {
                 pillScanViewModel.getControlledStep(pillCountTxn: pillScanViewModel.currentTransaction)
+                hasInitializedStep = true
                 pillScanViewModel.addCurrentOpenPillCount = 0
                 pillScanViewModel.stageFirstBottleIfNeeded(rawBarcode: scannedRawValue)
                 if pillScanViewModel.currentControlledStep == .vial {

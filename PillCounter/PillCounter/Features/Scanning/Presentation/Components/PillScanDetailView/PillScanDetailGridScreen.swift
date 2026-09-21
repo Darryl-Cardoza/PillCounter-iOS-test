@@ -20,7 +20,7 @@ struct PillScanDetailGridScreen: View {
     @State private var isEditing: Bool = false
     @State private var selectedIds: Set<Int64> = []
     @State private var showDeleteConfirm: Bool = false
-    @State private var selectedUIImage: Image? = nil
+    @State private var selectedImageIndex: Int? = nil
     @State private var showImageViewer = false
 
     
@@ -47,6 +47,14 @@ struct PillScanDetailGridScreen: View {
                     pillCount: Int($0.pill_count), capturedAt: $0.created_at
                 )
             }
+    }
+
+    private var galleryDetails: [PillScanDetailItem] {
+        details.filter { $0.imagePath != nil }
+    }
+
+    private var galleryImages: [Image] {
+        galleryDetails.compactMap { $0.imagePath.flatMap { PhotoFileManager.shared.loadImage(from: $0) } }
     }
 
     private var drugName: String {
@@ -153,13 +161,13 @@ struct PillScanDetailGridScreen: View {
         }
         .fullScreenCover(
             isPresented: Binding(
-                get: { selectedUIImage != nil },
-                set: { if !$0 { selectedUIImage = nil } }
+                get: { selectedImageIndex != nil },
+                set: { if !$0 { selectedImageIndex = nil } }
             )
         ) {
-            if let image = selectedUIImage {
-                FullScreenImageView(image: image) {
-                    selectedUIImage = nil
+            if let index = selectedImageIndex {
+                FullScreenImageView(images: galleryImages, initialIndex: index) {
+                    selectedImageIndex = nil
                 }
             }
         }
@@ -493,9 +501,8 @@ struct PillScanDetailGridScreen: View {
     private func handleCardTap(_ detail: PillScanDetailItem) {
         if isEditing {
             toggleSelection(detail.id)
-        } else if let path = detail.imagePath,
-                  let uiImage = PhotoFileManager.shared.loadImage(from: path) {
-            selectedUIImage = uiImage
+        } else if let index = galleryDetails.firstIndex(where: { $0.id == detail.id }) {
+            selectedImageIndex = index
         }
     }
 

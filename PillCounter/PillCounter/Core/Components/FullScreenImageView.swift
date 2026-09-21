@@ -81,71 +81,13 @@ private struct FullScreenImagePage: View {
                 .frame(width: geo.size.width, height: geo.size.height)
                 .scaleEffect(scale)
                 .offset(offset)
-                .gesture(
-                    SimultaneousGesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                let proposed = lastScale * value
-                                scale = min(max(proposed, 1), 4)
-                            }
-                            .onEnded { _ in
-                                lastScale = scale
-                                if scale <= 1 {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                        scale      = 1
-                                        lastScale  = 1
-                                        offset     = .zero
-                                        lastOffset = .zero
-                                    }
-                                } else {
-                                    let clamped = clampedOffset(offset, in: geo.size, scale: scale)
-                                    withAnimation(.spring(response: 0.25)) {
-                                        offset     = clamped
-                                        lastOffset = clamped
-                                    }
-                                }
-                            },
-                        DragGesture(minimumDistance: 10)
-                            .onChanged { value in
-                                if scale > 1 {
-                                    // Pan when zoomed in
-                                    let proposed = CGSize(
-                                        width:  lastOffset.width  + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                    offset = clampedOffset(proposed, in: geo.size, scale: scale)
-                                } else {
-                                    // Dismiss drag when at normal scale — vertical-dominant only,
-                                    // so a mostly-horizontal drag is left for TabView's page swipe.
-                                    let isVerticalDrag = abs(value.translation.height) > abs(value.translation.width)
-                                    if isVerticalDrag && value.translation.height > 0 {
-                                        offset = CGSize(width: 0, height: value.translation.height)
-                                    }
-                                }
-                            }
-                            .onEnded { value in
-                                if scale > 1 {
-                                    let proposed = CGSize(
-                                        width:  lastOffset.width  + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                    let clamped = clampedOffset(proposed, in: geo.size, scale: scale)
-                                    offset     = clamped
-                                    lastOffset = clamped
-                                } else {
-                                    let isVerticalDrag = abs(value.translation.height) > abs(value.translation.width)
-                                    // Dismiss if dragged down far enough
-                                    if isVerticalDrag && value.translation.height > 120 {
-                                        onDismiss()
-                                    } else {
-                                        withAnimation(.spring(response: 0.3)) {
-                                            offset = .zero
-                                        }
-                                    }
-                                }
-                            }
-                    )
-                )
+                .gesture(magnificationGesture(in: geo.size))
+                // Pan/dismiss drag is only attached when zoomed. At scale 1 no
+                // DragGesture sits in the arena at all, so TabView's own swipe
+                // recognizer is free to win horizontal drags for paging; vertical
+                // dismiss-by-drag is intentionally dropped in favor of the close
+                // button at scale 1 to avoid re-introducing the conflict.
+                .gesture(scale > 1 ? AnyGesture(panGesture(in: geo.size)) : nil)
                 .onTapGesture(count: 2) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         if scale > 1 {
@@ -160,6 +102,51 @@ private struct FullScreenImagePage: View {
                     }
                 }
         }
+    }
+
+    private func magnificationGesture(in size: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let proposed = lastScale * value
+                scale = min(max(proposed, 1), 4)
+            }
+            .onEnded { _ in
+                lastScale = scale
+                if scale <= 1 {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        scale      = 1
+                        lastScale  = 1
+                        offset     = .zero
+                        lastOffset = .zero
+                    }
+                } else {
+                    let clamped = clampedOffset(offset, in: size, scale: scale)
+                    withAnimation(.spring(response: 0.25)) {
+                        offset     = clamped
+                        lastOffset = clamped
+                    }
+                }
+            }
+    }
+
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                let proposed = CGSize(
+                    width:  lastOffset.width  + value.translation.width,
+                    height: lastOffset.height + value.translation.height
+                )
+                offset = clampedOffset(proposed, in: size, scale: scale)
+            }
+            .onEnded { value in
+                let proposed = CGSize(
+                    width:  lastOffset.width  + value.translation.width,
+                    height: lastOffset.height + value.translation.height
+                )
+                let clamped = clampedOffset(proposed, in: size, scale: scale)
+                offset     = clamped
+                lastOffset = clamped
+            }
     }
 
     // MARK: - Clamp offset so image never pans beyond its zoomed edges

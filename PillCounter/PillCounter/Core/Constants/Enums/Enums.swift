@@ -412,11 +412,11 @@ enum SettingsSubScreen {
 }
 
 enum SettingsSection: CaseIterable, Identifiable {
-    case general
     case dispenseControlledDrug
     case faceDetection
     case voiceAndHapticFeedback
     case hazardousPillCounting
+    case general
 
     var id: Self { self }
 

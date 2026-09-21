@@ -23,8 +23,8 @@ struct UserSettingsView: View {
     @State private var showSchedulePicker: Bool = false
 
     // Sections expand independently — any number can be open at once.
-    // General starts expanded.
-    @State private var expandedSections: Set<SettingsSection> = [.general]
+    // First card starts expanded.
+    @State private var expandedSections: Set<SettingsSection> = [.dispenseControlledDrug]
 
     #if DEBUG
     /// Drives the debug-only face-verification screen. Presented as a cover
@@ -145,23 +145,9 @@ struct UserSettingsView: View {
     
     private func userSettingsContent(geometry: GeometryProxy) -> some View {
         return ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 16) {
                 ForEach(SettingsSection.allCases) { section in
-                    sectionHeader(section)
-
-                    if expandedSections.contains(section) {
-                        VStack(alignment: .leading, spacing: 20) {
-                            sectionContent(section)
-                        }
-                        .font(.system(size: 14))
-                        .padding(.leading, 8)
-                        .padding(.top, 16)
-                        .padding(.bottom, 20)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-
-                    Divider()
-                        .background(appColors.text.opacity(0.15))
+                    sectionCard(section)
                 }
 
                 Spacer(minLength: 40)
@@ -169,29 +155,55 @@ struct UserSettingsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 64)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 16)
         .background(appColors.secondaryBackground)
     }
 
+    private func sectionCard(_ section: SettingsSection) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(section)
+
+            if expandedSections.contains(section) {
+                VStack(alignment: .leading, spacing: 18) {
+                    sectionContent(section)
+                }
+                .font(.system(size: 14))
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 18)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(appColors.primaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(appColors.text.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: appColors.text.opacity(0.06), radius: 6, x: 0, y: 3)
+    }
+
     private func sectionHeader(_ section: SettingsSection) -> some View {
-        HStack {
+        HStack(spacing: 10) {
             Text(section.title)
                 .foregroundStyle(appColors.text)
-                .fontWeight(.semibold)
+                .font(.system(size: 16, weight: .bold))
+
             Spacer()
+
             Image(systemName: expandedSections.contains(section) ? "chevron.up" : "chevron.down")
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(appColors.primary)
         }
-        .padding(.horizontal)
-        .padding(.top, 28)
-        .padding(.bottom, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) {
                 if expandedSections.contains(section) {
                     expandedSections.remove(section)
                 } else {
-                    expandedSections.insert(section)
+                    expandedSections = [section]
                 }
             }
         }
@@ -220,59 +232,36 @@ struct UserSettingsView: View {
             title: L10n.Settings.alwaysAskNotes,
             isOn: $settingsViewModel.isPillCountingEnabled,
             onColor: appColors.primary,
+            horizontalPadding: 0,
             onToggle: { newValue in
                 settingsViewModel.setPillCountingEnabled(newValue)
             }
         )
 
-        Divider().background(appColors.text.opacity(0.15))
+        settingsDivider
 
-        // MARK: Save History Title
-        VStack(spacing: 15) {
-            Text(L10n.Settings.saveHistory)
-                .foregroundStyle(appColors.text)
-                .fontWeight(.regular)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(settingsViewModel.saveHistoryOption.displayText)
-                .foregroundColor(appColors.secondary)
-                .fontWeight(.regular)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal)
-        .contentShape(Rectangle())
-        .onTapGesture {
+        // MARK: Save History
+        SettingsDisclosureRow(
+            title: L10n.Settings.saveHistory,
+            subtitle: settingsViewModel.saveHistoryOption.displayText
+        ) {
             showSaveHistoryPicker = true
         }
 
-        Divider().background(appColors.text.opacity(0.15))
+        settingsDivider
 
-        HStack {
-            Text(L10n.Settings.clearLocalData)
-                .foregroundStyle(appColors.text)
-                .padding(.horizontal)
-                .fontWeight(Font.Weight.regular)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .onTapGesture {
+        SettingsDisclosureRow(title: L10n.Settings.clearLocalData) {
             showClearDataConfirmationPopup = true
         }
 
         if AppStorageManager.shared.useStaticPMSConnection {
-            Divider().background(appColors.text.opacity(0.15))
+            settingsDivider
 
             // MARK: PMS Configuration (read-only diagnostics)
-            HStack {
-                Text(L10n.Settings.connectionInfo)
-                    .foregroundStyle(appColors.text)
-                    .padding(.horizontal)
-                    .fontWeight(.regular)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .opacity(isPmsDisabled ? 0.6 : 1.0)
-            .onTapGesture {
+            SettingsDisclosureRow(
+                title: L10n.Settings.connectionInfo,
+                isDisabled: isPmsDisabled
+            ) {
                 if isPmsDisabled {
                     showFeatureUnavailableToast()
                     return
@@ -286,10 +275,10 @@ struct UserSettingsView: View {
 
     @ViewBuilder
     private var dispenseControlledDrugSectionContent: some View {
-        VStack(spacing: 15) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(L10n.Settings.requireDoubleCount)
                 .foregroundStyle(appColors.text)
-                .fontWeight(.regular)
+                .font(.system(size: 14, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 4) {
@@ -300,12 +289,11 @@ struct UserSettingsView: View {
                             ? appColors.secondary
                             : appColors.text.opacity(0.35)
                         )
-                        .fontWeight(.regular)
+                        .font(.system(size: 13, weight: .regular))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal)
         .contentShape(Rectangle())
         .opacity(isPmsDisabled ? 0.6 : 1.0)
         .onTapGesture {
@@ -316,13 +304,14 @@ struct UserSettingsView: View {
             showSchedulePicker = true
         }
 
-        Divider().background(appColors.text.opacity(0.15))
+        settingsDivider
 
         // MARK: Back Count
         ToggleRowView(
             title: L10n.Settings.requireBackCount,
             isOn: $settingsViewModel.isBackCountRequired,
             onColor: appColors.primary,
+            horizontalPadding: 0,
             isDisabled: isPmsDisabled,
             onDisabledTap: { showFeatureUnavailableToast() },
             onToggle: { newValue in
@@ -334,30 +323,14 @@ struct UserSettingsView: View {
     @ViewBuilder
     private var faceDetectionSectionContent: some View {
         // MARK: Auto Lock Session
-        HStack {
-            Text(L10n.Settings.autoLockSession)
-                .foregroundStyle(appColors.text)
-                .fontWeight(.regular)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal)
-        .contentShape(Rectangle())
-        .onTapGesture {
+        SettingsDisclosureRow(title: L10n.Settings.autoLockSession) {
             showTimeLimitPicker = true
         }
 
-        Divider().background(appColors.text.opacity(0.15))
+        settingsDivider
 
         // MARK: Quick Access Users
-        HStack {
-            Text(L10n.Menu.quickAccessUsers)
-                .foregroundStyle(appColors.text)
-                .fontWeight(.regular)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal)
-        .contentShape(Rectangle())
-        .onTapGesture {
+        SettingsDisclosureRow(title: L10n.Menu.quickAccessUsers) {
             router.navigate(to: .authentication(.user(.userSettings(.quickAccessUsers))))
         }
     }
@@ -369,30 +342,33 @@ struct UserSettingsView: View {
             title: L10n.Settings.voiceInstructions,
             isOn: $settingsViewModel.isSpeechEnabled,
             onColor: appColors.primary,
+            horizontalPadding: 0,
             onToggle: { newValue in
                 settingsViewModel.setSpeechEnabled(newValue)
             }
         )
 
-        Divider().background(appColors.text.opacity(0.15))
+        settingsDivider
 
         // MARK: Sound
         ToggleRowView(
             title: L10n.Settings.soundFeedback,
             isOn: $settingsViewModel.isSoundEnabled,
             onColor: appColors.primary,
+            horizontalPadding: 0,
             onToggle: { newValue in
                 settingsViewModel.setSoundEnabled(newValue)
             }
         )
 
-        Divider().background(appColors.text.opacity(0.15))
+        settingsDivider
 
         // MARK: Haptic
         ToggleRowView(
             title: L10n.Settings.hapticFeedback,
             isOn: $settingsViewModel.isHapticEnabled,
             onColor: appColors.primary,
+            horizontalPadding: 0,
             onToggle: { newValue in
                 settingsViewModel.setHapticEnabled(newValue)
             }
@@ -406,6 +382,7 @@ struct UserSettingsView: View {
             title: L10n.Settings.hazardousPillSetting,
             isOn: $settingsViewModel.isHazardousDrugSettingEnabled,
             onColor: appColors.primary,
+            horizontalPadding: 0,
             isDisabled: isPmsDisabled,
             onDisabledTap: { showFeatureUnavailableToast() },
             onToggle: { newValue in
@@ -413,24 +390,14 @@ struct UserSettingsView: View {
             }
         )
 
-        Divider().background(appColors.text.opacity(0.15))
+        settingsDivider
 
         // MARK: Hazardous Tray Color
-        VStack(spacing: 15) {
-            Text(L10n.Settings.hazardousTrayColor)
-                .foregroundStyle(appColors.text)
-                .fontWeight(.regular)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(settingsViewModel.hazardousTrayColor ?? "—")
-                .foregroundColor(appColors.secondary)
-                .fontWeight(.regular)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal)
-        .contentShape(Rectangle())
-        .opacity(isPmsDisabled ? 0.6 : 1.0)
-        .onTapGesture {
+        SettingsDisclosureRow(
+            title: L10n.Settings.hazardousTrayColor,
+            subtitle: settingsViewModel.hazardousTrayColor ?? "—",
+            isDisabled: isPmsDisabled
+        ) {
             if isPmsDisabled {
                 showFeatureUnavailableToast()
                 return
@@ -472,6 +439,10 @@ struct UserSettingsView: View {
         }
     }
 
+    private var settingsDivider: some View {
+        Divider().background(appColors.text.opacity(0.12))
+    }
+
 }
 
 
@@ -504,6 +475,35 @@ private func alignmentFor(_ index: Int) -> Alignment {
     case 1: return .center
     case 2: return .trailing
     default: return .leading
+    }
+}
+
+/// Tappable row with a bold title and an optional secondary subtitle —
+/// the disclosure-style pattern used for rows that open a picker/sub-screen.
+struct SettingsDisclosureRow: View {
+
+    let title: String
+    var subtitle: String? = nil
+    var isDisabled: Bool = false
+    let onTap: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .foregroundStyle(AppColors.shared.text)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let subtitle {
+                Text(subtitle)
+                    .foregroundColor(AppColors.shared.secondary)
+                    .font(.system(size: 13, weight: .regular))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .opacity(isDisabled ? 0.6 : 1.0)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
     }
 }
 

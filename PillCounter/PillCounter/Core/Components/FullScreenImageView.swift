@@ -109,7 +109,6 @@ struct FullScreenImageView: View {
                 closeButton
             }
         }
-        .ignoresSafeArea()
     }
 
     // MARK: - Clamp offset so image never pans beyond its zoomed edges

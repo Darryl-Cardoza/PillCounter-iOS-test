@@ -10,9 +10,8 @@ import SwiftUI
 struct UserProfileScreen: View {
 
     /// True only for the post-login gate on PMS-integrated accounts that have
-    /// no terminal claimed on this device yet — hides back/skip and routes to
-    /// the dashboard on save instead of navigating back (there's nothing to
-    /// go back to: this screen was reached before the dashboard ever loaded).
+    /// no terminal claimed on this device yet — hides skip/delete and routes
+    /// to the dashboard on save instead of navigating back.
     let mustSelectTerminal: Bool
 
     init(mustSelectTerminal: Bool = false) {
@@ -73,7 +72,7 @@ struct UserProfileScreen: View {
                     EmptyView()
                 },
                 headerActions: { EmptyView() },
-                showBackButton: !mustSelectTerminal,
+                showBackButton: true,
                 showHamburgerMenu: false,
                 title: L10n.Menu.profile,
                 backgroundColor: appColors.primaryBackground,

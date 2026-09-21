@@ -251,8 +251,10 @@ struct PillCountLayout: View {
 
                 // In portrait (iPhone or iPad) the steps row is lifted out of the
                 // bottom bar (which can't fit everything in a single line) and
-                // shown above it.
-                if isPortrait && !isBarOnlyStep {
+                // shown above it. Also shown here for .scan even though its bar
+                // is fully hidden (hidesTopAndBottomBars) — vial stays excluded,
+                // its own controls occupy this spot instead.
+                if isPortrait && !isVialStep {
                     StepProgressRow(
                         activeSteps: activeSteps,
                         currentStep: pillScanViewModel.currentControlledStep,
@@ -268,7 +270,7 @@ struct PillCountLayout: View {
                         .padding(.bottom, isIpad ? 24 : 14)
                 }
 
-                if !hidesTopAndBottomBars {
+                if !hidesTopAndBottomBars && !(isScanStep && isPortrait) {
                 PillCountBottomBar(
                     activeSteps: activeSteps,
                     currentStep: pillScanViewModel.currentControlledStep,
@@ -276,7 +278,7 @@ struct PillCountLayout: View {
                     targetCount: targetCount,
                     isIpad: isIpad,
                     isLandscape: isLandscape,
-                    showSteps: !isPortrait || isBarOnlyStep,
+                    showSteps: !isPortrait,
                     onTapStep: { handleStepTap($0) },
                     isOpenEndedCountStep: isOpenEndedStep,
                     isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,

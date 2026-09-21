@@ -51,7 +51,7 @@ struct DashboardQueueTabHeaders: View {
 
                 Rectangle()
                     .fill(isSelected ? appColors.secondary : Color.clear)
-                    .frame(height: 2)
+                    .frame(height: 1)
             }
             .frame(maxWidth: .infinity)
         }

@@ -261,6 +261,11 @@ enum L10n {
         static let faceSessionTimeout2m = NSLocalizedString("settings.faceSessionTimeout2m", comment: "")
         static let faceSessionTimeout5m = NSLocalizedString("settings.faceSessionTimeout5m", comment: "")
         static let faceSessionTimeout10m = NSLocalizedString("settings.faceSessionTimeout10m", comment: "")
+        static let sectionGeneral = NSLocalizedString("settings.sectionGeneral", comment: "")
+        static let sectionDispenseControlledDrug = NSLocalizedString("settings.sectionDispenseControlledDrug", comment: "")
+        static let sectionFaceDetection = NSLocalizedString("settings.sectionFaceDetection", comment: "")
+        static let sectionVoiceHapticFeedback = NSLocalizedString("settings.sectionVoiceHapticFeedback", comment: "")
+        static let sectionHazardousPillCounting = NSLocalizedString("settings.sectionHazardousPillCounting", comment: "")
     }
 
     // MARK: - Face Enrollment

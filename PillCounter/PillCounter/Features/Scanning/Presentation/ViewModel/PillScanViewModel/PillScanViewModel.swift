@@ -25,6 +25,12 @@ class PillScanViewModel: ObservableObject {
     let decoder: BarcodeAndQRDecoder
     let userRepo: UserRepositoryProtocol
 
+    // Set by UnifiedCameraView.onAppear, checked by onDisappear before resetting
+    // shared state. On rapid back+reopen, NavigationStack can fire the outgoing
+    // screen's onDisappear after the incoming screen's onAppear already ran —
+    // this token stops that stale disappear from wiping the new screen's state.
+    var activeCameraSessionToken: UUID?
+
     @Published var isDrugFound: Bool?
 
     /// Filename of the barcode image saved for the scan currently being confirmed

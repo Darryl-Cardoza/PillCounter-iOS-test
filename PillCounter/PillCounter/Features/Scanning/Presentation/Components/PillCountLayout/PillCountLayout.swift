@@ -230,31 +230,38 @@ struct PillCountLayout: View {
                 // Shown for every step except the RX-label scan itself, which has
                 // no confirmed drug yet — the legacy header there covers it instead.
                 if !hidesTopAndBottomBars {
-                PillCountTopBar(
-                    ndc: topBarDrug?.ndc ?? "-",
-                    drugName: topBarDrug?.drug_name ?? "-",
-                    drugImagePath: topBarDrug?.drug_image,
-                    form: topBarDrug?.dosage_form ?? "-",
-                    strength: topBarDrug?.strength ?? "-",
-                    bucket: resolvedTransaction?.bucket_id
-                        ?? pillScanViewModel.currentStockTxn?.bucket_id ?? "NORMAL",
-                    instructionText: instructionText,
-                    isLandscape: isLandscape,
-                    isIpad: isIpad,
-                    cameraService: cameraService,
-                    showGloveIndicator: showGloveIndicator,
-                    onBack: onBack
-                )
+                    PillCountTopBar(
+                        ndc: topBarDrug?.ndc ?? "-",
+                        drugName: topBarDrug?.drug_name ?? "-",
+                        drugImagePath: topBarDrug?.drug_image,
+                        form: topBarDrug?.dosage_form ?? "-",
+                        strength: topBarDrug?.strength ?? "-",
+                        bucket: resolvedTransaction?.bucket_id
+                            ?? pillScanViewModel.currentStockTxn?.bucket_id ?? "NORMAL",
+                        instructionText: instructionText,
+                        isLandscape: isLandscape,
+                        isIpad: isIpad,
+                        cameraService: cameraService,
+                        showGloveIndicator: showGloveIndicator,
+                        onBack: onBack
+                    )
                 }
 
                 Spacer()
 
+                // Vial controls stacked directly above the bar in portrait — same
+                // VStack as the bar below, so Spacer-driven bottom pinning can't
+                // make them overlap. Sits above the steps row.
+                if isVialStep && isPortrait {
+                    vialControlBottomView
+                        .padding(.bottom, isIpad ? 24 : 14)
+                }
+
                 // In portrait (iPhone or iPad) the steps row is lifted out of the
                 // bottom bar (which can't fit everything in a single line) and
-                // shown above it. Also shown here for .scan even though its bar
-                // is fully hidden (hidesTopAndBottomBars) — vial stays excluded,
-                // its own controls occupy this spot instead.
-                if isPortrait && !isVialStep {
+                // shown above it — for every step, including vial and .scan
+                // (even when .scan's own bar is fully hidden via hidesTopAndBottomBars).
+                if isPortrait {
                     StepProgressRow(
                         activeSteps: activeSteps,
                         currentStep: pillScanViewModel.currentControlledStep,
@@ -262,34 +269,26 @@ struct PillCountLayout: View {
                     )
                 }
 
-                // Vial controls stacked directly above the bar in portrait — same
-                // VStack as the bar below, so Spacer-driven bottom pinning can't
-                // make them overlap.
-                if isVialStep && isPortrait {
-                    vialControlBottomView
-                        .padding(.bottom, isIpad ? 24 : 14)
-                }
-
                 if !hidesTopAndBottomBars && !(isScanStep && isPortrait) {
-                PillCountBottomBar(
-                    activeSteps: activeSteps,
-                    currentStep: pillScanViewModel.currentControlledStep,
-                    currentTotalCount: currentTotalCount,
-                    targetCount: targetCount,
-                    isIpad: isIpad,
-                    isLandscape: isLandscape,
-                    showSteps: !isPortrait,
-                    onTapStep: { handleStepTap($0) },
-                    isOpenEndedCountStep: isOpenEndedStep,
-                    isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,
-                    isDoneEnabled: isDoneEnabled,
-                    hidesCountUI: isBarOnlyStep,
-                    isResetEnabled: (isOpenPillScanMode || pillScanViewModel.canResetCurrentTransaction)
-                        && hasCountsToReset,
-                    onShowDetailGrid: onShowDetailGrid,
-                    onDone: onAllDone,
-                    onReset: onReset
-                )
+                    PillCountBottomBar(
+                        activeSteps: activeSteps,
+                        currentStep: pillScanViewModel.currentControlledStep,
+                        currentTotalCount: currentTotalCount,
+                        targetCount: targetCount,
+                        isIpad: isIpad,
+                        isLandscape: isLandscape,
+                        showSteps: !isPortrait ,
+                        onTapStep: { handleStepTap($0) },
+                        isOpenEndedCountStep: isOpenEndedStep,
+                        isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,
+                        isDoneEnabled: isDoneEnabled,
+                        hidesCountUI: isBarOnlyStep,
+                        isResetEnabled: (isOpenPillScanMode || pillScanViewModel.canResetCurrentTransaction)
+                            && hasCountsToReset,
+                        onShowDetailGrid: onShowDetailGrid,
+                        onDone: onAllDone,
+                        onReset: onReset
+                    )
                 }
             }
         }

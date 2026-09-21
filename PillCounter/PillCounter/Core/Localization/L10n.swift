@@ -622,9 +622,8 @@ enum L10n {
 
     // MARK: - PMS / HL7
     enum PMS {
+        static let badgeLabel = NSLocalizedString("pms.badgeLabel", comment: "")
         static let connected = NSLocalizedString("pms.connected", comment: "")
-        static let disconnected = NSLocalizedString("pms.disconnected", comment: "")
-        static let connecting = NSLocalizedString("pms.connecting", comment: "")
         static func connectedBody(_ name: String) -> String {
             String(format: NSLocalizedString("pms.connectedBody", comment: ""), name)
         }

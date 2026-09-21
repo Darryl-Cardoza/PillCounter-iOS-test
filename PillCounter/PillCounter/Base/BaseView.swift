@@ -420,11 +420,7 @@ struct PMSConnectionButtonView: View {
 
     // MARK: - Computed
     private var statusText: String {
-        switch pmsConnectionState {
-        case .connected:               return L10n.PMS.connected
-        case .disconnected, .notAvailable: return L10n.PMS.disconnected
-        case .connecting:              return L10n.PMS.connecting
-        }
+        L10n.PMS.badgeLabel
     }
 
     private var statusColor: Color {

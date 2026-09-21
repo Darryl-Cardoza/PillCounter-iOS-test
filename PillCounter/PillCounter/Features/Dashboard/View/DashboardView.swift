@@ -19,6 +19,7 @@ struct DashboardView: View {
 
     @StateObject private var viewModel = DashboardViewModel()
     @StateObject private var locationService = LocationService.shared
+    @ObservedObject private var faceSessionManager = FaceSessionManager.shared
 
     // userId is stored in Keychain via AppStorageManager — @AppStorage reads UserDefaults
     // and would always return "". Read directly from the Keychain-backed store instead.
@@ -90,6 +91,13 @@ struct DashboardView: View {
         }
         .ignoresSafeArea(edges: .top)
         .onAppear(perform: onAppear)
+        // Stat-card filters apply to Today's Queue only — clear on entering
+        // Recent Activity (swipe or tap), whichever changed the selection.
+        .onChange(of: selectedQueueTab) { _, newTab in
+            if newTab == 1 {
+                viewModel.activeFilterCardId = nil
+            }
+        }
         // Queue refreshes on any transaction/batch/stock-txn store change
         // (create/update/delete/status), which covers scan completion AND
         // HL7 inventory-request batch creation (BatchStore/StockTxnStore are
@@ -156,8 +164,8 @@ struct DashboardView: View {
             let panelHeight = screen.size.height - headerHeight
             let topRowHeight: CGFloat = 40
             let contentHeight = panelHeight - topRowHeight
-            let leftW = screen.size.width * 0.28
-            let midW = screen.size.width * 0.18
+            let leftW = screen.size.width * 0.32
+            let midW = screen.size.width * 0.20
 
             VStack(spacing: 0) {
                 headerBar
@@ -203,19 +211,19 @@ struct DashboardView: View {
                         )
                         .frame(maxHeight: .infinity)
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 2)
                     .padding(.bottom, 12)
                     .frame(width: leftW)
                     .frame(height: contentHeight)
 
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 15) {
+                        VStack(spacing: 8) {
                             ForEach(statCards) { card in
                                 statCardView(card: card)
                                     .frame(maxWidth: .infinity)
                             }
                         }
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                     }
                     .frame(width: midW)
@@ -348,10 +356,16 @@ struct DashboardView: View {
                     .font(.system(size: isIpad ? 20 : 17, weight: .semibold))
                     .foregroundColor(appColors.text)
                     
-                    // Showing terminal name and username
-                    let displayName = isPmsIntegrated && !selectedTerminalName.isEmpty
-                        ? "\(selectedTerminalName) | \(userViewModel.fullName)"
+                    // Showing terminal name and active username — the face-scanned
+                    // operator takes priority over the logged-in account name.
+                    let activeUserName = faceSessionManager.currentUserName?
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let resolvedName = (activeUserName?.isEmpty == false)
+                        ? activeUserName!
                         : userViewModel.fullName
+                    let displayName = isPmsIntegrated && !selectedTerminalName.isEmpty
+                        ? "\(selectedTerminalName) | \(resolvedName)"
+                        : resolvedName
 
                     Text(displayName)
                         .font(.system(size: isIpad ? 15 : 13))
@@ -474,6 +488,11 @@ struct DashboardView: View {
             isActive: viewModel.activeFilterCardId == card.id
         ) {
             viewModel.toggleFilter(cardId: card.id)
+            // Filters apply to Today's Queue only — jump there so the
+            // just-applied filter is immediately visible.
+            if selectedQueueTab != 0 {
+                selectedQueueTab = 0
+            }
         }
     }
 
@@ -486,10 +505,10 @@ struct DashboardView: View {
         )
     }
 
-    private var emptyQueueState: some View {
+    private func emptyQueueState(forTab tab: Int) -> some View {
         DashboardEmptyQueueState(
             title: viewModel.emptyQueueTitle(),
-            subtitle: viewModel.emptyQueueSubtitle(selectedQueueTab: selectedQueueTab)
+            subtitle: viewModel.emptyQueueSubtitle(selectedQueueTab: tab)
         )
     }
 
@@ -510,7 +529,8 @@ struct DashboardView: View {
                 AnyView(
                     queueScrollContent(
                         items: viewModel.filteredQueueItems,
-                        idPrefix: "queue"
+                        idPrefix: "queue",
+                        tab: 0
                     ) {
                         DashboardTodaysQueueRow(
                             item: $0,
@@ -528,7 +548,8 @@ struct DashboardView: View {
                 AnyView(
                     queueScrollContent(
                         items: viewModel.filteredRecentItems,
-                        idPrefix: "recent"
+                        idPrefix: "recent",
+                        tab: 1
                     ) {
                         DashboardRecentActivityRow(item: $0, router: router)
                     }
@@ -540,13 +561,14 @@ struct DashboardView: View {
     private func queueScrollContent<Row: View>(
         items: [DashboardQueueItem],
         idPrefix: String,
+        tab: Int,
         @ViewBuilder rowBuilder: @escaping (DashboardQueueItem) -> Row
     ) -> some View {
         GeometryReader { geo in
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 8) {
                     if items.isEmpty {
-                        emptyQueueState
+                        emptyQueueState(forTab: tab)
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: geo.size.height)
                     } else {

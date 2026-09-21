@@ -580,9 +580,8 @@
 
 
 // MARK: - PMS / HL7
+"pms.badgeLabel" = "PMS";
 "pms.connected" = "PMS Connected";
-"pms.disconnected" = "PMS Disconnected";
-"pms.connecting" = "Connecting...";
 "pms.connectedBody" = "Connected to %@";
 
 

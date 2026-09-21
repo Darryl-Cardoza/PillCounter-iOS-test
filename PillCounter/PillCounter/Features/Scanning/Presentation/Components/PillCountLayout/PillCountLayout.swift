@@ -261,7 +261,11 @@ struct PillCountLayout: View {
                 // bottom bar (which can't fit everything in a single line) and
                 // shown above it — for every step, including vial and .scan
                 // (even when .scan's own bar is fully hidden via hidesTopAndBottomBars).
-                if isPortrait {
+                // Hidden while the RX details sheet is up — this row lives in an
+                // .overlay above the sheet (UnifiedCameraView), so it would otherwise
+                // paint on top of it; the bar's own steps row is already suppressed
+                // in portrait via showSteps.
+                if isPortrait && !pillScanViewModel.showRxFlowPopup {
                     StepProgressRow(
                         activeSteps: activeSteps,
                         currentStep: pillScanViewModel.currentControlledStep,

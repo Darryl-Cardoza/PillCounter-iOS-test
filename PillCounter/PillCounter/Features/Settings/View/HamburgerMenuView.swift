@@ -239,10 +239,6 @@ struct HamburgerMenuView: View {
             .padding(.bottom, 40)
         }
         .padding(.top, 64)
-        .padding(
-            .horizontal,
-            isLandscape ? SafeAreaInsets.leading : 0
-        )
     }
 
     // MARK: - MENU ROW BUILDER

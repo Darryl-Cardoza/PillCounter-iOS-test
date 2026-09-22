@@ -168,7 +168,7 @@ struct UserSettingsView: View {
                     sectionContent(section)
                 }
                 .font(.system(size: 14))
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 24)
                 .padding(.top, 4)
                 .padding(.bottom, 18)
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -275,11 +275,12 @@ struct UserSettingsView: View {
 
     @ViewBuilder
     private var dispenseControlledDrugSectionContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 4) {
             Text(L10n.Settings.requireDoubleCount)
                 .foregroundStyle(appColors.text)
-                .font(.system(size: 14, weight: .semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.system(size: 14, weight: .regular))
+
+            Spacer(minLength: 8)
 
             HStack(spacing: 4) {
                 ForEach(Array(DrugSchedule.allCases.enumerated()), id: \.element.id) { index, schedule in
@@ -292,8 +293,8 @@ struct UserSettingsView: View {
                         .font(.system(size: 13, weight: .regular))
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .opacity(isPmsDisabled ? 0.6 : 1.0)
         .onTapGesture {
@@ -488,19 +489,20 @@ struct SettingsDisclosureRow: View {
     let onTap: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 4) {
             Text(title)
                 .foregroundStyle(AppColors.shared.text)
-                .font(.system(size: 14, weight: .semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.system(size: 14, weight: .regular))
+
+            Spacer(minLength: 8)
 
             if let subtitle {
                 Text(subtitle)
                     .foregroundColor(AppColors.shared.secondary)
                     .font(.system(size: 13, weight: .regular))
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .frame(maxWidth: .infinity)
         .opacity(isDisabled ? 0.6 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)

@@ -65,6 +65,16 @@ final class FaceAuthenticationViewModel: ObservableObject {
     private nonisolated(unsafe) var pendingMatchUserId: String?
     private nonisolated(unsafe) var consecutiveMatchCount = 0
 
+    /// Best match seen anywhere in the current scan window, independent of
+    /// the consecutive-frame streak above. Two enrolled users with a
+    /// near-duplicate face can cause `identify()`'s winner to flip frame to
+    /// frame, which keeps resetting `consecutiveMatchCount` and would
+    /// otherwise time out a genuine match as unrecognized. Falling back to
+    /// this on timeout means a score that ever cleared the threshold is
+    /// never thrown away just because it didn't win two frames in a row.
+    private nonisolated(unsafe) var bestSeenUserId: String?
+    private nonisolated(unsafe) var bestSeenScore: Float = -1
+
     /// Total budget for one scan attempt. Without it an unrecognized person
     /// scans forever with no outcome — they must be told, not left guessing.
     /// One continuous budget from scan start, deliberately NOT reset when a
@@ -109,6 +119,8 @@ final class FaceAuthenticationViewModel: ObservableObject {
         lastProcessedAt = 0
         pendingMatchUserId = nil
         consecutiveMatchCount = 0
+        bestSeenUserId = nil
+        bestSeenScore = -1
         scanStartedAt = Self.monotonicNow()
         guidanceShownAt = 0
         resetQualityThresholds()
@@ -215,6 +227,11 @@ final class FaceAuthenticationViewModel: ObservableObject {
             return
         }
 
+        if identification.score > bestSeenScore {
+            bestSeenScore = identification.score
+            bestSeenUserId = userId
+        }
+
         if pendingMatchUserId == userId {
             consecutiveMatchCount += 1
         } else {
@@ -248,7 +265,21 @@ final class FaceAuthenticationViewModel: ObservableObject {
     /// Ends the attempt once the scan budget is spent. An unrecognized person
     /// gets a definite outcome with Try Again / Cancel instead of an endless
     /// scanning screen.
+    ///
+    /// Before giving up, falls back to the best match seen anywhere in the
+    /// window: two enrolled users sharing a near-duplicate face can flip
+    /// `identify()`'s per-frame winner back and forth, which never lets
+    /// either one alone reach `requiredConsecutiveMatches`. A score that
+    /// cleared the acceptance threshold at least once is a real match — it
+    /// must not be discarded as unrecognized just because it didn't win two
+    /// frames in a row.
     private nonisolated func failScanAsUnrecognized() {
+        if let bestSeenUserId, bestSeenScore >= config.acceptanceThreshold {
+            Log("Authentication: scan budget expired but best-seen score=\(String(format: "%.3f", bestSeenScore)) clears threshold — accepting \(bestSeenUserId)")
+            authenticateAndStop(userId: bestSeenUserId)
+            return
+        }
+
         isRunning = false
         cameraService.stop()
         cameraService.onFrame = nil

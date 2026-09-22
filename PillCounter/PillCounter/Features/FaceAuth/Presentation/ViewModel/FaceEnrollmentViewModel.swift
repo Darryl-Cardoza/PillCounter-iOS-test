@@ -58,6 +58,10 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// here, EnrollmentPoseGuidance freezes that arrow to a done mark instead
     /// of following live pose. Session-scoped; reset on every new attempt.
     @Published private(set) var completedSteps: Set<EnrollmentPoseStep> = []
+    /// Non-nil while the "this face is already enrolled" confirmation is on
+    /// screen. The capture pipeline is paused for exactly as long as this is
+    /// non-nil — answering the prompt is the only thing that resumes it.
+    @Published private(set) var duplicateMatch: DuplicateFaceMatch?
 
     private let poseSteps = EnrollmentPoseStep.allCases
 
@@ -125,12 +129,17 @@ final class FaceEnrollmentViewModel: ObservableObject {
     // MARK: - Capture-pipeline state (camera-queue-only, see header)
 
     private nonisolated(unsafe) var isProcessing = false
-    private nonisolated(unsafe) var isCapturingFrames = false
+    // `isCapturingFrames`, `pendingUserId`, `duplicatePausedAt` and
+    // `enrollmentStartedAt` are internal rather than private so the duplicate-
+    // prompt tests can drive runDuplicateCheck/continueAfterDuplicate without a
+    // camera — a real `.center` capture needs a device. Nothing outside the
+    // test target touches them.
+    nonisolated(unsafe) var isCapturingFrames = false
     /// Local identifier for the in-progress attempt only — no FaceUserEntity
     /// row exists under this id until `finishEnrollment()` persists one.
     /// Deferring persistence to success is what makes an orphaned,
     /// embedding-less user row structurally impossible (see class header).
-    private nonisolated(unsafe) var pendingUserId: String?
+    nonisolated(unsafe) var pendingUserId: String?
     private nonisolated(unsafe) var collectedEmbeddings: [FaceEmbedding] = []
     private nonisolated(unsafe) var collectedSteps: [EnrollmentPoseStep] = []
     /// Snapshot of the trimmed name taken at `startEnrollment()` — the hot
@@ -154,10 +163,17 @@ final class FaceEnrollmentViewModel: ObservableObject {
     private nonisolated(unsafe) var consecutiveAnchorMismatchFrames = 0
     private var backgroundObserver: NSObjectProtocol?
 
+    /// Monotonic instant capture was paused for the duplicate prompt, nil when
+    /// not paused. Doubles as the re-entrancy guard for the check itself. On
+    /// resume both budget origins are shifted forward by the elapsed pause, so
+    /// reading a modal the user can't dismiss quickly never burns the 60s
+    /// global budget. Internal for tests — see the note above `isCapturingFrames`.
+    nonisolated(unsafe) var duplicatePausedAt: TimeInterval?
+
     private nonisolated(unsafe) var currentStepIndex = 0
     private nonisolated(unsafe) var poseHoldFrames = 0
     private nonisolated(unsafe) var stepStartedAt: TimeInterval = 0
-    private nonisolated(unsafe) var enrollmentStartedAt: TimeInterval = 0
+    nonisolated(unsafe) var enrollmentStartedAt: TimeInterval = 0
     private nonisolated(unsafe) var relaxedThisStep = false
     /// EMA-smoothed yaw/pitch, compared against the step's target range
     /// instead of the raw per-frame estimate — FaceQualityChecker's yaw/pitch
@@ -269,6 +285,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
         centerAnchorBox = nil
         consecutiveNoFaceFrames = 0
         consecutiveAnchorMismatchFrames = 0
+        duplicateMatch = nil
+        duplicatePausedAt = nil
         resetQualityThresholds(step: .center)
         hasLiveFace = false
         liveYawDegrees = 0
@@ -312,6 +330,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
         hasLiveFace = false
         liveRejectionReason = nil
         completedSteps = []
+        duplicateMatch = nil
+        duplicatePausedAt = nil
         state = .idle
     }
 
@@ -338,6 +358,8 @@ final class FaceEnrollmentViewModel: ObservableObject {
         hasLiveFace = false
         liveRejectionReason = nil
         completedSteps = []
+        duplicateMatch = nil
+        duplicatePausedAt = nil
         firstName = ""
         lastName = ""
         state = .idle
@@ -643,7 +665,89 @@ final class FaceEnrollmentViewModel: ObservableObject {
         }
 
         Log("Enrollment: step \(currentStepIndex) (\(step)) captured — \(collectedEmbeddings.count)/\(poseSteps.count) embeddings, quality=\(String(format: "%.2f", candidate.quality.qualityScore))")
+
+        // Duplicate check moved here from finishEnrollment: asking only after
+        // all five poses meant an already-enrolled person spent the whole flow
+        // before being told, and got a dead end rather than a choice. One
+        // frontal embedding is enough to answer the question.
+        //
+        // Accepted trade: the old check compared all five embeddings, this one
+        // only the frontal, and there is no end-of-flow safety net any more —
+        // a duplicate whose frontal misses the threshold but whose turned pose
+        // would have hit it is now missed. That is inherent to asking early.
+        //
+        // `.centerAgain` is a distinct step and deliberately does NOT re-ask.
+        if step == .center, duplicatePausedAt == nil {
+            // Gate first, on this (camera) queue: handleFrame is serial and
+            // additionally guarded by isProcessing, so no frame can be
+            // mid-flight when the flag flips, and every later one bounces at
+            // the top of handleFrame — which also freezes checkGlobalTimeout.
+            isCapturingFrames = false
+            duplicatePausedAt = Self.monotonicNow()
+            let attemptId = pendingUserId
+            let candidates = collectedEmbeddings
+            DispatchQueue.main.async {
+                self.runDuplicateCheck(attemptId: attemptId, candidates: candidates)
+            }
+            return // advanceToNextStep happens on resume
+        }
+
         advanceToNextStep()
+    }
+
+    /// Runs the duplicate check and either resumes silently or raises the
+    /// prompt. On the main actor deliberately: both face stores read
+    /// `CoreDataManager.shared.context`, which is `viewContext` and therefore
+    /// main-queue confined — the old camera-queue call site was a latent
+    /// threading violation this must not inherit.
+    ///
+    /// `internal` rather than `private` so tests can drive it without a camera.
+    func runDuplicateCheck(attemptId: String?, candidates: [FaceEmbedding]) {
+        // The attempt can be torn down (back button, backgrounding, dismiss)
+        // between the camera queue scheduling this and it running, and again
+        // across the synchronous fetch below. pendingUserId is the attempt
+        // token — a stale result must not resurrect a prompt on a dead attempt.
+        guard let attemptId, pendingUserId == attemptId else { return }
+
+        let match = repository.checkDuplicateFace(against: candidates, excludingUserId: nil)
+        guard pendingUserId == attemptId else { return }
+
+        guard let match else {
+            resumeCaptureAfterDuplicatePrompt()
+            return
+        }
+
+        Log("Enrollment: .center matches existing user \(match.userId) — prompting")
+        duplicateMatch = match // pipeline stays paused until the user answers
+    }
+
+    /// The user chose to enroll this face anyway, knowing it may leave both
+    /// people unable to unlock (see the dialog copy). Resumes from exactly
+    /// where `.center` paused — the remaining four poses run normally.
+    func continueAfterDuplicate() {
+        guard let match = duplicateMatch else { return }
+        Log("Enrollment: continuing despite duplicate of \(match.userId)")
+        duplicateMatch = nil
+        resumeCaptureAfterDuplicatePrompt()
+    }
+
+    /// Called on main with the pipeline provably idle — `isCapturingFrames` is
+    /// false, so the session queue is short-circuiting every frame at the top
+    /// of `handleFrame`. This is the one place the class's camera-queue-only
+    /// rule is deliberately crossed, and it is safe only because the flag is
+    /// re-armed LAST: no frame can observe half-updated step state.
+    private func resumeCaptureAfterDuplicatePrompt() {
+        if let pausedAt = duplicatePausedAt {
+            // Shift both budget origins forward rather than tracking paused
+            // time separately, so every existing `now - origin` comparison
+            // stays correct without knowing a pause ever happened.
+            let paused = Self.monotonicNow() - pausedAt
+            enrollmentStartedAt += paused
+            stepStartedAt += paused
+            duplicatePausedAt = nil
+        }
+        advanceToNextStep()
+        isCapturingFrames = true
     }
 
     private nonisolated func advanceToNextStep() {
@@ -684,11 +788,9 @@ final class FaceEnrollmentViewModel: ObservableObject {
             return
         }
 
-        if let duplicateUserId = repository.checkDuplicateFace(against: embeddings, excludingUserId: nil) {
-            Log("Enrollment: rejected — matches already-enrolled user \(duplicateUserId)")
-            DispatchQueue.main.async { self.state = .failed(.duplicateFace) }
-            return
-        }
+        // No duplicate check here any more — it runs at the `.center` capture
+        // instead, as a prompt the user can answer rather than a rejection
+        // they only discover after the whole flow. See captureStep.
 
         // Nothing is persisted until this point (see class header) — the
         // user row and its embeddings are created together, so a row can
@@ -821,7 +923,6 @@ final class FaceEnrollmentViewModel: ObservableObject {
         case .embeddingGenerationFailed: return L10n.FaceAuth.failureEmbedding
         case .cameraError: return L10n.FaceAuth.failureCamera
         case .storageError: return L10n.FaceAuth.failureStorage
-        case .duplicateFace: return L10n.FaceAuth.failureDuplicate
         case .timedOut: return L10n.FaceAuth.failureTimedOut
         case .differentFaceDetected: return L10n.FaceAuth.failureDifferentFace
         }

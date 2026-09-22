@@ -230,6 +230,43 @@ struct FaceEnrollmentView: View {
                 EnrollmentPoseGuidance(nudge: viewModel.poseNudge, completedSteps: viewModel.completedSteps)
             }
         )
+        // Scoped to this branch rather than the outer Group so leaving capture
+        // tears the prompt down with it. Passing dismissOnBackgroundTap also
+        // selects the real CustomPopup over the legacy 2-arg overload in
+        // View+.swift — the 2-arg form would let a stray backdrop tap dismiss
+        // the prompt without answering it, leaving capture paused forever.
+        .customPopup(
+            isPresented: Binding(
+                get: { viewModel.duplicateMatch != nil },
+                // Belt and braces: nothing should be able to clear this except
+                // the two buttons, but if anything does, resume rather than
+                // strand the paused pipeline.
+                set: { if !$0 { viewModel.continueAfterDuplicate() } }
+            ),
+            dismissOnBackgroundTap: false
+        ) {
+            duplicateFacePopup
+        }
+    }
+
+    /// Raised when the centre pose matches somebody already enrolled. Continue
+    /// is deliberately allowed — see the message copy for what it costs.
+    private var duplicateFacePopup: some View {
+        let matchedName = viewModel.duplicateMatch?.userName ?? ""
+        return ConfirmationDialogue(
+            title: L10n.FaceAuth.duplicateFaceTitle,
+            message: L10n.FaceAuth.duplicateFaceMessage(
+                matchedName.isEmpty ? L10n.FaceAuth.duplicateFaceUnknownUser : matchedName
+            ),
+            cancelButtonText: L10n.FaceAuth.cancel,
+            confirmButtonText: L10n.FaceAuth.continueButton,
+            onCancel: {
+                viewModel.cancelEnrollment()
+                dismiss()
+            },
+            onConfirm: { viewModel.continueAfterDuplicate() }
+        )
+        .environmentObject(appColors)
     }
 
     /// Green once the pose is locked in and being captured, on-brand while

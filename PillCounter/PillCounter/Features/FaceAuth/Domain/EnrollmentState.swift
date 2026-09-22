@@ -11,7 +11,6 @@ enum EnrollmentFailureReason {
     case embeddingGenerationFailed
     case cameraError(String)
     case storageError
-    case duplicateFace
     /// Global enrollment timeout expired with too few usable samples
     /// (spec: never loop forever — see FaceEnrollmentViewModel).
     case timedOut

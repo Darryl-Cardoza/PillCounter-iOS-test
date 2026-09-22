@@ -89,3 +89,10 @@
 "hl7Notification.inventoryRequestBodyMultiple" = "%d articles nécessitent un comptage de stock";
 "barcodeScan.hazardousNdcDetected" = "NDC dangereux détecté.";
 "barcodeScan.wearGlovesAndProceedWithCaution" = "Portez des gants et procédez avec prudence.";
+
+// MARK: - Face Auth — duplicate-face prompt
+// NOTE: the rest of the faceAuth.* namespace is still English-only in this
+// locale. Machine-translated, pending native review. %@ must be preserved.
+"faceAuth.duplicateFaceTitle" = "Visage déjà enregistré";
+"faceAuth.duplicateFaceMessage" = "Ce visage est déjà enregistré sous le nom de %@. Si vous continuez, aucun des deux utilisateurs ne pourra peut-être se déverrouiller avec son visage, car l'application ne peut pas distinguer de façon fiable deux visages identiques.";
+"faceAuth.duplicateFaceUnknownUser" = "un autre utilisateur";

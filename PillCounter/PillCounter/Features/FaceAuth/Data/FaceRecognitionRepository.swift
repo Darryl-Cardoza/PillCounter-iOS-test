@@ -21,6 +21,18 @@ struct RegisteredUserEmbeddings {
     let embeddings: [[Float]]
 }
 
+/// A face that already belongs to somebody else. Carries the name as well as
+/// the id because the only caller — enrollment's duplicate prompt — has to
+/// tell the user WHO it matched, and `checkDuplicateFace`'s loop already holds
+/// the row, so a separate name lookup would be a second fetch for data we just
+/// had in hand.
+struct DuplicateFaceMatch: Equatable {
+    let userId: String
+    /// May be empty for a row with no stored name — the caller supplies its
+    /// own fallback copy rather than this layer reaching for L10n.
+    let userName: String
+}
+
 protocol FaceRecognitionRepositoryProtocol {
     func isNameTaken(_ name: String) -> Bool
     func registerUser(firstName: String, lastName: String) -> FaceUserEntity
@@ -28,7 +40,7 @@ protocol FaceRecognitionRepositoryProtocol {
         pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, qualityScore: Float
     ) -> FaceEmbedding?
     func saveEnrollmentEmbeddings(userId: String, embeddings: [FaceEmbedding]) -> Bool
-    func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> String?
+    func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> DuplicateFaceMatch?
     func deleteUser(id: String)
 
     /// Stores the enrollment thumbnail and points the user row at it. Call
@@ -311,7 +323,7 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
 
     /// Compares `embeddings` (typically the just-captured enrollment set)
     /// against every OTHER user's stored embeddings — active or
-    /// deactivated. Returns the matching user's id if any pairwise cosine
+    /// deactivated. Returns the matching user if any pairwise cosine
     /// similarity meets `duplicateSimilarityThreshold`, else nil.
     /// Deliberately includes deactivated users: deactivation is a soft
     /// pause, not a release of that face for re-enrollment (see
@@ -320,9 +332,19 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
     /// Not called automatically by `saveEnrollmentEmbeddings` — the caller
     /// (ViewModel) decides whether to run this before persisting, so this
     /// first implementation can ship without gating enrollment on it.
-    func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> String? {
+    ///
+    /// Core Data here is `viewContext`-backed, so this must be called on the
+    /// main actor — see the note in FaceEnrollmentViewModel.runDuplicateCheck.
+    func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> DuplicateFaceMatch? {
         guard !embeddings.isEmpty else { return nil }
+        // This now runs mid-capture, in front of a modal the user is waiting
+        // on, so the real device cost matters — log it rather than guess.
+        let startedAt = ProcessInfo.processInfo.systemUptime
         let candidates = userStore.getAllUsers(activeOnly: false).filter { $0.id != excludingUserId }
+        defer {
+            let elapsedMs = (ProcessInfo.processInfo.systemUptime - startedAt) * 1000
+            Log("Repository: duplicate check scanned \(candidates.count) user(s) in \(String(format: "%.0f", elapsedMs))ms")
+        }
 
         for user in candidates {
             guard let userId = user.id else { continue }
@@ -332,7 +354,7 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
                       let storedVector = FaceEmbedding.unpack(base64: base64) else { continue }
                 for candidate in embeddings {
                     if FaceEmbedding.cosineSimilarity(candidate.vector, storedVector) >= duplicateSimilarityThreshold {
-                        return userId
+                        return DuplicateFaceMatch(userId: userId, userName: user.name ?? "")
                     }
                 }
             }

@@ -1507,7 +1507,11 @@ extension UnifiedCameraView {
                 substituteNdc: txn?.substitueDrug?.ndc ?? "",
                 workflowStep: pillScanViewModel.currentControlledStep.rawValue,
                 count: cameraService.stableCount,
-                targetCount: txn?.target_count,
+                // Mirror PillScanDetailGridScreen's countView: containerInitiate has no
+                // target (open-ended), containerPending uses the remaining-count-adjusted
+                // value, not the raw transaction target.
+                targetCount: pillScanViewModel.currentControlledTargetCount
+                    .flatMap { $0 > 0 ? Int32($0) : nil },
                 timestamp: timestamp,
                 userInitials: currentOperatorName(),
                 geolocation: locationService.locationString,
@@ -2041,11 +2045,16 @@ extension UnifiedCameraView {
         guard isOpenPillScanMode,
               pillScanViewModel.pendingOpenBottleDrugId != nil else { return }
         let loosePills = pillScanViewModel.addCurrentOpenPillCount
-        pillScanViewModel.createOpenedBottleFromPendingScan(
+        let didCreate = pillScanViewModel.createOpenedBottleFromPendingScan(
             existingBatch: stockCountViewModel.currentBatch,
             bucketId: stockCountViewModel.pendingBucketId,
             loosePillCount: loosePills
         )
+        // A 0-pill count is invalid (toast already shown) — stay on the counting
+        // screen so the user can add pills before completing, instead of tearing
+        // down the in-progress open-pill session.
+        guard didCreate else { return }
+
         // The batch may have just been created for real (first count of the session with
         // no prior sealed scan) — make sure stockCountViewModel tracks it from here on.
         if stockCountViewModel.currentBatch == nil {

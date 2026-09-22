@@ -40,13 +40,16 @@ struct PillScanViewModelBottleRescanTests {
         txn.txn_id = txnId
         txn.drug_id = drugId
         txn.is_dispense = isDispense
+        txn.drug = makeDrug(drugId: drugId)
         return txn
     }
 
     private func makeDrug(drugId: Int64, gtin: String? = nil) -> DrugMasterEntity {
         let drug = DrugMasterEntity(context: MockCoreData.context)
         drug.drug_id = drugId
-        drug.ndc = "NDC-\(drugId)"
+        // Realistic 11-digit NDC (5-4-2, no dashes) so ndcNormalized comparisons
+        // exercise the real digit-matching path instead of stripping letters.
+        drug.ndc = String(format: "%05d%04d%02d", 0, drugId, 0)
         drug.gtin = gtin
         return drug
     }
@@ -174,20 +177,140 @@ struct PillScanViewModelBottleRescanTests {
         #expect(vm.pendingBottleRescan == nil)
     }
 
-    @Test func handleBottleRescanSilentlyNoOpsOnDrugIdMismatch() {
+    @Test func handleBottleRescanSilentlyNoOpsOnNdcMismatch() {
         let transactionDAO = MockTransactionDataSource()
         let drugMasterDAO = MockDrugCatalogDataSource()
         let vm = makeViewModel(transactionDAO: transactionDAO, drugMasterDAO: drugMasterDAO)
         let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
         vm.currentTransaction = txn
         vm.currentControlledStep = .scan
-        // Resolved drug exists locally but belongs to a DIFFERENT drug_id than the txn's.
+        // Resolved drug exists locally but belongs to a DIFFERENT NDC than the txn's.
         drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 999, gtin: "00312345678906")
 
         vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
 
         #expect(vm.showAddBottlePopup == false)
         #expect(vm.showReplaceBottlePopup == false)
+    }
+
+    @Test func handleBottleRescanMatchesOnNdcAcrossDifferentDrugIds() {
+        // A second bottle of the identical NDC can resolve to a different
+        // drug_id row than the transaction's (e.g. separate import batches) —
+        // that must still be treated as a match, not rejected.
+        let transactionDAO = MockTransactionDataSource()
+        let transactionDetailDAO = MockTransactionDetailDataSource()
+        let drugMasterDAO = MockDrugCatalogDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
+        let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
+        vm.currentTransaction = txn
+        vm.currentControlledStep = .targetVerification
+        transactionDetailDAO.totals[1] = 0
+        // Same NDC as txn's drug (NDC-100), but a different drug_id (999).
+        let sameNdcDifferentDrugId = makeDrug(drugId: 999, gtin: "00312345678906")
+        sameNdcDifferentDrugId.ndc = txn.drug?.ndc
+        drugMasterDAO.drugsByGtin["00312345678906"] = sameNdcDifferentDrugId
+
+        vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
+
+        #expect(vm.showReplaceBottlePopup == true)
+    }
+
+    /// gs1WithFullInfo decodes to lot "LOT99"/exp "271231"/serial "SER77". A bottle
+    /// with that exact lot/exp/serial scanned earlier in the batch (not the last
+    /// entry) means the operator picked that bottle back up — it should become
+    /// active again (moved to the end of the list), not blocked as a duplicate
+    /// and not offered as a new "Add bottle" candidate.
+    @Test func handleBottleRescanReactivatesEarlierBottleMovingItToEnd() {
+        let transactionDAO = MockTransactionDataSource()
+        let transactionDetailDAO = MockTransactionDetailDataSource()
+        let drugMasterDAO = MockDrugCatalogDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
+        let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
+        vm.currentTransaction = txn
+        vm.currentControlledStep = .targetVerification
+        transactionDetailDAO.totals[1] = 0
+        drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
+
+        let earlierMatch = BottleInfo(lotNumber: "LOT99", expirationDate: "12-31-2027", serialNumber: "SER77", txnDetailsIds: [1], scannedAt: 1)
+        let mostRecent = BottleInfo(lotNumber: "LOT-OTHER", expirationDate: "01-01-2028", serialNumber: "SER-OTHER", txnDetailsIds: [], scannedAt: 2)
+        transactionDAO.setBottleList(txnId: 1, [earlierMatch, mostRecent])
+
+        vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
+
+        #expect(vm.showAddBottlePopup == false)
+        #expect(vm.showReplaceBottlePopup == false)
+        #expect(vm.pendingBottleRescan == nil)
+        let updated = transactionDAO.getBottleList(txnId: 1)
+        #expect(updated.count == 2)
+        // earlierMatch is now last (active again), history (txnDetailsIds) preserved.
+        #expect(updated.last?.lotNumber == "LOT99")
+        #expect(updated.last?.txnDetailsIds == [1])
+        #expect(updated.first?.lotNumber == "LOT-OTHER")
+    }
+
+    /// Same lot+expiry but NO serial on either side can't prove two scans are the
+    /// same physical bottle (a lot/expiry can span multiple real bottles) — must
+    /// fall through to the normal add/replace flow, not be blocked as a duplicate.
+    @Test func handleBottleRescanSameLotExpiryNoSerialIsNotTreatedAsDuplicate() {
+        let transactionDAO = MockTransactionDataSource()
+        let transactionDetailDAO = MockTransactionDetailDataSource()
+        let drugMasterDAO = MockDrugCatalogDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
+        let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
+        vm.currentTransaction = txn
+        vm.currentControlledStep = .targetVerification
+        transactionDetailDAO.totals[1] = 0
+        drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
+
+        // Same lot/expiry as the incoming scan, but no serial recorded.
+        let existing = BottleInfo(lotNumber: "LOT99", expirationDate: "12-31-2027", serialNumber: nil, txnDetailsIds: [], scannedAt: 1)
+        transactionDAO.setBottleList(txnId: 1, [existing])
+
+        // gs1WithFullInfo carries a serial (SER77), so the candidate has one but
+        // the existing row doesn't — still can't be proven the same bottle.
+        vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
+
+        #expect(vm.showReplaceBottlePopup == true)
+        #expect(vm.pendingBottleRescan?.lotNumber == "LOT99")
+        // Bottle list untouched until the popup is confirmed.
+        #expect(transactionDAO.getBottleList(txnId: 1) == [existing])
+    }
+
+    @Test func handleBottleRescanMatchesAcrossDashedAndPlainNdcFormatting() {
+        // Different import paths can store the same NDC with or without dashes
+        // (e.g. "00406-0124-10" vs "00406012410") — that must still match.
+        let transactionDAO = MockTransactionDataSource()
+        let transactionDetailDAO = MockTransactionDetailDataSource()
+        let drugMasterDAO = MockDrugCatalogDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
+        let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
+        txn.drug?.ndc = "00406012410"
+        vm.currentTransaction = txn
+        vm.currentControlledStep = .targetVerification
+        transactionDetailDAO.totals[1] = 0
+        let dashedNdcDrug = makeDrug(drugId: 999, gtin: "00312345678906")
+        dashedNdcDrug.ndc = "00406-0124-10"
+        drugMasterDAO.drugsByGtin["00312345678906"] = dashedNdcDrug
+
+        vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
+
+        #expect(vm.showReplaceBottlePopup == true)
+    }
+
+    @Test func handleBottleRescanAllowedOnContainerPendingStep() {
+        let transactionDAO = MockTransactionDataSource()
+        let transactionDetailDAO = MockTransactionDetailDataSource()
+        let drugMasterDAO = MockDrugCatalogDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
+        let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
+        vm.currentTransaction = txn
+        vm.currentControlledStep = .containerPending
+        transactionDetailDAO.totals[1] = 0
+        drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
+
+        vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
+
+        #expect(vm.showReplaceBottlePopup == true)
     }
 
     // MARK: - handleBottleRescan: duplicate vs add vs replace
@@ -221,7 +344,7 @@ struct PillScanViewModelBottleRescanTests {
         let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
         let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
         vm.currentTransaction = txn
-        vm.currentControlledStep = .scan
+        vm.currentControlledStep = .targetVerification
         drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
 
         let existing = BottleInfo(lotNumber: "OLDLOT", expirationDate: nil, serialNumber: nil, txnDetailsIds: [1], scannedAt: 1)
@@ -242,7 +365,7 @@ struct PillScanViewModelBottleRescanTests {
         let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
         let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
         vm.currentTransaction = txn
-        vm.currentControlledStep = .scan
+        vm.currentControlledStep = .targetVerification
         drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
 
         let existing = BottleInfo(lotNumber: "OLDLOT", expirationDate: nil, serialNumber: nil, txnDetailsIds: [], scannedAt: 1)
@@ -263,7 +386,7 @@ struct PillScanViewModelBottleRescanTests {
         let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
         let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
         vm.currentTransaction = txn
-        vm.currentControlledStep = .scan
+        vm.currentControlledStep = .targetVerification
         drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
         transactionDetailDAO.totals[1] = 0
 

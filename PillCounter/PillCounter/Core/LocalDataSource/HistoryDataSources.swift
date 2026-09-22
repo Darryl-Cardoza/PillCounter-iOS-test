@@ -144,9 +144,6 @@ protocol BottleInfoDataSource: AnyObject {
         stockTxnId: Int64, looseQty: Int32, lotNo: String?, expNo: String?, serialNo: String?,
         images: [BottleImageRecord]
     ) -> (entity: BottleInfoEntity?, created: Bool)
-    func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity?
-    func appendImages(bottleId: Int64, images: [BottleImageRecord])
-    func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32)
     func fetchById(_ bottleId: Int64) -> BottleInfoEntity?
     func fetchByStockTxn(stockTxnId: Int64) -> [BottleInfoEntity]
     func fetchByBatch(batchId: Int64) -> [BottleInfoEntity]

@@ -5,7 +5,7 @@
 //  MEASUREMENT HARNESS, not a pass/fail unit test.
 //
 //  Purpose: derive FaceRecognitionConfig.acceptanceThreshold and
-//  minMarginOverRunnerUp from measured data instead of picking a number.
+//  acceptanceThreshold from measured data instead of picking a number.
 //
 //  Why this exists: the shipped threshold (0.38) was taken from OpenCV's
 //  FaceRecognizerSF default (0.363), which is a 1:1 VERIFICATION operating
@@ -479,7 +479,9 @@ struct FaceMatchCalibrationTests {
         }
 
         let strategy = FaceRecognitionConfig.shared.scoringStrategy
-        let minMargin = FaceRecognitionConfig.shared.minMarginOverRunnerUp
+        // The runner-up margin this used to report was removed — identify() is
+        // a single threshold now, so there is nothing else to print here.
+        let threshold = FaceRecognitionConfig.shared.acceptanceThreshold
 
         let distributions = CalibrationEngine.distributions(from: identities)
         Report.emit(Report.distributionSummary(distributions))
@@ -487,7 +489,7 @@ struct FaceMatchCalibrationTests {
         let strangerCount = identities.filter { !$0.isEnrolled }.count
         Report.emit(
             "\nidentities=\(identities.count) enrolled=\(identities.count - strangerCount) "
-            + "strangers=\(strangerCount)  strategy=\(strategy) minMargin=\(minMargin)"
+            + "strangers=\(strangerCount)  strategy=\(strategy) threshold=\(threshold)"
         )
         if strangerCount == 0 {
             Report.emit(

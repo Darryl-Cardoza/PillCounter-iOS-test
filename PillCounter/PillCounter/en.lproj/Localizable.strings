@@ -252,6 +252,9 @@
 "faceAuth.poseTurnRight" = "Slowly turn your head right";
 "faceAuth.poseChinUp" = "Lift your chin up slightly";
 "faceAuth.poseCenterAgain" = "Look straight ahead again";
+"faceAuth.poseTurnLeftFurther" = "Turn your head further to your left";
+"faceAuth.poseTurnRightFurther" = "Turn your head further to your right";
+"faceAuth.samePersonRequired" = "Keep the same person in frame — starting the scan again";
 "faceAuth.poseHoldStill" = "Hold still…";
 "faceAuth.poseCaptured" = "Got it!";
 "faceAuth.faceOffCenter" = "Move your face into the oval";

@@ -19,15 +19,8 @@ struct FaceRecognitionIdentifyTests {
         let repo = FaceRecognitionRepository.shared
         let config = FaceRecognitionConfig.shared
         let originalThreshold = config.acceptanceThreshold
-        let originalFloor = config.minAbsoluteAcceptScore
         config.acceptanceThreshold = 0.7
-        // This suite drives acceptanceThreshold directly; neutralize the
-        // absolute floor so these cases keep testing the gate they target.
-        config.minAbsoluteAcceptScore = 0
-        defer {
-            config.acceptanceThreshold = originalThreshold
-            config.minAbsoluteAcceptScore = originalFloor
-        }
+        defer { config.acceptanceThreshold = originalThreshold }
 
         let target: [Float] = [1, 0, 0, 0]
         let other: [Float] = [0, 1, 0, 0]
@@ -100,14 +93,11 @@ struct FaceRecognitionIdentifyTests {
         let repo = FaceRecognitionRepository.shared
         let config = FaceRecognitionConfig.shared
         let originalThreshold = config.acceptanceThreshold
-        let originalFloor = config.minAbsoluteAcceptScore
         let originalStrategy = config.scoringStrategy
         config.acceptanceThreshold = 0.5
-        config.minAbsoluteAcceptScore = 0
         config.scoringStrategy = .bestSimilarity
         defer {
             config.acceptanceThreshold = originalThreshold
-            config.minAbsoluteAcceptScore = originalFloor
             config.scoringStrategy = originalStrategy
         }
 
@@ -126,29 +116,17 @@ struct FaceRecognitionIdentifyTests {
         #expect(result.userId == "userA")
     }
 
-    // MARK: - Absolute floor / single-user margin degeneracy
+    // MARK: - Single-threshold behaviour (Android FaceMatcher parity)
 
-    @Test func singleEnrolledUserRejectsStrangerScoringAboveThresholdButBelowFloor() {
-        // The reported production bug, with the scores actually measured
-        // on-device: an unenrolled person scored 0.391 against the only
-        // enrolled user. That cleared acceptanceThreshold (0.38), and with no
-        // second user the margin gate could not fail, so the app unlocked.
-        // The absolute floor is what must reject it.
+    @Test func singleEnrolledUserRejectsStrangerBelowThreshold() {
+        // The production bug, with the score actually measured on-device: an
+        // unenrolled person scored 0.391 against the only enrolled user. It
+        // used to clear the old 0.38 threshold, which is why a floor and a
+        // margin were bolted on. The shipped 0.60 threshold rejects it
+        // outright, which is what lets both extra gates go.
         let repo = FaceRecognitionRepository.shared
         let config = FaceRecognitionConfig.shared
-        let originalThreshold = config.acceptanceThreshold
-        let originalFloor = config.minAbsoluteAcceptScore
-        let originalStrategy = config.scoringStrategy
-        config.acceptanceThreshold = 0.38
-        config.minAbsoluteAcceptScore = 0.55
-        config.scoringStrategy = .averageSimilarity
-        defer {
-            config.acceptanceThreshold = originalThreshold
-            config.minAbsoluteAcceptScore = originalFloor
-            config.scoringStrategy = originalStrategy
-        }
 
-        let live: [Float] = [1, 0, 0, 0]
         let users = [
             RegisteredUserEmbeddings(
                 userId: "enrolledUser", userName: "Bb Bb",
@@ -156,29 +134,17 @@ struct FaceRecognitionIdentifyTests {
             )
         ]
 
-        let result = repo.identify(embedding: live, among: users)
+        let result = repo.identify(embedding: [1, 0, 0, 0], among: users)
 
+        #expect(config.acceptanceThreshold > 0.391)
         #expect(result.userId == nil)
     }
 
-    @Test func singleEnrolledUserStillMatchesGenuineScoreAboveFloor() {
-        // Same single-user setup, genuine user's measured score (0.715) —
-        // must still unlock, otherwise the floor is set too high.
+    @Test func singleEnrolledUserStillMatchesGenuineScore() {
+        // Same setup, the genuine user's measured score (0.715) — must still
+        // unlock, otherwise the threshold is set too high.
         let repo = FaceRecognitionRepository.shared
-        let config = FaceRecognitionConfig.shared
-        let originalThreshold = config.acceptanceThreshold
-        let originalFloor = config.minAbsoluteAcceptScore
-        let originalStrategy = config.scoringStrategy
-        config.acceptanceThreshold = 0.38
-        config.minAbsoluteAcceptScore = 0.55
-        config.scoringStrategy = .averageSimilarity
-        defer {
-            config.acceptanceThreshold = originalThreshold
-            config.minAbsoluteAcceptScore = originalFloor
-            config.scoringStrategy = originalStrategy
-        }
 
-        let live: [Float] = [1, 0, 0, 0]
         let users = [
             RegisteredUserEmbeddings(
                 userId: "enrolledUser", userName: "Bb Bb",
@@ -186,40 +152,26 @@ struct FaceRecognitionIdentifyTests {
             )
         ]
 
-        let result = repo.identify(embedding: live, among: users)
+        let result = repo.identify(embedding: [1, 0, 0, 0], among: users)
 
         #expect(result.userId == "enrolledUser")
     }
 
-    @Test func marginGateStillRejectsNearTieBetweenTwoUsers() {
-        // With a real runner-up present the margin gate must still apply:
-        // both users clear the floor, but they are too close to call.
+    /// Enrollment lets a duplicate face through behind an explicit warning, so
+    /// a near-tie between two users must NOT be rejected — whichever scores
+    /// highest wins and the session unlocks. This is the case the old
+    /// runner-up margin made structurally impossible.
+    @Test func nearTieBetweenTwoUsersStillMatchesTheBestOne() {
         let repo = FaceRecognitionRepository.shared
-        let config = FaceRecognitionConfig.shared
-        let originalThreshold = config.acceptanceThreshold
-        let originalFloor = config.minAbsoluteAcceptScore
-        let originalMargin = config.minMarginOverRunnerUp
-        let originalStrategy = config.scoringStrategy
-        config.acceptanceThreshold = 0.38
-        config.minAbsoluteAcceptScore = 0.55
-        config.minMarginOverRunnerUp = 0.10
-        config.scoringStrategy = .averageSimilarity
-        defer {
-            config.acceptanceThreshold = originalThreshold
-            config.minAbsoluteAcceptScore = originalFloor
-            config.minMarginOverRunnerUp = originalMargin
-            config.scoringStrategy = originalStrategy
-        }
 
-        let live: [Float] = [1, 0, 0, 0]
         let users = [
             RegisteredUserEmbeddings(userId: "userA", userName: "Alice", embeddings: [vectorWithSimilarity(0.80)]),
             RegisteredUserEmbeddings(userId: "userB", userName: "Bob", embeddings: [vectorWithSimilarity(0.76)]),
         ]
 
-        let result = repo.identify(embedding: live, among: users)
+        let result = repo.identify(embedding: [1, 0, 0, 0], among: users)
 
-        #expect(result.userId == nil)
+        #expect(result.userId == "userA")
     }
 
     /// Builds a unit vector whose cosine similarity against [1,0,0,0] is

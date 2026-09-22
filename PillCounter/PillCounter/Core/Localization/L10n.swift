@@ -303,6 +303,11 @@ enum L10n {
         static let poseTurnRight = NSLocalizedString("faceAuth.poseTurnRight", comment: "")
         static let poseChinUp = NSLocalizedString("faceAuth.poseChinUp", comment: "")
         static let poseCenterAgain = NSLocalizedString("faceAuth.poseCenterAgain", comment: "")
+        /// Firmer wording after the user has been stuck on a turn for a while.
+        static let poseTurnLeftFurther = NSLocalizedString("faceAuth.poseTurnLeftFurther", comment: "")
+        static let poseTurnRightFurther = NSLocalizedString("faceAuth.poseTurnRightFurther", comment: "")
+        /// Shown and spoken when a continuity break restarts the scan.
+        static let samePersonRequired = NSLocalizedString("faceAuth.samePersonRequired", comment: "")
         static let poseHoldStill = NSLocalizedString("faceAuth.poseHoldStill", comment: "")
         static let poseCaptured = NSLocalizedString("faceAuth.poseCaptured", comment: "")
         static let faceOffCenter = NSLocalizedString("faceAuth.faceOffCenter", comment: "")

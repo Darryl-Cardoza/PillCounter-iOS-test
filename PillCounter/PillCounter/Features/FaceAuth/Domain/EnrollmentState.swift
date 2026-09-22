@@ -17,7 +17,8 @@ enum EnrollmentFailureReason {
     /// The face being captured no longer matches the one that captured the
     /// `.center` step — either a different person stepped in, or no usable
     /// face was seen for too long. See FaceEnrollmentViewModel's
-    /// boxMatchesAnchor/failTrackContinuity.
+    /// boxMatchesAnchor/restartForBrokenTrack. Only reachable as defense in
+    /// depth now — a broken track restarts the scan rather than failing it.
     case differentFaceDetected
 }
 

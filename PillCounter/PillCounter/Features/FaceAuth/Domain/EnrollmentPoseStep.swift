@@ -57,6 +57,18 @@ enum EnrollmentPoseStep: Int, CaseIterable {
         }
     }
 
+    /// Firmer wording once the user has been stuck on this step for a while
+    /// (see FaceEnrollmentViewModel.escalateAfterSeconds). Only the turns have
+    /// one — "center your face" can't be usefully restated, which is also why
+    /// Android only escalates its two tilts.
+    var escalatedInstructionKey: String? {
+        switch self {
+        case .turnLeft: return L10n.FaceAuth.poseTurnLeftFurther
+        case .turnRight: return L10n.FaceAuth.poseTurnRightFurther
+        case .center, .chinUp, .centerAgain: return nil
+        }
+    }
+
     /// Voiceover text for this step — center/turnLeft/turnRight use Android's
     /// exact spoken-strings-reference.md copy (distinct from instructionKey's
     /// on-screen wording); chinUp/centerAgain have no Android equivalent, so

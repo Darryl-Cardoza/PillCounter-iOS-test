@@ -216,9 +216,8 @@ struct FaceEnrollmentView: View {
             instructionText: viewModel.instructionText,
             title: L10n.FaceAuth.enrollmentTitle,
             // Enrollment always needs a face in frame to make progress —
-            // flipping to the back camera starves the pose detector, which
-            // hard-fails the step (~12s, see stepHardTimeoutSeconds) and
-            // stops the session, making the flip button look dead afterward.
+            // flipping to the back camera starves the pose detector, and with
+            // no step timeout left the flow would simply wait forever.
             showsFlipCamera: false,
             isBusy: viewModel.isBusy,
             guideColorOverride: guideColor,

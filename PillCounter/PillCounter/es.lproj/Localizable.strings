@@ -96,3 +96,6 @@
 "faceAuth.duplicateFaceTitle" = "Rostro ya registrado";
 "faceAuth.duplicateFaceMessage" = "Este rostro ya está registrado como %@. Si continúa, es posible que ninguno de los dos usuarios pueda desbloquear con su rostro, porque la aplicación no puede distinguir de forma fiable dos rostros idénticos.";
 "faceAuth.duplicateFaceUnknownUser" = "otro usuario";
+"faceAuth.poseTurnLeftFurther" = "Gire la cabeza más hacia su izquierda";
+"faceAuth.poseTurnRightFurther" = "Gire la cabeza más hacia su derecha";
+"faceAuth.samePersonRequired" = "Mantenga a la misma persona en el encuadre: el escaneo comenzará de nuevo";

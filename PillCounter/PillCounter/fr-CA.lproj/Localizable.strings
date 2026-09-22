@@ -297,3 +297,6 @@
 "faceAuth.duplicateFaceTitle" = "Visage déjà enregistré";
 "faceAuth.duplicateFaceMessage" = "Ce visage est déjà enregistré sous le nom de %@. Si vous continuez, aucun des deux utilisateurs ne pourra peut-être se déverrouiller avec son visage, car l'application ne peut pas distinguer de façon fiable deux visages identiques.";
 "faceAuth.duplicateFaceUnknownUser" = "un autre utilisateur";
+"faceAuth.poseTurnLeftFurther" = "Tournez davantage la tête vers votre gauche";
+"faceAuth.poseTurnRightFurther" = "Tournez davantage la tête vers votre droite";
+"faceAuth.samePersonRequired" = "Gardez la même personne dans le cadre — le scan recommence";

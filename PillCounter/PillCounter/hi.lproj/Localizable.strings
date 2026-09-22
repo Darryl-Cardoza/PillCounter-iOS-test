@@ -328,3 +328,6 @@
 "faceAuth.duplicateFaceTitle" = "चेहरा पहले से पंजीकृत है";
 "faceAuth.duplicateFaceMessage" = "यह चेहरा पहले से %@ के रूप में पंजीकृत है। यदि आप जारी रखते हैं, तो हो सकता है कि दोनों में से कोई भी उपयोगकर्ता अपने चेहरे से अनलॉक न कर सके, क्योंकि ऐप दो एक जैसे चेहरों में भरोसेमंद ढंग से अंतर नहीं कर सकता।";
 "faceAuth.duplicateFaceUnknownUser" = "कोई अन्य उपयोगकर्ता";
+"faceAuth.poseTurnLeftFurther" = "अपना सिर और बाईं ओर घुमाएँ";
+"faceAuth.poseTurnRightFurther" = "अपना सिर और दाईं ओर घुमाएँ";
+"faceAuth.samePersonRequired" = "एक ही व्यक्ति को फ़्रेम में रखें — स्कैन फिर से शुरू हो रहा है";

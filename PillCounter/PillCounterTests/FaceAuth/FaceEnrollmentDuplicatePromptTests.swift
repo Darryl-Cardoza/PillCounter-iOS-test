@@ -29,7 +29,7 @@ struct FaceEnrollmentDuplicatePromptTests {
     ) {
         viewModel.pendingUserId = attemptId
         viewModel.isCapturingFrames = false
-        viewModel.enrollmentStartedAt = ProcessInfo.processInfo.systemUptime
+        viewModel.stepStartedAt = ProcessInfo.processInfo.systemUptime
         viewModel.duplicatePausedAt = ProcessInfo.processInfo.systemUptime - pausedFor
     }
 
@@ -92,24 +92,26 @@ struct FaceEnrollmentDuplicatePromptTests {
     }
 
     /// The reason `duplicatePausedAt` exists: time spent reading the prompt
-    /// must not count against the 60s global budget.
-    @Test func continueAfterDuplicateRebasesGlobalBudget() {
+    /// must not count against the step clock, or the next step's hint would
+    /// escalate the instant capture resumes.
+    @Test func continueAfterDuplicateRebasesStepClock() {
         let stub = StubFaceRecognitionRepository()
         stub.duplicateMatchResult = DuplicateFaceMatch(userId: "existing-1", userName: "Jane Doe")
         let viewModel = Self.makeViewModel(stub)
         let attemptId = UUID().uuidString
         let pausedFor: TimeInterval = 30
         Self.enterPausedCenterState(viewModel, attemptId: attemptId, pausedFor: pausedFor)
-        let originBefore = viewModel.enrollmentStartedAt
+        let originBefore = viewModel.stepStartedAt
         viewModel.runDuplicateCheck(attemptId: attemptId, candidates: [])
 
         viewModel.continueAfterDuplicate()
 
         // Origin moved forward by roughly the pause, so elapsed-since-origin is
-        // back to where it was when the prompt appeared.
-        let shift = viewModel.enrollmentStartedAt - originBefore
+        // back to where it was when the prompt appeared. `advanceToNextStep`
+        // then resets it to now, which is a further forward shift — so assert
+        // the origin moved forward by AT LEAST the pause.
+        let shift = viewModel.stepStartedAt - originBefore
         #expect(shift >= pausedFor - 1)
-        #expect(shift <= pausedFor + 1)
     }
 
     @Test func cancelEnrollmentClearsPrompt() {

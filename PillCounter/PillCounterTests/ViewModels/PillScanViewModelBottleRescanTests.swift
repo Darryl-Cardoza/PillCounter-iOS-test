@@ -47,7 +47,9 @@ struct PillScanViewModelBottleRescanTests {
     private func makeDrug(drugId: Int64, gtin: String? = nil) -> DrugMasterEntity {
         let drug = DrugMasterEntity(context: MockCoreData.context)
         drug.drug_id = drugId
-        drug.ndc = "NDC-\(drugId)"
+        // Realistic 11-digit NDC (5-4-2, no dashes) so ndcNormalized comparisons
+        // exercise the real digit-matching path instead of stripping letters.
+        drug.ndc = String(format: "%05d%04d%02d", 0, drugId, 0)
         drug.gtin = gtin
         return drug
     }
@@ -211,6 +213,32 @@ struct PillScanViewModelBottleRescanTests {
         vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
 
         #expect(vm.showReplaceBottlePopup == true)
+    }
+
+    /// gs1WithFullInfo decodes to lot "LOT99"/exp "271231"/serial "SER77". A bottle
+    /// with that exact lot/exp/serial scanned earlier in the batch — not just the
+    /// immediately-previous scan — must still be caught as a duplicate, not offered
+    /// as a new "Add bottle" candidate.
+    @Test func handleBottleRescanTreatsMatchAnywhereInBottleListAsDuplicateNotJustLast() {
+        let transactionDAO = MockTransactionDataSource()
+        let transactionDetailDAO = MockTransactionDetailDataSource()
+        let drugMasterDAO = MockDrugCatalogDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
+        let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
+        vm.currentTransaction = txn
+        vm.currentControlledStep = .targetVerification
+        transactionDetailDAO.totals[1] = 0
+        drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
+
+        let earlierMatch = BottleInfo(lotNumber: "LOT99", expirationDate: "12-31-2027", serialNumber: "SER77", txnDetailsIds: [], scannedAt: 1)
+        let mostRecent = BottleInfo(lotNumber: "LOT-OTHER", expirationDate: "01-01-2028", serialNumber: "SER-OTHER", txnDetailsIds: [], scannedAt: 2)
+        transactionDAO.setBottleList(txnId: 1, [earlierMatch, mostRecent])
+
+        vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
+
+        #expect(vm.showAddBottlePopup == false)
+        #expect(vm.showReplaceBottlePopup == false)
+        #expect(vm.pendingBottleRescan == nil)
     }
 
     @Test func handleBottleRescanMatchesAcrossDashedAndPlainNdcFormatting() {

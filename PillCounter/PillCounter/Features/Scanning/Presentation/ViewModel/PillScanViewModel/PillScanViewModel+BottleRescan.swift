@@ -95,10 +95,19 @@ extension PillScanViewModel {
             scannedAt: Int64(Date().timeIntervalSince1970 * 1000)
         )
 
-        if let last = bottles.last,
-           last.lotNumber == candidate.lotNumber,
-           last.expirationDate == candidate.expirationDate,
-           last.serialNumber == candidate.serialNumber {
+        // Match against every bottle already scanned this batch, not just the
+        // last one — a lot/exp/serial scanned earlier (not immediately prior)
+        // must still be caught as a duplicate. A candidate with no lot, exp, OR
+        // serial at all (GS1 carried none of that data) can't prove identity
+        // against another equally-blank scan, so it never counts as a duplicate.
+        let candidateIsBlank = (candidate.lotNumber ?? "").isEmpty
+            && (candidate.expirationDate ?? "").isEmpty
+            && (candidate.serialNumber ?? "").isEmpty
+        if !candidateIsBlank, bottles.contains(where: {
+            $0.lotNumber == candidate.lotNumber
+                && $0.expirationDate == candidate.expirationDate
+                && $0.serialNumber == candidate.serialNumber
+        }) {
             showToastMessage(text: L10n.BarcodeScan.bottleAlreadyScanned)
             return
         }

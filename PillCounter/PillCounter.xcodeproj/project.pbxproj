@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		793AFA5C30065D89006598D4 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 793AFA5B30065D89006598D4 /* Hl7Core */; };
-		799898AE305D252300D74C49 /* Hl7Core in Frameworks */ = {isa = PBXBuildFile; productRef = 799898AD305D252300D74C49 /* Hl7Core */; };
 		79A3C41E303485270066409B /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 79A3C41D303485270066409B /* FirebaseCore */; };
 		79A3C420303485270066409B /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 79A3C41F303485270066409B /* FirebaseMessaging */; };
 		88D04D902FD02CEB0079ED80 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
@@ -99,7 +98,6 @@
 				88E39FA92FB31DFA00D6DEA2 /* CoreVideo.framework in Frameworks */,
 				88E39FA72FB31DF200D6DEA2 /* CoreMedia.framework in Frameworks */,
 				88E39FA52FB31DDA00D6DEA2 /* AVFoundation.framework in Frameworks */,
-				799898AE305D252300D74C49 /* Hl7Core in Frameworks */,
 				88E39FA32FB31DD400D6DEA2 /* MetalKit.framework in Frameworks */,
 				88E39FA12FB31DC500D6DEA2 /* Metal.framework in Frameworks */,
 				88E39F9F2FB31DBA00D6DEA2 /* SwiftUI.framework in Frameworks */,
@@ -186,7 +184,6 @@
 				793AFA5B30065D89006598D4 /* Hl7Core */,
 				79A3C41D303485270066409B /* FirebaseCore */,
 				79A3C41F303485270066409B /* FirebaseMessaging */,
-				799898AD305D252300D74C49 /* Hl7Core */,
 			);
 			productName = PillCounter;
 			productReference = 473A48F52EB4F11200EEA905 /* PillCounter.app */;
@@ -954,10 +951,6 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		793AFA5B30065D89006598D4 /* Hl7Core */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Hl7Core;
-		};
-		799898AD305D252300D74C49 /* Hl7Core */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Hl7Core;
 		};

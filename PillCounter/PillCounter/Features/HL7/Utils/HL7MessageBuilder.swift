@@ -305,8 +305,8 @@ final class HL7CompletionBuilder {
     /// `observationId`/`observationValue` into a single unescaped subcomponent,
     /// so any `^` passed through it comes back HL7-escaped as `\S\` instead of
     /// staying a literal component separator. Building these two rows as raw
-    /// pipe-delimited text sidesteps that until the builder gains component-level
-    /// setters for OBX-3.2/3.3 and OBX-5.2/5.3.
+    /// pipe-delimited text sidesteps that until the builder gains a component-level
+    /// setter for OBX-3.2/3.3 (OBX-5.2/5.3 is now covered by `observationValue2`).
     private func insertSegments(_ newSegments: [String], afterLastPrefixIn encoded: String, prefix: String) -> String {
         var segments = encoded.components(separatedBy: "\r")
         let insertAt = segments.lastIndex(where: { $0.hasPrefix(prefix) }).map { $0 + 1 } ?? segments.count
@@ -474,7 +474,9 @@ final class HL7CompletionBuilder {
         }
 
         // Zero-total groups carry no information for PMS — never emit an INV for them.
-        grouped = grouped.filter { $0.value.opened + $0.value.sealed > 0 }
+        // Include bottle counts, not just pill quantities: a sealed row with
+        // package_qty == 0 still has a real sealedBottles count worth reporting.
+        grouped = grouped.filter { $0.value.opened + $0.value.sealed + $0.value.sealedBottles + $0.value.openBottles > 0 }
 
         var setId = 1
 

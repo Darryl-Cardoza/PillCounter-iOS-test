@@ -278,6 +278,10 @@ extension PillScanViewModel {
     /// Every completed Proceed always inserts a fresh row, even for a NDC/lot/expiry
     /// already counted earlier in this batch — a second bottle of the same drug and lot
     /// is a distinct physical bottle and must not be merged into the first one's row.
+    /// Multiple Add taps on the same bottle do NOT need a merge-into-existing-row path
+    /// here: taps only accumulate into `addCurrentOpenPillCount` in memory
+    /// (UnifiedCameraView.swift), and this method persists once, on Proceed. Do not
+    /// reintroduce a fetch-and-merge step for that reason.
     /// Returns false, and persists nothing, when `loosePillCount` is 0 — an opened bottle
     /// counted empty is not a valid open-pill entry.
     @discardableResult
@@ -285,8 +289,7 @@ extension PillScanViewModel {
         guard let drugId = pendingOpenBottleDrugId else { return false }
 
         guard loosePillCount > 0 else {
-            toastMessage = "Count at least 1 pill before completing an open bottle."
-            showToast = true
+            showToastMessage(text: L10n.PillCount.zeroPillsMessage, autoClose: false)
             return false
         }
 

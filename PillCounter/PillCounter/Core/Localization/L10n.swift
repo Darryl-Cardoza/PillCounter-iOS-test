@@ -295,11 +295,25 @@ enum L10n {
         static let enrollmentCompleteSubtitle = NSLocalizedString("faceAuth.enrollmentCompleteSubtitle", comment: "")
         static let enrollmentFailedTitle = NSLocalizedString("faceAuth.enrollmentFailedTitle", comment: "")
 
+        // Duplicate-face prompt, raised at the centre pose (see
+        // FaceEnrollmentViewModel.runDuplicateCheck).
+        static let duplicateFaceTitle = NSLocalizedString("faceAuth.duplicateFaceTitle", comment: "")
+        static let duplicateFaceUnknownUser = NSLocalizedString("faceAuth.duplicateFaceUnknownUser", comment: "")
+        /// %@ is the already-enrolled user's display name.
+        static func duplicateFaceMessage(_ name: String) -> String {
+            String(format: NSLocalizedString("faceAuth.duplicateFaceMessage", comment: ""), name)
+        }
+
         static let poseCenter = NSLocalizedString("faceAuth.poseCenter", comment: "")
         static let poseTurnLeft = NSLocalizedString("faceAuth.poseTurnLeft", comment: "")
         static let poseTurnRight = NSLocalizedString("faceAuth.poseTurnRight", comment: "")
         static let poseChinUp = NSLocalizedString("faceAuth.poseChinUp", comment: "")
         static let poseCenterAgain = NSLocalizedString("faceAuth.poseCenterAgain", comment: "")
+        /// Firmer wording after the user has been stuck on a turn for a while.
+        static let poseTurnLeftFurther = NSLocalizedString("faceAuth.poseTurnLeftFurther", comment: "")
+        static let poseTurnRightFurther = NSLocalizedString("faceAuth.poseTurnRightFurther", comment: "")
+        /// Shown and spoken when a continuity break restarts the scan.
+        static let samePersonRequired = NSLocalizedString("faceAuth.samePersonRequired", comment: "")
         static let poseHoldStill = NSLocalizedString("faceAuth.poseHoldStill", comment: "")
         static let poseCaptured = NSLocalizedString("faceAuth.poseCaptured", comment: "")
         static let faceOffCenter = NSLocalizedString("faceAuth.faceOffCenter", comment: "")
@@ -323,8 +337,8 @@ enum L10n {
         static let failureEmbedding = NSLocalizedString("faceAuth.failureEmbedding", comment: "")
         static let failureCamera = NSLocalizedString("faceAuth.failureCamera", comment: "")
         static let failureStorage = NSLocalizedString("faceAuth.failureStorage", comment: "")
-        static let failureDuplicate = NSLocalizedString("faceAuth.failureDuplicate", comment: "")
         static let failureTimedOut = NSLocalizedString("faceAuth.failureTimedOut", comment: "")
+        static let failureDifferentFace = NSLocalizedString("faceAuth.failureDifferentFace", comment: "")
         static let retry = NSLocalizedString("faceAuth.retry", comment: "")
 
         // Authentication screen

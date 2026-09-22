@@ -31,9 +31,9 @@ enum CandidateScoringStrategy {
     /// (`identify()`) reference implementations exactly.
     case bestSimilarity
     /// The user's score is the mean similarity across all their stored
-    /// embeddings. Not used by either reference implementation, but is the
-    /// default here — bestSimilarity let one noisy oblique-angle embedding
-    /// spike a non-matching user's score past threshold (false accepts).
+    /// embeddings. Not used by either reference implementation, and no
+    /// longer the default here (see `bestSimilarity`) — kept for the case
+    /// `bestSimilarity` needs walking back.
     case averageSimilarity
 }
 
@@ -46,46 +46,34 @@ final class FaceRecognitionConfig {
     /// considered a match. Below this, "no match" — never the closest user
     /// anyway (spec section 7/10).
     ///
-    /// 0.38 — same value this app's Android FaceMatcher.MATCH_THRESHOLD and
-    /// the Python reference use (OpenCV's own FaceRecognizerSF default is
-    /// 0.363). Do not raise this back toward 0.6+ without on-device
-    /// evidence — SFace's genuine same-identity cosine similarity runs much
-    /// lower than that.
-    var acceptanceThreshold: Float = 0.38
-
-    /// Absolute floor the best score must clear on top of
-    /// `acceptanceThreshold`, applied regardless of how many users are
-    /// enrolled. This is the gate that actually protects the single-enrolled-
-    /// user case, where `minMarginOverRunnerUp` below is structurally unable
-    /// to reject anything (there is no runner-up to lead).
+    /// 0.60 — this app's current Android FaceMatcher.MATCH_THRESHOLD. It was
+    /// 0.38 here (Android's old value, and OpenCV's FaceRecognizerSF default
+    /// of 0.363), which was low enough to need an absolute floor and a
+    /// runner-up margin bolted on top to stop false accepts. Android raised
+    /// the threshold instead and dropped both extra gates; this now matches.
+    /// NOT independently verified against this app's iOS SFace score
+    /// distribution — the 0.38 value it replaced was (see git history: an
+    /// unenrolled stranger scored 0.391, the genuine enrolled user 0.715).
+    /// Re-measure on-device before trusting this in production.
     ///
-    /// 0.55 — midpoint of scores measured on-device with one enrolled user:
-    /// an UNENROLLED person scored 0.391 (a false accept under the bare 0.38
-    /// threshold), the genuine enrolled user scored 0.715. 0.55 sits 0.16
-    /// above the false accept and 0.165 below the genuine match. If a genuine
-    /// user is ever rejected, re-read the identify() debug scores before
-    /// moving this — overlapping ranges would mean no threshold can separate
-    /// them and the problem is upstream in capture quality.
-    var minAbsoluteAcceptScore: Float = 0.55
-
-    /// Minimum lead the best-matching user's score must hold over the best
-    /// score from any OTHER user to be accepted, even when the best score
-    /// alone clears `acceptanceThreshold`. Without this gate, once two
-    /// users' scores land close together (e.g. after an alignment fix
-    /// tightens the whole score distribution), whichever is closest by
-    /// per-frame noise wins and identity flips between runs. Not from
-    /// either reference implementation (they only threshold) — added
-    /// because a single global threshold can't distinguish "clearly A"
-    /// from "barely A over B."
-    ///
-    /// 0.10 (raised from 0.03) — 0.03 was too thin to reject real near-ties
-    /// between different people's embeddings, causing false accepts. Needs
-    /// on-device tuning against real enrolled users.
-    var minMarginOverRunnerUp: Float = 0.10
+    /// Deliberately a single gate: two people who share a face must BOTH be
+    /// able to unlock (enrollment allows a duplicate through an explicit
+    /// warning), and a runner-up margin structurally cannot allow that. This
+    /// does not address the other reason the margin gate existed — two
+    /// DIFFERENT users' scores landing close together, where per-frame noise
+    /// decides the winner and identity flips between runs.
+    var acceptanceThreshold: Float = 0.60
 
     /// How a user's per-frame candidate score is computed from their stored
     /// embedding set.
-    var scoringStrategy: CandidateScoringStrategy = .averageSimilarity
+    ///
+    /// `.bestSimilarity` matches Android's FaceMatcher.identify and the Python
+    /// reference: the gallery is flat and the single best-scoring embedding
+    /// wins. Was `.averageSimilarity` here, which only existed to stop one
+    /// noisy oblique embedding spiking a non-matching user past the old 0.38
+    /// threshold — at 0.60 that is no longer the cheapest fix, and averaging
+    /// penalises a genuine user whose turned-head embeddings score lower.
+    var scoringStrategy: CandidateScoringStrategy = .bestSimilarity
 
     // MARK: - Performance (spec section 13)
 

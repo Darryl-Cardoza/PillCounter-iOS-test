@@ -456,7 +456,6 @@
 "faceAuth.failureEmbedding" = "इस चेहरे को संसाधित नहीं किया जा सका। फिर से प्रयास करें।";
 "faceAuth.failureCamera" = "कैमरा अनुपलब्ध है।";
 "faceAuth.failureStorage" = "नामांकन सहेजा नहीं जा सका। कृपया फिर से प्रयास करें।";
-"faceAuth.failureDuplicate" = "यह चेहरा पहले से किसी अन्य उपयोगकर्ता के लिए नामांकित है।";
 "faceAuth.failureTimedOut" = "नामांकन में बहुत अधिक समय लगा। अच्छी रोशनी में फिर से प्रयास करें।";
 "faceAuth.retry" = "फिर से प्रयास करें";
 "faceAuth.authTitle" = "चेहरा प्रमाणीकरण";
@@ -584,3 +583,13 @@
 "pms.connected" = "PMS कनेक्ट है";
 "pms.connectedBody" = "%@ से कनेक्ट है";
 "countHistory.noTransactionsFound" = "कोई लेनदेन नहीं मिला";
+
+// MARK: - Face Auth — duplicate-face prompt
+// NOTE: the rest of the faceAuth.* namespace is still English-only in this
+// locale. Machine-translated, pending native review. %@ must be preserved.
+"faceAuth.duplicateFaceTitle" = "चेहरा पहले से पंजीकृत है";
+"faceAuth.duplicateFaceMessage" = "यह चेहरा पहले से %@ के रूप में पंजीकृत है। यदि आप जारी रखते हैं, तो हो सकता है कि दोनों में से कोई भी उपयोगकर्ता अपने चेहरे से अनलॉक न कर सके, क्योंकि ऐप दो एक जैसे चेहरों में भरोसेमंद ढंग से अंतर नहीं कर सकता।";
+"faceAuth.duplicateFaceUnknownUser" = "कोई अन्य उपयोगकर्ता";
+"faceAuth.poseTurnLeftFurther" = "अपना सिर और बाईं ओर घुमाएँ";
+"faceAuth.poseTurnRightFurther" = "अपना सिर और दाईं ओर घुमाएँ";
+"faceAuth.samePersonRequired" = "एक ही व्यक्ति को फ़्रेम में रखें — स्कैन फिर से शुरू हो रहा है";

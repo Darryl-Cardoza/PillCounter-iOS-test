@@ -98,8 +98,15 @@ final class FaceSessionManager: ObservableObject {
     /// `activeOnly: true` deliberately mirrors the identify path
     /// (FaceRecognitionRepository) — deactivating every user is just as
     /// unrecoverable as deleting them.
+    ///
+    /// Checks embedding existence, not just row existence — a user row with
+    /// no usable embedding can authenticate against nothing, so counting it
+    /// here would arm a lock the roster can never actually satisfy (the
+    /// stuck-lock bug QA reported). FaceEnrollmentViewModel no longer creates
+    /// such rows going forward, but this stays as a defense-in-depth
+    /// backstop rather than trusting that invariant alone.
     var hasEnrolledUsers: Bool {
-        !FaceUserStore.shared.getAllUsers(activeOnly: true).isEmpty
+        !FaceRecognitionRepository.shared.loadActiveEnrollments().isEmpty
     }
 
     /// Every lock entry point's shared preamble: no-op when logged out,

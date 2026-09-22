@@ -249,11 +249,18 @@
 "faceAuth.enrollmentCompleteSubtitle" = "You're all set. You can now unlock \n the counter with a glance.";
 "faceAuth.enrollmentFailedTitle" = "We couldn't enroll your face";
 
+"faceAuth.duplicateFaceTitle" = "Face already enrolled";
+"faceAuth.duplicateFaceMessage" = "This face is already enrolled as %@. If you continue, neither user may be able to unlock with their face — the app can't reliably tell two identical faces apart.";
+"faceAuth.duplicateFaceUnknownUser" = "another user";
+
 "faceAuth.poseCenter" = "Center your face in the oval";
 "faceAuth.poseTurnLeft" = "Slowly turn your head left";
 "faceAuth.poseTurnRight" = "Slowly turn your head right";
 "faceAuth.poseChinUp" = "Lift your chin up slightly";
 "faceAuth.poseCenterAgain" = "Look straight ahead again";
+"faceAuth.poseTurnLeftFurther" = "Turn your head further to your left";
+"faceAuth.poseTurnRightFurther" = "Turn your head further to your right";
+"faceAuth.samePersonRequired" = "Keep the same person in frame — starting the scan again";
 "faceAuth.poseHoldStill" = "Hold still…";
 "faceAuth.poseCaptured" = "Got it!";
 "faceAuth.faceOffCenter" = "Move your face into the oval";
@@ -269,8 +276,8 @@
 "faceAuth.failureEmbedding" = "Could not process this face. Try again.";
 "faceAuth.failureCamera" = "Camera unavailable.";
 "faceAuth.failureStorage" = "Could not save enrollment. Please try again.";
-"faceAuth.failureDuplicate" = "This face is already enrolled for another user.";
 "faceAuth.failureTimedOut" = "Enrollment took too long. Please try again in good lighting.";
+"faceAuth.failureDifferentFace" = "A different face was detected, or the same face couldn't be tracked. Please retry with the same person.";
 "faceAuth.retry" = "Try Again";
 
 "faceAuth.authTitle" = "Face Authentication";

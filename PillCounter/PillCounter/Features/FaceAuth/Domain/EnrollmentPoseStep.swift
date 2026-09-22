@@ -25,8 +25,15 @@ enum EnrollmentPoseStep: Int, CaseIterable {
     var targetYawDegrees: ClosedRange<Float>? {
         switch self {
         case .center, .centerAgain: return -10...10
-        case .turnLeft: return 12...25
-        case .turnRight: return -25...(-12)
+        // Widened from 12...25 / -25...(-12) (13° window) to match center's
+        // 20° tolerance — the underlying yaw estimate is the same noisy
+        // nose-offset ratio heuristic used for every step (see
+        // FaceQualityChecker.yawDegreesEstimate), so giving it a narrower
+        // window here than elsewhere made the same absolute jitter
+        // proportionally much more disruptive, independent of how fast or
+        // slow the user actually turned.
+        case .turnLeft: return 10...30
+        case .turnRight: return -30...(-10)
         case .chinUp: return -12...12
         }
     }
@@ -47,6 +54,18 @@ enum EnrollmentPoseStep: Int, CaseIterable {
         case .turnRight: return L10n.FaceAuth.poseTurnRight
         case .chinUp: return L10n.FaceAuth.poseChinUp
         case .centerAgain: return L10n.FaceAuth.poseCenterAgain
+        }
+    }
+
+    /// Firmer wording once the user has been stuck on this step for a while
+    /// (see FaceEnrollmentViewModel.escalateAfterSeconds). Only the turns have
+    /// one — "center your face" can't be usefully restated, which is also why
+    /// Android only escalates its two tilts.
+    var escalatedInstructionKey: String? {
+        switch self {
+        case .turnLeft: return L10n.FaceAuth.poseTurnLeftFurther
+        case .turnRight: return L10n.FaceAuth.poseTurnRightFurther
+        case .center, .chinUp, .centerAgain: return nil
         }
     }
 

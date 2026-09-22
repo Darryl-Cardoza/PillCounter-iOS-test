@@ -87,12 +87,15 @@ final class FaceUserStore {
         }
     }
 
-    /// Case-insensitive active-name check, used to reject duplicate enrollment names.
+    /// Case-insensitive name check across ALL users, active or deactivated —
+    /// used to reject duplicate enrollment names. Deactivation is a soft
+    /// pause (the record can be reactivated later), not a release of the
+    /// name for reuse; only deleting the row actually frees it. Previously
+    /// scoped to `is_active == YES`, which let someone re-enroll under a
+    /// deactivated user's exact name.
     func isNameTaken(_ name: String) -> Bool {
         let request = makeFetchRequest()
-        request.predicate = NSPredicate(
-            format: "is_active == YES AND name ==[c] %@", name
-        )
+        request.predicate = NSPredicate(format: "name ==[c] %@", name)
         request.fetchLimit = 1
         return ((try? context.count(for: request)) ?? 0) > 0
     }

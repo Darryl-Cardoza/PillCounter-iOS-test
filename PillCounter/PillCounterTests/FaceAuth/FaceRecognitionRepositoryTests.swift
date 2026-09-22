@@ -91,6 +91,10 @@ struct FaceRecognitionRepositoryTests {
 
     @Test func checkDuplicateFaceFindsHighSimilarityMatch() {
         let repo = FaceRecognitionRepository.shared
+        // Restore afterwards: the suite is .serialized against the shared
+        // singleton, so a leaked threshold silently changes every later test.
+        let originalThreshold = repo.duplicateSimilarityThreshold
+        defer { repo.duplicateSimilarityThreshold = originalThreshold }
         repo.duplicateSimilarityThreshold = 0.99
 
         let existingUser = Self.register(repo, name: "Repo Existing \(UUID().uuidString.prefix(8))")
@@ -107,11 +111,41 @@ struct FaceRecognitionRepositoryTests {
         let candidate = FaceEmbedding(vector: vector, qualityScore: 0.9)
         let match = repo.checkDuplicateFace(against: [candidate], excludingUserId: nil)
 
-        #expect(match == existingId)
+        #expect(match?.userId == existingId)
+    }
+
+    /// The prompt has to name who it matched, so the name must come back with
+    /// the id rather than needing a second lookup.
+    @Test func checkDuplicateFaceReturnsMatchedUserName() {
+        let repo = FaceRecognitionRepository.shared
+        let originalThreshold = repo.duplicateSimilarityThreshold
+        defer { repo.duplicateSimilarityThreshold = originalThreshold }
+        repo.duplicateSimilarityThreshold = 0.99
+
+        let name = "Repo Named \(UUID().uuidString.prefix(8))"
+        let existingUser = Self.register(repo, name: name)
+        guard let existingId = existingUser.id else {
+            Issue.record("expected user id")
+            return
+        }
+        defer { repo.deleteUser(id: existingId) }
+
+        let vector: [Float] = [1, 0, 0, 0]
+        _ = repo.saveEnrollmentEmbeddings(
+            userId: existingId, embeddings: [FaceEmbedding(vector: vector, qualityScore: 0.9)]
+        )
+
+        let match = repo.checkDuplicateFace(
+            against: [FaceEmbedding(vector: vector, qualityScore: 0.9)], excludingUserId: nil
+        )
+
+        #expect(match?.userName == name)
     }
 
     @Test func checkDuplicateFaceReturnsNilWhenNoMatch() {
         let repo = FaceRecognitionRepository.shared
+        let originalThreshold = repo.duplicateSimilarityThreshold
+        defer { repo.duplicateSimilarityThreshold = originalThreshold }
         repo.duplicateSimilarityThreshold = 0.75
 
         let existingUser = Self.register(repo, name: "Repo NoMatch \(UUID().uuidString.prefix(8))")

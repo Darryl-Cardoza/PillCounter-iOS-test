@@ -21,6 +21,18 @@ struct RegisteredUserEmbeddings {
     let embeddings: [[Float]]
 }
 
+/// A face that already belongs to somebody else. Carries the name as well as
+/// the id because the only caller — enrollment's duplicate prompt — has to
+/// tell the user WHO it matched, and `checkDuplicateFace`'s loop already holds
+/// the row, so a separate name lookup would be a second fetch for data we just
+/// had in hand.
+struct DuplicateFaceMatch: Equatable {
+    let userId: String
+    /// May be empty for a row with no stored name — the caller supplies its
+    /// own fallback copy rather than this layer reaching for L10n.
+    let userName: String
+}
+
 protocol FaceRecognitionRepositoryProtocol {
     func isNameTaken(_ name: String) -> Bool
     func registerUser(firstName: String, lastName: String) -> FaceUserEntity
@@ -28,7 +40,7 @@ protocol FaceRecognitionRepositoryProtocol {
         pixelBuffer: CVPixelBuffer, detection: FaceDetectionResult, qualityScore: Float
     ) -> FaceEmbedding?
     func saveEnrollmentEmbeddings(userId: String, embeddings: [FaceEmbedding]) -> Bool
-    func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> String?
+    func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> DuplicateFaceMatch?
     func deleteUser(id: String)
 
     /// Stores the enrollment thumbnail and points the user row at it. Call
@@ -234,60 +246,34 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
         let config = FaceRecognitionConfig.shared
         var bestUserId: String?
         var bestScore: Float = -1
-        var runnerUpScore: Float = -1
 
-        Log("Repository: identify — live embedding dim=\(embedding.count), comparing against \(registeredUsers.count) user(s)")
-
-        // TEMP DEBUG — every user's score, unsorted collection first.
-        var allScores: [(userId: String, userName: String, score: Float)] = []
+        // One gate, deliberately — see FaceRecognitionConfig.acceptanceThreshold.
+        // The absolute floor and runner-up margin that used to sit here were
+        // compensating for a 0.38 threshold; they also made it impossible for
+        // two people who genuinely share a face to ever unlock, which
+        // enrollment now explicitly permits.
+        var allScores: [(userName: String, score: Float)] = []
 
         for user in registeredUsers {
             let score = candidateScore(for: embedding, storedEmbeddings: user.embeddings, strategy: config.scoringStrategy)
-            Log("Repository: user \(user.userId) — \(user.embeddings.count) stored embedding(s), dims=\(user.embeddings.map(\.count)), score=\(String(format: "%.3f", score))")
-            allScores.append((user.userId, user.userName, score))
+            allScores.append((user.userName, score))
             if score > bestScore {
-                // Previous best is now a different user's runner-up score.
-                runnerUpScore = bestScore
                 bestScore = score
                 bestUserId = user.userId
-            } else if score > runnerUpScore {
-                runnerUpScore = score
             }
         }
 
-        // TEMP DEBUG — full sorted distribution, remove after root-causing
-        // bug 1/bug 2. Look at the gap between #1 and #2 here, and whether
-        // #1 clears acceptanceThreshold at all.
-        let sorted = allScores.sorted { $0.score > $1.score }
-        let sortedLine = sorted.map { "\($0.userName)=\(String(format: "%.3f", $0.score))" }.joined(separator: ", ")
-        Log("DEBUG allScores (sorted): [\(sortedLine)]")
+        let sortedLine = allScores.sorted { $0.score > $1.score }
+            .map { "\($0.userName)=\(String(format: "%.3f", $0.score))" }
+            .joined(separator: ", ")
+        Log("Repository: identify — scores [\(sortedLine)] threshold=\(config.acceptanceThreshold)")
 
-        let thresholdPass = bestScore >= config.acceptanceThreshold
-        let floorPass = bestScore >= config.minAbsoluteAcceptScore
-
-        // A runner-up only exists once a SECOND different user has been
-        // scored. With a single enrolled user `runnerUpScore` is still at its
-        // -1 sentinel, and computing `bestScore - max(-1, 0)` would yield the
-        // raw score as a "margin" that always clears the requirement — the
-        // gate would silently disable itself in exactly the single-user
-        // deployment it is meant to protect. Skip it explicitly instead and
-        // let the absolute floor carry that case.
-        let hasRunnerUp = runnerUpScore >= 0
-        let margin = hasRunnerUp ? bestScore - runnerUpScore : Float.infinity
-        let marginPass = !hasRunnerUp || margin >= config.minMarginOverRunnerUp
-
-        Log("DEBUG gate: threshold=\(config.acceptanceThreshold) thresholdPass=\(thresholdPass) floor=\(config.minAbsoluteAcceptScore) floorPass=\(floorPass) hasRunnerUp=\(hasRunnerUp) marginRequired=\(config.minMarginOverRunnerUp) marginActual=\(hasRunnerUp ? String(format: "%.3f", margin) : "n/a") marginPass=\(marginPass)")
-
-        guard let bestUserId, thresholdPass, floorPass, marginPass else {
-            // Highest score doesn't clear the threshold or the absolute
-            // floor, or it isn't clearly ahead of the next-best DIFFERENT
-            // user — report "no match", never the closest-anyway user
-            // (spec section 7/10).
-            Log("Repository: identify — best=\(String(format: "%.3f", bestScore)) runnerUp=\(String(format: "%.3f", runnerUpScore)) — rejected")
-            Log("DEBUG return: userId=nil (gate failed)")
+        guard let bestUserId, bestScore >= config.acceptanceThreshold else {
+            // Highest score doesn't clear the threshold — report "no match",
+            // never the closest-anyway user (spec section 7/10).
+            Log("Repository: identify — best=\(String(format: "%.3f", bestScore)) — rejected")
             return FrameIdentification(userId: nil, score: bestScore)
         }
-        Log("DEBUG return: userId=\(bestUserId) (gate passed)")
         return FrameIdentification(userId: bestUserId, score: bestScore)
     }
 
@@ -310,16 +296,30 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
     // MARK: - Optional duplicate check (extension point)
 
     /// Compares `embeddings` (typically the just-captured enrollment set)
-    /// against every OTHER active user's stored embeddings. Returns the
-    /// matching user's id if any pairwise cosine similarity meets
-    /// `duplicateSimilarityThreshold`, else nil.
+    /// against every OTHER user's stored embeddings — active or
+    /// deactivated. Returns the matching user if any pairwise cosine
+    /// similarity meets `duplicateSimilarityThreshold`, else nil.
+    /// Deliberately includes deactivated users: deactivation is a soft
+    /// pause, not a release of that face for re-enrollment (see
+    /// `FaceUserStore.isNameTaken`'s comment for the same rationale).
     ///
-    /// Not called automatically by `saveEnrollmentEmbeddings` — the caller
-    /// (ViewModel) decides whether to run this before persisting, so this
-    /// first implementation can ship without gating enrollment on it.
-    func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> String? {
+    /// Not called by `saveEnrollmentEmbeddings` itself — FaceEnrollmentViewModel
+    /// calls this mid-capture, after `.center`, and gates enrollment on the
+    /// result: a match pauses the pipeline behind a user-facing duplicate
+    /// prompt (`runDuplicateCheck`/`duplicateMatch`) before persisting.
+    ///
+    /// Core Data here is `viewContext`-backed, so this must be called on the
+    /// main actor — see the note in FaceEnrollmentViewModel.runDuplicateCheck.
+    func checkDuplicateFace(against embeddings: [FaceEmbedding], excludingUserId: String?) -> DuplicateFaceMatch? {
         guard !embeddings.isEmpty else { return nil }
-        let candidates = userStore.getAllUsers().filter { $0.id != excludingUserId }
+        // This now runs mid-capture, in front of a modal the user is waiting
+        // on, so the real device cost matters — log it rather than guess.
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        let candidates = userStore.getAllUsers(activeOnly: false).filter { $0.id != excludingUserId }
+        defer {
+            let elapsedMs = (ProcessInfo.processInfo.systemUptime - startedAt) * 1000
+            Log("Repository: duplicate check scanned \(candidates.count) user(s) in \(String(format: "%.0f", elapsedMs))ms")
+        }
 
         for user in candidates {
             guard let userId = user.id else { continue }
@@ -329,7 +329,7 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
                       let storedVector = FaceEmbedding.unpack(base64: base64) else { continue }
                 for candidate in embeddings {
                     if FaceEmbedding.cosineSimilarity(candidate.vector, storedVector) >= duplicateSimilarityThreshold {
-                        return userId
+                        return DuplicateFaceMatch(userId: userId, userName: user.name ?? "")
                     }
                 }
             }

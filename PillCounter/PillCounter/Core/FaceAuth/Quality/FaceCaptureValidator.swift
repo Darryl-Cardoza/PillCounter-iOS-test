@@ -60,6 +60,13 @@ enum FaceCaptureValidator {
     // MARK: - Thresholds (see each check for rationale)
 
     private static let minAcceptConfidence: Float = 0.9
+    /// Relaxed confidence floor for turnLeft/turnRight/chinUp — measured on
+    /// real device logs: a legitimate, landmark-sane turned/tilted face
+    /// repeatedly scores detector confidence as low as 0.856, well under
+    /// `minAcceptConfidence`. That's an expected consequence of the pose
+    /// these steps ask for, not a bad detection — checks 2-4 below still
+    /// catch a genuinely garbled/partial one regardless of this floor.
+    private static let minAcceptConfidenceOffCenter: Float = 0.85
     private static let minAspectRatio: CGFloat = 0.65
     private static let maxAspectRatio: CGFloat = 1.15
     private static let minEyeDistanceRatio: CGFloat = 0.25
@@ -72,6 +79,12 @@ enum FaceCaptureValidator {
     /// an empirical stand-in for "~30° off frontal", not a literal angle.
     private static let maxYawRatio: Float = 0.3
     private static let minSharpnessVariance: Float = 45
+    /// Relaxed sharpness floor for turnLeft/turnRight/chinUp — same
+    /// rationale as minAcceptConfidenceOffCenter: real, legitimate turned
+    /// frames measured sharpness as low as 17.1 (moving the head naturally
+    /// blurs more than holding still for center), well under
+    /// `minSharpnessVariance`.
+    private static let minSharpnessVarianceOffCenter: Float = 20
 
     // MARK: - Public API
 
@@ -83,17 +96,30 @@ enum FaceCaptureValidator {
     ///   - face: detection to validate (box + landmarks + confidence).
     ///   - frame: the camera pixel buffer the detection came from, used only
     ///     for the sharpness crop.
+    ///   - step: current enrollment pose step, or nil outside enrollment
+    ///     (e.g. authentication). Only used to skip check 4b for
+    ///     `.turnLeft`/`.turnRight` — see that check's comment.
     /// - Returns: nil if the capture is valid and safe to embed, otherwise
     ///   the specific reason it was rejected.
-    static func isFaceCaptureValid(face: FaceDetectionResult, frame: CVPixelBuffer) -> FaceCaptureRejectionReason? {
+    static func isFaceCaptureValid(
+        face: FaceDetectionResult, frame: CVPixelBuffer, step: EnrollmentPoseStep? = nil
+    ) -> FaceCaptureRejectionReason? {
         let box = face.boundingBox
         let l = face.landmarks
+        // turnLeft/turnRight/chinUp deliberately require an off-frontal
+        // pose, which reads as lower detector confidence, smaller apparent
+        // box width, and more motion blur than a held-still frontal
+        // capture — none of that means the frame is actually worse.
+        // center/centerAgain (and nil, e.g. authentication) keep the
+        // stricter floors since a frontal capture can and should meet them.
+        let isOffCenterStep = step == .turnLeft || step == .turnRight || step == .chinUp
 
         // 1. Detection confidence — stricter than the decoder's base
         // accept/NMS threshold. A frame can clear NMS with a mediocre score
         // and still be a partial/garbled detection; this raises the bar
         // specifically for "safe to embed."
-        guard face.confidence >= minAcceptConfidence else {
+        let confidenceFloor = isOffCenterStep ? minAcceptConfidenceOffCenter : minAcceptConfidence
+        guard face.confidence >= confidenceFloor else {
             return .lowConfidence
         }
 
@@ -153,13 +179,26 @@ enum FaceCaptureValidator {
         // turned well off frontal is likely to have one side partially
         // occluded even when the landmark regressor "fills in" a plausible
         // point for it.
-        let leftEyeToNose = hypot(l.leftEye.x - l.nose.x, l.leftEye.y - l.nose.y)
-        let rightEyeToNose = hypot(l.rightEye.x - l.nose.x, l.rightEye.y - l.nose.y)
-        let eyeToNoseSum = leftEyeToNose + rightEyeToNose
-        if eyeToNoseSum > 0 {
-            let yawRatio = Float(abs(leftEyeToNose - rightEyeToNose) / eyeToNoseSum)
-            guard yawRatio <= maxYawRatio else {
-                return .tooMuchYaw
+        //
+        // Skipped for turnLeft/turnRight: those steps deliberately require
+        // an off-frontal pose (see EnrollmentPoseStep.targetYawDegrees), so
+        // this check would be fighting the very pose it's being asked to
+        // capture. It uses a different landmark ratio than
+        // FaceQualityChecker.yawDegreesEstimate (the one that actually
+        // gates the pose-range match), and the two were never validated to
+        // agree in the turn steps' target band — a frame the pose-range
+        // check accepts could still be discarded here, which is exactly the
+        // kind of intermittent, speed-independent capture failure this was
+        // root-caused to.
+        if step != .turnLeft && step != .turnRight {
+            let leftEyeToNose = hypot(l.leftEye.x - l.nose.x, l.leftEye.y - l.nose.y)
+            let rightEyeToNose = hypot(l.rightEye.x - l.nose.x, l.rightEye.y - l.nose.y)
+            let eyeToNoseSum = leftEyeToNose + rightEyeToNose
+            if eyeToNoseSum > 0 {
+                let yawRatio = Float(abs(leftEyeToNose - rightEyeToNose) / eyeToNoseSum)
+                guard yawRatio <= maxYawRatio else {
+                    return .tooMuchYaw
+                }
             }
         }
 
@@ -167,7 +206,8 @@ enum FaceCaptureValidator {
         // already computes as advisory-only; here it hard-gates. Computed
         // on the same face-box crop for consistency with that scoring.
         let sharpness = sharpnessVariance(pixelBuffer: frame, box: box) ?? 0
-        guard sharpness >= minSharpnessVariance else {
+        let sharpnessFloor = isOffCenterStep ? minSharpnessVarianceOffCenter : minSharpnessVariance
+        guard sharpness >= sharpnessFloor else {
             return .tooBlurry
         }
 

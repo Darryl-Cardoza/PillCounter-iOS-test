@@ -131,6 +131,7 @@
 "menu.confirmLogoutMessage" = "Are you sure you want to logout?";
 "menu.logoutButton" = "Logout";
 "menu.toast.noLastBatchFound" = "No last batch found";
+"menu.toast.lockNowNoEnrolledUsers" = "No enrolled users";
 "menu.featureNotAvailableTitle" = "Feature Not Available";
 "menu.featureNotAvailableMessage" = "This feature is not available for your account. contact Dispensure.com for more info";
 "menu.quickAccessUsers" = "Quick Access Users";
@@ -190,7 +191,7 @@
 "settings.clearHistoryTitle" = "Are you sure want to clear all history?";
 "settings.clearHistoryMessage" = "This will delete all your saved data permanently.";
 "settings.hazardousDrugSetting" = "Hazardous Pill Counting";
-"settings.connectionInfo" = "PMS Connection Info";
+"settings.connectionInfo" = "PMS Configuration";
 "settings.connectionInfoScreenTitle" = "CONNECTION INFO";
 "settings.deviceSectionTitle" = "This Device (Dispenser Server)";
 "settings.deviceIpAddressLabel" = "IP Address";
@@ -218,6 +219,11 @@
 "settings.faceSessionTimeout2m" = "2 Minutes (Default)";
 "settings.faceSessionTimeout5m" = "5 Minutes";
 "settings.faceSessionTimeout10m" = "10 Minutes";
+"settings.sectionGeneral" = "General";
+"settings.sectionDispenseControlledDrug" = "Dispense Controlled Drug";
+"settings.sectionFaceDetection" = "Face Detection";
+"settings.sectionVoiceHapticFeedback" = "Voice and Haptic Feedback";
+"settings.sectionHazardousPillCounting" = "Hazardous Pill Counting";
 
 "faceAuth.enrollmentTitle" = "Add New User";
 "faceAuth.setupIntroTitle" = "Setup Quick Access";
@@ -365,6 +371,12 @@
 "barcodeScan.rxInProgressMessage" = "Pill counting for this Rx has already started. Do you want to continue from where you left off?";
 "barcodeScan.hazardousNdcDetected" = "Hazardous NDC detected.";
 "barcodeScan.wearGlovesAndProceedWithCaution" = "Wear gloves and proceed with caution.";
+"barcodeScan.ndcLabelFormat" = "NDC %@";
+"barcodeScan.wrongHazardousTrayToastFormat" = "Wrong tray. Use the saved %@ tray for hazardous drugs.";
+"barcodeScan.nonHazardousDrugOnHazardousTrayToastFormat" = "The %@ tray is reserved for hazardous drugs. Please use a different tray.";
+"barcodeScan.hazardousTrayDetectedTitleFormat" = "%@ Tray Detected";
+"barcodeScan.markHazardousTrayMessageFormat" = "Mark the %@ tray as the hazardous tray? It will then be required for all hazardous drugs.";
+"barcodeScan.substituteHazardousTrayMessageFormat" = "This %@ tray doesn't match the saved hazardous tray. Substitute the hazardous tray with the %@ tray?";
 
 
 // MARK: - GENERIC EQUIVALENT POPUP
@@ -426,6 +438,10 @@
 "pillScan.deleteScans" = "Delete Scans";
 "pillScan.deleteScansMessage" = "Are you sure you want to delete the selected scans?";
 "pillScan.viewAllCounts" = "View All";
+"pillScan.glovesDetected" = "Gloves Detected";
+"pillScan.dispenseQueue" = "Dispense's Queue";
+"pillScan.noItemsInQueue" = "No items in the queue";
+"pillScan.pendingDispenseCounts" = "pending dispense counts";
 
 // MARK: - LOCATION
 "location.fetching" = "Fetching...";
@@ -555,10 +571,7 @@
 "controlled.vial" = "Capture Filled Vial Image";
 "controlled.containerPending" = "Count all remaining Pills from Container";
 "controlled.regularTargetReverification" = "Count Pills from Open Bottle";
-"controlled.scanBarcode" = "Scan Stock Bottle Barcode / QR Code";
-"controlled.scanStockCountBarcode" = "Scan Stock Bottle Barcode / QR Code";
 "controlled.scanRxLabelBarcode" = "Scan Rx Label";
-"controlled.scanNdcToCountPills" = "Scan NDC to count pills";
 "controlled.countOpenPills" = "Count Open Pills";
 
 
@@ -580,9 +593,8 @@
 
 
 // MARK: - PMS / HL7
+"pms.badgeLabel" = "PMS";
 "pms.connected" = "PMS Connected";
-"pms.disconnected" = "PMS Disconnected";
-"pms.connecting" = "Connecting...";
 "pms.connectedBody" = "Connected to %@";
 
 
@@ -596,6 +608,10 @@
 "hl7Notification.inventoryRequestTitle" = "Inventory Request";
 "hl7Notification.inventoryRequestBodySingle" = "1 item needs stock count";
 "hl7Notification.inventoryRequestBodyMultiple" = "%d items need stock count";
+"hl7Notification.editRxFailedTitle" = "Edit Rx Failed";
+"hl7Notification.refillMismatchBodyFormat" = "Rx %@ found but refill %@ does not match any stored transaction";
+"hl7Notification.noTransactionFoundBodyFormat" = "No transaction found for Rx %@";
+"hl7Notification.drugNotFoundBodyFormat" = "Drug not found for Rx %@, NDC %@";
 
 
 // MARK: - COUNT HISTORY

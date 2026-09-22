@@ -60,7 +60,7 @@ struct DashboardSelectBucketPopup: View {
                 )
                 PillCountingButton(
                     iconName: nil,
-                    title: "OK",
+                    title: L10n.Common.ok,
                     textColor: .white,
                     backgroundColor: appColors.primary,
                     borderColor: .clear,

@@ -97,11 +97,11 @@ struct QuickActionCardCompact: View {
                         .foregroundColor(appColors.text)
                         .lineLimit(2)
                 }
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
+            .padding(.leading, 20)
+            .padding(.trailing, 12)
             .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .background(appColors.secondaryBackground)
             .cornerRadius(14)
             .shadow(color: appColors.text.opacity(0.05), radius: 4, x: 0, y: 2)

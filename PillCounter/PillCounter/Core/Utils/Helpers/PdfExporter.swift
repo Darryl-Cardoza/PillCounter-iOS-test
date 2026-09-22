@@ -291,14 +291,14 @@ private final class BatchPDFRenderer {
 
         // ── Sealed Bottles ──────────────────────────────────────────────────
         let sealedDetails = txn.lotDetails.filter { $0.sealedQty > 0 }
-        y = drawSubSection(title: "Sealed Bottles",
+        y = drawSubSection(title: L10n.History.sealedBottles,
                            count: "\(txn.sealedBottles)",
                            details: sealedDetails.map { (lot: $0.lot, expiry: $0.expiry, qty: Int($0.sealedQty)) },
                            cardX: cardX, cardW: cardW, y: y)
 
         // ── Opened Bottles ──────────────────────────────────────────────────
         let openDetails = txn.lotDetails.filter { $0.openQty > 0 }
-        y = drawSubSection(title: "Opened Bottles",
+        y = drawSubSection(title: L10n.History.openedBottles,
                            count: "\(txn.openPills)",
                            details: openDetails.map { (lot: $0.lot, expiry: $0.expiry, qty: Int($0.openQty)) },
                            cardX: cardX, cardW: cardW, y: y)

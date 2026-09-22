@@ -34,8 +34,10 @@ final class Hl7ServiceManager {
     ///   segment from the PMS doesn't take down the whole receive pipeline — we still get
     ///   a `partialMessage` plus the list of `errors` to log/ACK against.
     /// - `validationConfig`: Rule set used by `validate(message:)`/`ack(message:)` to decide
-    ///   AA vs AE/AR. `.DEFAULT` applies the library's standard structural HL7 rules with no
-    ///   pharmacy-specific overrides.
+    ///   AA vs AE/AR. Built off `.DEFAULT` with `knownPriorities` widened to include LOW/MEDIUM —
+    ///   the library default (`HIGH`, `ROUTINE` only) was REJECTing any ZPR-3 priority of
+    ///   LOW or MEDIUM sent by the PMS, since `HL7Validator.validateDispense` rejects any
+    ///   ZPR whose priority isn't in that set.
     /// - `extraSegments`: Registers additional custom (Z-)segment types so they parse as
     ///   typed views instead of falling back to a generic/lossless segment. Left empty
     ///   because every custom segment this app sends/receives — ZIN (inventory: opened/
@@ -44,7 +46,15 @@ final class Hl7ServiceManager {
     private let hl7 = HL7(
         version: AppStorageManager.shared.hl7Version,
         strictMode: false,
-        validationConfig: .companion.DEFAULT,
+        validationConfig: ValidationConfig.companion.DEFAULT.doCopy(
+            knownAdjustmentReasons: ValidationConfig.companion.DEFAULT.knownAdjustmentReasons,
+            knownAdjustmentTypes: ValidationConfig.companion.DEFAULT.knownAdjustmentTypes,
+            expectedQueryName: ValidationConfig.companion.DEFAULT.expectedQueryName,
+            commentRequiredReasons: ValidationConfig.companion.DEFAULT.commentRequiredReasons,
+            knownOrderControlCodes: ValidationConfig.companion.DEFAULT.knownOrderControlCodes,
+            knownPriorities: ValidationConfig.companion.DEFAULT.knownPriorities.union(["LOW", "MEDIUM"]),
+            maxQuantity: ValidationConfig.companion.DEFAULT.maxQuantity
+        ),
         extraSegments: []
     )
 

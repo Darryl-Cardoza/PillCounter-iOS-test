@@ -20,7 +20,7 @@ struct PillScanDetailGridScreen: View {
     @State private var isEditing: Bool = false
     @State private var selectedIds: Set<Int64> = []
     @State private var showDeleteConfirm: Bool = false
-    @State private var selectedUIImage: Image? = nil
+    @State private var selectedImageIndex: Int? = nil
     @State private var showImageViewer = false
 
     
@@ -47,6 +47,17 @@ struct PillScanDetailGridScreen: View {
                     pillCount: Int($0.pill_count), capturedAt: $0.created_at
                 )
             }
+    }
+
+    // Path-only — FullScreenImageView decodes lazily per page instead of every
+    // photo in the run being decrypted/decoded up front on the main thread.
+    // Still filters out entries without a path so index stays in sync with what
+    // the viewer actually shows.
+    private var galleryEntries: [(detail: PillScanDetailItem, path: String)] {
+        details.compactMap { detail in
+            guard let path = detail.imagePath else { return nil }
+            return (detail, path)
+        }
     }
 
     private var drugName: String {
@@ -153,13 +164,13 @@ struct PillScanDetailGridScreen: View {
         }
         .fullScreenCover(
             isPresented: Binding(
-                get: { selectedUIImage != nil },
-                set: { if !$0 { selectedUIImage = nil } }
+                get: { selectedImageIndex != nil },
+                set: { if !$0 { selectedImageIndex = nil } }
             )
         ) {
-            if let image = selectedUIImage {
-                FullScreenImageView(image: image) {
-                    selectedUIImage = nil
+            if let index = selectedImageIndex {
+                FullScreenImageView(imagePaths: galleryEntries.map(\.path), initialIndex: index) {
+                    selectedImageIndex = nil
                 }
             }
         }
@@ -191,22 +202,6 @@ struct PillScanDetailGridScreen: View {
             .onTapGesture { toggleAll() }
             .padding(.trailing, 16)
             .transition(.opacity)
-
-        } else {
-            HStack(spacing: 16) {
-                Button {
-                    withAnimation(.spring()) {
-                        isEditing = true
-                        selectedIds.removeAll()
-                    }
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 20))
-                        .foregroundColor(appColors.primary)
-                }
-            }
-            .padding(.trailing, 16)
-            .transition(.opacity)
         }
     }
 
@@ -217,14 +212,13 @@ struct PillScanDetailGridScreen: View {
             if !isEditing{
                 infoStrip
             }
-
             if isLandscape {
                 landscapeContent
             } else {
                 portraitContent
             }
         }
-        .padding(.top, 64)
+        .padding(.top, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(appColors.primaryBackground)
     }
@@ -269,16 +263,8 @@ struct PillScanDetailGridScreen: View {
                             isEditing: isEditing,
                             isSelected: selectedIds.contains(detail.id)
                         )
-                        .onTapGesture {
-                            if isEditing {
-                                toggleSelection(detail.id)
-                            } else {
-                                if let path = detail.imagePath,
-                                   let uiImage = PhotoFileManager.shared.loadImage(from: path) {
-                                    selectedUIImage = uiImage
-                                }
-                            }
-                        }
+                        .onTapGesture { handleCardTap(detail) }
+                        .onLongPressGesture { handleCardLongPress(detail) }
                     }
                 }
                 .padding(.horizontal, 12)
@@ -286,7 +272,7 @@ struct PillScanDetailGridScreen: View {
             }
         }
     }
-    
+
     private var gridColumns: [GridItem] {
         let columnCount: Int
         if UIDevice.current.userInterfaceIdiom == .pad {
@@ -315,16 +301,8 @@ struct PillScanDetailGridScreen: View {
                                     isEditing: isEditing,
                                     isSelected: selectedIds.contains(detail.id)
                                 )
-                                .onTapGesture {
-                                    if isEditing {
-                                        toggleSelection(detail.id)
-                                    } else {
-                                        if let path = detail.imagePath,
-                                           let uiImage = PhotoFileManager.shared.loadImage(from: path) {
-                                            selectedUIImage = uiImage
-                                        }
-                                    }
-                                }
+                                .onTapGesture { handleCardTap(detail) }
+                                .onLongPressGesture { handleCardLongPress(detail) }
                             }
                         }
                         .padding(.horizontal, 12)
@@ -341,16 +319,8 @@ struct PillScanDetailGridScreen: View {
                                     isEditing: isEditing,
                                     isSelected: selectedIds.contains(detail.id)
                                 )
-                                .onTapGesture {
-                                    if isEditing {
-                                        toggleSelection(detail.id)
-                                    } else {
-                                        if let path = detail.imagePath,
-                                           let uiImage = PhotoFileManager.shared.loadImage(from: path) {
-                                            selectedUIImage = uiImage
-                                        }
-                                    }
-                                }
+                                .onTapGesture { handleCardTap(detail) }
+                                .onLongPressGesture { handleCardLongPress(detail) }
                             }
                         }
                         .padding(.horizontal, 16)
@@ -531,20 +501,51 @@ struct PillScanDetailGridScreen: View {
     }
 
     // MARK: - Logic
+    private func handleCardTap(_ detail: PillScanDetailItem) {
+        if isEditing {
+            toggleSelection(detail.id)
+        } else if let index = galleryEntries.firstIndex(where: { $0.detail.id == detail.id }) {
+            selectedImageIndex = index
+        }
+    }
+
+    private func handleCardLongPress(_ detail: PillScanDetailItem) {
+        guard !isEditing else { return }
+        withAnimation(.spring()) {
+            isEditing = true
+            selectedIds = [detail.id]
+        }
+    }
+
     private func toggleSelection(_ id: Int64) {
         if selectedIds.contains(id) {
             selectedIds.remove(id)
         } else {
             selectedIds.insert(id)
         }
+        // Nothing left selected means nothing left to delete — drop back to
+        // the plain grid instead of stranding edit mode with a permanently
+        // disabled Delete button.
+        exitEditModeIfEmpty()
     }
 
     private func toggleAll() {
+        // No exitEditModeIfEmpty() here — deselect-all via this control is a
+        // deliberate bulk toggle, not the user unchecking their way out row by
+        // row, so it shouldn't kick them out of edit mode.
         let allIds = Set(details.map { $0.id })
         if selectedIds == allIds {
             selectedIds.removeAll()
         } else {
             selectedIds = allIds
+        }
+    }
+
+    private func exitEditModeIfEmpty() {
+        if isEditing && selectedIds.isEmpty {
+            withAnimation(.easeOut(duration: 0.3)) {
+                isEditing = false
+            }
         }
     }
 

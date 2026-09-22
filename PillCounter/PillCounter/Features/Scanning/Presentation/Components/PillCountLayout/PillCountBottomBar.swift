@@ -84,9 +84,6 @@ struct PillCountBottomBar: View {
                         Text(L10n.PillScan.viewAllCounts)
                             .font(.system(size: isIpad ? 18 : 13, weight: .semibold))
                             .foregroundStyle(appColors.primary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: isIpad ? 16 : 11, weight: .semibold))
-                            .foregroundStyle(appColors.primary)
                     }
                 }
                 // In portrait the button hugs its content so the trailing progress bar

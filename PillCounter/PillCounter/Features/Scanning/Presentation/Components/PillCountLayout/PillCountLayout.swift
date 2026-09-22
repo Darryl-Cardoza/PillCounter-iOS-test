@@ -65,9 +65,8 @@ struct PillCountLayout: View {
     /// reads "Count Open Pills" instead of "Count Prescribed Quantity").
     private var tooltipText: String {
         guard let step = tooltipStep else { return instructionText }
-        if isOpenPillScanMode && step == .targetVerification
-            && step == pillScanViewModel.currentControlledStep {
-            return instructionText
+        if isOpenPillScanMode && step == .targetVerification {
+            return L10n.Controlled.countOpenPills
         }
         return step.displayText
     }
@@ -230,29 +229,48 @@ struct PillCountLayout: View {
                 // Shown for every step except the RX-label scan itself, which has
                 // no confirmed drug yet — the legacy header there covers it instead.
                 if !hidesTopAndBottomBars {
-                PillCountTopBar(
-                    ndc: topBarDrug?.ndc ?? "-",
-                    drugName: topBarDrug?.drug_name ?? "-",
-                    drugImagePath: topBarDrug?.drug_image,
-                    form: topBarDrug?.dosage_form ?? "-",
-                    strength: topBarDrug?.strength ?? "-",
-                    bucket: resolvedTransaction?.bucket_id
-                        ?? pillScanViewModel.currentStockTxn?.bucket_id ?? "NORMAL",
-                    instructionText: instructionText,
-                    isLandscape: isLandscape,
-                    isIpad: isIpad,
-                    cameraService: cameraService,
-                    showGloveIndicator: showGloveIndicator,
-                    onBack: onBack
-                )
+                    PillCountTopBar(
+                        ndc: topBarDrug?.ndc ?? "-",
+                        drugName: topBarDrug?.drug_name ?? "-",
+                        drugImagePath: topBarDrug?.drug_image,
+                        form: topBarDrug?.dosage_form ?? "-",
+                        strength: topBarDrug?.strength ?? "-",
+                        bucket: resolvedTransaction?.bucket_id
+                            ?? pillScanViewModel.currentStockTxn?.bucket_id ?? "NORMAL",
+                        instructionText: instructionText,
+                        isLandscape: isLandscape,
+                        isIpad: isIpad,
+                        cameraService: cameraService,
+                        showGloveIndicator: showGloveIndicator,
+                        onBack: onBack
+                    )
                 }
 
                 Spacer()
 
+                // Vial controls stacked directly above the bar in portrait — same
+                // VStack as the bar below, so Spacer-driven bottom pinning can't
+                // make them overlap. Sits above the steps row.
+                if isVialStep && isPortrait {
+                    vialControlBottomView
+                        .padding(.bottom, isIpad ? 24 : 14)
+                }
+
                 // In portrait (iPhone or iPad) the steps row is lifted out of the
                 // bottom bar (which can't fit everything in a single line) and
-                // shown above it.
-                if isPortrait && !isBarOnlyStep {
+                // shown above it — for every step, including vial and .scan
+                // (even when .scan's own bar is fully hidden via hidesTopAndBottomBars).
+                // Hidden while the RX details sheet is up — this row lives in an
+                // .overlay above the sheet (UnifiedCameraView), so it would otherwise
+                // paint on top of it; the bar's own steps row is already suppressed
+                // in portrait via showSteps.
+                // Landscape normally gets its steps row from inside PillCountBottomBar
+                // instead of this standalone row — except open-pill's .scan step, which
+                // suppresses that whole bar via hidesTopAndBottomBars (no drug to show
+                // yet), so fall back to this row there too, keeping both fixed open-pill
+                // steps ([.scan, .targetVerification]) visible/tappable.
+                if (isPortrait || (isOpenPillScanMode && isScanStep && hidesTopAndBottomBars))
+                    && !pillScanViewModel.showRxFlowPopup {
                     StepProgressRow(
                         activeSteps: activeSteps,
                         currentStep: pillScanViewModel.currentControlledStep,
@@ -260,34 +278,26 @@ struct PillCountLayout: View {
                     )
                 }
 
-                // Vial controls stacked directly above the bar in portrait — same
-                // VStack as the bar below, so Spacer-driven bottom pinning can't
-                // make them overlap.
-                if isVialStep && isPortrait {
-                    vialControlBottomView
-                        .padding(.bottom, isIpad ? 24 : 14)
-                }
-
-                if !hidesTopAndBottomBars {
-                PillCountBottomBar(
-                    activeSteps: activeSteps,
-                    currentStep: pillScanViewModel.currentControlledStep,
-                    currentTotalCount: currentTotalCount,
-                    targetCount: targetCount,
-                    isIpad: isIpad,
-                    isLandscape: isLandscape,
-                    showSteps: !isPortrait || isBarOnlyStep,
-                    onTapStep: { handleStepTap($0) },
-                    isOpenEndedCountStep: isOpenEndedStep,
-                    isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,
-                    isDoneEnabled: isDoneEnabled,
-                    hidesCountUI: isBarOnlyStep,
-                    isResetEnabled: (isOpenPillScanMode || pillScanViewModel.canResetCurrentTransaction)
-                        && hasCountsToReset,
-                    onShowDetailGrid: onShowDetailGrid,
-                    onDone: onAllDone,
-                    onReset: onReset
-                )
+                if !hidesTopAndBottomBars && !(isScanStep && isPortrait) {
+                    PillCountBottomBar(
+                        activeSteps: activeSteps,
+                        currentStep: pillScanViewModel.currentControlledStep,
+                        currentTotalCount: currentTotalCount,
+                        targetCount: targetCount,
+                        isIpad: isIpad,
+                        isLandscape: isLandscape,
+                        showSteps: !isPortrait,
+                        onTapStep: { handleStepTap($0) },
+                        isOpenEndedCountStep: isOpenEndedStep,
+                        isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,
+                        isDoneEnabled: isDoneEnabled,
+                        hidesCountUI: isBarOnlyStep,
+                        isResetEnabled: (isOpenPillScanMode || pillScanViewModel.canResetCurrentTransaction)
+                            && hasCountsToReset,
+                        onShowDetailGrid: onShowDetailGrid,
+                        onDone: onAllDone,
+                        onReset: onReset
+                    )
                 }
             }
         }
@@ -379,9 +389,8 @@ private extension PillCountLayout {
 
         presentTooltip(for: step)
         let text: String
-        if isOpenPillScanMode && step == .targetVerification
-            && step == pillScanViewModel.currentControlledStep {
-            text = instructionText
+        if isOpenPillScanMode && step == .targetVerification {
+            text = L10n.Controlled.countOpenPills
         } else {
             text = step.displayText
         }

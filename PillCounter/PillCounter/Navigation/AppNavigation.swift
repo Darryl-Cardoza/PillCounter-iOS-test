@@ -13,11 +13,8 @@ struct AppNavigation: View {
     @EnvironmentObject private var appColors: AppColors
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var isLandscape: Bool = {
-        let o = UIDevice.current.orientation
-        if o.isValidInterfaceOrientation { return o.isLandscape }
-        return UIScreen.main.bounds.width > UIScreen.main.bounds.height
-    }()
+    @State private var isLandscape: Bool =
+        UIScreen.main.bounds.width > UIScreen.main.bounds.height
 
     var body: some View {
         NavigationStack(path: $router.navigationPath) {
@@ -46,7 +43,7 @@ struct AppNavigation: View {
                         .navigationBarBackButtonHidden(true)
 
                 case .authentication(.login(.dashboard(.fixedCountPartial))):
-                    DispenseCountPartialTxnList(title: "pending dispense counts")
+                    DispenseCountPartialTxnList(title: L10n.PillScan.pendingDispenseCounts)
                         .navigationBarBackButtonHidden(true)
                     
                     
@@ -102,9 +99,12 @@ struct AppNavigation: View {
                       for: UIDevice.orientationDidChangeNotification
                   )
               ) { _ in
-                  let o = UIDevice.current.orientation
-                  guard o.isValidInterfaceOrientation else { return }
-                  let newValue = o.isLandscape
+                  guard
+                      let scene = UIApplication.shared.connectedScenes
+                          .first(where: { $0.activationState == .foregroundActive })
+                          as? UIWindowScene
+                  else { return }
+                  let newValue = scene.interfaceOrientation.isLandscape
                   if isLandscape != newValue {
                       isLandscape = newValue
                   }

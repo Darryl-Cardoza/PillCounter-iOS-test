@@ -57,12 +57,6 @@ struct FaceSessionTimeoutPickerView: View {
             .background(appColors.primaryBackground)
             .navigationTitle(L10n.Settings.timeLimitScreenTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(L10n.Common.cancel) { dismiss() }
-                        .foregroundColor(appColors.primary)
-                }
-            }
         }
     }
 }

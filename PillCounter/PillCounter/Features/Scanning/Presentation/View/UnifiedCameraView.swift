@@ -136,6 +136,11 @@ struct UnifiedCameraView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.isLandscape) var isLandscape
 
+    // Identifies this specific view instance so onDisappear can tell whether it's
+    // still the active screen before resetting the shared pillScanViewModel — see
+    // PillScanViewModel.activeCameraSessionToken.
+    @State private var sessionToken = UUID()
+
     var body: some View {
         rootWithAllPopups
     }
@@ -750,7 +755,7 @@ struct UnifiedCameraView: View {
             return controlledStepInstruction
         }
         if isOpenPillScanMode {
-            return L10n.Controlled.scanNdcToCountPills
+            return L10n.Controlled.scan
         }
         return scanType.instructionText
     }
@@ -862,6 +867,7 @@ extension UnifiedCameraView {
     }
 
     func onAppear() {
+        pillScanViewModel.activeCameraSessionToken = sessionToken
         pillScanViewModel.showRxFlowPopup = false
         pillScanViewModel.showRxOnHoldPopup = false
         pillScanViewModel.showRxInProgressPopup = false
@@ -971,6 +977,12 @@ extension UnifiedCameraView {
         cameraService.disableBottleRescanListening()
         cameraService.isTrayColorDetectionEnabled = false
         cameraService.stop()
+
+        // A rapid back+reopen can fire this AFTER the next screen's onAppear
+        // already claimed the shared view model — don't let a stale disappear
+        // wipe state the new screen just set up.
+        guard pillScanViewModel.activeCameraSessionToken == sessionToken else { return }
+
         pillScanViewModel.showRxFlowPopup = false
         pillScanViewModel.showRxOnHoldPopup = false
         pillScanViewModel.showRxInProgressPopup = false
@@ -1155,6 +1167,7 @@ extension UnifiedCameraView {
             }
             await MainActor.run {
                 pillScanViewModel.getControlledStep(pillCountTxn: pillScanViewModel.currentTransaction)
+                hasInitializedStep = true
                 pillScanViewModel.addCurrentOpenPillCount = 0
                 pillScanViewModel.stageFirstBottleIfNeeded(rawBarcode: scannedRawValue)
                 if pillScanViewModel.currentControlledStep == .vial {

@@ -9,117 +9,49 @@ import SwiftUI
 
 struct FullScreenImageView: View {
 
-    let image: Image?
+    // Decrypt+decode happens per-page in FullScreenImagePage, keyed off this path —
+    // pre-decoding every path here would put a whole scan run's photos on the main
+    // thread on first render instead of one at a time as the user swipes.
+    let imagePaths: [String]
     let onDismiss: () -> Void
 
-    @State private var scale: CGFloat = 1
-    @State private var lastScale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
+    @State private var currentIndex: Int
 
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Color.black.ignoresSafeArea()
-
-                if let image {
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .scaleEffect(scale)
-                        .offset(offset)
-                        .gesture(
-                            SimultaneousGesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        let proposed = lastScale * value
-                                        scale = min(max(proposed, 1), 4)
-                                    }
-                                    .onEnded { _ in
-                                        lastScale = scale
-                                        if scale <= 1 {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                                scale      = 1
-                                                lastScale  = 1
-                                                offset     = .zero
-                                                lastOffset = .zero
-                                            }
-                                        } else {
-                                            let clamped = clampedOffset(offset, in: geo.size, scale: scale)
-                                            withAnimation(.spring(response: 0.25)) {
-                                                offset     = clamped
-                                                lastOffset = clamped
-                                            }
-                                        }
-                                    },
-                                DragGesture(minimumDistance: 1)
-                                    .onChanged { value in
-                                        if scale > 1 {
-                                            // Pan when zoomed in
-                                            let proposed = CGSize(
-                                                width:  lastOffset.width  + value.translation.width,
-                                                height: lastOffset.height + value.translation.height
-                                            )
-                                            offset = clampedOffset(proposed, in: geo.size, scale: scale)
-                                        } else {
-                                            // Dismiss drag when at normal scale
-                                            if value.translation.height > 0 {
-                                                offset = CGSize(width: 0, height: value.translation.height)
-                                            }
-                                        }
-                                    }
-                                    .onEnded { value in
-                                        if scale > 1 {
-                                            let proposed = CGSize(
-                                                width:  lastOffset.width  + value.translation.width,
-                                                height: lastOffset.height + value.translation.height
-                                            )
-                                            let clamped = clampedOffset(proposed, in: geo.size, scale: scale)
-                                            offset     = clamped
-                                            lastOffset = clamped
-                                        } else {
-                                            // Dismiss if dragged down far enough
-                                            if value.translation.height > 120 {
-                                                onDismiss()
-                                            } else {
-                                                withAnimation(.spring(response: 0.3)) {
-                                                    offset = .zero
-                                                }
-                                            }
-                                        }
-                                    }
-                            )
-                        )
-                        .onTapGesture(count: 2) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                if scale > 1 {
-                                    scale      = 1
-                                    lastScale  = 1
-                                    offset     = .zero
-                                    lastOffset = .zero
-                                } else {
-                                    scale     = 2.5
-                                    lastScale = 2.5
-                                }
-                            }
-                        }
-                }
-
-                closeButton
-            }
-        }
-        .ignoresSafeArea()
+    init(image: Image?, onDismiss: @escaping () -> Void) {
+        self.imagePaths = []
+        self.onDismiss = onDismiss
+        self._currentIndex = State(initialValue: 0)
+        self.preloadedImage = image
     }
 
-    // MARK: - Clamp offset so image never pans beyond its zoomed edges
-    private func clampedOffset(_ proposed: CGSize, in size: CGSize, scale: CGFloat) -> CGSize {
-        let maxX = max(0, (size.width  * (scale - 1)) / 2)
-        let maxY = max(0, (size.height * (scale - 1)) / 2)
-        return CGSize(
-            width:  min(max(proposed.width,  -maxX), maxX),
-            height: min(max(proposed.height, -maxY), maxY)
-        )
+    init(imagePaths: [String], initialIndex: Int, onDismiss: @escaping () -> Void) {
+        self.imagePaths = imagePaths
+        self.onDismiss = onDismiss
+        self._currentIndex = State(initialValue: initialIndex)
+        self.preloadedImage = nil
+    }
+
+    // Legacy single-image path (already-decoded Image, no file to key a reload off of).
+    private let preloadedImage: Image?
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if let preloadedImage {
+                FullScreenImagePage(image: preloadedImage, onDismiss: onDismiss)
+            } else {
+                TabView(selection: $currentIndex) {
+                    ForEach(imagePaths.indices, id: \.self) { index in
+                        FullScreenImagePage(imagePath: imagePaths[index], onDismiss: onDismiss)
+                            .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+            }
+
+            closeButton
+        }
     }
 
     // MARK: - Close Button
@@ -136,6 +68,132 @@ struct FullScreenImageView: View {
             }
             Spacer()
         }
+    }
+}
+
+// MARK: - Single zoomable/pannable/dismissable page
+private struct FullScreenImagePage: View {
+
+    private let imagePath: String?
+    private let preloadedImage: Image?
+    let onDismiss: () -> Void
+
+    @State private var loadedImage: Image?
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    init(image: Image, onDismiss: @escaping () -> Void) {
+        self.imagePath = nil
+        self.preloadedImage = image
+        self.onDismiss = onDismiss
+    }
+
+    init(imagePath: String, onDismiss: @escaping () -> Void) {
+        self.imagePath = imagePath
+        self.preloadedImage = nil
+        self.onDismiss = onDismiss
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            Group {
+                if let image = preloadedImage ?? loadedImage {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Color.clear
+                }
+            }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .scaleEffect(scale)
+                .offset(offset)
+                .gesture(magnificationGesture(in: geo.size))
+                // Pan/dismiss drag is only attached when zoomed. At scale 1 no
+                // DragGesture sits in the arena at all, so TabView's own swipe
+                // recognizer is free to win horizontal drags for paging; vertical
+                // dismiss-by-drag is intentionally dropped in favor of the close
+                // button at scale 1 to avoid re-introducing the conflict.
+                .gesture(scale > 1 ? AnyGesture(panGesture(in: geo.size)) : nil)
+                .onTapGesture(count: 2) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        if scale > 1 {
+                            scale      = 1
+                            lastScale  = 1
+                            offset     = .zero
+                            lastOffset = .zero
+                        } else {
+                            scale     = 2.5
+                            lastScale = 2.5
+                        }
+                    }
+                }
+                .task(id: imagePath) {
+                    guard let imagePath else { return }
+                    let path = imagePath
+                    let image = await Task.detached(priority: .userInitiated) {
+                        PhotoFileManager.shared.loadImage(from: path)
+                    }.value
+                    loadedImage = image
+                }
+        }
+    }
+
+    private func magnificationGesture(in size: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let proposed = lastScale * value
+                scale = min(max(proposed, 1), 4)
+            }
+            .onEnded { _ in
+                lastScale = scale
+                if scale <= 1 {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        scale      = 1
+                        lastScale  = 1
+                        offset     = .zero
+                        lastOffset = .zero
+                    }
+                } else {
+                    let clamped = clampedOffset(offset, in: size, scale: scale)
+                    withAnimation(.spring(response: 0.25)) {
+                        offset     = clamped
+                        lastOffset = clamped
+                    }
+                }
+            }
+    }
+
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                let proposed = CGSize(
+                    width:  lastOffset.width  + value.translation.width,
+                    height: lastOffset.height + value.translation.height
+                )
+                offset = clampedOffset(proposed, in: size, scale: scale)
+            }
+            .onEnded { value in
+                let proposed = CGSize(
+                    width:  lastOffset.width  + value.translation.width,
+                    height: lastOffset.height + value.translation.height
+                )
+                let clamped = clampedOffset(proposed, in: size, scale: scale)
+                offset     = clamped
+                lastOffset = clamped
+            }
+    }
+
+    // MARK: - Clamp offset so image never pans beyond its zoomed edges
+    private func clampedOffset(_ proposed: CGSize, in size: CGSize, scale: CGFloat) -> CGSize {
+        let maxX = max(0, (size.width  * (scale - 1)) / 2)
+        let maxY = max(0, (size.height * (scale - 1)) / 2)
+        return CGSize(
+            width:  min(max(proposed.width,  -maxX), maxX),
+            height: min(max(proposed.height, -maxY), maxY)
+        )
     }
 }
 

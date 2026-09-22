@@ -7,12 +7,12 @@
 //  Pushed via Router like UserHistoryView. This is the single entry point for
 //  face-user management — Settings now exposes only the session time limit.
 //
-//  Delete follows the same edit-mode flow as PillScanDetailGridScreen rather
-//  than select-then-trash: the trash icon ENTERS edit mode, the header swaps
-//  to a select-all control, checkboxes appear on each row, and Cancel/Delete
-//  are pill buttons in a bottom bar with one confirmation for the whole
-//  selection. Tapping a row does nothing outside edit mode, so a stray tap
-//  can no longer arm a destructive action.
+//  Delete follows the same edit-mode flow as PillScanDetailGridScreen: a
+//  long-press on a row ENTERS edit mode and selects that row, the header
+//  swaps to a select-all control, and Cancel/Delete are pill buttons in a
+//  bottom bar with one confirmation for the whole selection. A plain tap on
+//  a row does nothing outside edit mode, so a stray tap can't arm a
+//  destructive action.
 //
 
 import SwiftUI
@@ -121,19 +121,6 @@ struct QuickAccessUsersView: View {
     private var headerActions: some View {
         if isEditing {
             editModeHeader
-        } else if !rows.isEmpty {
-            Button {
-                withAnimation {
-                    isEditing = true
-                    selectedIds.removeAll()
-                }
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 20))
-                    .foregroundColor(appColors.primary)
-            }
-            .padding(.trailing, 16)
-            .transition(.opacity)
         }
     }
 
@@ -307,10 +294,18 @@ struct QuickAccessUsersView: View {
         .animation(.easeInOut(duration: 0.15), value: selectedIds.contains(row.id))
         .contentShape(Rectangle())
         .onTapGesture {
-            // Outside edit mode a row tap is inert — nothing here is worth
-            // arming by accident.
+            // Outside edit mode a row tap is inert — long-press is what
+            // arms selection now, so a stray tap still can't trigger delete.
             if isEditing {
                 toggleSelection(row.id)
+            }
+        }
+        .onLongPressGesture {
+            if !isEditing {
+                withAnimation {
+                    isEditing = true
+                    selectedIds = [row.id]
+                }
             }
         }
     }
@@ -323,13 +318,28 @@ struct QuickAccessUsersView: View {
         } else {
             selectedIds.insert(id)
         }
+        // Nothing left selected means nothing left to delete — drop back to
+        // the plain list instead of stranding the header/bottom bar in edit
+        // mode with a permanently disabled Delete button.
+        exitEditModeIfEmpty()
     }
 
     private func toggleSelectAll() {
+        // No exitEditModeIfEmpty() here — deselect-all via this control is a
+        // deliberate bulk toggle, not the user unchecking their way out row by
+        // row, so it shouldn't kick them out of edit mode.
         if areAllSelected {
             selectedIds.removeAll()
         } else {
             selectedIds = Set(rows.map(\.id))
+        }
+    }
+
+    private func exitEditModeIfEmpty() {
+        if isEditing && selectedIds.isEmpty {
+            withAnimation {
+                isEditing = false
+            }
         }
     }
 

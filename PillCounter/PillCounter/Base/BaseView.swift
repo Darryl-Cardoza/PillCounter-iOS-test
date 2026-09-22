@@ -48,8 +48,8 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
     // MARK: - STATE
     @State private var keyboardHeight: CGFloat = 0
     @State private var animatePulse = false
-    
-    
+
+
 
 
     // MARK: - MAIN INIT
@@ -120,17 +120,10 @@ struct BaseView<TopContent: View, BottomContent: View, HeaderActions: View>: Vie
                         .zIndex(100)
                 }
             }
-            
         }
-        
+
         .background(backgroundColor ?? appColors.secondaryBackground)
         .ignoresSafeArea(edges: .bottom)
-        .ignoresSafeArea(
-            UIDevice.current.userInterfaceIdiom == .phone
-            ? .all
-            : [],
-            edges: [.leading, .trailing, .bottom]
-        )
         .environment(\.dynamicTypeSize, .medium)
     }
 }
@@ -235,6 +228,7 @@ extension BaseView {
                         backButton
                         Spacer()
                     }
+                    .frame(height: 52)
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
@@ -426,11 +420,7 @@ struct PMSConnectionButtonView: View {
 
     // MARK: - Computed
     private var statusText: String {
-        switch pmsConnectionState {
-        case .connected:               return L10n.PMS.connected
-        case .disconnected, .notAvailable: return L10n.PMS.disconnected
-        case .connecting:              return L10n.PMS.connecting
-        }
+        L10n.PMS.badgeLabel
     }
 
     private var statusColor: Color {

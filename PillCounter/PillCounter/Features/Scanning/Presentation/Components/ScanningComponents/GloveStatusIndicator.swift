@@ -22,7 +22,7 @@ struct GloveStatusIndicator: View {
     var body: some View {
         HStack(spacing: 8) {
             if showLabel {
-                Text("Gloves Detected")
+                Text(L10n.PillScan.glovesDetected)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)

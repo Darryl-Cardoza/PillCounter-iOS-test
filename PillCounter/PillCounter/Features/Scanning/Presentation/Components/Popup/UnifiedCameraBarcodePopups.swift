@@ -12,8 +12,8 @@ extension UnifiedCameraView {
 
     var hazardousTrayPopup: some View {
         ConfirmationDialogue(
-            title: "\(pillScanViewModel.pendingHazardousTrayColor) Tray Detected",
-            message: "Mark the \(pillScanViewModel.pendingHazardousTrayColor) tray as the hazardous tray? It will then be required for all hazardous drugs.",
+            title: L10n.BarcodeScan.hazardousTrayDetectedTitle(pillScanViewModel.pendingHazardousTrayColor),
+            message: L10n.BarcodeScan.markHazardousTrayMessage(pillScanViewModel.pendingHazardousTrayColor),
             cancelButtonText: L10n.Common.no,
             confirmButtonText: L10n.Common.yes,
             onCancel: {
@@ -27,8 +27,8 @@ extension UnifiedCameraView {
 
     var hazardousTraySubstitutePopup: some View {
         ConfirmationDialogue(
-            title: "\(pillScanViewModel.pendingHazardousTrayColor) Tray Detected",
-            message: "This \(pillScanViewModel.pendingHazardousTrayColor) tray doesn't match the saved hazardous tray. Substitute the hazardous tray with the \(pillScanViewModel.pendingHazardousTrayColor) tray?",
+            title: L10n.BarcodeScan.hazardousTrayDetectedTitle(pillScanViewModel.pendingHazardousTrayColor),
+            message: L10n.BarcodeScan.substituteHazardousTrayMessage(pillScanViewModel.pendingHazardousTrayColor),
             cancelButtonText: L10n.Common.no,
             confirmButtonText: L10n.BarcodeScan.substitute,
             onCancel: {

@@ -155,8 +155,10 @@ final class DashboardViewModel: ObservableObject {
         filtered(mergedQueueItems)
     }
 
+    // Stat-card filters apply to Today's Queue only — Recent Activity always
+    // shows the unfiltered list.
     var filteredRecentItems: [DashboardQueueItem] {
-        filtered(mergedRecentItems)
+        mergedRecentItems
     }
 
     // MARK: - Filtering

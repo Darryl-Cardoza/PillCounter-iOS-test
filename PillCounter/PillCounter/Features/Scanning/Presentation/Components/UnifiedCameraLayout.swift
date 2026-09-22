@@ -197,7 +197,11 @@ struct UnifiedCameraLayout: View {
             // Toasts are shown via the global ToastManager (see PillScanViewModel
             // .showToastMessage). No local toast here to avoid duplicate toasts.
         }
-        .ignoresSafeArea()
+        // Camera preview / overlays each ignore safe area on their own layer above;
+        // this outer ignore is only .top/.bottom so the header row (back button,
+        // instruction, glove indicator) keeps leading/trailing safe area and isn't
+        // hidden behind the landscape notch.
+        .ignoresSafeArea(edges: [.top, .bottom])
         // Any touch on the screen counts as activity — reset the idle clock without
         // consuming the touch, so buttons/gestures underneath still work normally.
         .simultaneousGesture(

@@ -14,15 +14,18 @@ struct UserSettingsView: View {
     // source of truth for this screen.
     @StateObject private var settingsViewModel = SettingsViewModel()
 
-    // Temporary state: the save-history option the user *wants* to switch to.
-    @State private var pendingOption: SaveHistoryOption? = nil
-
     // UI State for popups / sub-screens
-    @State private var showConfirmationPopup: Bool = false
     @State private var showClearDataConfirmationPopup: Bool = false
     @State private var showResetHazardousTrayColorPopup: Bool = false
-    @State private var activeSubScreen: SettingsSubScreen? = nil
     @State private var showTimeLimitPicker: Bool = false
+    @State private var showSaveHistoryPicker: Bool = false
+    @State private var showSchedulePicker: Bool = false
+    @State private var showConnectionInfo: Bool = false
+
+    // Accordion: opening a section closes any other open one. Set<> instead of
+    // Optional<> only so tapping the already-open section can collapse to none.
+    // First card starts expanded.
+    @State private var expandedSections: Set<SettingsSection> = [.dispenseControlledDrug]
 
     #if DEBUG
     /// Drives the debug-only face-verification screen. Presented as a cover
@@ -77,17 +80,6 @@ struct UserSettingsView: View {
                 )
             }
         }
-        .overlay {
-            if let screen = activeSubScreen {
-                subScreenView(screen)
-                    .transition(.move(edge: .trailing))
-                    .zIndex(1000)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: activeSubScreen)
-        .customPopup(isPresented: $showConfirmationPopup) {
-            confirmationPopUp
-        }
         .customPopup(isPresented: $showClearDataConfirmationPopup) {
             clearHistoryConfirmatioDialog
         }
@@ -96,6 +88,18 @@ struct UserSettingsView: View {
         }
         .sheet(isPresented: $showTimeLimitPicker) {
             FaceSessionTimeoutPickerView(settingsViewModel: settingsViewModel)
+                .environmentObject(appColors)
+        }
+        .sheet(isPresented: $showSaveHistoryPicker) {
+            SaveHistoryOptionPickerView(settingsViewModel: settingsViewModel)
+                .environmentObject(appColors)
+        }
+        .sheet(isPresented: $showSchedulePicker) {
+            DrugSchedulePickerView(settingsViewModel: settingsViewModel)
+                .environmentObject(appColors)
+        }
+        .sheet(isPresented: $showConnectionInfo) {
+            PMSConnectionInfoView()
                 .environmentObject(appColors)
         }
         .modifier(DebugFaceVerifyCover(isPresented: debugFaceVerifyBinding))
@@ -122,27 +126,6 @@ struct UserSettingsView: View {
         }
     }
 
-    private var confirmationPopUp: some View {
-        ConfirmationDialogue(
-            title: String(format: L10n.Settings.confirmHistoryTitle, pendingOption?.displayText ?? settingsViewModel.saveHistoryOption.displayText),
-            message: L10n.Settings.confirmHistoryMessage,
-            cancelButtonText: L10n.Common.no,
-            confirmButtonText: L10n.Common.yes
-        ) {
-            pendingOption = nil
-            showConfirmationPopup = false
-        } onConfirm: {
-            // Confirm Action: Commit the change
-            if let newOption = pendingOption {
-                settingsViewModel.commitSaveHistoryOption(newOption)
-            }
-            withAnimation(.easeInOut(duration: 0.25)) {
-                activeSubScreen = nil
-            }
-            showConfirmationPopup = false
-        }
-    }
-    
     private var clearHistoryConfirmatioDialog: some View {
         ConfirmationDialogue(
             title: L10n.Settings.clearHistoryTitle,
@@ -158,428 +141,272 @@ struct UserSettingsView: View {
     }
     
     private func userSettingsContent(geometry: GeometryProxy) -> some View {
-        let isLandscape = geometry.size.width > geometry.size.height
-        
-        
         return ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                
-                // MARK: Pill Counting
-                ToggleRowView(
-                    title: L10n.Settings.alwaysAskNotes,
-                    isOn: $settingsViewModel.isPillCountingEnabled,
-                    onColor: appColors.primary,
-                    onToggle: { newValue in
-                        settingsViewModel.setPillCountingEnabled(newValue)
-                    }
-                )
-                
-                Divider().background(appColors.primaryBackground)
-                
-                VStack (spacing: 15){
-                    Text(L10n.Settings.requireDoubleCount)
-                        .foregroundStyle(appColors.text)
-                        .fontWeight(.regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    HStack(spacing: 4) {
-                        ForEach(Array(DrugSchedule.allCases.enumerated()), id: \.element.id) { index, schedule in
-                            Text(schedule.rawValue)
-                                .foregroundColor(
-                                    settingsViewModel.isScheduleSelected(schedule)
-                                    ? appColors.secondary
-                                    : appColors.text.opacity(0.35)
-                                )
-                                .fontWeight(.regular)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal)
-                .contentShape(Rectangle())
-                .opacity(isPmsDisabled ? 0.6 : 1.0)
-                .onTapGesture {
-                    if isPmsDisabled {
-                        showFeatureUnavailableToast()
-                        return
-                    }
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        activeSubScreen = .schedule
-                    }
-                }
-                
-                
-                Divider().background(appColors.primaryBackground)
-                
-                // MARK: Back Count
-                ToggleRowView(
-                    title: L10n.Settings.requireBackCount,
-                    isOn: $settingsViewModel.isBackCountRequired,
-                    onColor: appColors.primary,
-                    isDisabled: isPmsDisabled,
-                    onDisabledTap: { showFeatureUnavailableToast() },
-                    onToggle: { newValue in
-                        settingsViewModel.setBackCountRequired(newValue)
-                    }
-                )
-                
-                Divider().background(appColors.primaryBackground)
-                
-                
-                
-                // MARK: Save History Title
-                VStack (spacing: 15){
-                    Text(L10n.Settings.saveHistory)
-                        .foregroundStyle(appColors.text)
-                        .fontWeight(.regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    
-                    Text(settingsViewModel.saveHistoryOption.displayText)
-                        .foregroundColor(appColors.secondary)
-                        .fontWeight(.regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                }
-                .padding(.horizontal)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        activeSubScreen = .saveHistory
-                    }
-                }
-                
-                
-                Divider().background(appColors.primaryBackground)
-
-                // MARK: Auto Lock Session
-                HStack {
-                    Text(L10n.Settings.autoLockSession)
-                        .foregroundStyle(appColors.text)
-                        .fontWeight(.regular)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    showTimeLimitPicker = true
+            VStack(alignment: .leading, spacing: 16) {
+                ForEach(SettingsSection.allCases) { section in
+                    sectionCard(section)
                 }
 
-                Divider().background(appColors.primaryBackground)
-
-                // MARK: Quick Access Users
-                HStack {
-                    Text(L10n.Menu.quickAccessUsers)
-                        .foregroundStyle(appColors.text)
-                        .fontWeight(.regular)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    router.navigate(to: .authentication(.user(.userSettings(.quickAccessUsers))))
-                }
-
-                Divider().background(appColors.primaryBackground)
-
-//                // Debug-only: opens the face-auth camera screen on demand, so
-//                // recognition can be exercised without waiting for the
-//                // inactivity timer. Compiled out of release builds.
-//                HStack {
-//                    Text("⚙︎ Verify Face (Debug)")
-//                        .foregroundStyle(appColors.text)
-//                        .fontWeight(.regular)
-//                }
-//                .frame(maxWidth: .infinity, alignment: .leading)
-//                .padding(.horizontal)
-//                .contentShape(Rectangle())
-//                .onTapGesture {
-//                    guard FaceSessionManager.shared.hasEnrolledUsers else {
-//                        ToastManager.shared.show(message: "No enrolled users")
-//                        return
-//                    }
-//                    showDebugFaceVerify = true
-//                }
-//
-//                Divider().background(appColors.primaryBackground)
-
-                // Debug-only: locks the session immediately and shows the
-                // session-locked screen. Compiled out of release builds.
-                HStack {
-                    Text(L10n.Settings.lockNowDebug)
-                        .foregroundStyle(appColors.text)
-                        .fontWeight(.regular)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    guard FaceSessionManager.shared.hasEnrolledUsers else {
-                        ToastManager.shared.show(message: "No enrolled users")
-                        return
-                    }
-                    // Nav stack left alone on purpose: the overlay lives at the
-                    // app root and covers this screen, so unlocking lands back
-                    // here — which is exactly the resume-in-place behavior
-                    // worth eyeballing.
-                    FaceSessionManager.shared.lockDueToInactivity()
-                }
-
-                Divider().background(appColors.primaryBackground)
-
-                // MARK: Sound
-                ToggleRowView(
-                    title: L10n.Settings.soundFeedback,
-                    isOn: $settingsViewModel.isSoundEnabled,
-                    onColor: appColors.primary,
-                    onToggle: { newValue in
-                        settingsViewModel.setSoundEnabled(newValue)
-                    }
-                )
-                
-                
-                Divider().background(appColors.primaryBackground)
-                
-                // MARK: Haptic
-                ToggleRowView(
-                    title: L10n.Settings.hapticFeedback,
-                    isOn: $settingsViewModel.isHapticEnabled,
-                    onColor: appColors.primary,
-                    onToggle: { newValue in
-                        settingsViewModel.setHapticEnabled(newValue)
-                    }
-                )
-                
-                Divider().background(appColors.primaryBackground)
-                
-                // MARK: Speech Instruction
-                ToggleRowView(
-                    title: L10n.Settings.voiceInstructions,
-                    isOn: $settingsViewModel.isSpeechEnabled,
-                    onColor: appColors.primary,
-                    onToggle: { newValue in
-                        settingsViewModel.setSpeechEnabled(newValue)
-                    }
-                )
-                
-                Divider().background(appColors.primaryBackground)
-                
-                // MARK: HAZARDOUS DRUG
-                ToggleRowView(
-                    title: L10n.Settings.hazardousPillSetting,
-                    isOn: $settingsViewModel.isHazardousDrugSettingEnabled,
-                    onColor: appColors.primary,
-                    isDisabled: isPmsDisabled,
-                    onDisabledTap: { showFeatureUnavailableToast() },
-                    onToggle: { newValue in
-                        settingsViewModel.setHazardousDrugSetting(newValue)
-                    }
-                )
-
-                Divider().background(appColors.primaryBackground)
-
-                // MARK: Hazardous Tray Color
-                VStack(spacing: 15) {
-                    Text(L10n.Settings.hazardousTrayColor)
-                        .foregroundStyle(appColors.text)
-                        .fontWeight(.regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Text(settingsViewModel.hazardousTrayColor ?? "—")
-                        .foregroundColor(appColors.secondary)
-                        .fontWeight(.regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal)
-                .contentShape(Rectangle())
-                .opacity(isPmsDisabled ? 0.6 : 1.0)
-                .onTapGesture {
-                    if isPmsDisabled {
-                        showFeatureUnavailableToast()
-                        return
-                    }
-                    // Only offer to reset when a hazardous tray color is set.
-                    if settingsViewModel.hazardousTrayColor != nil {
-                        showResetHazardousTrayColorPopup = true
-                    }
-                }
-
-                if AppStorageManager.shared.useStaticPMSConnection {
-                    Divider().background(appColors.primaryBackground)
-
-                    // MARK: PMS Connection Info (read-only diagnostics)
-                    HStack {
-                        Text(L10n.Settings.connectionInfo)
-                            .foregroundStyle(appColors.text)
-                            .padding(.horizontal)
-                            .fontWeight(.regular)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .opacity(isPmsDisabled ? 0.6 : 1.0)
-                    .onTapGesture {
-                        if isPmsDisabled {
-                            showFeatureUnavailableToast()
-                            return
-                        }
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            activeSubScreen = .connectionInfo
-                        }
-                    }
-                }
-
-                Divider().background(appColors.primaryBackground)
-
-                HStack{
-                    Text(L10n.Settings.clearLocalData)
-                        .foregroundStyle(appColors.text)
-                        .padding(.horizontal)
-                        .fontWeight(Font.Weight.regular)
-                    
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    showClearDataConfirmationPopup = true
-                }
-                
-                Divider().background(appColors.primaryBackground)
-                
                 Spacer(minLength: 40)
-                
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 64)
-        .padding(.horizontal,10)
+        .padding(.horizontal, 16)
         .background(appColors.secondaryBackground)
     }
-    
+
+    private func sectionCard(_ section: SettingsSection) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(section)
+
+            if expandedSections.contains(section) {
+                VStack(alignment: .leading, spacing: 18) {
+                    sectionContent(section)
+                }
+                .font(.system(size: 14))
+                .padding(.horizontal, 24)
+                .padding(.top, 4)
+                .padding(.bottom, 18)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(appColors.primaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(appColors.text.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: appColors.text.opacity(0.06), radius: 6, x: 0, y: 3)
+    }
+
+    private func sectionHeader(_ section: SettingsSection) -> some View {
+        HStack(spacing: 10) {
+            Text(section.title)
+                .foregroundStyle(appColors.text)
+                .font(.system(size: 16, weight: .bold))
+
+            Spacer()
+
+            Image(systemName: expandedSections.contains(section) ? "chevron.up" : "chevron.down")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(appColors.primary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if expandedSections.contains(section) {
+                    expandedSections.remove(section)
+                } else {
+                    expandedSections = [section]
+                }
+            }
+        }
+    }
+
     @ViewBuilder
-    private func subScreenView(_ screen: SettingsSubScreen) -> some View {
-        BaseView(
-            topRatio: 1.0,
-            topContent: {
-                switch screen {
-                case .saveHistory:
-                    saveHistoryContent
-                case .schedule:
-                    scheduleContent
-                case .connectionInfo:
-                    PMSConnectionInfoView()
+    private func sectionContent(_ section: SettingsSection) -> some View {
+        switch section {
+        case .general:
+            generalSectionContent
+        case .dispenseControlledDrug:
+            dispenseControlledDrugSectionContent
+        case .faceDetection:
+            faceDetectionSectionContent
+        case .voiceAndHapticFeedback:
+            voiceAndHapticFeedbackSectionContent
+        case .hazardousPillCounting:
+            hazardousPillCountingSectionContent
+        }
+    }
+
+    @ViewBuilder
+    private var generalSectionContent: some View {
+        // MARK: Pill Counting
+        ToggleRowView(
+            title: L10n.Settings.alwaysAskNotes,
+            isOn: $settingsViewModel.isPillCountingEnabled,
+            onColor: appColors.primary,
+            horizontalPadding: 0,
+            onToggle: { newValue in
+                settingsViewModel.setPillCountingEnabled(newValue)
+            }
+        )
+
+        settingsDivider
+
+        // MARK: Save History
+        SettingsDisclosureRow(
+            title: L10n.Settings.saveHistory,
+            subtitle: settingsViewModel.saveHistoryOption.displayText
+        ) {
+            showSaveHistoryPicker = true
+        }
+
+        settingsDivider
+
+        SettingsDisclosureRow(title: L10n.Settings.clearLocalData) {
+            showClearDataConfirmationPopup = true
+        }
+
+        if AppStorageManager.shared.useStaticPMSConnection {
+            settingsDivider
+
+            // MARK: PMS Configuration (read-only diagnostics)
+            SettingsDisclosureRow(
+                title: L10n.Settings.connectionInfo,
+                isDisabled: isPmsDisabled
+            ) {
+                if isPmsDisabled {
+                    showFeatureUnavailableToast()
+                    return
                 }
-            },
-            bottomContent: { EmptyView() },
-            headerActions: { EmptyView() },
-            showBackButton: true,
-            showHamburgerMenu: false,
-            title: screenTitle(screen),
-            backgroundColor: appColors.primaryBackground,
-            onBack: {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    activeSubScreen = nil
+                showConnectionInfo = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var dispenseControlledDrugSectionContent: some View {
+        HStack(spacing: 4) {
+            Text(L10n.Settings.requireDoubleCount)
+                .foregroundStyle(appColors.text)
+                .font(.system(size: 14, weight: .regular))
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 4) {
+                ForEach(DrugSchedule.allCases) { schedule in
+                    Text(schedule.rawValue)
+                        .foregroundColor(
+                            settingsViewModel.isScheduleSelected(schedule)
+                            ? appColors.secondary
+                            : appColors.text.opacity(0.35)
+                        )
+                        .font(.system(size: 13, weight: .regular))
                 }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .opacity(isPmsDisabled ? 0.6 : 1.0)
+        .onTapGesture {
+            if isPmsDisabled {
+                showFeatureUnavailableToast()
+                return
+            }
+            showSchedulePicker = true
+        }
+
+        settingsDivider
+
+        // MARK: Back Count
+        ToggleRowView(
+            title: L10n.Settings.requireBackCount,
+            isOn: $settingsViewModel.isBackCountRequired,
+            onColor: appColors.primary,
+            horizontalPadding: 0,
+            isDisabled: isPmsDisabled,
+            onDisabledTap: { showFeatureUnavailableToast() },
+            onToggle: { newValue in
+                settingsViewModel.setBackCountRequired(newValue)
             }
         )
     }
-    
-    private func screenTitle(_ screen: SettingsSubScreen) -> String {
-        switch screen {
-        case .saveHistory: return L10n.Settings.saveHistoryScreenTitle
-        case .schedule: return L10n.Settings.scheduleScreenTitle
-        case .connectionInfo: return L10n.Settings.connectionInfoScreenTitle
+
+    @ViewBuilder
+    private var faceDetectionSectionContent: some View {
+        // MARK: Auto Lock Session
+        SettingsDisclosureRow(title: L10n.Settings.autoLockSession) {
+            showTimeLimitPicker = true
+        }
+
+        settingsDivider
+
+        // MARK: Quick Access Users
+        SettingsDisclosureRow(title: L10n.Menu.quickAccessUsers) {
+            router.navigate(to: .authentication(.user(.userSettings(.quickAccessUsers))))
+        }
+    }
+
+    @ViewBuilder
+    private var voiceAndHapticFeedbackSectionContent: some View {
+        // MARK: Speech Instruction
+        ToggleRowView(
+            title: L10n.Settings.voiceInstructions,
+            isOn: $settingsViewModel.isSpeechEnabled,
+            onColor: appColors.primary,
+            horizontalPadding: 0,
+            onToggle: { newValue in
+                settingsViewModel.setSpeechEnabled(newValue)
+            }
+        )
+
+        settingsDivider
+
+        // MARK: Sound
+        ToggleRowView(
+            title: L10n.Settings.soundFeedback,
+            isOn: $settingsViewModel.isSoundEnabled,
+            onColor: appColors.primary,
+            horizontalPadding: 0,
+            onToggle: { newValue in
+                settingsViewModel.setSoundEnabled(newValue)
+            }
+        )
+
+        settingsDivider
+
+        // MARK: Haptic
+        ToggleRowView(
+            title: L10n.Settings.hapticFeedback,
+            isOn: $settingsViewModel.isHapticEnabled,
+            onColor: appColors.primary,
+            horizontalPadding: 0,
+            onToggle: { newValue in
+                settingsViewModel.setHapticEnabled(newValue)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var hazardousPillCountingSectionContent: some View {
+        // MARK: HAZARDOUS DRUG
+        ToggleRowView(
+            title: L10n.Settings.hazardousPillSetting,
+            isOn: $settingsViewModel.isHazardousDrugSettingEnabled,
+            onColor: appColors.primary,
+            horizontalPadding: 0,
+            isDisabled: isPmsDisabled,
+            onDisabledTap: { showFeatureUnavailableToast() },
+            onToggle: { newValue in
+                settingsViewModel.setHazardousDrugSetting(newValue)
+            }
+        )
+
+        settingsDivider
+
+        // MARK: Hazardous Tray Color
+        SettingsDisclosureRow(
+            title: L10n.Settings.hazardousTrayColor,
+            subtitle: settingsViewModel.hazardousTrayColor ?? "—",
+            isDisabled: isPmsDisabled
+        ) {
+            if isPmsDisabled {
+                showFeatureUnavailableToast()
+                return
+            }
+            // Only offer to reset when a hazardous tray color is set.
+            if settingsViewModel.hazardousTrayColor != nil {
+                showResetHazardousTrayColorPopup = true
+            }
         }
     }
     
-    private var saveHistoryContent: some View {
-        VStack(alignment: .leading, spacing: 25) {
-            VStack(alignment: .leading, spacing: 45) {
-                ForEach(SaveHistoryOption.allCases) { option in
-                    Button {
-                        pendingOption = option
-                        showConfirmationPopup = true
-                    } label: {
-                        HStack (spacing:8){
-                            Circle()
-                                .stroke(
-                                    option == settingsViewModel.saveHistoryOption
-                                    ? appColors.primary
-                                    : appColors.text,
-                                    lineWidth: 2
-                                )
-                                .frame(width: 20, height: 20)
-                                .overlay {
-                                    if option == settingsViewModel.saveHistoryOption {
-                                        Circle()
-                                            .fill(appColors.primary)
-                                            .frame(width: 10, height: 10)
-                                    }
-                                }
-                            
-                            Text(option.displayText)
-                                .foregroundColor(appColors.text)
-                            
-                            Spacer()
-                        }
-                    }
-                }
-            }
-            .padding(.leading, 30)
-            
-            Spacer()
-        }
-        .padding(.top, SafeAreaInsets.top + 60)
-        .background(appColors.primaryBackground)
-    }
-    
-    private var scheduleContent: some View {
-        VStack(alignment: .leading, spacing: 25) {
-            
-            VStack(alignment: .leading, spacing: 45) {
-                ForEach(DrugSchedule.allCases) { schedule in
-                    
-                    Button {
-                        settingsViewModel.toggleSchedule(schedule)
-                    } label: {
-                        HStack(spacing: 8) {
-                            RoundedRectangle(cornerRadius: 5)
-                                .stroke(
-                                    settingsViewModel.isScheduleSelected(schedule)
-                                    ? appColors.primary
-                                    : appColors.text.opacity(0.6),
-                                    lineWidth: 2
-                                )
-                                .frame(width: 22, height: 22)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 5)
-                                        .fill(
-                                            settingsViewModel.isScheduleSelected(schedule)
-                                            ? appColors.primary
-                                            : Color.clear
-                                        )
-                                )
-                                .overlay {
-                                    if settingsViewModel.isScheduleSelected(schedule) {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                            
-                            Text(schedule.rawValue)
-                                .foregroundColor(appColors.text)
-                            
-                            Spacer()
-                        }
-                    }
-                }
-            }
-            .padding(.leading, 30)
-            
-            Spacer()
-        }
-        .padding(.top, SafeAreaInsets.top + 60)
-        .background(appColors.primaryBackground)
+    private var settingsDivider: some View {
+        Divider().background(appColors.text.opacity(0.12))
     }
 
 }
@@ -617,7 +444,41 @@ private func alignmentFor(_ index: Int) -> Alignment {
     }
 }
 
+/// Tappable row with a bold title and an optional secondary subtitle —
+/// the disclosure-style pattern used for rows that open a picker/sub-screen.
+struct SettingsDisclosureRow: View {
+
+    @EnvironmentObject private var appColors: AppColors
+
+    let title: String
+    var subtitle: String? = nil
+    var isDisabled: Bool = false
+    let onTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .foregroundStyle(appColors.text)
+                .font(.system(size: 14, weight: .regular))
+
+            Spacer(minLength: 8)
+
+            if let subtitle {
+                Text(subtitle)
+                    .foregroundColor(appColors.secondary)
+                    .font(.system(size: 13, weight: .regular))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .opacity(isDisabled ? 0.6 : 1.0)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+    }
+}
+
 struct ToggleRowView: View {
+
+    @EnvironmentObject private var appColors: AppColors
 
     let title: String
     @Binding var isOn: Bool
@@ -634,7 +495,7 @@ struct ToggleRowView: View {
         HStack {
             Text(title)
                 .fontWeight(Font.Weight.regular)
-                .foregroundColor(AppColors.shared.text)
+                .foregroundColor(appColors.text)
             Spacer()
             PillCountingToggleButton(
                 isOn: Binding(

@@ -50,6 +50,8 @@ struct CollapsibleBox<Content: View>: View {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(appColors.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
 
                 Spacer()
 

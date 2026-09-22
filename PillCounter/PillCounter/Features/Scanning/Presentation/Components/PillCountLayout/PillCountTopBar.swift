@@ -83,8 +83,17 @@ struct PillCountTopBar: View {
                 }
             }
 
-            formStrengthBucketRow(equalWidth: true)
-                .frame(maxWidth: .infinity)
+            HStack(alignment: .center, spacing: 0) {
+                drugThumbnail
+                    .frame(maxWidth: .infinity)
+                infoColumn(title: L10n.BarcodeScan.strength, value: strength)
+                    .frame(maxWidth: .infinity)
+                infoColumn(title: L10n.BarcodeScan.bucket, value: bucket)
+                    .frame(maxWidth: .infinity)
+            }
+            // Leading inset matches the back button's width + spacing above,
+            // so the thumbnail lines up with the NDC/drug-name text, not the button.
+            .padding(.leading, 24 + 10)
         }
         .padding(10)
     }
@@ -117,7 +126,7 @@ struct PillCountTopBar: View {
 
     private var ndcDrugColumn: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("NDC \(ndc)")
+            Text(L10n.BarcodeScan.ndcLabel(ndc))
                 .font(.system(size: isIpad ? 14 : 11, weight: .regular))
                 .foregroundStyle(appColors.text.opacity(0.85))
             Text(drugName)

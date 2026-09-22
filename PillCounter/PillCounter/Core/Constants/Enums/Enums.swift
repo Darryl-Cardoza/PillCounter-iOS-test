@@ -63,13 +63,13 @@ public enum ScanType: Codable, Hashable {
     var instructionText: String {
         switch self {
         case .barcode:
-            return L10n.Controlled.scanBarcode
+            return L10n.Controlled.scan
         case .stockCount:
-            return L10n.Controlled.scanStockCountBarcode
+            return L10n.Controlled.scan
         case .rx_label:
             return L10n.Controlled.scanRxLabelBarcode
         case .resumeCount:
-            return L10n.Controlled.scanBarcode
+            return L10n.Controlled.scan
         }
     }
 }
@@ -99,6 +99,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
     #if LOAD_TEST
     case LoadTestData
     #endif
+    case LockNow
     case Logout
 
     public var id: String { title }
@@ -116,6 +117,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
             #if LOAD_TEST
             case .LoadTestData: return "Load Test Data"
             #endif
+            case .LockNow: return L10n.Settings.lockNow
             case .Logout: return L10n.Menu.logout
         }
 
@@ -132,6 +134,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
         #if LOAD_TEST
         case .LoadTestData: return "settings_icon"
         #endif
+        case .LockNow: return "icon_session_lock"
         case .Logout: return "logout_icon"
         }
     }
@@ -404,10 +407,24 @@ enum DrugSchedule: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum SettingsSubScreen {
-    case saveHistory
-    case schedule
-    case connectionInfo
+enum SettingsSection: CaseIterable, Identifiable {
+    case dispenseControlledDrug
+    case faceDetection
+    case voiceAndHapticFeedback
+    case hazardousPillCounting
+    case general
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .general: return L10n.Settings.sectionGeneral
+        case .dispenseControlledDrug: return L10n.Settings.sectionDispenseControlledDrug
+        case .faceDetection: return L10n.Settings.sectionFaceDetection
+        case .voiceAndHapticFeedback: return L10n.Settings.sectionVoiceHapticFeedback
+        case .hazardousPillCounting: return L10n.Settings.sectionHazardousPillCounting
+        }
+    }
 }
 
 /// Session-lock idle timeout — how long the app can sit untouched before the

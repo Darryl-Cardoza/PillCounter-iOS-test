@@ -136,6 +136,11 @@ struct UnifiedCameraView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.isLandscape) var isLandscape
 
+    // Identifies this specific view instance so onDisappear can tell whether it's
+    // still the active screen before resetting the shared pillScanViewModel — see
+    // PillScanViewModel.activeCameraSessionToken.
+    @State private var sessionToken = UUID()
+
     var body: some View {
         rootWithAllPopups
     }
@@ -750,7 +755,7 @@ struct UnifiedCameraView: View {
             return controlledStepInstruction
         }
         if isOpenPillScanMode {
-            return L10n.Controlled.scanNdcToCountPills
+            return L10n.Controlled.scan
         }
         return scanType.instructionText
     }
@@ -862,6 +867,7 @@ extension UnifiedCameraView {
     }
 
     func onAppear() {
+        pillScanViewModel.activeCameraSessionToken = sessionToken
         pillScanViewModel.showRxFlowPopup = false
         pillScanViewModel.showRxOnHoldPopup = false
         pillScanViewModel.showRxInProgressPopup = false
@@ -971,6 +977,12 @@ extension UnifiedCameraView {
         cameraService.disableBottleRescanListening()
         cameraService.isTrayColorDetectionEnabled = false
         cameraService.stop()
+
+        // A rapid back+reopen can fire this AFTER the next screen's onAppear
+        // already claimed the shared view model — don't let a stale disappear
+        // wipe state the new screen just set up.
+        guard pillScanViewModel.activeCameraSessionToken == sessionToken else { return }
+
         pillScanViewModel.showRxFlowPopup = false
         pillScanViewModel.showRxOnHoldPopup = false
         pillScanViewModel.showRxInProgressPopup = false
@@ -1155,6 +1167,7 @@ extension UnifiedCameraView {
             }
             await MainActor.run {
                 pillScanViewModel.getControlledStep(pillCountTxn: pillScanViewModel.currentTransaction)
+                hasInitializedStep = true
                 pillScanViewModel.addCurrentOpenPillCount = 0
                 pillScanViewModel.stageFirstBottleIfNeeded(rawBarcode: scannedRawValue)
                 if pillScanViewModel.currentControlledStep == .vial {
@@ -1507,7 +1520,11 @@ extension UnifiedCameraView {
                 substituteNdc: txn?.substitueDrug?.ndc ?? "",
                 workflowStep: pillScanViewModel.currentControlledStep.rawValue,
                 count: cameraService.stableCount,
-                targetCount: txn?.target_count,
+                // Mirror PillScanDetailGridScreen's countView: containerInitiate has no
+                // target (open-ended), containerPending uses the remaining-count-adjusted
+                // value, not the raw transaction target.
+                targetCount: pillScanViewModel.currentControlledTargetCount
+                    .flatMap { $0 > 0 ? Int32($0) : nil },
                 timestamp: timestamp,
                 userInitials: currentOperatorName(),
                 geolocation: locationService.locationString,
@@ -2041,11 +2058,16 @@ extension UnifiedCameraView {
         guard isOpenPillScanMode,
               pillScanViewModel.pendingOpenBottleDrugId != nil else { return }
         let loosePills = pillScanViewModel.addCurrentOpenPillCount
-        pillScanViewModel.createOpenedBottleFromPendingScan(
+        let didCreate = pillScanViewModel.createOpenedBottleFromPendingScan(
             existingBatch: stockCountViewModel.currentBatch,
             bucketId: stockCountViewModel.pendingBucketId,
             loosePillCount: loosePills
         )
+        // A 0-pill count is invalid (toast already shown) — stay on the counting
+        // screen so the user can add pills before completing, instead of tearing
+        // down the in-progress open-pill session.
+        guard didCreate else { return }
+
         // The batch may have just been created for real (first count of the session with
         // no prior sealed scan) — make sure stockCountViewModel tracks it from here on.
         if stockCountViewModel.currentBatch == nil {

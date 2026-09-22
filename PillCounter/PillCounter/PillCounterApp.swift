@@ -175,10 +175,6 @@ struct PillCounterApp: App {
                             VStack {
                                 Spacer()
                                 HStack(spacing: 10) {
-                                    Image("icon_app")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 24, height: 24)
                                     Text(toastManager.message)
                                         .font(.subheadline)
                                         .foregroundColor(.white)

@@ -22,7 +22,7 @@ struct PillCountTargetProgressBar: View {
         return min(max(CGFloat(current) / CGFloat(target), 0), 1)
     }
 
-    private var trackHeight: CGFloat { isIpad ? 4 : 10 }
+    var trackHeight: CGFloat = 4
     /// Lower bound so the track never collapses to nothing when steps are crowded.
     private var minTrackWidth: CGFloat { isIpad ? 80 : 60 }
 

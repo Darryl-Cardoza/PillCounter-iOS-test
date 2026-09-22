@@ -239,10 +239,6 @@ struct HamburgerMenuView: View {
             .padding(.bottom, 40)
         }
         .padding(.top, 64)
-        .padding(
-            .horizontal,
-            isLandscape ? SafeAreaInsets.leading : 0
-        )
     }
 
     // MARK: - MENU ROW BUILDER
@@ -616,6 +612,13 @@ struct HamburgerMenuView: View {
 //            router.selectedPillScanningType = .REGULAR
 //            showStockCountPopup = true
 //            selectedStockCountOption = .newBatch
+
+        case .LockNow:
+            guard FaceSessionManager.shared.hasEnrolledUsers else {
+                ToastManager.shared.show(message: L10n.Menu.lockNowNoEnrolledUsers)
+                return
+            }
+            FaceSessionManager.shared.lockDueToInactivity()
 
         case .Logout:
             Task {

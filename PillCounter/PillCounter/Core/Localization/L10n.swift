@@ -160,6 +160,7 @@ enum L10n {
         static let confirmLogoutMessage = NSLocalizedString("menu.confirmLogoutMessage", comment: "")
         static let logoutButton = NSLocalizedString("menu.logoutButton", comment: "")
         static let noLastBatchFound = NSLocalizedString("menu.toast.noLastBatchFound", comment: "")
+        static let lockNowNoEnrolledUsers = NSLocalizedString("menu.toast.lockNowNoEnrolledUsers", comment: "")
         static let featureNotAvailableTitle = NSLocalizedString("menu.featureNotAvailableTitle", comment: "")
         static let featureNotAvailableMessage = NSLocalizedString("menu.featureNotAvailableMessage", comment: "")
         static let quickAccessUsers = NSLocalizedString("menu.quickAccessUsers", comment: "")
@@ -261,6 +262,11 @@ enum L10n {
         static let faceSessionTimeout2m = NSLocalizedString("settings.faceSessionTimeout2m", comment: "")
         static let faceSessionTimeout5m = NSLocalizedString("settings.faceSessionTimeout5m", comment: "")
         static let faceSessionTimeout10m = NSLocalizedString("settings.faceSessionTimeout10m", comment: "")
+        static let sectionGeneral = NSLocalizedString("settings.sectionGeneral", comment: "")
+        static let sectionDispenseControlledDrug = NSLocalizedString("settings.sectionDispenseControlledDrug", comment: "")
+        static let sectionFaceDetection = NSLocalizedString("settings.sectionFaceDetection", comment: "")
+        static let sectionVoiceHapticFeedback = NSLocalizedString("settings.sectionVoiceHapticFeedback", comment: "")
+        static let sectionHazardousPillCounting = NSLocalizedString("settings.sectionHazardousPillCounting", comment: "")
     }
 
     // MARK: - Face Enrollment
@@ -452,6 +458,24 @@ enum L10n {
         static let rxInProgressMessage = NSLocalizedString("barcodeScan.rxInProgressMessage", comment: "")
         static let hazardousNdcDetected = NSLocalizedString("barcodeScan.hazardousNdcDetected", comment: "")
         static let wearGlovesAndProceedWithCaution = NSLocalizedString("barcodeScan.wearGlovesAndProceedWithCaution", comment: "")
+        static func ndcLabel(_ ndc: String) -> String {
+            String(format: NSLocalizedString("barcodeScan.ndcLabelFormat", comment: ""), ndc)
+        }
+        static func wrongHazardousTrayToast(_ storedTrayName: String) -> String {
+            String(format: NSLocalizedString("barcodeScan.wrongHazardousTrayToastFormat", comment: ""), storedTrayName)
+        }
+        static func nonHazardousDrugOnHazardousTrayToast(_ trayName: String) -> String {
+            String(format: NSLocalizedString("barcodeScan.nonHazardousDrugOnHazardousTrayToastFormat", comment: ""), trayName)
+        }
+        static func hazardousTrayDetectedTitle(_ trayName: String) -> String {
+            String(format: NSLocalizedString("barcodeScan.hazardousTrayDetectedTitleFormat", comment: ""), trayName)
+        }
+        static func markHazardousTrayMessage(_ trayName: String) -> String {
+            String(format: NSLocalizedString("barcodeScan.markHazardousTrayMessageFormat", comment: ""), trayName)
+        }
+        static func substituteHazardousTrayMessage(_ trayName: String) -> String {
+            String(format: NSLocalizedString("barcodeScan.substituteHazardousTrayMessageFormat", comment: ""), trayName, trayName)
+        }
     }
 
     // MARK: - Generic Equivalent Popup
@@ -515,6 +539,10 @@ enum L10n {
         static let deleteScans = NSLocalizedString("pillScan.deleteScans", comment: "")
         static let deleteScansMessage = NSLocalizedString("pillScan.deleteScansMessage", comment: "")
         static let viewAllCounts = NSLocalizedString("pillScan.viewAllCounts", comment: "")
+        static let glovesDetected = NSLocalizedString("pillScan.glovesDetected", comment: "")
+        static let dispenseQueue = NSLocalizedString("pillScan.dispenseQueue", comment: "")
+        static let noItemsInQueue = NSLocalizedString("pillScan.noItemsInQueue", comment: "")
+        static let pendingDispenseCounts = NSLocalizedString("pillScan.pendingDispenseCounts", comment: "")
     }
 
     // MARK: - Location
@@ -636,9 +664,8 @@ enum L10n {
 
     // MARK: - PMS / HL7
     enum PMS {
+        static let badgeLabel = NSLocalizedString("pms.badgeLabel", comment: "")
         static let connected = NSLocalizedString("pms.connected", comment: "")
-        static let disconnected = NSLocalizedString("pms.disconnected", comment: "")
-        static let connecting = NSLocalizedString("pms.connecting", comment: "")
         static func connectedBody(_ name: String) -> String {
             String(format: NSLocalizedString("pms.connectedBody", comment: ""), name)
         }
@@ -680,10 +707,7 @@ enum L10n {
         static let vial = NSLocalizedString("controlled.vial", comment: "")
         static let containerPending = NSLocalizedString("controlled.containerPending", comment: "")
         static let regularTargetReverification = NSLocalizedString("controlled.regularTargetReverification", comment: "")
-        static let scanBarcode = NSLocalizedString("controlled.scanBarcode", comment: "")
-        static let scanStockCountBarcode = NSLocalizedString("controlled.scanStockCountBarcode", comment: "")
         static let scanRxLabelBarcode = NSLocalizedString("controlled.scanRxLabelBarcode", comment: "")
-        static let scanNdcToCountPills = NSLocalizedString("controlled.scanNdcToCountPills", comment: "")
         static let countOpenPills = NSLocalizedString("controlled.countOpenPills", comment: "")
     }
 
@@ -699,6 +723,16 @@ enum L10n {
         static let inventoryRequestBodySingle = NSLocalizedString("hl7Notification.inventoryRequestBodySingle", comment: "")
         static func inventoryRequestBodyMultiple(_ count: Int) -> String {
             String(format: NSLocalizedString("hl7Notification.inventoryRequestBodyMultiple", comment: ""), count)
+        }
+        static let editRxFailedTitle = NSLocalizedString("hl7Notification.editRxFailedTitle", comment: "")
+        static func refillMismatchBody(rxNo: String, refillNo: String) -> String {
+            String(format: NSLocalizedString("hl7Notification.refillMismatchBodyFormat", comment: ""), rxNo, refillNo)
+        }
+        static func noTransactionFoundBody(rxNo: String) -> String {
+            String(format: NSLocalizedString("hl7Notification.noTransactionFoundBodyFormat", comment: ""), rxNo)
+        }
+        static func drugNotFoundBody(rxNo: String, ndc: String) -> String {
+            String(format: NSLocalizedString("hl7Notification.drugNotFoundBodyFormat", comment: ""), rxNo, ndc)
         }
     }
 }

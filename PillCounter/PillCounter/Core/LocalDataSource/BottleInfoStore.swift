@@ -144,30 +144,6 @@ final class BottleInfoStore {
 
     // MARK: - Opened bottle writes (new row every call)
 
-    /// Same identity key as sealed rows: exact match on (stock_txn_id, lot_no, exp_no)
-    /// is the same opened row; any lot OR exp difference is a distinct row. Exposed for
-    /// callers (open-pill scan flow) that need to merge into an existing opened row
-    /// instead of always inserting a new one — `addOpenedBottle` itself keeps its
-    /// existing "always new row" contract for its other call sites.
-    func fetchOpenedRow(stockTxnId: Int64, lotNo: String?, expNo: String?) -> BottleInfoEntity? {
-        let targetKey = SealedLotKey(lotNo: lotNo, expNo: expNo)
-        return fetchByStockTxn(stockTxnId: stockTxnId).first {
-            !$0.isSealed && SealedLotKey(lotNo: $0.lot_no, expNo: $0.exp_no) == targetKey
-        }
-    }
-
-    /// Appends `images` to an existing opened row's `image_paths_json` array (no-op if
-    /// `images` is empty). Used to merge captured snapshots into a row that was already
-    /// merged/updated via `fetchOpenedRow` + `updateOpenedBottleLooseQty`.
-    func appendImages(bottleId: Int64, images: [BottleImageRecord]) {
-        guard !images.isEmpty, let bottle = fetchById(bottleId) else { return }
-        let merged = bottle.images + images
-        bottle.image_paths_json = BottleInfoEntity.encodeImages(merged)
-        bottle.updated_at = nowMs()
-        CoreDataManager.shared.save(context: context)
-        bottleInfosDidChange.send()
-    }
-
     /// Reclaims a zeroed row at the same (stockTxnId, lot, exp) key rather than always
     /// inserting: a lot pruned down to 0/0 (edit) or zeroed out (pill-count correction)
     /// has no remaining sealed-vs-opened identity, so re-scanning it as opened should
@@ -237,15 +213,6 @@ final class BottleInfoStore {
         StoreLogger.debug("🧴 [BottleInfoDAO] CREATED opened row — bottleId: \(entity.bottle_id), stockTxnId: \(stockTxnId), looseQty: \(looseQty)")
         bottleInfosDidChange.send()
         return (entity, true)
-    }
-
-    func updateOpenedBottleLooseQty(bottleId: Int64, looseQty: Int32) {
-        guard let bottle = fetchById(bottleId) else { return }
-        bottle.loose_qty = looseQty
-        bottle.updated_at = nowMs()
-        CoreDataManager.shared.save(context: context)
-        StoreLogger.debug("🧴 [BottleInfoDAO] SET opened loose_qty — bottleId: \(bottleId), looseQty: \(looseQty)")
-        bottleInfosDidChange.send()
     }
 
     // MARK: - Read

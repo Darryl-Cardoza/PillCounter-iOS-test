@@ -325,7 +325,7 @@ private struct VerifyFormBadge: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Text("Form")
+            Text(L10n.BarcodeScan.form)
                 .font(.system(size: isIpad ? 17 : 12, weight: .regular))
                 .foregroundColor(appColors.text)
 

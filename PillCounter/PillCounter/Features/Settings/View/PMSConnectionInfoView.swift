@@ -34,23 +34,28 @@ struct PMSConnectionInfoView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 25) {
-            sectionHeader(L10n.Settings.deviceSectionTitle)
-            infoRow(label: L10n.Settings.deviceIpAddressLabel, value: deviceIPAddress ?? L10n.Settings.ipAddressUnavailable)
-            infoRow(label: L10n.Settings.deviceListenerPortLabel, value: String(listenerPort))
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 25) {
+                sectionHeader(L10n.Settings.deviceSectionTitle)
+                infoRow(label: L10n.Settings.deviceIpAddressLabel, value: deviceIPAddress ?? L10n.Settings.ipAddressUnavailable)
+                infoRow(label: L10n.Settings.deviceListenerPortLabel, value: String(listenerPort))
 
-            Divider().background(appColors.primaryBackground)
-            sectionHeader(L10n.Settings.pmsSectionTitle)
-            infoRow(label: L10n.Settings.pmsIpAddressLabel, value: AppStorageManager.shared.pmsIpAddress ?? L10n.Settings.ipAddressUnavailable)
-            infoRow(label: L10n.Settings.pmsPortLabel, value: AppStorageManager.shared.pmsPort.map(String.init) ?? L10n.Settings.ipAddressUnavailable)
+                Divider().background(appColors.primaryBackground)
+                sectionHeader(L10n.Settings.pmsSectionTitle)
+                infoRow(label: L10n.Settings.pmsIpAddressLabel, value: AppStorageManager.shared.pmsIpAddress ?? L10n.Settings.ipAddressUnavailable)
+                infoRow(label: L10n.Settings.pmsPortLabel, value: AppStorageManager.shared.pmsPort.map(String.init) ?? L10n.Settings.ipAddressUnavailable)
 
-            testConnectionSection
+                testConnectionSection
 
-            Spacer()
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(appColors.primaryBackground)
+            .navigationTitle(L10n.Settings.connectionInfoScreenTitle)
+            .navigationBarTitleDisplayMode(.inline)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, SafeAreaInsets.top + 60)
-        .background(appColors.primaryBackground)
         .onAppear {
             deviceIPAddress = NetworkUtils.getLocalIPAddress()
             testState = .idle

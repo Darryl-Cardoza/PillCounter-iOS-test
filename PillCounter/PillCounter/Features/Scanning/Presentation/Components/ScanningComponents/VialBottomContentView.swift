@@ -26,7 +26,7 @@ struct VialBottomContentView: View {
     // bars, so the row's 70pt spacing (sized for portrait's much wider row) would
     // push "redo"/"done" under those bars. 28pt keeps the column's total height
     // comfortably inside that range.
-    private var layoutSpacing: CGFloat { isIPad ? 100 : (isLandscape ? 28 : 90) }
+    private var layoutSpacing: CGFloat { isIPad ? 100 : (isLandscape ? 22 : 90) }
 
     var body: some View {
         // Portrait: horizontal row at the bottom. Landscape: vertical column

@@ -54,8 +54,10 @@ extension PillScanViewModel {
             print("📦 [BottleRescan] ignored — no active dispense transaction")
             return
         }
-        guard currentControlledStep == .containerInitiate || currentControlledStep == .targetVerification else {
-            print("📦 [BottleRescan] ignored — not on containerInitiate/targetVerification step")
+        guard currentControlledStep == .containerInitiate
+            || currentControlledStep == .targetVerification
+            || currentControlledStep == .containerPending else {
+            print("📦 [BottleRescan] ignored — not on containerInitiate/targetVerification/containerPending step")
             return
         }
 
@@ -71,8 +73,16 @@ extension PillScanViewModel {
             print("📦 [BottleRescan] ignored — drug not found locally for gtin/ndc")
             return
         }
-        guard resolvedDrug.drug_id == txn.drug_id else {
-            print("📦 [BottleRescan] ignored — resolved drug_id \(resolvedDrug.drug_id) does not match txn drug_id \(txn.drug_id)")
+        // Compare by NDC, not drug_id: the same physical drug can exist as more
+        // than one DrugMasterEntity row (separate imports/batches), so a second
+        // bottle of the identical NDC can resolve to a different drug_id than the
+        // transaction's — that must still count as a match. ndcNormalized (not a
+        // plain dash-strip) is used since different import paths also vary the
+        // 10-vs-11-digit segment layout (e.g. "1234-5678-90" vs "01234-567-90").
+        let resolvedNdc = (resolvedDrug.ndc ?? "").ndcNormalized
+        let txnNdc = (txn.drug?.ndc ?? "").ndcNormalized
+        guard !resolvedNdc.isEmpty, resolvedNdc == txnNdc else {
+            print("📦 [BottleRescan] ignored — resolved ndc \(resolvedDrug.ndc ?? "nil") does not match txn ndc \(txn.drug?.ndc ?? "nil")")
             return
         }
 
@@ -85,11 +95,34 @@ extension PillScanViewModel {
             scannedAt: Int64(Date().timeIntervalSince1970 * 1000)
         )
 
-        if let last = bottles.last,
-           last.lotNumber == candidate.lotNumber,
-           last.expirationDate == candidate.expirationDate,
-           last.serialNumber == candidate.serialNumber {
+        // Identity match requires lot, expiry, AND serial all present and equal —
+        // lot+expiry alone can't prove two scans are the same physical bottle
+        // (HL7MessageBuilder's own grouping treats same lot/expiry as potentially
+        // multiple distinct bottles). No serial on either side means we can't tell,
+        // so it's never treated as the same bottle.
+        func isSameBottle(_ a: BottleInfo, _ b: BottleInfo) -> Bool {
+            guard let serial = a.serialNumber, !serial.isEmpty, serial == b.serialNumber,
+                  let lot = a.lotNumber, !lot.isEmpty, lot == b.lotNumber,
+                  let exp = a.expirationDate, !exp.isEmpty, exp == b.expirationDate else {
+                return false
+            }
+            return true
+        }
+
+        if let lastIndex = bottles.indices.last, isSameBottle(candidate, bottles[lastIndex]) {
+            // Immediate re-scan of the bottle currently active — genuinely a no-op scan.
             showToastMessage(text: L10n.BarcodeScan.bottleAlreadyScanned)
+            return
+        }
+        if let earlierIndex = bottles.dropLast().lastIndex(where: { isSameBottle(candidate, $0) }) {
+            // Operator picked back up a bottle scanned earlier in this batch — resume
+            // counting from it instead of blocking. Move it to the end so activeBottle
+            // (bottles.last) points at it again.
+            var reordered = bottles
+            var resumed = reordered.remove(at: earlierIndex)
+            resumed.scannedAt = Int64(Date().timeIntervalSince1970 * 1000)
+            reordered.append(resumed)
+            transactionDAO.setBottleList(txnId: txn.txn_id, reordered)
             return
         }
 

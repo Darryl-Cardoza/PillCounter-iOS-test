@@ -59,7 +59,7 @@ struct DispenseItemRowView: View {
             VStack(alignment: .leading, spacing: 5) {
 
                 HStack{
-                    Text("NDC \(data.ndc)")
+                    Text(L10n.BarcodeScan.ndcLabel(data.ndc))
                         .foregroundColor(appColors.primary)
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1)

@@ -25,6 +25,12 @@ class PillScanViewModel: ObservableObject {
     let decoder: BarcodeAndQRDecoder
     let userRepo: UserRepositoryProtocol
 
+    // Set by UnifiedCameraView.onAppear, checked by onDisappear before resetting
+    // shared state. On rapid back+reopen, NavigationStack can fire the outgoing
+    // screen's onDisappear after the incoming screen's onAppear already ran —
+    // this token stops that stale disappear from wiping the new screen's state.
+    var activeCameraSessionToken: UUID?
+
     @Published var isDrugFound: Bool?
 
     /// Filename of the barcode image saved for the scan currently being confirmed
@@ -570,7 +576,7 @@ class PillScanViewModel: ObservableObject {
                 // commented out below in case we need to restore it.
                 print("🧪 [HazardousTray] Wrong tray: got \(detectedName), expected \(storedName ?? "") — toast only")
                 pendingHazardousTrayColor = detectedName
-                showToastMessage(text: "Wrong tray. Use the saved \(storedName ?? "") tray for hazardous drugs.")
+                showToastMessage(text: L10n.BarcodeScan.wrongHazardousTrayToast(storedName ?? ""))
                 // Only flag NOT-detected if it isn't already confirmed true —
                 // once a txn is marked hazardous-tray-detected it stays true.
                 if currentTransaction?.hazardous_tray_detected != true {
@@ -591,7 +597,7 @@ class PillScanViewModel: ObservableObject {
             if storedName == detectedName, lastToastedTrayColor != detectedName {
                 lastToastedTrayColor = detectedName
                 print("🧪 [HazardousTray] Non-hazardous drug on hazardous tray (\(detectedName)) — warning")
-                showToastMessage(text: "The \(detectedName) tray is reserved for hazardous drugs. Please use a different tray.")
+                showToastMessage(text: L10n.BarcodeScan.nonHazardousDrugOnHazardousTrayToast(detectedName))
             } else if storedName != detectedName {
                 // Reset so returning to the hazardous tray re-toasts.
                 lastToastedTrayColor = detectedName

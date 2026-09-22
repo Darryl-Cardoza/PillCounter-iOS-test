@@ -49,12 +49,15 @@ struct PillScanDetailGridScreen: View {
             }
     }
 
-    private var galleryDetails: [PillScanDetailItem] {
-        details.filter { $0.imagePath != nil }
-    }
-
-    private var galleryImages: [Image] {
-        galleryDetails.compactMap { $0.imagePath.flatMap { PhotoFileManager.shared.loadImage(from: $0) } }
+    // Path-only — FullScreenImageView decodes lazily per page instead of every
+    // photo in the run being decrypted/decoded up front on the main thread.
+    // Still filters out entries without a path so index stays in sync with what
+    // the viewer actually shows.
+    private var galleryEntries: [(detail: PillScanDetailItem, path: String)] {
+        details.compactMap { detail in
+            guard let path = detail.imagePath else { return nil }
+            return (detail, path)
+        }
     }
 
     private var drugName: String {
@@ -166,7 +169,7 @@ struct PillScanDetailGridScreen: View {
             )
         ) {
             if let index = selectedImageIndex {
-                FullScreenImageView(images: galleryImages, initialIndex: index) {
+                FullScreenImageView(imagePaths: galleryEntries.map(\.path), initialIndex: index) {
                     selectedImageIndex = nil
                 }
             }
@@ -501,7 +504,7 @@ struct PillScanDetailGridScreen: View {
     private func handleCardTap(_ detail: PillScanDetailItem) {
         if isEditing {
             toggleSelection(detail.id)
-        } else if let index = galleryDetails.firstIndex(where: { $0.id == detail.id }) {
+        } else if let index = galleryEntries.firstIndex(where: { $0.detail.id == detail.id }) {
             selectedImageIndex = index
         }
     }
@@ -527,13 +530,15 @@ struct PillScanDetailGridScreen: View {
     }
 
     private func toggleAll() {
+        // No exitEditModeIfEmpty() here — deselect-all via this control is a
+        // deliberate bulk toggle, not the user unchecking their way out row by
+        // row, so it shouldn't kick them out of edit mode.
         let allIds = Set(details.map { $0.id })
         if selectedIds == allIds {
             selectedIds.removeAll()
         } else {
             selectedIds = allIds
         }
-        exitEditModeIfEmpty()
     }
 
     private func exitEditModeIfEmpty() {

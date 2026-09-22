@@ -126,7 +126,7 @@ struct PillCountTopBar: View {
 
     private var ndcDrugColumn: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("NDC \(ndc)")
+            Text(L10n.BarcodeScan.ndcLabel(ndc))
                 .font(.system(size: isIpad ? 14 : 11, weight: .regular))
                 .foregroundStyle(appColors.text.opacity(0.85))
             Text(drugName)

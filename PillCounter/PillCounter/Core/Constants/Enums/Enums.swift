@@ -117,7 +117,7 @@ public enum HamburgerMenuItem: CaseIterable, Identifiable {
             #if LOAD_TEST
             case .LoadTestData: return "Load Test Data"
             #endif
-            case .LockNow: return L10n.Settings.lockNowDebug
+            case .LockNow: return L10n.Settings.lockNow
             case .Logout: return L10n.Menu.logout
         }
 
@@ -405,10 +405,6 @@ enum DrugSchedule: String, CaseIterable, Identifiable {
     case cvi = "CVI"
 
     var id: String { rawValue }
-}
-
-enum SettingsSubScreen {
-    case connectionInfo
 }
 
 enum SettingsSection: CaseIterable, Identifiable {

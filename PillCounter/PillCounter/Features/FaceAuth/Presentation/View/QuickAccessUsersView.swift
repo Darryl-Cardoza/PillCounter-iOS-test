@@ -325,12 +325,14 @@ struct QuickAccessUsersView: View {
     }
 
     private func toggleSelectAll() {
+        // No exitEditModeIfEmpty() here — deselect-all via this control is a
+        // deliberate bulk toggle, not the user unchecking their way out row by
+        // row, so it shouldn't kick them out of edit mode.
         if areAllSelected {
             selectedIds.removeAll()
         } else {
             selectedIds = Set(rows.map(\.id))
         }
-        exitEditModeIfEmpty()
     }
 
     private func exitEditModeIfEmpty() {

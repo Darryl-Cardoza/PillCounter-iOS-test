@@ -43,7 +43,7 @@ struct AppNavigation: View {
                         .navigationBarBackButtonHidden(true)
 
                 case .authentication(.login(.dashboard(.fixedCountPartial))):
-                    DispenseCountPartialTxnList(title: "pending dispense counts")
+                    DispenseCountPartialTxnList(title: L10n.PillScan.pendingDispenseCounts)
                         .navigationBarBackButtonHidden(true)
                     
                     
@@ -101,7 +101,8 @@ struct AppNavigation: View {
               ) { _ in
                   guard
                       let scene = UIApplication.shared.connectedScenes
-                          .first as? UIWindowScene
+                          .first(where: { $0.activationState == .foregroundActive })
+                          as? UIWindowScene
                   else { return }
                   let newValue = scene.interfaceOrientation.isLandscape
                   if isLandscape != newValue {

@@ -271,13 +271,13 @@ extension PillScanViewModel {
             if !isStatusOnlyUpdate {
                 if rxKnownUnderOtherRefill {
                     HL7NotificationManager.show(
-                        title: "Edit Rx Failed",
-                        body: "Rx \(rxNo) found but refill \(refillNo ?? "—") does not match any stored transaction"
+                        title: L10n.Hl7Notification.editRxFailedTitle,
+                        body: L10n.Hl7Notification.refillMismatchBody(rxNo: rxNo, refillNo: refillNo ?? "—")
                     )
                 } else {
                     HL7NotificationManager.show(
-                        title: "Edit Rx Failed",
-                        body: "No transaction found for Rx \(rxNo)"
+                        title: L10n.Hl7Notification.editRxFailedTitle,
+                        body: L10n.Hl7Notification.noTransactionFoundBody(rxNo: rxNo)
                     )
                 }
             }
@@ -321,8 +321,8 @@ extension PillScanViewModel {
                 } else {
                     Log("HL7 ORC|XO: API returned no drug name for NDC=\(hl7Ndc) — aborting edit")
                     HL7NotificationManager.show(
-                        title: "Edit Rx Failed",
-                        body: "Drug not found for Rx \(rxNo), NDC \(hl7Ndc)"
+                        title: L10n.Hl7Notification.editRxFailedTitle,
+                        body: L10n.Hl7Notification.drugNotFoundBody(rxNo: rxNo, ndc: hl7Ndc)
                     )
                     callback?(false)
                     return
@@ -330,8 +330,8 @@ extension PillScanViewModel {
             } catch {
                 Log("HL7 ORC|XO: API failed for NDC=\(hl7Ndc) → \(error.localizedDescription)")
                 HL7NotificationManager.show(
-                    title: "Edit Rx Failed",
-                    body: "Drug not found for Rx \(rxNo), NDC \(hl7Ndc)"
+                    title: L10n.Hl7Notification.editRxFailedTitle,
+                    body: L10n.Hl7Notification.drugNotFoundBody(rxNo: rxNo, ndc: hl7Ndc)
                 )
                 callback?(false)
                 return

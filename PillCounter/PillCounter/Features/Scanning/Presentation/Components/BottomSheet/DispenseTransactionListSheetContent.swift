@@ -122,7 +122,7 @@ struct DispenseTransactionListSheetContent: View {
     // MARK: - Header
     private var header: some View {
         HStack {
-            Text("Dispense's Queue")
+            Text(L10n.PillScan.dispenseQueue)
                 .font(.system(size: titleSize, weight: .bold))
                 .foregroundColor(appColors.text)
             Spacer()
@@ -189,7 +189,7 @@ struct DispenseTransactionListSheetContent: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Spacer()
-            Text("No items in the queue")
+            Text(L10n.PillScan.noItemsInQueue)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(appColors.text.opacity(0.6))
             Spacer()

@@ -615,7 +615,7 @@ struct HamburgerMenuView: View {
 
         case .LockNow:
             guard FaceSessionManager.shared.hasEnrolledUsers else {
-                ToastManager.shared.show(message: "No enrolled users")
+                ToastManager.shared.show(message: L10n.Menu.lockNowNoEnrolledUsers)
                 return
             }
             FaceSessionManager.shared.lockDueToInactivity()

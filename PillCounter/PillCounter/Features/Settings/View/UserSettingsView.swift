@@ -17,12 +17,13 @@ struct UserSettingsView: View {
     // UI State for popups / sub-screens
     @State private var showClearDataConfirmationPopup: Bool = false
     @State private var showResetHazardousTrayColorPopup: Bool = false
-    @State private var activeSubScreen: SettingsSubScreen? = nil
     @State private var showTimeLimitPicker: Bool = false
     @State private var showSaveHistoryPicker: Bool = false
     @State private var showSchedulePicker: Bool = false
+    @State private var showConnectionInfo: Bool = false
 
-    // Sections expand independently — any number can be open at once.
+    // Accordion: opening a section closes any other open one. Set<> instead of
+    // Optional<> only so tapping the already-open section can collapse to none.
     // First card starts expanded.
     @State private var expandedSections: Set<SettingsSection> = [.dispenseControlledDrug]
 
@@ -79,14 +80,6 @@ struct UserSettingsView: View {
                 )
             }
         }
-        .overlay {
-            if let screen = activeSubScreen {
-                subScreenView(screen)
-                    .transition(.move(edge: .trailing))
-                    .zIndex(1000)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: activeSubScreen)
         .customPopup(isPresented: $showClearDataConfirmationPopup) {
             clearHistoryConfirmatioDialog
         }
@@ -103,6 +96,10 @@ struct UserSettingsView: View {
         }
         .sheet(isPresented: $showSchedulePicker) {
             DrugSchedulePickerView(settingsViewModel: settingsViewModel)
+                .environmentObject(appColors)
+        }
+        .sheet(isPresented: $showConnectionInfo) {
+            PMSConnectionInfoView()
                 .environmentObject(appColors)
         }
         .modifier(DebugFaceVerifyCover(isPresented: debugFaceVerifyBinding))
@@ -266,9 +263,7 @@ struct UserSettingsView: View {
                     showFeatureUnavailableToast()
                     return
                 }
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    activeSubScreen = .connectionInfo
-                }
+                showConnectionInfo = true
             }
         }
     }
@@ -283,7 +278,7 @@ struct UserSettingsView: View {
             Spacer(minLength: 8)
 
             HStack(spacing: 4) {
-                ForEach(Array(DrugSchedule.allCases.enumerated()), id: \.element.id) { index, schedule in
+                ForEach(DrugSchedule.allCases) { schedule in
                     Text(schedule.rawValue)
                         .foregroundColor(
                             settingsViewModel.isScheduleSelected(schedule)
@@ -410,36 +405,6 @@ struct UserSettingsView: View {
         }
     }
     
-    @ViewBuilder
-    private func subScreenView(_ screen: SettingsSubScreen) -> some View {
-        BaseView(
-            topRatio: 1.0,
-            topContent: {
-                switch screen {
-                case .connectionInfo:
-                    PMSConnectionInfoView()
-                }
-            },
-            bottomContent: { EmptyView() },
-            headerActions: { EmptyView() },
-            showBackButton: true,
-            showHamburgerMenu: false,
-            title: screenTitle(screen),
-            backgroundColor: appColors.primaryBackground,
-            onBack: {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    activeSubScreen = nil
-                }
-            }
-        )
-    }
-
-    private func screenTitle(_ screen: SettingsSubScreen) -> String {
-        switch screen {
-        case .connectionInfo: return L10n.Settings.connectionInfoScreenTitle
-        }
-    }
-
     private var settingsDivider: some View {
         Divider().background(appColors.text.opacity(0.12))
     }
@@ -483,6 +448,8 @@ private func alignmentFor(_ index: Int) -> Alignment {
 /// the disclosure-style pattern used for rows that open a picker/sub-screen.
 struct SettingsDisclosureRow: View {
 
+    @EnvironmentObject private var appColors: AppColors
+
     let title: String
     var subtitle: String? = nil
     var isDisabled: Bool = false
@@ -491,14 +458,14 @@ struct SettingsDisclosureRow: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(title)
-                .foregroundStyle(AppColors.shared.text)
+                .foregroundStyle(appColors.text)
                 .font(.system(size: 14, weight: .regular))
 
             Spacer(minLength: 8)
 
             if let subtitle {
                 Text(subtitle)
-                    .foregroundColor(AppColors.shared.secondary)
+                    .foregroundColor(appColors.secondary)
                     .font(.system(size: 13, weight: .regular))
             }
         }
@@ -510,6 +477,8 @@ struct SettingsDisclosureRow: View {
 }
 
 struct ToggleRowView: View {
+
+    @EnvironmentObject private var appColors: AppColors
 
     let title: String
     @Binding var isOn: Bool
@@ -526,7 +495,7 @@ struct ToggleRowView: View {
         HStack {
             Text(title)
                 .fontWeight(Font.Weight.regular)
-                .foregroundColor(AppColors.shared.text)
+                .foregroundColor(appColors.text)
             Spacer()
             PillCountingToggleButton(
                 isOn: Binding(

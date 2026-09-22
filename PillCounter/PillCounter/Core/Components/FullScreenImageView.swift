@@ -9,37 +9,46 @@ import SwiftUI
 
 struct FullScreenImageView: View {
 
-    let images: [Image]
-    let initialIndex: Int
+    // Decrypt+decode happens per-page in FullScreenImagePage, keyed off this path —
+    // pre-decoding every path here would put a whole scan run's photos on the main
+    // thread on first render instead of one at a time as the user swipes.
+    let imagePaths: [String]
     let onDismiss: () -> Void
 
     @State private var currentIndex: Int
 
     init(image: Image?, onDismiss: @escaping () -> Void) {
-        self.images = image.map { [$0] } ?? []
-        self.initialIndex = 0
+        self.imagePaths = []
         self.onDismiss = onDismiss
         self._currentIndex = State(initialValue: 0)
+        self.preloadedImage = image
     }
 
-    init(images: [Image], initialIndex: Int, onDismiss: @escaping () -> Void) {
-        self.images = images
-        self.initialIndex = initialIndex
+    init(imagePaths: [String], initialIndex: Int, onDismiss: @escaping () -> Void) {
+        self.imagePaths = imagePaths
         self.onDismiss = onDismiss
         self._currentIndex = State(initialValue: initialIndex)
+        self.preloadedImage = nil
     }
+
+    // Legacy single-image path (already-decoded Image, no file to key a reload off of).
+    private let preloadedImage: Image?
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            TabView(selection: $currentIndex) {
-                ForEach(images.indices, id: \.self) { index in
-                    FullScreenImagePage(image: images[index], onDismiss: onDismiss)
-                        .tag(index)
+            if let preloadedImage {
+                FullScreenImagePage(image: preloadedImage, onDismiss: onDismiss)
+            } else {
+                TabView(selection: $currentIndex) {
+                    ForEach(imagePaths.indices, id: \.self) { index in
+                        FullScreenImagePage(imagePath: imagePaths[index], onDismiss: onDismiss)
+                            .tag(index)
+                    }
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
 
             closeButton
         }
@@ -65,19 +74,39 @@ struct FullScreenImageView: View {
 // MARK: - Single zoomable/pannable/dismissable page
 private struct FullScreenImagePage: View {
 
-    let image: Image
+    private let imagePath: String?
+    private let preloadedImage: Image?
     let onDismiss: () -> Void
 
+    @State private var loadedImage: Image?
     @State private var scale: CGFloat = 1
     @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
 
+    init(image: Image, onDismiss: @escaping () -> Void) {
+        self.imagePath = nil
+        self.preloadedImage = image
+        self.onDismiss = onDismiss
+    }
+
+    init(imagePath: String, onDismiss: @escaping () -> Void) {
+        self.imagePath = imagePath
+        self.preloadedImage = nil
+        self.onDismiss = onDismiss
+    }
+
     var body: some View {
         GeometryReader { geo in
-            image
-                .resizable()
-                .scaledToFit()
+            Group {
+                if let image = preloadedImage ?? loadedImage {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Color.clear
+                }
+            }
                 .frame(width: geo.size.width, height: geo.size.height)
                 .scaleEffect(scale)
                 .offset(offset)
@@ -100,6 +129,14 @@ private struct FullScreenImagePage: View {
                             lastScale = 2.5
                         }
                     }
+                }
+                .task(id: imagePath) {
+                    guard let imagePath else { return }
+                    let path = imagePath
+                    let image = await Task.detached(priority: .userInitiated) {
+                        PhotoFileManager.shared.loadImage(from: path)
+                    }.value
+                    loadedImage = image
                 }
         }
     }

@@ -286,7 +286,7 @@ struct PillCountLayout: View {
                         targetCount: targetCount,
                         isIpad: isIpad,
                         isLandscape: isLandscape,
-                        showSteps: !isPortrait ,
+                        showSteps: !isPortrait,
                         onTapStep: { handleStepTap($0) },
                         isOpenEndedCountStep: isOpenEndedStep,
                         isRegularCountType: isOpenPillScanMode || resolvedTransaction?.is_dispense == false,

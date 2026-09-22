@@ -431,7 +431,6 @@
 "faceAuth.failureEmbedding" = "Impossible de traiter ce visage. Réessayez.";
 "faceAuth.failureCamera" = "Caméra indisponible.";
 "faceAuth.failureStorage" = "Impossible d'enregistrer l'inscription. Veuillez réessayer.";
-"faceAuth.failureDuplicate" = "Ce visage est déjà enregistré pour un autre utilisateur.";
 "faceAuth.failureTimedOut" = "L'inscription a pris trop de temps. Réessayez avec un bon éclairage.";
 "faceAuth.retry" = "Réessayer";
 "faceAuth.authTitle" = "Authentification faciale";

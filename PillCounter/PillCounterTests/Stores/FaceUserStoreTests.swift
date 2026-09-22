@@ -37,7 +37,7 @@ struct FaceUserStoreTests {
         #expect(fetched?.is_active == true)
     }
 
-    @Test func isNameTakenIsCaseInsensitiveAndActiveOnly() {
+    @Test func isNameTakenIsCaseInsensitive() {
         let id = UUID().uuidString
         let name = "Dup Check \(id.prefix(8))"
         defer { FaceUserStore.shared.deleteUser(id: id) }
@@ -50,7 +50,7 @@ struct FaceUserStoreTests {
         #expect(FaceUserStore.shared.isNameTaken(name.uppercased()) == true)
     }
 
-    @Test func deactivateUserRemovesFromActiveList() {
+    @Test func deactivateUserKeepsNameReservedButFlipsIsActive() {
         let id = UUID().uuidString
         let name = "Deactivate Me \(id.prefix(8))"
         defer { FaceUserStore.shared.deleteUser(id: id) }
@@ -60,7 +60,9 @@ struct FaceUserStoreTests {
 
         FaceUserStore.shared.deactivateUser(id: id)
 
-        #expect(FaceUserStore.shared.isNameTaken(name) == false)
+        // Deactivation is a soft pause, not a release of the name for reuse
+        // (see FaceUserStore.isNameTaken) — only deleting the row frees it.
+        #expect(FaceUserStore.shared.isNameTaken(name) == true)
         #expect(FaceUserStore.shared.getUser(id: id)?.is_active == false)
     }
 

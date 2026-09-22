@@ -8,9 +8,10 @@
 //
 //  Structural fixes for the "enrollment never completes" failure mode
 //  (see research notes): each step runs a best-of-window capture instead of
-//  hard-rejecting every imperfect frame, thresholds relax progressively if a
-//  step is slow, and a global timeout guarantees the flow always resolves to
-//  either EnrollmentComplete or an explicit failure — never an endless loop.
+//  hard-rejecting every imperfect frame. There is no global or per-step
+//  timeout — a step with no pose-matched candidate yet waits indefinitely
+//  rather than skipping, so a mismatched-pose embedding can never be stored.
+//  The only exits from a stuck step are Cancel or backgrounding.
 //
 //  The hot per-frame path (`handleFrame` and everything it calls) runs
 //  `nonisolated` on the camera session queue and only hops to the main actor
@@ -792,12 +793,15 @@ final class FaceEnrollmentViewModel: ObservableObject {
     }
 
     private nonisolated func finishEnrollment() {
-        guard let userId = pendingUserId else {
+        guard pendingUserId != nil else {
             DispatchQueue.main.async { self.state = .failed(.storageError) }
             return
         }
 
         let embeddings = collectedEmbeddings
+        let avatar = frontalAvatar
+        let firstName = pendingFirstName
+        let lastName = pendingLastName
         // EVERY pose is required. There is no step-skip and no timeout left in
         // the capture loop, so the only way to reach here is by capturing all
         // of them — this is defense in depth against a future path that
@@ -815,29 +819,31 @@ final class FaceEnrollmentViewModel: ObservableObject {
         // instead, as a prompt the user can answer rather than a rejection
         // they only discover after the whole flow. See captureStep.
 
-        // Nothing is persisted until this point (see class header) — the
-        // user row and its embeddings are created together, so a row can
-        // never exist without embeddings.
-        let user = repository.registerUser(firstName: pendingFirstName, lastName: pendingLastName)
-        guard let registeredUserId = user.id else {
-            DispatchQueue.main.async { self.state = .failed(.storageError) }
-            return
-        }
-
-        let success = repository.saveEnrollmentEmbeddings(userId: registeredUserId, embeddings: embeddings)
-        Log("Enrollment: finishing for user \(registeredUserId) — \(embeddings.count) embeddings, persisted=\(success)")
-
-        if success {
-            // Only after the embeddings are durably stored — a rolled-back
-            // enrollment must not leave an avatar file behind.
-            if let avatar = frontalAvatar {
-                repository.saveAvatar(userId: registeredUserId, image: avatar)
-            }
-        }
-
+        // Both stores read CoreDataManager.shared.context (viewContext,
+        // main-queue confined) — hop before touching repository, same as
+        // runDuplicateCheck above, instead of calling it from this
+        // camera-queue function.
         DispatchQueue.main.async {
+            // Nothing is persisted until this point (see class header) — the
+            // user row and its embeddings are created together, so a row can
+            // never exist without embeddings.
+            let user = self.repository.registerUser(firstName: firstName, lastName: lastName)
+            guard let registeredUserId = user.id else {
+                self.state = .failed(.storageError)
+                return
+            }
+
+            let success = self.repository.saveEnrollmentEmbeddings(userId: registeredUserId, embeddings: embeddings)
+            Log("Enrollment: finishing for user \(registeredUserId) — \(embeddings.count) embeddings, persisted=\(success)")
+
             if success {
                 self.pendingUserId = registeredUserId
+                // Only after the embeddings are durably stored — a
+                // rolled-back enrollment must not leave an avatar file
+                // behind.
+                if let avatar {
+                    self.repository.saveAvatar(userId: registeredUserId, image: avatar)
+                }
                 self.state = .enrollmentComplete
             } else {
                 self.repository.deleteUser(id: registeredUserId)

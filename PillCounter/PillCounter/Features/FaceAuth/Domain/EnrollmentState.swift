@@ -11,8 +11,12 @@ enum EnrollmentFailureReason {
     case embeddingGenerationFailed
     case cameraError(String)
     case storageError
-    /// Global enrollment timeout expired with too few usable samples
-    /// (spec: never loop forever — see FaceEnrollmentViewModel).
+    /// Defense in depth only: `finishEnrollment()` refuses to complete if any
+    /// pose step's samples are missing. Should be unreachable, since capture
+    /// has no step-skip and no timeout — see FaceEnrollmentViewModel.
+    /// `failureText` still shows "Enrollment took too long" for this case,
+    /// which is wrong for how it's actually reached now — needs its own
+    /// copy if this stops being unreachable in practice.
     case timedOut
     /// The face being captured no longer matches the one that captured the
     /// `.center` step — either a different person stepped in, or no usable

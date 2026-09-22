@@ -29,7 +29,11 @@ final class FaceTrackContinuityGate {
     static let minTrackIoU: Float = 0.35
 
     /// Consecutive sampled frames with no face that are forgiven before the
-    /// track is lost. ~450ms at the 150ms sampling interval.
+    /// track is lost. ~450ms at the 150ms sampling interval. A second person
+    /// briefly occluding the enrolling user's face (detections.count != 1
+    /// feeds `observe` nil the same as no face) breaks the track at this
+    /// gap and restarts the scan from `.center` — there is no cap on how
+    /// many times that can happen to one enrollment attempt.
     static let maxTrackGapFrames = 3
 
     /// True once an armed track has been lost. Latches — only `reset()` clears it.

@@ -303,9 +303,10 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
     /// pause, not a release of that face for re-enrollment (see
     /// `FaceUserStore.isNameTaken`'s comment for the same rationale).
     ///
-    /// Not called automatically by `saveEnrollmentEmbeddings` — the caller
-    /// (ViewModel) decides whether to run this before persisting, so this
-    /// first implementation can ship without gating enrollment on it.
+    /// Not called by `saveEnrollmentEmbeddings` itself — FaceEnrollmentViewModel
+    /// calls this mid-capture, after `.center`, and gates enrollment on the
+    /// result: a match pauses the pipeline behind a user-facing duplicate
+    /// prompt (`runDuplicateCheck`/`duplicateMatch`) before persisting.
     ///
     /// Core Data here is `viewContext`-backed, so this must be called on the
     /// main actor — see the note in FaceEnrollmentViewModel.runDuplicateCheck.

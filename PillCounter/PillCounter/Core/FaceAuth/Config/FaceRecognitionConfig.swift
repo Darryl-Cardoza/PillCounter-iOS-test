@@ -31,9 +31,9 @@ enum CandidateScoringStrategy {
     /// (`identify()`) reference implementations exactly.
     case bestSimilarity
     /// The user's score is the mean similarity across all their stored
-    /// embeddings. Not used by either reference implementation, but is the
-    /// default here — bestSimilarity let one noisy oblique-angle embedding
-    /// spike a non-matching user's score past threshold (false accepts).
+    /// embeddings. Not used by either reference implementation, and no
+    /// longer the default here (see `bestSimilarity`) — kept for the case
+    /// `bestSimilarity` needs walking back.
     case averageSimilarity
 }
 
@@ -51,10 +51,17 @@ final class FaceRecognitionConfig {
     /// of 0.363), which was low enough to need an absolute floor and a
     /// runner-up margin bolted on top to stop false accepts. Android raised
     /// the threshold instead and dropped both extra gates; this now matches.
+    /// NOT independently verified against this app's iOS SFace score
+    /// distribution — the 0.38 value it replaced was (see git history: an
+    /// unenrolled stranger scored 0.391, the genuine enrolled user 0.715).
+    /// Re-measure on-device before trusting this in production.
     ///
     /// Deliberately a single gate: two people who share a face must BOTH be
     /// able to unlock (enrollment allows a duplicate through an explicit
-    /// warning), and a runner-up margin structurally cannot allow that.
+    /// warning), and a runner-up margin structurally cannot allow that. This
+    /// does not address the other reason the margin gate existed — two
+    /// DIFFERENT users' scores landing close together, where per-frame noise
+    /// decides the winner and identity flips between runs.
     var acceptanceThreshold: Float = 0.60
 
     /// How a user's per-frame candidate score is computed from their stored

@@ -328,7 +328,6 @@ Asegúrese de que la cámara detecte las pastillas.";
 "faceAuth.failureEmbedding" = "No se pudo procesar este rostro. Inténtelo de nuevo.";
 "faceAuth.failureCamera" = "Cámara no disponible.";
 "faceAuth.failureStorage" = "No se pudo guardar el registro. Inténtelo de nuevo.";
-"faceAuth.failureDuplicate" = "Este rostro ya está registrado para otro usuario.";
 "faceAuth.failureTimedOut" = "El registro tardó demasiado. Inténtelo de nuevo con buena iluminación.";
 "faceAuth.retry" = "Intentar de nuevo";
 "faceAuth.authTitle" = "Autenticación facial";

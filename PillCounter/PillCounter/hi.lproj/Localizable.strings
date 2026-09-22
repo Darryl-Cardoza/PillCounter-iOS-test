@@ -456,7 +456,6 @@
 "faceAuth.failureEmbedding" = "इस चेहरे को संसाधित नहीं किया जा सका। फिर से प्रयास करें।";
 "faceAuth.failureCamera" = "कैमरा अनुपलब्ध है।";
 "faceAuth.failureStorage" = "नामांकन सहेजा नहीं जा सका। कृपया फिर से प्रयास करें।";
-"faceAuth.failureDuplicate" = "यह चेहरा पहले से किसी अन्य उपयोगकर्ता के लिए नामांकित है।";
 "faceAuth.failureTimedOut" = "नामांकन में बहुत अधिक समय लगा। अच्छी रोशनी में फिर से प्रयास करें।";
 "faceAuth.retry" = "फिर से प्रयास करें";
 "faceAuth.authTitle" = "चेहरा प्रमाणीकरण";

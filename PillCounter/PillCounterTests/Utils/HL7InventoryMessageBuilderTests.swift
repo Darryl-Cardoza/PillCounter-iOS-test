@@ -93,4 +93,26 @@ struct HL7InventoryMessageBuilderTests {
         #expect(components?[0] == "0")
         #expect(components?[1] == "2")
     }
+
+    @Test func openedRowWithZeroLooseQtyIsExcludedFromInventoryMessage() {
+        let fixture = BatchTrackingFixture()
+        defer { fixture.cleanUp() }
+        // Scanned as opened but never counted (looseQty 0) — carries nothing for
+        // the PMS to act on, unlike a sealed row where bottle_qty alone is real
+        // physical-count information.
+        let batch = fixture.makeBatch()
+        let stockTxn = fixture.makeStockTxn(batch: batch)
+
+        let opened = BottleInfoStore.shared.addOpenedBottle(
+            stockTxnId: stockTxn.stock_txn_id, looseQty: 0, lotNo: "LOT-B", expNo: "2027-06",
+            serialNo: nil, images: []
+        )
+        defer { if let opened { BottleInfoStore.shared.softDelete(bottleId: opened.bottle_id) } }
+
+        let message = HL7CompletionBuilder().buildInventoryMessage(batch: batch, user: nil)
+        let rows = obxSegments(in: message)
+
+        #expect(rows.first { $0[3] == "OPEN_QTY" } == nil)
+        #expect(rows.first { $0[3] == "SEALED_QTY" } == nil)
+    }
 }

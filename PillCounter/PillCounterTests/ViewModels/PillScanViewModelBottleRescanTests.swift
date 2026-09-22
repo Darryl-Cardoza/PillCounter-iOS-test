@@ -216,10 +216,11 @@ struct PillScanViewModelBottleRescanTests {
     }
 
     /// gs1WithFullInfo decodes to lot "LOT99"/exp "271231"/serial "SER77". A bottle
-    /// with that exact lot/exp/serial scanned earlier in the batch — not just the
-    /// immediately-previous scan — must still be caught as a duplicate, not offered
-    /// as a new "Add bottle" candidate.
-    @Test func handleBottleRescanTreatsMatchAnywhereInBottleListAsDuplicateNotJustLast() {
+    /// with that exact lot/exp/serial scanned earlier in the batch (not the last
+    /// entry) means the operator picked that bottle back up — it should become
+    /// active again (moved to the end of the list), not blocked as a duplicate
+    /// and not offered as a new "Add bottle" candidate.
+    @Test func handleBottleRescanReactivatesEarlierBottleMovingItToEnd() {
         let transactionDAO = MockTransactionDataSource()
         let transactionDetailDAO = MockTransactionDetailDataSource()
         let drugMasterDAO = MockDrugCatalogDataSource()
@@ -230,7 +231,7 @@ struct PillScanViewModelBottleRescanTests {
         transactionDetailDAO.totals[1] = 0
         drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
 
-        let earlierMatch = BottleInfo(lotNumber: "LOT99", expirationDate: "12-31-2027", serialNumber: "SER77", txnDetailsIds: [], scannedAt: 1)
+        let earlierMatch = BottleInfo(lotNumber: "LOT99", expirationDate: "12-31-2027", serialNumber: "SER77", txnDetailsIds: [1], scannedAt: 1)
         let mostRecent = BottleInfo(lotNumber: "LOT-OTHER", expirationDate: "01-01-2028", serialNumber: "SER-OTHER", txnDetailsIds: [], scannedAt: 2)
         transactionDAO.setBottleList(txnId: 1, [earlierMatch, mostRecent])
 
@@ -239,6 +240,40 @@ struct PillScanViewModelBottleRescanTests {
         #expect(vm.showAddBottlePopup == false)
         #expect(vm.showReplaceBottlePopup == false)
         #expect(vm.pendingBottleRescan == nil)
+        let updated = transactionDAO.getBottleList(txnId: 1)
+        #expect(updated.count == 2)
+        // earlierMatch is now last (active again), history (txnDetailsIds) preserved.
+        #expect(updated.last?.lotNumber == "LOT99")
+        #expect(updated.last?.txnDetailsIds == [1])
+        #expect(updated.first?.lotNumber == "LOT-OTHER")
+    }
+
+    /// Same lot+expiry but NO serial on either side can't prove two scans are the
+    /// same physical bottle (a lot/expiry can span multiple real bottles) — must
+    /// fall through to the normal add/replace flow, not be blocked as a duplicate.
+    @Test func handleBottleRescanSameLotExpiryNoSerialIsNotTreatedAsDuplicate() {
+        let transactionDAO = MockTransactionDataSource()
+        let transactionDetailDAO = MockTransactionDetailDataSource()
+        let drugMasterDAO = MockDrugCatalogDataSource()
+        let vm = makeViewModel(transactionDAO: transactionDAO, transactionDetailDAO: transactionDetailDAO, drugMasterDAO: drugMasterDAO)
+        let txn = makeTransaction(txnId: 1, drugId: 100, isDispense: true)
+        vm.currentTransaction = txn
+        vm.currentControlledStep = .targetVerification
+        transactionDetailDAO.totals[1] = 0
+        drugMasterDAO.drugsByGtin["00312345678906"] = makeDrug(drugId: 100, gtin: "00312345678906")
+
+        // Same lot/expiry as the incoming scan, but no serial recorded.
+        let existing = BottleInfo(lotNumber: "LOT99", expirationDate: "12-31-2027", serialNumber: nil, txnDetailsIds: [], scannedAt: 1)
+        transactionDAO.setBottleList(txnId: 1, [existing])
+
+        // gs1WithFullInfo carries a serial (SER77), so the candidate has one but
+        // the existing row doesn't — still can't be proven the same bottle.
+        vm.handleBottleRescan(rawBarcode: gs1WithFullInfo)
+
+        #expect(vm.showReplaceBottlePopup == true)
+        #expect(vm.pendingBottleRescan?.lotNumber == "LOT99")
+        // Bottle list untouched until the popup is confirmed.
+        #expect(transactionDAO.getBottleList(txnId: 1) == [existing])
     }
 
     @Test func handleBottleRescanMatchesAcrossDashedAndPlainNdcFormatting() {

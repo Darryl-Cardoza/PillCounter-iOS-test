@@ -1507,7 +1507,11 @@ extension UnifiedCameraView {
                 substituteNdc: txn?.substitueDrug?.ndc ?? "",
                 workflowStep: pillScanViewModel.currentControlledStep.rawValue,
                 count: cameraService.stableCount,
-                targetCount: txn?.target_count,
+                // Mirror PillScanDetailGridScreen's countView: containerInitiate has no
+                // target (open-ended), containerPending uses the remaining-count-adjusted
+                // value, not the raw transaction target.
+                targetCount: pillScanViewModel.currentControlledTargetCount
+                    .flatMap { $0 > 0 ? Int32($0) : nil },
                 timestamp: timestamp,
                 userInitials: currentOperatorName(),
                 geolocation: locationService.locationString,

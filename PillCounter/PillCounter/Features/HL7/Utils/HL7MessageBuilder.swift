@@ -474,9 +474,10 @@ final class HL7CompletionBuilder {
         }
 
         // Zero-total groups carry no information for PMS — never emit an INV for them.
-        // Include bottle counts, not just pill quantities: a sealed row with
-        // package_qty == 0 still has a real sealedBottles count worth reporting.
-        grouped = grouped.filter { $0.value.opened + $0.value.sealed + $0.value.sealedBottles + $0.value.openBottles > 0 }
+        // Sealed side counts sealedBottles too: package_qty == 0 still has a real
+        // bottle count worth reporting. Opened side stays qty-gated — an opened row
+        // with looseQty 0 (scanned but not yet counted) carries nothing to report.
+        grouped = grouped.filter { $0.value.sealed + $0.value.sealedBottles > 0 || $0.value.opened > 0 }
 
         var setId = 1
 

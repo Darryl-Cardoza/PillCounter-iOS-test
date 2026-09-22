@@ -95,20 +95,34 @@ extension PillScanViewModel {
             scannedAt: Int64(Date().timeIntervalSince1970 * 1000)
         )
 
-        // Match against every bottle already scanned this batch, not just the
-        // last one — a lot/exp/serial scanned earlier (not immediately prior)
-        // must still be caught as a duplicate. A candidate with no lot, exp, OR
-        // serial at all (GS1 carried none of that data) can't prove identity
-        // against another equally-blank scan, so it never counts as a duplicate.
-        let candidateIsBlank = (candidate.lotNumber ?? "").isEmpty
-            && (candidate.expirationDate ?? "").isEmpty
-            && (candidate.serialNumber ?? "").isEmpty
-        if !candidateIsBlank, bottles.contains(where: {
-            $0.lotNumber == candidate.lotNumber
-                && $0.expirationDate == candidate.expirationDate
-                && $0.serialNumber == candidate.serialNumber
-        }) {
+        // Identity match requires lot, expiry, AND serial all present and equal —
+        // lot+expiry alone can't prove two scans are the same physical bottle
+        // (HL7MessageBuilder's own grouping treats same lot/expiry as potentially
+        // multiple distinct bottles). No serial on either side means we can't tell,
+        // so it's never treated as the same bottle.
+        func isSameBottle(_ a: BottleInfo, _ b: BottleInfo) -> Bool {
+            guard let serial = a.serialNumber, !serial.isEmpty, serial == b.serialNumber,
+                  let lot = a.lotNumber, !lot.isEmpty, lot == b.lotNumber,
+                  let exp = a.expirationDate, !exp.isEmpty, exp == b.expirationDate else {
+                return false
+            }
+            return true
+        }
+
+        if let lastIndex = bottles.indices.last, isSameBottle(candidate, bottles[lastIndex]) {
+            // Immediate re-scan of the bottle currently active — genuinely a no-op scan.
             showToastMessage(text: L10n.BarcodeScan.bottleAlreadyScanned)
+            return
+        }
+        if let earlierIndex = bottles.dropLast().lastIndex(where: { isSameBottle(candidate, $0) }) {
+            // Operator picked back up a bottle scanned earlier in this batch — resume
+            // counting from it instead of blocking. Move it to the end so activeBottle
+            // (bottles.last) points at it again.
+            var reordered = bottles
+            var resumed = reordered.remove(at: earlierIndex)
+            resumed.scannedAt = Int64(Date().timeIntervalSince1970 * 1000)
+            reordered.append(resumed)
+            transactionDAO.setBottleList(txnId: txn.txn_id, reordered)
             return
         }
 

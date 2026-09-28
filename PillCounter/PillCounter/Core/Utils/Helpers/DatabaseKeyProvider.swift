@@ -133,7 +133,7 @@ final class DatabaseKeyProvider {
                 cachedDeks[slot.bootstrapAlias] = dek
                 return dek
             } catch {
-                Log("❌ DatabaseKeyProvider: DEK unwrap failed for \(slot.bootstrapAlias) (\(error)) — re-keying, affected fields will blank on next decrypt")
+                AppLogger.shared.error("DatabaseKeyProvider: DEK unwrap failed for \(slot.bootstrapAlias) — re-keying, affected fields will blank on next decrypt", error: error)
                 return recoverFromUnrecoverableDek(slot: slot, storage: storage)
             }
         }
@@ -161,7 +161,7 @@ final class DatabaseKeyProvider {
     private func bootstrapWrapDek(raw: Data, slot: DekSlot, storage: AppStorageManager) -> SymmetricKey {
         let dek = SymmetricKey(data: raw)
         guard let wrapped = try? KekDekManager.shared.wrap(alias: slot.bootstrapAlias, plaintext: raw) else {
-            Log("❌ DatabaseKeyProvider: failed to wrap freshly generated DEK for \(slot.bootstrapAlias) — returning unwrapped in-memory key")
+            AppLogger.shared.error("DatabaseKeyProvider: failed to wrap freshly generated DEK for \(slot.bootstrapAlias) — returning unwrapped in-memory key")
             cachedDeks[slot.bootstrapAlias] = dek
             return dek
         }
@@ -220,12 +220,12 @@ final class DatabaseKeyProvider {
         guard let oldKekId = storage.string(forKey: slot.kekIdStorageKey),
               let oldWrappedB64 = storage.string(forKey: slot.wrappedStorageKey),
               let oldWrapped = Data(base64Encoded: oldWrappedB64) else {
-            Log("❌ DatabaseKeyProvider: rotation requested but no existing wrapped DEK for \(slot.bootstrapAlias) — skipping")
+            AppLogger.shared.error("DatabaseKeyProvider: rotation requested but no existing wrapped DEK for \(slot.bootstrapAlias) — skipping")
             return
         }
 
         guard var rawKek = Data(base64Encoded: kekInfo.keyMaterial) else {
-            Log("❌ DatabaseKeyProvider: rotation payload key_material is not valid base64 — skipping \(slot.bootstrapAlias), existing DEK left untouched")
+            AppLogger.shared.error("DatabaseKeyProvider: rotation payload key_material is not valid base64 — skipping \(slot.bootstrapAlias), existing DEK left untouched")
             return
         }
 
@@ -244,7 +244,7 @@ final class DatabaseKeyProvider {
             // cache stays valid; refresh it anyway to avoid a redundant unwrap.
             cachedDeks[slot.bootstrapAlias] = SymmetricKey(data: dek)
         } catch {
-            Log("❌ DatabaseKeyProvider: KEK rotation failed for \(slot.bootstrapAlias) (\(error.localizedDescription)) — rolling back imported key, existing DEK left untouched")
+            AppLogger.shared.error("DatabaseKeyProvider: KEK rotation failed for \(slot.bootstrapAlias) — rolling back imported key, existing DEK left untouched", error: error)
             KekDekManager.shared.deleteKey(alias: newAlias)
             return
         }

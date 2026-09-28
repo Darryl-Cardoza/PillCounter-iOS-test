@@ -16,14 +16,14 @@ enum StoreLogger {
     static func log(dao: String, op: String, columns: [String], rows: [[String]]) {
         #if DEBUG
         guard !rows.isEmpty else {
-            print("[\(dao)] \(op) → (0 rows)")
+            AppLogger.shared.debug("[\(dao)] \(op) → (0 rows)")
             return
         }
         let widths = columnWidths(columns: columns, rows: rows)
         let header  = buildRow(cells: columns, widths: widths)
         let divider = buildDivider(widths: widths)
         let body    = rows.map { buildRow(cells: $0, widths: widths) }.joined(separator: "\n")
-        print("""
+        AppLogger.shared.debug("""
             [\(dao)] \(op) → \(rows.count) row(s)
             \(divider)
             \(header)
@@ -38,7 +38,7 @@ enum StoreLogger {
     static func logSingle(dao: String, op: String, columns: [String], row: [String]?) {
         guard let row else {
             #if DEBUG
-            print("[\(dao)] \(op) → (not found)")
+            AppLogger.shared.debug("[\(dao)] \(op) → (not found)")
             #endif
             return
         }
@@ -53,7 +53,7 @@ enum StoreLogger {
     /// Log a free-form trace message (create/update/delete notices, errors). No-op outside DEBUG builds.
     static func debug(_ message: @autoclosure () -> String) {
         #if DEBUG
-        print(message())
+        AppLogger.shared.debug(message())
         #endif
     }
 

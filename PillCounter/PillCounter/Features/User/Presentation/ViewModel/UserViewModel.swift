@@ -59,6 +59,7 @@ class UserViewModel: ObservableObject {
             }
             return healthy
         } catch {
+            AppLogger.shared.error("Server health check request failed", error: error)
             OfflineSessionManager.shared.markOffline()
             return false
         }
@@ -162,7 +163,7 @@ class UserViewModel: ObservableObject {
                         AppStorageManager.shared.cachedOfflineSessionThresholdSeconds = threshold
                     }
 
-                    Log("Barcode format: \(response.data?.hl7Config?.barcodeFormat ?? "")")
+                    AppLogger.shared.debug("Barcode format: \(response.data?.hl7Config?.barcodeFormat ?? "")")
 
                     // Notify the HL7 controller that pmsHostName is now populated.
                     // This triggers the first real Bonjour browse if the service
@@ -170,7 +171,7 @@ class UserViewModel: ObservableObject {
                     Hl7ServiceController.shared.notifySettingsUpdated()
                 }
             } catch {
-                Log("❌ Failed to load mobile settings: \(error)")
+                AppLogger.shared.error("Failed to load mobile settings", error: error)
                 await MainActor.run {
                     self.isMaintenance = false
                     self.isForceUpdate = false
@@ -338,7 +339,7 @@ class UserViewModel: ObservableObject {
             getAllTransactionsAndFilterByCountType()
 
         } catch {
-            Log("[User] Error fetching user: \(error.localizedDescription)")
+            AppLogger.shared.error("Error fetching user", error: error)
             // The auth/me call failed. Fall back to whatever we have cached so the
             // terminal dropdown (and profile) stay populated instead of going blank.
             if terminals.isEmpty {
@@ -387,7 +388,7 @@ class UserViewModel: ObservableObject {
                 AppStorageManager.shared.pharmacyTypeOptions = types
             }
         } catch {
-            Log("❌ Failed to fetch pharmacy types: \(error)")
+            AppLogger.shared.error("Failed to fetch pharmacy types", error: error)
         }
     }
 
@@ -406,7 +407,7 @@ class UserViewModel: ObservableObject {
                 countryOptions = AppStorageManager.shared.countryOptions
             }
         } catch {
-            Log("❌ Failed to fetch countries: \(error)")
+            AppLogger.shared.error("Failed to fetch countries", error: error)
             countryOptions = AppStorageManager.shared.countryOptions
         }
     }
@@ -485,10 +486,10 @@ class UserViewModel: ObservableObject {
             }
         } catch APIError.server(let message) {
             profileErrorMessage = message
-            Log("updateUserProfile error: \(message)")
+            AppLogger.shared.error("Failed to update user profile", error: APIError.server(message: message))
         } catch {
             profileErrorMessage = nil
-            Log("updateUserProfile error: \(error)")
+            AppLogger.shared.error("Failed to update user profile", error: error)
         }
     }
     // func to check if any updates were there in the profile.
@@ -518,12 +519,7 @@ class UserViewModel: ObservableObject {
 
         // Get the user
         guard let user = userLocalDB.fetchByUserId( userID) else {
-            print(
-                """
-                ❌ [TransactionCount]
-                User not found in local DB
-                UserID: \(userID)
-                """)
+            AppLogger.shared.warn("[TransactionCount] User not found in local DB. UserID: \(userID)")
             return
         }
 
@@ -557,7 +553,11 @@ class UserViewModel: ObservableObject {
         }
 
         let startOfDay  = Calendar.current.startOfDay(for: startDate)
-        let endOfDay    = Calendar.current.date(byAdding: DateComponents(day: 1, second: -1), to: Calendar.current.startOfDay(for: endDate))!
+        let endStartOfDay = Calendar.current.startOfDay(for: endDate)
+        // Calendar arithmetic can return nil on calendrical overflow; fall back to
+        // a plain Date computation (which cannot fail) so a malformed date never crashes.
+        let endOfDay = Calendar.current.date(byAdding: DateComponents(day: 1, second: -1), to: endStartOfDay)
+            ?? endStartOfDay.addingTimeInterval(86399)
         let startTs     = Int64(startOfDay.timeIntervalSince1970 * 1000)
         let endTs       = Int64(endOfDay.timeIntervalSince1970 * 1000)
 
@@ -733,7 +733,7 @@ class UserViewModel: ObservableObject {
             }
 
         } catch {
-            print("Failed to delete user profile: \(error)")
+            AppLogger.shared.error("Failed to delete user profile", error: error)
         }
     }
     
@@ -787,7 +787,7 @@ class UserViewModel: ObservableObject {
                 AppStorageManager.shared.selectedTerminalName = ""
             }
         } catch {
-            Log("❌ Failed to load terminals: \(error)")
+            AppLogger.shared.error("Failed to load terminals", error: error)
             hydrateTerminalsFromCache()
         }
     }
@@ -877,7 +877,7 @@ class UserViewModel: ObservableObject {
                     // `terminals` is now stale relative to `selectedTerminal` until
                     // the next `loadTerminals()` call. Log so the divergence is
                     // diagnosable instead of failing invisibly.
-                    Log("⚠️ [updateTerminal] Claim succeeded but post-claim terminal re-fetch failed — local terminals list is stale")
+                    AppLogger.shared.warn("[updateTerminal] Claim succeeded but post-claim terminal re-fetch failed — local terminals list is stale")
                 }
                 return true
             }
@@ -886,7 +886,7 @@ class UserViewModel: ObservableObject {
             terminalErrorMessage = L10n.Profile.Error.errorTerminalAlreadyClaimedMessage
             return false
         } catch {
-            print("Failed to update terminal: \(error)")
+            AppLogger.shared.error("Failed to update terminal", error: error)
             terminalErrorMessage = L10n.Profile.Error.errorUpdateTerminalMessage
             return false
         }
@@ -899,10 +899,13 @@ class UserViewModel: ObservableObject {
 //        }
 
         let startOfDay = Calendar.current.startOfDay(for: startDate)
+        let endStartOfDay = Calendar.current.startOfDay(for: endDate)
+        // Calendar arithmetic can return nil on calendrical overflow; fall back to
+        // a plain Date computation (which cannot fail) so a malformed date never crashes.
         let endOfDay = Calendar.current.date(
             byAdding: DateComponents(day: 1, second: -1),
-            to: Calendar.current.startOfDay(for: endDate)
-        )!
+            to: endStartOfDay
+        ) ?? endStartOfDay.addingTimeInterval(86399)
 
         let startTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
         let endTs   = Int64(endOfDay.timeIntervalSince1970 * 1000)

@@ -100,6 +100,7 @@ final class IdCardAnalyzer {
                 self.handleRecognized(lines: lines, token: token, onDetected: onDetected)
             } catch {
                 // Path 2: recognizer threw.
+                AppLogger.shared.error("IdCardAnalyzer: text recognizer threw while analyzing ID card frame", error: error)
                 self.finishFrame(token: token)
             }
         }

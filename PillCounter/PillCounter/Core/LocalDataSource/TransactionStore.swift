@@ -567,19 +567,18 @@ final class TransactionStore: BaseDataStore<PillCountTransactionEntity> {
                 in: context
             )
             #if DEBUG
+            // rx_no/drug_name tie a real prescription to this user's transaction
+            // history — PHI — so they're excluded from the logged columns below.
             StoreLogger.log(
                 dao: "TransactionDAO", op: "fetchAll",
-                columns: ["txn_id", "rx_no", "drug_name", "is_dispense", "status", "batch_id", "target_count", "refill_no" , "bottle_info_list_json" ],
+                columns: ["txn_id", "is_dispense", "status", "batch_id", "target_count", "refill_no"],
                 rows: results.map { [
                     "\($0.txn_id)",
-                    $0.rx_no ?? "-",
-                    $0.drug?.drug_name ?? "-",
                     "\($0.is_dispense)",
                     $0.status ?? "-",
                     "\($0.batch_id)",
                     "\($0.target_count)",
-                    "\($0.refill_no ?? "-")",
-                    "\($0.bottle_info_list_json)"
+                    "\($0.refill_no ?? "-")"
                 ]}
             )
             #endif

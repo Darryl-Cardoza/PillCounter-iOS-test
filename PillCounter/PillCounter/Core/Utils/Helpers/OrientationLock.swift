@@ -47,7 +47,7 @@ final class OrientationLock {
 
         let mask = current ?? (UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown)
         scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
-            Log("OrientationLock: geometry update failed — \(error)")
+            AppLogger.shared.error("OrientationLock: geometry update failed", error: error)
         }
         scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
     }

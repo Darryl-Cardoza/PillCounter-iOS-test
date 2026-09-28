@@ -93,9 +93,9 @@ final class YuNetDetectorService {
             let cfg = MLModelConfiguration()
             cfg.computeUnits = .cpuAndNeuralEngine
             model = try yunet_640x640_float16(configuration: cfg)
-            Log("YuNet: model loaded and ready")
+            AppLogger.shared.info("YuNet: model loaded and ready")
         } catch {
-            Log("YuNet: failed to load — \(error)")
+            AppLogger.shared.error("YuNet: failed to load", error: error)
         }
     }
 
@@ -107,21 +107,21 @@ final class YuNetDetectorService {
     /// letterbox, inference error) — callers treat that as "no face found".
     func detect(pixelBuffer: CVPixelBuffer) -> [FaceDetectionResult] {
         guard let model else {
-            Log("YuNet: model not loaded")
+            AppLogger.shared.warn("YuNet: model not loaded")
             return []
         }
         let frameSize = pixelBuffer.size
 
         guard let (lbBuffer, scale, padX, padY) = letterbox(pixelBuffer) else {
-            Log("YuNet: letterbox failed for frame \(frameSize)")
+            AppLogger.shared.warn("YuNet: letterbox failed for frame \(frameSize)")
             return []
         }
         guard let inputArray = pixelBufferToNHWCFloat16(lbBuffer) else {
-            Log("YuNet: NHWC conversion failed")
+            AppLogger.shared.warn("YuNet: NHWC conversion failed")
             return []
         }
         guard let output = try? model.prediction(input: inputArray) else {
-            Log("YuNet: model.prediction threw")
+            AppLogger.shared.warn("YuNet: model.prediction threw")
             return []
         }
 
@@ -130,9 +130,9 @@ final class YuNetDetectorService {
 
         if kept.isEmpty {
             let topScore = raw.map(\.score).max() ?? 0
-            Log("YuNet: 0 detections above threshold \(confidenceThreshold) — best raw score this frame: \(topScore)")
+            AppLogger.shared.debug("YuNet: 0 detections above threshold \(confidenceThreshold) — best raw score this frame: \(topScore)")
         } else {
-            Log("YuNet: \(kept.count) detection(s), scores: \(kept.map { String(format: "%.2f", $0.score) })")
+            AppLogger.shared.debug("YuNet: \(kept.count) detection(s), scores: \(kept.map { String(format: "%.2f", $0.score) })")
         }
 
         return kept.map { det in

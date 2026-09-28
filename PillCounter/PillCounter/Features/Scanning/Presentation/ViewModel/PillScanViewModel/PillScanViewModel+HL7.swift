@@ -15,7 +15,7 @@ extension PillScanViewModel {
         callback: HL7SimpleCallback? = nil
     ) {
         guard let msgType = classifyInboundMessage(message) else {
-            print("Unknown HL7 message")
+            AppLogger.shared.warn("Unknown HL7 message")
             return
         }
 
@@ -246,7 +246,7 @@ extension PillScanViewModel {
         var existingTxn = currentUser.flatMap { transactionDAO.fetchByRxNo(rxNo, refillNo: refillNo, for: $0) }
         if existingTxn == nil {
             if let currentUser, let deleted = transactionDAO.fetchDeletedByRxNo(rxNo, refillNo: refillNo, for: currentUser) {
-                Log("HL7 ORC|XO: restoring deleted txnId=\(deleted.txn_id) for rxNo=\(rxNo)")
+                AppLogger.shared.info("HL7 ORC|XO: restoring deleted txnId=\(deleted.txn_id) for rxNo=\(rxNo)")
                 transactionDAO.restoreDeleted(txnId: deleted.txn_id)
                 existingTxn = transactionDAO.fetchById(deleted.txn_id)
             }
@@ -281,7 +281,7 @@ extension PillScanViewModel {
                     )
                 }
             }
-            Log("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), refillNo=\(refillNo ?? "nil"), refillMismatch=\(rxKnownUnderOtherRefill), orderStatus=\(orderStatusRaw ?? "nil") — ignoring")
+            AppLogger.shared.warn("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), refillNo=\(refillNo ?? "nil"), refillMismatch=\(rxKnownUnderOtherRefill), orderStatus=\(orderStatusRaw ?? "nil") — ignoring")
             callback?(false)
             return
         }
@@ -300,7 +300,7 @@ extension PillScanViewModel {
            let localName = local.drug_name, !localName.isEmpty {
             resolvedDrugId = local.drug_id
             resolvedDrugName = localName
-            Log("HL7 ORC|XO: drug found locally → \(resolvedDrugName)")
+            AppLogger.shared.debug("HL7 ORC|XO: drug found locally → \(resolvedDrugName)")
         } else {
             let request = NdcValidationRequest(targetNdc: hl7Ndc, scannedNdc: hl7Ndc)
             do {
@@ -317,9 +317,9 @@ extension PillScanViewModel {
                     )
                     resolvedDrugId = newId
                     resolvedDrugName = lookup
-                    Log("HL7 ORC|XO: drug created via API → \(lookup)")
+                    AppLogger.shared.debug("HL7 ORC|XO: drug created via API → \(lookup)")
                 } else {
-                    Log("HL7 ORC|XO: API returned no drug name for NDC=\(hl7Ndc) — aborting edit")
+                    AppLogger.shared.warn("HL7 ORC|XO: API returned no drug name for NDC=\(hl7Ndc) — aborting edit")
                     HL7NotificationManager.show(
                         title: L10n.Hl7Notification.editRxFailedTitle,
                         body: L10n.Hl7Notification.drugNotFoundBody(rxNo: rxNo, ndc: hl7Ndc)
@@ -328,7 +328,7 @@ extension PillScanViewModel {
                     return
                 }
             } catch {
-                Log("HL7 ORC|XO: API failed for NDC=\(hl7Ndc) → \(error.localizedDescription)")
+                AppLogger.shared.error("HL7 ORC|XO: API failed for NDC=\(hl7Ndc)", error: error)
                 HL7NotificationManager.show(
                     title: L10n.Hl7Notification.editRxFailedTitle,
                     body: L10n.Hl7Notification.drugNotFoundBody(rxNo: rxNo, ndc: hl7Ndc)
@@ -354,7 +354,7 @@ extension PillScanViewModel {
             refillNo: refillNo
         )
 
-        Log("HL7 ORC|XO applied: txnId=\(txnId), rxNo=\(rxNo), drugId=\(resolvedDrugId), targetCount=\(newTargetCount), priority=\(newPriority ?? "nil")")
+        AppLogger.shared.debug("HL7 ORC|XO applied: txnId=\(txnId), rxNo=\(rxNo), drugId=\(resolvedDrugId), targetCount=\(newTargetCount), priority=\(newPriority ?? "nil")")
 
         // 5. Map and apply order status
         let orderStatusRaw: String? = {
@@ -368,7 +368,7 @@ extension PillScanViewModel {
 
         // 6. If CA — soft-delete after the update
         if orderStatusRaw == "CA" {
-            Log("HL7 ORC|XO status=CA — soft-deleting txnId=\(txnId) after update")
+            AppLogger.shared.debug("HL7 ORC|XO status=CA — soft-deleting txnId=\(txnId) after update")
             transactionDAO.softDelete(txnId: txnId)
             HL7NotificationManager.show(
                 title: L10n.Hl7Notification.rxCancelledTitle,
@@ -380,7 +380,7 @@ extension PillScanViewModel {
 
         // 7. If ON_HOLD
         if newStatus == .ON_HOLD {
-            Log("HL7 ORC|XO status=HD — transaction placed on hold txnId=\(txnId)")
+            AppLogger.shared.debug("HL7 ORC|XO status=HD — transaction placed on hold txnId=\(txnId)")
             getAllTransactionDetailsOfTheCurrentTransaction()
             HL7NotificationManager.show(
                 title: L10n.Hl7Notification.rxOnHoldTitle,
@@ -392,7 +392,7 @@ extension PillScanViewModel {
 
         // 8. If COMPLETED — updateStatus already fired transactionsDidChange which auto-enqueues PMS sync
         if newStatus == .COMPLETED {
-            Log("HL7 ORC|XO status=CM — transaction marked completed, PMS sync enqueued via transactionsDidChange")
+            AppLogger.shared.debug("HL7 ORC|XO status=CM — transaction marked completed, PMS sync enqueued via transactionsDidChange")
             HL7NotificationManager.show(
                 title: L10n.Hl7Notification.rxCompletedTitle,
                 body: "Rx \(rxNo) • \(resolvedDrugName)"
@@ -441,7 +441,7 @@ extension PillScanViewModel {
         var drugType: String? = nil
 
         guard !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            Log("HL7: Missing NDC")
+            AppLogger.shared.warn("HL7: Missing NDC")
             return
         }
 
@@ -456,7 +456,7 @@ extension PillScanViewModel {
             drugIdToUse = existing.drug_id
             resolvedName = localName
 
-            Log("HL7: Drug found locally → \(resolvedName)")
+            AppLogger.shared.debug("HL7: Drug found locally → \(resolvedName)")
         }
         else {
 
@@ -492,7 +492,7 @@ extension PillScanViewModel {
                         drugId: newId,
                         drug:   scannedNdc
                     ) else {
-                        Log("HL7: API returned empty drug name")
+                        AppLogger.shared.warn("HL7: API returned empty drug name")
                         HL7NotificationManager.show(
                             title: L10n.BarcodeScan.drugNotFound,
                             body: L10n.BarcodeScan.drugNotFoundMessage
@@ -503,9 +503,9 @@ extension PillScanViewModel {
                     drugIdToUse = persisted.drug_id
                     drugType = scannedNdc.scheduleType
 
-                    Log("HL7: Drug created via API → \(lookup)")
+                    AppLogger.shared.debug("HL7: Drug created via API → \(lookup)")
                 } else {
-                    Log("HL7: API returned empty drug name")
+                    AppLogger.shared.warn("HL7: API returned empty drug name")
                     HL7NotificationManager.show(
                         title: L10n.BarcodeScan.drugNotFound,
                         body: L10n.BarcodeScan.drugNotFoundMessage
@@ -514,7 +514,7 @@ extension PillScanViewModel {
                 }
 
             } catch {
-                Log("HL7: API failed for NDC \(ndc) → \(error.localizedDescription)")
+                AppLogger.shared.error("HL7: API failed for NDC \(ndc)", error: error)
                 HL7NotificationManager.show(
                     title: L10n.BarcodeScan.drugNotFound,
                     body: L10n.BarcodeScan.drugNotFoundMessage
@@ -567,7 +567,7 @@ extension PillScanViewModel {
             if existing.txn_id == activeTxnIdBeforeReceive {
                 self.currentTransaction = transactionDAO.fetchById(existing.txn_id)
             }
-            Log("HL7: Rx \(rxNo) already exists (txnId=\(existing.txn_id)) — updated in place, no new txn created")
+            AppLogger.shared.debug("HL7: Rx \(rxNo) already exists (txnId=\(existing.txn_id)) — updated in place, no new txn created")
         } else {
             await createTransaction(
                 drugId: drugIdToUse,
@@ -589,7 +589,7 @@ extension PillScanViewModel {
             let createdTxn = self.currentTransaction
 
             guard let createdTxn else {
-                Log("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)")
+                AppLogger.shared.warn("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)")
                 HL7NotificationManager.show(
                     title: L10n.BarcodeScan.drugNotFound,
                     body: L10n.BarcodeScan.drugNotFoundMessage
@@ -616,7 +616,7 @@ extension PillScanViewModel {
                 )
 
                 transactionDAO.updateWorkflowStep(txnId: txnId, step: .targetVerification)
-                Log("HL7: Pre-filled CONTAINER_INITIATE with \(invCount) from PMS; advanced to targetVerification")
+                AppLogger.shared.debug("HL7: Pre-filled CONTAINER_INITIATE with \(invCount) from PMS; advanced to targetVerification")
             }
         }
 
@@ -663,7 +663,7 @@ extension PillScanViewModel {
 
         let ndc = zui.ndc.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ndc.isEmpty else {
-            Log("HL7 ZUI order packet: missing NDC — ignoring")
+            AppLogger.shared.warn("HL7 ZUI order packet: missing NDC — ignoring")
             callback?(false)
             return
         }
@@ -701,7 +701,7 @@ extension PillScanViewModel {
 
         let ndc = zni.ndc.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ndc.isEmpty else {
-            Log("HL7 ZNI dispense result: missing NDC — ignoring")
+            AppLogger.shared.warn("HL7 ZNI dispense result: missing NDC — ignoring")
             callback?(false)
             return
         }
@@ -738,7 +738,7 @@ extension PillScanViewModel {
         let currentUser = userDataLocalStorage.fetchByUserId(userId)
         let txns = currentUser.map { transactionDAO.fetchByRxNo(rxNo, for: $0) } ?? []
         guard !txns.isEmpty else {
-            Log("HL7: Cancel order — no transactions found for Rx \(rxNo)")
+            AppLogger.shared.warn("HL7: Cancel order — no transactions found for Rx \(rxNo)")
             callback?(false)
             return
         }
@@ -747,7 +747,7 @@ extension PillScanViewModel {
             transactionDAO.softDelete(txnId: txn.txn_id)
         }
 
-        Log("HL7: Cancelled \(txns.count) transaction(s) for Rx \(rxNo)")
+        AppLogger.shared.debug("HL7: Cancelled \(txns.count) transaction(s) for Rx \(rxNo)")
         getAllTransactionDetailsOfTheCurrentTransaction()
 
         HL7NotificationManager.show(

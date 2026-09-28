@@ -81,7 +81,7 @@ final class FaceCameraService: NSObject, ObservableObject {
                 let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
                 let newInput = try? AVCaptureDeviceInput(device: device)
             else {
-                Log("FaceCameraService: flip failed — no camera at position \(newPosition)")
+                AppLogger.shared.warn("FaceCameraService: flip failed — no camera at position \(newPosition)")
                 return
             }
 
@@ -100,7 +100,7 @@ final class FaceCameraService: NSObject, ObservableObject {
             self.applyConnectionOrientation(position: newPosition)
 
             DispatchQueue.main.async { self.cameraPosition = newPosition }
-            Log("FaceCameraService: flipped to \(newPosition)")
+            AppLogger.shared.info("FaceCameraService: flipped to \(newPosition)")
         }
     }
 

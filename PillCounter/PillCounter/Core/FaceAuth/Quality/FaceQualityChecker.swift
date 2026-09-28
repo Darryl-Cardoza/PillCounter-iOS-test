@@ -61,11 +61,11 @@ final class FaceQualityChecker {
     /// multi-face frames rather than silently picking a winner.
     func check(detections: [FaceDetectionResult], pixelBuffer: CVPixelBuffer) -> FaceQualityResult {
         guard !detections.isEmpty else {
-            Log("Quality: REJECT faceNotFound (0 detections)")
+            AppLogger.shared.debug("Quality: REJECT faceNotFound (0 detections)")
             return .rejected(.faceNotFound)
         }
         guard detections.count == 1 else {
-            Log("Quality: REJECT multipleFaces (\(detections.count) detections)")
+            AppLogger.shared.debug("Quality: REJECT multipleFaces (\(detections.count) detections)")
             return .rejected(.multipleFaces)
         }
 
@@ -81,35 +81,35 @@ final class FaceQualityChecker {
 
         // TEMP DEBUG — remove after root-causing bug 1/bug 2.
         let l = detection.landmarks
-        Log("DEBUG detect: score=\(String(format: "%.3f", detection.confidence)) box=(\(Int(box.minX)),\(Int(box.minY)),\(Int(box.width))x\(Int(box.height))) frame=\(Int(frame.width))x\(Int(frame.height))")
-        Log("DEBUG landmarks: rEye=\(l.rightEye) lEye=\(l.leftEye) nose=\(l.nose) rMouth=\(l.rightMouthCorner) lMouth=\(l.leftMouthCorner)")
+        AppLogger.shared.debug("DEBUG detect: score=\(String(format: "%.3f", detection.confidence)) box=(\(Int(box.minX)),\(Int(box.minY)),\(Int(box.width))x\(Int(box.height))) frame=\(Int(frame.width))x\(Int(frame.height))")
+        AppLogger.shared.debug("DEBUG landmarks: rEye=\(l.rightEye) lEye=\(l.leftEye) nose=\(l.nose) rMouth=\(l.rightMouthCorner) lMouth=\(l.leftMouthCorner)")
 
         guard box.width >= minFaceWidthPx else {
-            Log("Quality: REJECT faceTooSmall (width \(box.width) < \(minFaceWidthPx))")
+            AppLogger.shared.debug("Quality: REJECT faceTooSmall (width \(box.width) < \(minFaceWidthPx))")
             return .rejected(.faceTooSmall, qualityScore: Float(box.width))
         }
         guard box.width <= frame.width * maxFaceWidthRatio else {
-            Log("Quality: REJECT faceTooClose (width \(box.width) > \(frame.width * maxFaceWidthRatio))")
+            AppLogger.shared.debug("Quality: REJECT faceTooClose (width \(box.width) > \(frame.width * maxFaceWidthRatio))")
             return .rejected(.faceTooClose, qualityScore: Float(box.width))
         }
         let centerOffsetX = abs(box.midX - frame.width / 2)
         let centerOffsetY = abs(box.midY - frame.height / 2)
         guard centerOffsetX <= frame.width * maxCenterOffsetXRatio,
               centerOffsetY <= frame.height * maxCenterOffsetYRatio else {
-            Log("Quality: REJECT faceCropIncomplete (offset \(Int(centerOffsetX)),\(Int(centerOffsetY)))")
+            AppLogger.shared.debug("Quality: REJECT faceCropIncomplete (offset \(Int(centerOffsetX)),\(Int(centerOffsetY)))")
             return .rejected(.faceCropIncomplete, qualityScore: Float(box.width))
         }
 
         // TEMP DEBUG landmark-sanity check — not gating yet, log only.
         let sane = landmarkSanityCheck(detection)
-        Log("DEBUG landmarkSanity: \(sane ? "PASS" : "FAIL")")
+        AppLogger.shared.debug("DEBUG landmarkSanity: \(sane ? "PASS" : "FAIL")")
 
         let yawDegrees = yawDegreesEstimate(detection)
         let pitchDegrees = pitchDegreesEstimate(detection)
         let sharpness = sharpnessScore(pixelBuffer: pixelBuffer, box: box) ?? softMinSharpness
         let sharpnessNormalized = min(1, max(0, sharpness / (softMinSharpness * 2)))
 
-        Log("Quality: ACCEPT conf=\(String(format: "%.2f", detection.confidence)) width=\(String(format: "%.0f", box.width)) sharpness=\(String(format: "%.1f", sharpness)) yaw=\(String(format: "%.1f", yawDegrees))° pitch=\(String(format: "%.1f", pitchDegrees))°")
+        AppLogger.shared.debug("Quality: ACCEPT conf=\(String(format: "%.2f", detection.confidence)) width=\(String(format: "%.0f", box.width)) sharpness=\(String(format: "%.1f", sharpness)) yaw=\(String(format: "%.1f", yawDegrees))° pitch=\(String(format: "%.1f", pitchDegrees))°")
         return .accepted(qualityScore: sharpnessNormalized, yawDegrees: yawDegrees, pitchDegrees: pitchDegrees)
     }
 

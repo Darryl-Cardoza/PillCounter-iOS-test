@@ -16,30 +16,30 @@ import Foundation
 
 enum IdNameParser {
 
-    private static let lastNameLabel = try! NSRegularExpression(
-        pattern: #"^(?:LN|1)[:.]?\s+(.+)$"#, options: [.caseInsensitive]
+    private static let lastNameLabel = NSRegularExpression.literal(
+        #"^(?:LN|1)[:.]?\s+(.+)$"#, options: [.caseInsensitive]
     )
-    private static let firstNameLabel = try! NSRegularExpression(
-        pattern: #"^(?:FN|2)[:.]?\s+(.+)$"#, options: [.caseInsensitive]
+    private static let firstNameLabel = NSRegularExpression.literal(
+        #"^(?:FN|2)[:.]?\s+(.+)$"#, options: [.caseInsensitive]
     )
-    private static let firstLabelLine = try! NSRegularExpression(
-        pattern: #"^FIRST\s*NAME\b[:.]?\s*(.*)$"#, options: [.caseInsensitive]
+    private static let firstLabelLine = NSRegularExpression.literal(
+        #"^FIRST\s*NAME\b[:.]?\s*(.*)$"#, options: [.caseInsensitive]
     )
-    private static let lastLabelLine = try! NSRegularExpression(
-        pattern: #"^LAST\s*NAME\b[:.]?\s*(.*)$"#, options: [.caseInsensitive]
+    private static let lastLabelLine = NSRegularExpression.literal(
+        #"^LAST\s*NAME\b[:.]?\s*(.*)$"#, options: [.caseInsensitive]
     )
-    private static let fullNameLabelLine = try! NSRegularExpression(
-        pattern: #"^(?:FULL\s*)?NAME\b[:.]?\s*(.*)$"#, options: [.caseInsensitive]
+    private static let fullNameLabelLine = NSRegularExpression.literal(
+        #"^(?:FULL\s*)?NAME\b[:.]?\s*(.*)$"#, options: [.caseInsensitive]
     )
 
     // ASCII only, matching Android. Widen to `\p{L}` for accented names if
     // this ever needs non-English deployments (Android parity, not applied).
     // Both apostrophe forms kept — Vision emits the typographic '’' too.
-    private static let nameWord = try! NSRegularExpression(
-        pattern: #"^[A-Za-z][A-Za-z'’-]*$"#
+    private static let nameWord = NSRegularExpression.literal(
+        #"^[A-Za-z][A-Za-z'’-]*$"#
     )
 
-    private static let whitespace = try! NSRegularExpression(pattern: #"\s+"#)
+    private static let whitespace = NSRegularExpression.literal(#"\s+"#)
 
     /// Titles/credentials that may surround a name without disqualifying the line.
     private static let strippedTokens: Set<String> = [

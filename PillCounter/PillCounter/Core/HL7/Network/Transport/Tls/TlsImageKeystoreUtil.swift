@@ -98,6 +98,12 @@ final class TlsImageKeystoreUtil {
         guard status == errSecSuccess, let ref = result else {
             throw ImageTLSError.keychainError(status)
         }
+        // kSecReturnRef + a kSecClassIdentity query should guarantee a single
+        // SecIdentity, but check the concrete type rather than force-casting so a
+        // future query change that widens the match fails safe instead of crashing.
+        guard CFGetTypeID(ref) == SecIdentityGetTypeID() else {
+            throw ImageTLSError.unexpectedItemType
+        }
         // swiftlint:disable:next force_cast
         return (ref as! SecIdentity)
     }
@@ -185,6 +191,7 @@ final class TlsImageKeystoreUtil {
 private enum ImageTLSError: Error, LocalizedError {
     case publicKeyExportFailed
     case keychainError(OSStatus)
+    case unexpectedItemType
 
 //    var errorDescription: String? {
 //        switch self {

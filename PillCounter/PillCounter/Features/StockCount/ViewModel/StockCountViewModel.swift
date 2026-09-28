@@ -123,7 +123,7 @@ class StockCountViewModel: ObservableObject {
     /// Central state refresh. Replaces loadTransactions() + updateBatchCount()
     /// everywhere they were previously called manually.
     func reloadAllState() {
-        Log("State Reloaded")
+        AppLogger.shared.debug("State Reloaded")
         let batches = batchDAO.fetchAllPartial()
         totalBatchCount = batches.count
         totalCompletedBatchCount = batchDAO.fetchAllCompleted().count

@@ -204,6 +204,7 @@ enum LoadTestDataGenerator {
                         completion(.success(()))
                     }
                 } catch {
+                    AppLogger.shared.error("Load test data generation/save failed", error: error)
                     DispatchQueue.main.async { completion(.failure(error)) }
                 }
             }
@@ -264,6 +265,7 @@ enum LoadTestDataGenerator {
 
                     DispatchQueue.main.async { completion(.success(())) }
                 } catch {
+                    AppLogger.shared.error("Load test data cleanup failed", error: error)
                     DispatchQueue.main.async { completion(.failure(error)) }
                 }
             }

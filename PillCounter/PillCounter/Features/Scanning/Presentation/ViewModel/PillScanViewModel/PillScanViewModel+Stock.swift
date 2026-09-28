@@ -78,7 +78,7 @@ extension PillScanViewModel {
             if (existingDrug.gtin ?? "").isEmpty, !gtin.isEmpty {
                 existingDrug.gtin = gtin
                 CoreDataManager.shared.save(context: CoreDataManager.shared.context)
-                Log("Updated GTIN for existing drug → \(ndc)")
+                AppLogger.shared.info("Updated GTIN for existing drug → \(ndc)")
             }
 
             drugIdToUse = existingDrug.drug_id
@@ -124,7 +124,7 @@ extension PillScanViewModel {
 
             } catch {
 
-                Log("API failed → fallback create")
+                AppLogger.shared.error("API failed → fallback create", error: error)
 
                 let newId = generateUniqueDrugId()
 
@@ -216,7 +216,7 @@ extension PillScanViewModel {
             if (existingDrug.gtin ?? "").isEmpty, !gtin.isEmpty {
                 existingDrug.gtin = gtin
                 CoreDataManager.shared.save(context: CoreDataManager.shared.context)
-                Log("Updated GTIN for existing drug → \(ndc)")
+                AppLogger.shared.info("Updated GTIN for existing drug → \(ndc)")
             }
             drugIdToUse = existingDrug.drug_id
         } else if !gtin.isEmpty, let existingByGtin = drugMasterDAO.fetchByGtin(gtin) {
@@ -245,7 +245,7 @@ extension PillScanViewModel {
                     throw NSError(domain: "HL7", code: -1)
                 }
             } catch {
-                Log("API failed → fallback create")
+                AppLogger.shared.error("API failed → fallback create", error: error)
                 let newId = generateUniqueDrugId()
                 drugMasterDAO.saveManual(
                     ndc: ndc,
@@ -504,6 +504,7 @@ extension PillScanViewModel {
                 )
 
             } catch {
+                AppLogger.shared.error("Controlled-drug API lookup failed for an NDC during batch create; item skipped", error: error)
                 continue
             }
         }

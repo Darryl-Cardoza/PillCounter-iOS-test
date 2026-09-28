@@ -47,9 +47,9 @@ final class ImageWebServer {
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    Log("Image server running on port \(self.port)")
+                    AppLogger.shared.info("Image server running on port \(self.port)")
                 case .failed(let error):
-                    Log("Image server failed: \(error.localizedDescription)")
+                    AppLogger.shared.error("Image server failed", error: error)
                 default:
                     break
                 }
@@ -63,7 +63,7 @@ final class ImageWebServer {
             self.listener = listener
 
         } catch {
-            Log("Failed to start image server: \(error.localizedDescription)")
+            AppLogger.shared.error("Failed to start image server", error: error)
         }
 
         startPortEighty()
@@ -82,9 +82,9 @@ final class ImageWebServer {
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    Log("Image server running on port 80")
+                    AppLogger.shared.info("Image server running on port 80")
                 case .failed(let error):
-                    Log("Image server (port 80) failed: \(error.localizedDescription)")
+                    AppLogger.shared.error("Image server (port 80) failed", error: error)
                 default:
                     break
                 }
@@ -98,7 +98,7 @@ final class ImageWebServer {
             self.portEightyListener = listener
 
         } catch {
-            Log("Failed to start image server on port 80: \(error.localizedDescription)")
+            AppLogger.shared.error("Failed to start image server on port 80", error: error)
         }
     }
 
@@ -152,7 +152,7 @@ final class ImageWebServer {
             if let data { buffer.append(data) }
 
             if let error {
-                Log("Image server receive error: \(error.localizedDescription)")
+                AppLogger.shared.error("Image server receive error", error: error)
                 connection.cancel()
                 return
             }
@@ -514,7 +514,7 @@ final class ImageWebServer {
         connection.send(content: response,
         completion: .contentProcessed { error in
             if let error {
-                Log("Image server send error: \(error.localizedDescription)")
+                AppLogger.shared.error("Image server send error", error: error)
             }
             connection.cancel()
             onComplete(error == nil)

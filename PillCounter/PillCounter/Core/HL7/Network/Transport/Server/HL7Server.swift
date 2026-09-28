@@ -25,9 +25,10 @@ final class HL7TLSServer {
     private var onMessage: ((String) -> (ack: String, controlId: String)?)?
     private var onAckSent: ((String) -> Void)?
 
-    init(port: UInt16) {
+    init?(port: UInt16) {
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
-            fatalError("Invalid port \(port)")
+            AppLogger.shared.error("HL7TLSServer: invalid port \(port), refusing to start")
+            return nil
         }
         self.port = nwPort
     }
@@ -56,8 +57,10 @@ final class HL7TLSServer {
 
             guard let osIdentity = sec_identity_create(secIdentity) else {
                 print("❌ [HL7][SERVER] sec_identity_create returned nil")
-                throw NSError(domain: "TLS", code: -1,
+                let error = NSError(domain: "TLS", code: -1,
                               userInfo: [NSLocalizedDescriptionKey: "sec_identity_create returned nil"])
+                AppLogger.shared.error("Failed to create secure identity for HL7 TLS server", error: error)
+                throw error
             }
 
             sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, osIdentity)
@@ -81,15 +84,15 @@ final class HL7TLSServer {
             switch state {
             case .ready:
                 print("✅ [HL7][SERVER] NWListener READY — port=\(self?.port.rawValue ?? 0) bonjour='\(serviceName)'")
-                Log("HL7 TLS Server ready on port \(self?.port.rawValue ?? 0)")
+                AppLogger.shared.info("HL7 TLS Server ready on port \(self?.port.rawValue ?? 0)")
             case .failed(let error):
                 print("❌ [HL7][SERVER] NWListener FAILED — \(error) (posix=\(error.localizedDescription))")
-                Log("HL7 TLS Server failed: \(error.localizedDescription)")
+                AppLogger.shared.error("HL7 TLS Server failed", error: error)
                 // Attempt recovery — recreate listener after a short delay
                 self?.scheduleRestart(serviceName: serviceName, serviceType: serviceType)
             case .cancelled:
                 print("🔴 [HL7][SERVER] NWListener CANCELLED")
-                Log("HL7 TLS Server stopped")
+                AppLogger.shared.info("HL7 TLS Server stopped")
             case .waiting(let error):
                 print("⏳ [HL7][SERVER] NWListener WAITING — \(error)")
             default:
@@ -99,7 +102,7 @@ final class HL7TLSServer {
 
         listener.newConnectionHandler = { [weak self] connection in
             guard let self else { return }
-            Log("PMS connected from \(connection.endpoint)")
+            AppLogger.shared.info("PMS connected from \(connection.endpoint)")
             self.track(connection)
             self.handle(connection)
         }
@@ -116,7 +119,7 @@ final class HL7TLSServer {
             activeConnections.removeAll()
             listener?.cancel()
             listener = nil
-            Log("HL7 TLS Server stopped")
+            AppLogger.shared.info("HL7 TLS Server stopped")
         }
     }
     // MARK: - Connection Tracking
@@ -124,14 +127,14 @@ final class HL7TLSServer {
     private func track(_ connection: NWConnection) {
         let key = ObjectIdentifier(connection)
         activeConnections[key] = connection
-        Log("HL7 active connections: \(activeConnections.count)")
+        AppLogger.shared.debug("HL7 active connections: \(activeConnections.count)")
     }
 
     private func untrack(_ connection: NWConnection) {
         let key = ObjectIdentifier(connection)
         activeConnections.removeValue(forKey: key)
         receiveBuffers.removeValue(forKey: key)
-        Log("HL7 active connections: \(activeConnections.count)")
+        AppLogger.shared.debug("HL7 active connections: \(activeConnections.count)")
     }
 
     // MARK: - Connection Handling
@@ -141,10 +144,10 @@ final class HL7TLSServer {
             guard let self, let connection else { return }
             switch state {
             case .ready:
-                Log("HL7 connection ready: \(connection.endpoint)")
+                AppLogger.shared.info("HL7 connection ready: \(connection.endpoint)")
                 self.receive(on: connection)
             case .failed(let error):
-                Log("HL7 connection failed: \(error.localizedDescription)")
+                AppLogger.shared.error("HL7 connection failed", error: error)
                 self.untrack(connection)
                 connection.cancel()
             case .cancelled:
@@ -172,14 +175,14 @@ final class HL7TLSServer {
             }
 
             if let error {
-                Log("HL7 receive error: \(error.localizedDescription)")
+                AppLogger.shared.error("HL7 receive error", error: error)
                 self.untrack(connection)
                 connection.cancel()
                 return
             }
 
             if isComplete {
-                Log("HL7 connection closed by remote")
+                AppLogger.shared.info("HL7 connection closed by remote")
                 self.untrack(connection)
                 connection.cancel()
                 return
@@ -219,7 +222,7 @@ final class HL7TLSServer {
             content: data,
             completion: .contentProcessed { error in
                 if let error {
-                    Log("HL7 send error: \(error.localizedDescription)")
+                    AppLogger.shared.error("HL7 send error", error: error)
                 } else {
                     completion?()
                 }
@@ -242,9 +245,9 @@ final class HL7TLSServer {
                     onMessage: onMessage,
                     onAckSent: onAckSent
                 )
-                Log("HL7 TLS Server restarted")
+                AppLogger.shared.info("HL7 TLS Server restarted")
             } catch {
-                Log("HL7 TLS Server restart failed: \(error.localizedDescription)")
+                AppLogger.shared.error("HL7 TLS Server restart failed", error: error)
             }
         }
     }

@@ -329,7 +329,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         isCapturingFrames = true
         cameraService.start()
         publishAwaitingPose()
-        Log("Enrollment: started for user \(userId), \(poseSteps.count) pose steps")
+        AppLogger.shared.info("Enrollment: started for user \(userId), \(poseSteps.count) pose steps")
     }
 
     func cancelEnrollment() {
@@ -338,7 +338,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         cameraService.onFrame = nil
         // No DB cleanup needed — nothing is persisted until finishEnrollment()
         // succeeds, so an in-progress attempt never has a row to delete.
-        Log("Enrollment: cancelled, had \(collectedEmbeddings.count) embedding(s) — nothing persisted")
+        AppLogger.shared.info("Enrollment: cancelled, had \(collectedEmbeddings.count) embedding(s) — nothing persisted")
         pendingUserId = nil
         collectedEmbeddings = []
         collectedSteps = []
@@ -417,13 +417,13 @@ final class FaceEnrollmentViewModel: ObservableObject {
         // reference box went stale and the overlap collapsed.
         trackGate.observe(detectedBox)
         if trackGate.isBroken {
-            Log("Enrollment: track lost — restarting the scan from .center")
+            AppLogger.shared.warn("Enrollment: track lost — restarting the scan from .center")
             restartForBrokenTrack()
             return
         }
 
         guard detections.count == 1 else {
-            Log("Enrollment: frame skipped — \(detections.count) face(s) detected")
+            AppLogger.shared.debug("Enrollment: frame skipped — \(detections.count) face(s) detected")
             DispatchQueue.main.async {
                 self.hasLiveFace = false
                 self.liveRejectionReason = nil
@@ -443,7 +443,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         if let anchor = centerAnchorBox, !boxMatchesAnchor(box, anchor: anchor, frameSize: detections[0].frameSize) {
             consecutiveAnchorMismatchFrames += 1
             if consecutiveAnchorMismatchFrames > anchorMismatchGraceFrames {
-                Log("Enrollment: track lost — box mismatched the center-step anchor for \(consecutiveAnchorMismatchFrames) frames")
+                AppLogger.shared.warn("Enrollment: track lost — box mismatched the center-step anchor for \(consecutiveAnchorMismatchFrames) frames")
                 restartForBrokenTrack()
                 return
             }
@@ -651,7 +651,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             // SFace/alignment failure — discard this step's candidate and keep
             // sampling. The step has no deadline of its own, so this simply
             // retries until a frame embeds successfully.
-            Log("Enrollment: step \(currentStepIndex) (\(step)) — embedding generation failed, retrying")
+            AppLogger.shared.warn("Enrollment: step \(currentStepIndex) (\(step)) — embedding generation failed, retrying")
             bestPoseMatchedCandidate = nil
             settleDeadline = nil
             poseStability.reset()
@@ -672,7 +672,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
                 pixelBuffer: candidate.pixelBuffer, detection: candidate.detection
             )
             if frontalAvatar == nil {
-                Log("Enrollment: frontal avatar render failed — user will show the placeholder")
+                AppLogger.shared.warn("Enrollment: frontal avatar render failed — user will show the placeholder")
             }
             // The fixed reference every later frame's box is checked
             // against for track continuity (see centerAnchorBox's
@@ -680,7 +680,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             centerAnchorBox = candidate.detection.boundingBox
         }
 
-        Log("Enrollment: step \(currentStepIndex) (\(step)) captured — \(collectedEmbeddings.count)/\(poseSteps.count) embeddings, quality=\(String(format: "%.2f", candidate.quality.qualityScore))")
+        AppLogger.shared.info("Enrollment: step \(currentStepIndex) (\(step)) captured — \(collectedEmbeddings.count)/\(poseSteps.count) embeddings, quality=\(String(format: "%.2f", candidate.quality.qualityScore))")
 
         // Duplicate check moved here from finishEnrollment: asking only after
         // all five poses meant an already-enrolled person spent the whole flow
@@ -733,7 +733,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             return
         }
 
-        Log("Enrollment: .center matches existing user \(match.userId) — prompting")
+        AppLogger.shared.warn("Enrollment: .center matches existing user \(match.userId) — prompting")
         duplicateMatch = match // pipeline stays paused until the user answers
     }
 
@@ -742,7 +742,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// where `.center` paused — the remaining four poses run normally.
     func continueAfterDuplicate() {
         guard let match = duplicateMatch else { return }
-        Log("Enrollment: continuing despite duplicate of \(match.userId)")
+        AppLogger.shared.warn("Enrollment: continuing despite duplicate of \(match.userId)")
         duplicateMatch = nil
         resumeCaptureAfterDuplicatePrompt()
     }
@@ -810,7 +810,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         // enough; a gallery missing an angle can't match that angle later.
         let missing = Set(poseSteps).subtracting(collectedSteps)
         guard missing.isEmpty else {
-            Log("Enrollment: refusing to finish — missing steps \(missing)")
+            AppLogger.shared.warn("Enrollment: refusing to finish — missing steps \(missing)")
             DispatchQueue.main.async { self.state = .failed(.timedOut) }
             return
         }
@@ -834,7 +834,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             }
 
             let success = self.repository.saveEnrollmentEmbeddings(userId: registeredUserId, embeddings: embeddings)
-            Log("Enrollment: finishing for user \(registeredUserId) — \(embeddings.count) embeddings, persisted=\(success)")
+            AppLogger.shared.info("Enrollment: finishing for user \(registeredUserId) — \(embeddings.count) embeddings, persisted=\(success)")
 
             if success {
                 self.pendingUserId = registeredUserId

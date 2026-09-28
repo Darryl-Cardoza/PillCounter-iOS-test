@@ -143,6 +143,7 @@ final class CameraFocusController {
                 device.unlockForConfiguration()
             } catch {
                 // Intentionally silent — a failed re-arm must not break scanning.
+                AppLogger.shared.error("CameraFocusController: failed to re-arm one-shot autofocus", error: error)
             }
         }
 
@@ -159,6 +160,7 @@ final class CameraFocusController {
                     device.unlockForConfiguration()
                 } catch {
                     // Intentionally silent.
+                    AppLogger.shared.error("CameraFocusController: failed to restore continuous autofocus after re-arm", error: error)
                 }
             }
         }

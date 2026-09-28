@@ -90,6 +90,12 @@ final class TLSIdentityManager {
         guard status == errSecSuccess, let identity = result else {
             throw TLSError.keychainError(status)
         }
+        // kSecReturnRef + a kSecClassIdentity query should guarantee a single
+        // SecIdentity, but check the concrete type rather than force-casting so a
+        // future query change that widens the match fails safe instead of crashing.
+        guard CFGetTypeID(identity) == SecIdentityGetTypeID() else {
+            throw TLSError.unexpectedItemType
+        }
 
         return (identity as! SecIdentity)
     }
@@ -175,6 +181,7 @@ final class TLSIdentityManager {
 enum TLSError: Error, LocalizedError {
     case publicKeyExportFailed
     case keychainError(OSStatus)
+    case unexpectedItemType
 
     var errorDescription: String? {
         switch self {
@@ -182,6 +189,8 @@ enum TLSError: Error, LocalizedError {
             return "Failed to export public key from Secure Enclave"
         case .keychainError(let status):
             return "Keychain error \(status): \(status.keychainDescription)"
+        case .unexpectedItemType:
+            return "Keychain returned an unexpected item type"
         }
     }
 }

@@ -15,12 +15,12 @@ struct RuntimeUnit {
 
     /// BOOTSTRAP
     /// Initializes and securely stores the protected material if it does not already exist.
-    static func activateIfNeeded() {
+    static func activateIfNeeded() throws {
         guard !existsInStore() else { return }
 
         let raw = compose()
         let refined = refine(raw)
-        let sealed = seal(refined)
+        let sealed = try seal(refined)
 
         persist(sealed)
         destroy(refined)
@@ -119,16 +119,27 @@ struct RuntimeUnit {
 
         var item: CFTypeRef?
         if SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess {
-            return item as! SecKey
+            // kSecReturnRef + a kSecClassKey query should guarantee a single SecKey,
+            // but check the concrete type rather than force-casting so a future query
+            // change that widens the match fails safe instead of crashing.
+            guard let item, CFGetTypeID(item) == SecKeyGetTypeID() else {
+                throw KeychainTypeError(reason: "Unexpected Keychain item type for Enclave key")
+            }
+            return (item as! SecKey)
         }
 
-        let access =
+        var accessError: Unmanaged<CFError>?
+        guard let access =
             SecAccessControlCreateWithFlags(
                 nil,
                 kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
                 [.privateKeyUsage],
-                nil
-            )!
+                &accessError
+            )
+        else {
+            if let accessError { throw accessError.takeRetainedValue() }
+            throw KeychainTypeError(reason: "Access Control Creation Failed")
+        }
 
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
@@ -152,26 +163,32 @@ struct RuntimeUnit {
         return key
     }
 
+    private struct SealError: Error { let reason: String }
+    private struct KeychainTypeError: Error { let reason: String }
+
     /// SEAL
     /// Encrypts the value using the Secure Enclave key.
-    private static func seal(_ value: String) -> Data {
+    private static func seal(_ value: String) throws -> Data {
         // 1. Get the Private Key safely
         let privateKey: SecKey
         do {
             privateKey = try enclaveKey()
         } catch {
-            print("RuntimeUnit: Failed to retrieve Enclave Key - \(error)")
-            fatalError("Critical Security Error: Missing Key")
+            AppLogger.shared.error("RuntimeUnit: failed to retrieve Enclave Key", error: error)
+            throw SealError(reason: "Missing Key")
         }
 
         // 2. Extract the Public Key from the Private Key
         // Encryption is a Public Key operation. The Secure Enclave requires this explicit step.
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
-            print("RuntimeUnit: Failed to generate Public Key from Private Key")
-            fatalError("Critical Security Error: Public Key Generation Failed")
+            AppLogger.shared.error("RuntimeUnit: failed to generate Public Key from Private Key")
+            throw SealError(reason: "Public Key Generation Failed")
         }
 
-        let data = value.data(using: .utf8)!
+        guard let data = value.data(using: .utf8) else {
+            AppLogger.shared.error("RuntimeUnit: failed to encode refined value as UTF-8")
+            throw SealError(reason: "Encoding Failed")
+        }
 
         var error: Unmanaged<CFError>?
 
@@ -185,9 +202,8 @@ struct RuntimeUnit {
             )
         else {
             let err = error!.takeRetainedValue() as Error
-            print(
-                "RuntimeUnit: Encryption failed - \(err.localizedDescription)")
-            fatalError("Critical Security Error: Encryption Failed")
+            AppLogger.shared.error("RuntimeUnit: encryption failed", error: err)
+            throw SealError(reason: "Encryption Failed")
         }
 
         return encrypted as Data
@@ -268,6 +284,9 @@ struct RuntimeUnit {
             throw NSError(domain: "unit", code: -1)
         }
 
-        return item as! Data
+        guard let data = item as? Data else {
+            throw KeychainTypeError(reason: "Unexpected Keychain item type for stored payload")
+        }
+        return data
     }
 }

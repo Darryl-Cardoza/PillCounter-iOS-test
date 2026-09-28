@@ -105,18 +105,19 @@ final class Hl7ServiceManager {
 
     // MARK: - Init
 
-    init(
+    init?(
         port: UInt16,
         serviceName: String,
         serviceType: String,
         pmsServiceType: String,
         listener: Hl7EventListener
     ) {
+        guard let server = HL7TLSServer(port: port) else { return nil }
         self.port           = port
         self.serviceName    = serviceName
         self.serviceType    = serviceType
         self.pmsServiceType = pmsServiceType
-        self.server         = HL7TLSServer(port: port)
+        self.server         = server
         self.listener       = listener
 
         startPMSConnection()

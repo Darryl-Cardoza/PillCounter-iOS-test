@@ -127,7 +127,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
 
         let loaded = repository.loadActiveEnrollments()
         registeredUsers = loaded
-        Log("Authentication: loaded \(loaded.count) registered user(s), \(loaded.reduce(0) { $0 + $1.embeddings.count }) total embeddings")
+        AppLogger.shared.info("Authentication: loaded \(loaded.count) registered user(s), \(loaded.reduce(0) { $0 + $1.embeddings.count }) total embeddings")
         guard !loaded.isEmpty else {
             // Without this, a stuck lock with no usable embeddings anywhere
             // (e.g. a legacy embedding-less row that predates the
@@ -136,7 +136,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
             // could ever release the overlay.
             FaceSessionManager.shared.releaseLockIfNoUsersEnrolled()
             state = .failed(.noRegisteredUsers)
-            Log("Authentication: no registered users — aborting")
+            AppLogger.shared.warn("Authentication: no registered users — aborting")
             return
         }
 
@@ -146,14 +146,14 @@ final class FaceAuthenticationViewModel: ObservableObject {
         isRunning = true
         cameraService.start()
         state = .detectingFace
-        Log("Authentication: camera started")
+        AppLogger.shared.info("Authentication: camera started")
     }
 
     func stopAuthentication() {
         isRunning = false
         cameraService.stop()
         cameraService.onFrame = nil
-        Log("Authentication: stopped")
+        AppLogger.shared.info("Authentication: stopped")
     }
 
     func retry() {
@@ -181,7 +181,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
         }
 
         let detections = detector.detect(pixelBuffer: pixelBuffer)
-        Log("Authentication: frame — \(detections.count) face(s) detected")
+        AppLogger.shared.debug("Authentication: frame — \(detections.count) face(s) detected")
 
         guard detections.count == 1 else {
             publishGuidance(
@@ -208,13 +208,13 @@ final class FaceAuthenticationViewModel: ObservableObject {
         ) else {
             // Stay on the scanning copy — this is an internal per-frame
             // failure, not something the user can act on.
-            Log("Authentication: embedding generation failed for this frame")
+            AppLogger.shared.warn("Authentication: embedding generation failed for this frame")
             return
         }
 
         DispatchQueue.main.async { self.state = .comparing }
         let identification = repository.identify(embedding: embedding.vector, among: registeredUsers)
-        Log("Authentication: score=\(String(format: "%.3f", identification.score)) threshold=\(config.acceptanceThreshold) result=\(identification.userId != nil ? "PASS" : "no match")")
+        AppLogger.shared.debug("Authentication: score=\(String(format: "%.3f", identification.score)) threshold=\(config.acceptanceThreshold) result=\(identification.userId != nil ? "PASS" : "no match")")
 
         guard let userId = identification.userId else {
             // No match on this frame — keep scanning until the scan budget
@@ -240,7 +240,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
         }
 
         guard consecutiveMatchCount >= requiredConsecutiveMatches else {
-            Log("Authentication: match on \(userId) awaiting confirmation (\(consecutiveMatchCount)/\(requiredConsecutiveMatches))")
+            AppLogger.shared.debug("Authentication: match on \(userId) awaiting confirmation (\(consecutiveMatchCount)/\(requiredConsecutiveMatches))")
             let passCount = consecutiveMatchCount
             let required = requiredConsecutiveMatches
             DispatchQueue.main.async {
@@ -275,7 +275,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
     /// frames in a row.
     private nonisolated func failScanAsUnrecognized() {
         if let bestSeenUserId, bestSeenScore >= config.acceptanceThreshold {
-            Log("Authentication: scan budget expired but best-seen score=\(String(format: "%.3f", bestSeenScore)) clears threshold — accepting \(bestSeenUserId)")
+            AppLogger.shared.info("Authentication: scan budget expired but best-seen score=\(String(format: "%.3f", bestSeenScore)) clears threshold — accepting \(bestSeenUserId)")
             authenticateAndStop(userId: bestSeenUserId)
             return
         }
@@ -284,7 +284,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
         cameraService.stop()
         cameraService.onFrame = nil
 
-        Log("Authentication: scan budget of \(scanBudgetSeconds)s expired — no match")
+        AppLogger.shared.warn("Authentication: scan budget of \(scanBudgetSeconds)s expired — no match")
         DispatchQueue.main.async { self.state = .failed(.unknownUser) }
     }
 
@@ -299,7 +299,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
         cameraService.stop()
         cameraService.onFrame = nil
 
-        Log("Authentication: SUCCESS for user \(user.userId)")
+        AppLogger.shared.info("Authentication: SUCCESS for user \(user.userId)")
         DispatchQueue.main.async {
             self.state = .authenticated(userName: user.userName)
             self.onAuthenticated?(user.userId, user.userName)

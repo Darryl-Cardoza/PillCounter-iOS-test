@@ -17,17 +17,17 @@ final class Hl7EventHandler: Hl7EventListener {
 
     /// Called when HL7 server starts listening.
     func onHL7ServerStarted(port: Int) {
-        Log("Server started on port \(port)")
+        AppLogger.shared.info("Server started on port \(port)")
     }
 
     /// Called when HL7 server stops.
     func onHl7ServerStopped() {
-        Log("Server stopped")
+        AppLogger.shared.info("Server stopped")
     }
 
     /// Called when Bonjour service is registered.
     func onBonjourRegistered(serviceName: String) {
-        Log("Bonjour registered: \(serviceName)")
+        AppLogger.shared.info("Bonjour registered: \(serviceName)")
     }
 
     /// Called when a new HL7 message is received from PMS.
@@ -37,7 +37,9 @@ final class Hl7EventHandler: Hl7EventListener {
                 message: message,
                 rawHl7: rawHl7
             ) { _ in
-                StoreLogger.debug("📥 [HL7] onMessageReceived: \(message)")
+                // The message body carries patient/drug PHI — log only identifying
+                // metadata, never the message contents.
+                StoreLogger.debug("📥 [HL7] onMessageReceived: type=\(message.messageType) controlId=\(message.messageControlId)")
                 self.userViewModel.getAllTransactionsAndFilterByCountType()
             }
         }
@@ -45,12 +47,12 @@ final class Hl7EventHandler: Hl7EventListener {
 
     /// Called after ACK is sent to PMS.
     func onAckSent(messageId: String) {
-        Log("ACK sent | id=\(messageId)")
+        AppLogger.shared.info("ACK sent | id=\(messageId)")
     }
 
     /// Called when ACK is received from PMS.
     func onAckReceived(messageId: String?, ackCode: String, hl7:String) {
-        Log("ACK received | id=\(messageId ?? "nil") code=\(ackCode)")
+        AppLogger.shared.info("ACK received | id=\(messageId ?? "nil") code=\(ackCode)")
 
         Task { @MainActor in
             Hl7ServiceController.shared.onAckReceived(
@@ -63,7 +65,7 @@ final class Hl7EventHandler: Hl7EventListener {
 
     /// Called when PMS client connects.
     func onClientConnected(serviceName: String) {
-        Log("Client connected: \(serviceName)")
+        AppLogger.shared.info("Client connected: \(serviceName)")
 
         Task { @MainActor in
             Hl7ServiceController.shared.onClientConnected()
@@ -78,7 +80,7 @@ final class Hl7EventHandler: Hl7EventListener {
 
     /// Called when PMS client disconnects.
     func onClientDisconnected() {
-        Log("Client disconnected")
+        AppLogger.shared.info("Client disconnected")
         Task { @MainActor in
             userViewModel.setPmsConnected(false)
         }
@@ -86,6 +88,6 @@ final class Hl7EventHandler: Hl7EventListener {
 
     /// Called when any HL7-related error occurs.
     func onError(source: String, error: Error) {
-        Log("Error | \(source) | \(error.localizedDescription)")
+        AppLogger.shared.error("HL7 error | \(source)", error: error)
     }
 }

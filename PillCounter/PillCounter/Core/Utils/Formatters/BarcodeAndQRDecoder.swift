@@ -27,32 +27,32 @@ class BarcodeAndQRDecoder: ObservableObject {
 
     // MARK: GS1 Patterns (Same as your Android Regex patterns)
     private let regexPatterns: [String: NSRegularExpression] = [
-        "GTIN": try! NSRegularExpression(
-            pattern: "(?:\\(01\\)|01)(\\d{14})"
+        "GTIN": NSRegularExpression.literal(
+            "(?:\\(01\\)|01)(\\d{14})"
         ),
-        "LotNumber": try! NSRegularExpression(
-            pattern: "(?:\\(10\\)|(?<=\\x1D)10|(?<=\\d{18})10)([\\w\\d/\\-\\.]{1,20})(?=\\(\\d{2,4}\\)|\\x1D|$)"
+        "LotNumber": NSRegularExpression.literal(
+            "(?:\\(10\\)|(?<=\\x1D)10|(?<=\\d{18})10)([\\w\\d/\\-\\.]{1,20})(?=\\(\\d{2,4}\\)|\\x1D|$)"
         ),
-        "SerialNumber": try! NSRegularExpression(
-            pattern: "(?:\\(21\\)|21)([\\w\\d/\\-\\.]{1,20})(?=\\(\\d{2,4}\\)|\\x1D|$)"
+        "SerialNumber": NSRegularExpression.literal(
+            "(?:\\(21\\)|21)([\\w\\d/\\-\\.]{1,20})(?=\\(\\d{2,4}\\)|\\x1D|$)"
         ),
-        "ProductionDate": try! NSRegularExpression(
-            pattern: "(?:\\(11\\)|11)(\\d{6})"),
-        "PackingDate": try! NSRegularExpression(
-            pattern: "(?:\\(13\\)|13)(\\d{6})"),
-        "SellByDate": try! NSRegularExpression(
-            pattern: "(?:\\(15\\)|15)(\\d{6})"),
-        "ExpirationDate": try! NSRegularExpression(
-            pattern: "(?:\\(17\\)|17)(\\d{6})"),
+        "ProductionDate": NSRegularExpression.literal(
+            "(?:\\(11\\)|11)(\\d{6})"),
+        "PackingDate": NSRegularExpression.literal(
+            "(?:\\(13\\)|13)(\\d{6})"),
+        "SellByDate": NSRegularExpression.literal(
+            "(?:\\(15\\)|15)(\\d{6})"),
+        "ExpirationDate": NSRegularExpression.literal(
+            "(?:\\(17\\)|17)(\\d{6})"),
 
-        "NetWeightKgs": try! NSRegularExpression(
-            pattern: "(?:\\(310[0-4]\\)|310[0-4])(\\d{6})"),
-        "GrossWeightKgs": try! NSRegularExpression(
-            pattern: "(?:\\(330[0-4]\\)|330[0-4])(\\d{6})"),
-        "NetWeightPounds": try! NSRegularExpression(
-            pattern: "(?:\\(320[0-4]\\)|320[0-4])(\\d{6})"),
-        "GrossWeightPounds": try! NSRegularExpression(
-            pattern: "(?:\\(340[0-4]\\)|340[0-4])(\\d{6})"),
+        "NetWeightKgs": NSRegularExpression.literal(
+            "(?:\\(310[0-4]\\)|310[0-4])(\\d{6})"),
+        "GrossWeightKgs": NSRegularExpression.literal(
+            "(?:\\(330[0-4]\\)|330[0-4])(\\d{6})"),
+        "NetWeightPounds": NSRegularExpression.literal(
+            "(?:\\(320[0-4]\\)|320[0-4])(\\d{6})"),
+        "GrossWeightPounds": NSRegularExpression.literal(
+            "(?:\\(340[0-4]\\)|340[0-4])(\\d{6})"),
     ]
 
     // MARK: - Public Decode Function
@@ -296,8 +296,9 @@ class BarcodeAndQRDecoder: ObservableObject {
         let fullMatch = (barcode as NSString).substring(with: match.range)
         let identifier = String(fullMatch.prefix(4))
 
-        // Last digit indicates decimal places
-        let decimals = Int(String(identifier.last!)) ?? 0
+        // Last digit indicates decimal places. All weight-AI regexes guarantee a
+        // ≥4-char match today, but fall back to 0 rather than crash if that ever changes.
+        let decimals = identifier.last.flatMap { Int(String($0)) } ?? 0
 
         guard match.numberOfRanges > 1 else { return nil }
         let rawDigits = (barcode as NSString).substring(

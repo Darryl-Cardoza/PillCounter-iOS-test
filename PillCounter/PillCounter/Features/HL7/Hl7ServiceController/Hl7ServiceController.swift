@@ -131,7 +131,7 @@ final class Hl7ServiceController: ObservableObject, Hl7SyncTrigger {
         transactionDAO.transactionsDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
-                Log("🔄 [TxnObserver] Detected change → enqueue txn sync")
+                AppLogger.shared.debug("[TxnObserver] Detected change → enqueue txn sync")
                 self?.txnSyncQueue?.enqueueUnsynced()
             }
             .store(in: &cancellables)
@@ -170,7 +170,7 @@ final class Hl7ServiceController: ObservableObject, Hl7SyncTrigger {
     // MARK: - Events from Hl7EventHandler
 
     func onClientConnected() {
-        Log("📡 [HL7] onClientConnected — starting batch + txn queues")
+        AppLogger.shared.info("[HL7] onClientConnected — starting batch + txn queues")
         batchSyncQueue?.resetParkedState()
         txnSyncQueue?.resetParkedState()
         batchSyncQueue?.enqueueUnsynced()

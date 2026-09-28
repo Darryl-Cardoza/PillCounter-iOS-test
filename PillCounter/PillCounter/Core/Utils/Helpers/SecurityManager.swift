@@ -66,6 +66,7 @@ struct SecurityManager {
             try FileManager.default.removeItem(atPath: testPath)
             return true
         } catch {
+            AppLogger.shared.debug("Jailbreak sandbox-escape write test failed (expected on unmodified device)")
             return false
         }
         #endif

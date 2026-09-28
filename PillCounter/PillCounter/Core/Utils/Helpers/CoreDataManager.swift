@@ -38,6 +38,11 @@ final class CoreDataManager {
         guard let url = Bundle.main.url(forResource: modelName, withExtension: "momd"),
               let model = NSManagedObjectModel(contentsOf: url)
         else {
+            // No recovery is possible here — every entity type the app defines
+            // resolves through this model, so continuing would just turn one
+            // clear startup crash into an unbounded number of confusing ones
+            // at first Core Data use. Log for diagnostics, then fail fast.
+            AppLogger.shared.error("CoreDataManager: failed to load Core Data model \(modelName) from bundle")
             fatalError("Failed to load Core Data model \(modelName)")
         }
         return model
@@ -50,6 +55,10 @@ final class CoreDataManager {
         container = NSPersistentContainer(name: CoreDataManager.modelName, managedObjectModel: CoreDataManager.managedObjectModel)
 
         guard let description = container.persistentStoreDescriptions.first else {
+            // NSPersistentContainer always seeds persistentStoreDescriptions from its
+            // model/name at init — an empty array here means Core Data itself is in
+            // a broken state, not something this layer can work around.
+            AppLogger.shared.error("CoreDataManager: persistentStoreDescriptions is empty, cannot configure store")
             fatalError("No store description")
         }
 
@@ -71,7 +80,7 @@ final class CoreDataManager {
                 // every fetch afterwards fails in a way that reads like a
                 // missing entity rather than a failed migration.
                 assertionFailure("Failed to load Core Data: \(error)")
-                print("Failed to load Core Data: \(error.localizedDescription)")
+                AppLogger.shared.error("Failed to load Core Data", error: error)
             }
             #if DEBUG
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
@@ -111,6 +120,10 @@ final class CoreDataManager {
 
         container.loadPersistentStores { _, error in
             if let error = error {
+                // In-memory store load failures are effectively always a test-setup
+                // bug (misconfigured description), not a runtime condition — fail
+                // fast so the failing test points straight at the cause.
+                AppLogger.shared.error("CoreDataManager: failed to load in-memory Core Data store", error: error)
                 fatalError("Failed to load in-memory Core Data: \(error.localizedDescription)")
             }
         }
@@ -132,7 +145,7 @@ final class CoreDataManager {
         do {
             try context.save()
         } catch {
-            Log("❌ CoreData save error: \(error.localizedDescription)")
+            AppLogger.shared.error("CoreData save error", error: error)
         }
     }
 
@@ -147,7 +160,7 @@ final class CoreDataManager {
             try context.save()
             return true
         } catch {
-            Log("❌ CoreData save error: \(error.localizedDescription)")
+            AppLogger.shared.error("CoreData save error", error: error)
             return false
         }
     }
@@ -190,13 +203,13 @@ final class CoreDataManager {
                     options: nil
                 )
             } catch {
-                Log("❌ CoreData destroyPersistentStore error: \(error.localizedDescription)")
+                AppLogger.shared.error("CoreData destroyPersistentStore error", error: error)
             }
         }
 
         container.loadPersistentStores { _, error in
             if let error = error {
-                Log("❌ CoreData reload after destroy failed: \(error.localizedDescription)")
+                AppLogger.shared.error("CoreData reload after destroy failed", error: error)
             }
         }
     }

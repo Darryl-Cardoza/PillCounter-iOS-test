@@ -105,7 +105,8 @@ final class HL7BatchSyncQueue: HL7SyncQueue<BatchSyncQueueItem> {
             processNext()
             return
         }
-        StoreLogger.debug("📡 [HL7] Built batch message for \(item.batchId):\n\(hl7)")
+        // Message body carries patient/drug PHI — log only identifying metadata, never the raw HL7 text.
+        StoreLogger.debug("📡 [HL7] Built batch message for \(item.batchId) (\(hl7.count) chars)")
 
         guard let ackMessageId = HL7TxnSyncQueue.extractMessageControlId(from: hl7) else {
             removeFirstQueueItem()

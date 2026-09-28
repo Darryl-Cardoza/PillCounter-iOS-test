@@ -133,7 +133,7 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
         guard let filename = avatarStore.save(userId: userId, image: image) else {
             // Writing the image failed, so there is no filename worth storing —
             // the row keeps a nil photo_path and renders the placeholder.
-            Log("Repository: avatar write failed for user \(userId)")
+            AppLogger.shared.warn("Repository: avatar write failed for user \(userId)")
             return
         }
         userStore.setPhotoPath(id: userId, filename: filename)
@@ -197,15 +197,17 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
 
     func loadActiveEnrollments() -> [RegisteredUserEmbeddings] {
         let allUsers = userStore.getAllUsers(activeOnly: true)
-        Log("Repository: \(allUsers.count) active user row(s) in store")
+        AppLogger.shared.info("Repository: \(allUsers.count) active user row(s) in store")
 
         return allUsers.compactMap { user in
             guard let userId = user.id, let userName = user.name else {
-                Log("Repository: skipping user row with nil id/name")
+                AppLogger.shared.warn("Repository: skipping user row with nil id/name")
                 return nil
             }
             let stored = embeddingStore.getEmbeddingsForUser(userId: userId)
-            Log("Repository: user \(userId) (\(userName)) has \(stored.count) stored embedding row(s)")
+            // userId alone identifies the row for diagnostics — userName is PII
+            // and doesn't need to be persisted to the log file.
+            AppLogger.shared.debug("Repository: user \(userId) has \(stored.count) stored embedding row(s)")
 
             let vectors = stored.compactMap { entity -> [Float]? in
                 guard let base64 = entity.embedding, !base64.isEmpty else {
@@ -217,16 +219,16 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
                     // which would sail through as a "valid" 0-dimension vector
                     // and silently score 0 against everything forever. Reject
                     // it explicitly instead.
-                    Log("Repository: embedding row for \(userId) has nil/empty payload — likely a decrypt failure, skipping")
+                    AppLogger.shared.warn("Repository: embedding row for \(userId) has nil/empty payload — likely a decrypt failure, skipping")
                     return nil
                 }
                 guard let vector = FaceEmbedding.unpack(base64: base64), !vector.isEmpty else {
-                    Log("Repository: embedding row for \(userId) failed to unpack (base64 len=\(base64.count)) — corrupted or undecryptable")
+                    AppLogger.shared.warn("Repository: embedding row for \(userId) failed to unpack (base64 len=\(base64.count)) — corrupted or undecryptable")
                     return nil
                 }
                 return vector
             }
-            Log("Repository: user \(userId) — \(vectors.count)/\(stored.count) embeddings unpacked, dims: \(vectors.map(\.count))")
+            AppLogger.shared.debug("Repository: user \(userId) — \(vectors.count)/\(stored.count) embeddings unpacked, dims: \(vectors.map(\.count))")
 
             guard !vectors.isEmpty else { return nil }
             return RegisteredUserEmbeddings(userId: userId, userName: userName, embeddings: vectors)
@@ -266,12 +268,12 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
         let sortedLine = allScores.sorted { $0.score > $1.score }
             .map { "\($0.userName)=\(String(format: "%.3f", $0.score))" }
             .joined(separator: ", ")
-        Log("Repository: identify — scores [\(sortedLine)] threshold=\(config.acceptanceThreshold)")
+        AppLogger.shared.debug("Repository: identify — scores [\(sortedLine)] threshold=\(config.acceptanceThreshold)")
 
         guard let bestUserId, bestScore >= config.acceptanceThreshold else {
             // Highest score doesn't clear the threshold — report "no match",
             // never the closest-anyway user (spec section 7/10).
-            Log("Repository: identify — best=\(String(format: "%.3f", bestScore)) — rejected")
+            AppLogger.shared.debug("Repository: identify — best=\(String(format: "%.3f", bestScore)) — rejected")
             return FrameIdentification(userId: nil, score: bestScore)
         }
         return FrameIdentification(userId: bestUserId, score: bestScore)
@@ -318,7 +320,7 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
         let candidates = userStore.getAllUsers(activeOnly: false).filter { $0.id != excludingUserId }
         defer {
             let elapsedMs = (ProcessInfo.processInfo.systemUptime - startedAt) * 1000
-            Log("Repository: duplicate check scanned \(candidates.count) user(s) in \(String(format: "%.0f", elapsedMs))ms")
+            AppLogger.shared.info("Repository: duplicate check scanned \(candidates.count) user(s) in \(String(format: "%.0f", elapsedMs))ms")
         }
 
         for user in candidates {

@@ -65,6 +65,7 @@ final class CameraMotionEstimator {
         do {
             try handler.perform([request])
         } catch {
+            AppLogger.shared.debug("CameraMotionEstimator: motion estimation request failed, no shift computed this frame")
             return nil
         }
         guard let observation = request.results?.first else { return nil }

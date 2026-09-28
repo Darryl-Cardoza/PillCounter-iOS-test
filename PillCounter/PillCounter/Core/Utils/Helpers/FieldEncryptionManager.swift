@@ -27,7 +27,7 @@ final class FieldEncryptionManager {
             guard let combined = sealed.combined else { return value }
             return combined.base64EncodedString()
         } catch {
-            Log("❌ FieldEncryption: encrypt failed — \(error.localizedDescription)")
+            AppLogger.shared.error("FieldEncryption: encrypt failed", error: error)
             return value
         }
     }
@@ -54,6 +54,7 @@ final class FieldEncryptionManager {
         do {
             sealed = try AES.GCM.SealedBox(combined: data)
         } catch {
+            AppLogger.shared.debug("FieldEncryption: value not structured AES-GCM ciphertext, treating as legacy plaintext")
             return value
         }
 
@@ -65,7 +66,7 @@ final class FieldEncryptionManager {
             // It is real ciphertext but we cannot decrypt it (key mismatch /
             // unavailable / corruption). Do NOT return the ciphertext — that
             // would render an encrypted blob in the UI. Surface nil instead.
-            Log("❌ FieldEncryption: decrypt failed on ciphertext — \(error.localizedDescription)")
+            AppLogger.shared.error("FieldEncryption: decrypt failed on ciphertext", error: error)
             return nil
         }
     }

@@ -57,7 +57,9 @@ struct PillCounterApp: App {
         // launch.
         PillCounterApp.purgeEmbeddinglessFaceUsers()
 
-        Log("🔑 Device key: \(DeviceKeyProvider.shared.getDeviceKey())")
+        // Never log the raw device key — it's a persistent auth secret sent as
+        // `deviceKey:` on every login/OTP call, not something to persist to disk.
+        AppLogger.shared.info("Device key resolved (\(DeviceKeyProvider.shared.getDeviceKey().count) chars)")
 
         // Cold launch (app was fully closed, now reopened) always requires a
         // fresh face scan — never resume a session from a prior process.
@@ -72,7 +74,11 @@ struct PillCounterApp: App {
         UIApplication.shared.registerForRemoteNotifications()
 
         if !compromised {
-            RuntimeUnit.activateIfNeeded()
+            do {
+                try RuntimeUnit.activateIfNeeded()
+            } catch {
+                AppLogger.shared.error("RuntimeUnit: activateIfNeeded failed", error: error)
+            }
         }
 
         let center = UNUserNotificationCenter.current()
@@ -349,7 +355,7 @@ extension PillCounterApp {
             }
         guard !orphans.isEmpty else { return }
 
-        Log("PillCounterApp: purging \(orphans.count) embedding-less face user row(s) from a prior stuck-enrollment bug")
+        AppLogger.shared.warn("PillCounterApp: purging \(orphans.count) embedding-less face user row(s) from a prior stuck-enrollment bug")
         for user in orphans {
             guard let id = user.id else { continue }
             repository.deleteUser(id: id)
@@ -362,7 +368,11 @@ extension PillCounterApp {
             securityState.isSecure = false
             return
         }
-        RuntimeUnit.activateIfNeeded()
+        do {
+            try RuntimeUnit.activateIfNeeded()
+        } catch {
+            AppLogger.shared.error("RuntimeUnit: activateIfNeeded failed", error: error)
+        }
     }
 }
     

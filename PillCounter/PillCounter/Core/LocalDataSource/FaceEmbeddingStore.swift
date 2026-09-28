@@ -84,7 +84,7 @@ final class FaceEmbeddingStore {
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
         } catch {
-            Log("FaceEmbeddingStore: failed to delete embeddings for user \(userId)")
+            AppLogger.shared.error("FaceEmbeddingStore: failed to delete embeddings for user \(userId)", error: error)
         }
     }
 
@@ -96,7 +96,7 @@ final class FaceEmbeddingStore {
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
         } catch {
-            Log("FaceEmbeddingStore: failed to delete all embeddings")
+            AppLogger.shared.error("FaceEmbeddingStore: failed to delete all embeddings", error: error)
         }
     }
 }

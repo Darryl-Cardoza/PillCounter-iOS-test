@@ -114,10 +114,13 @@ class HistoryViewModel: ObservableObject {
         }
 
         let startOfDay = Calendar.current.startOfDay(for: startDate)
+        let endStartOfDay = Calendar.current.startOfDay(for: endDate)
+        // Calendar arithmetic can return nil on calendrical overflow; fall back to
+        // a plain Date computation (which cannot fail) so a malformed date never crashes.
         let endOfDay = Calendar.current.date(
             byAdding: DateComponents(day: 1, second: -1),
-            to: Calendar.current.startOfDay(for: endDate)
-        )!
+            to: endStartOfDay
+        ) ?? endStartOfDay.addingTimeInterval(86399)
 
         currentStartTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
         currentEndTs = Int64(endOfDay.timeIntervalSince1970 * 1000)
@@ -178,10 +181,13 @@ class HistoryViewModel: ObservableObject {
 
     func getBatchesByDate(startDate: Date, endDate: Date) async {
         let startOfDay = Calendar.current.startOfDay(for: startDate)
+        let endStartOfDay = Calendar.current.startOfDay(for: endDate)
+        // Calendar arithmetic can return nil on calendrical overflow; fall back to
+        // a plain Date computation (which cannot fail) so a malformed date never crashes.
         let endOfDay = Calendar.current.date(
             byAdding: DateComponents(day: 1, second: -1),
-            to: Calendar.current.startOfDay(for: endDate)
-        )!
+            to: endStartOfDay
+        ) ?? endStartOfDay.addingTimeInterval(86399)
 
         currentStartTs = Int64(startOfDay.timeIntervalSince1970 * 1000)
         currentEndTs = Int64(endOfDay.timeIntervalSince1970 * 1000)

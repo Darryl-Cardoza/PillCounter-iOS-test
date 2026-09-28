@@ -67,7 +67,9 @@ final class UserStore {
         // didSave restores plaintext in memory (see NSManagedObject+Encryption),
         // so reading entity fields below / by callers without re-fetching is safe.
         let action = isNew ? "CREATED" : "UPDATED"
-        StoreLogger.debug("👤 [UserDAO] \(action) — userId: \(userId), email: \(entity.email ?? "-"), name: \((entity.fname ?? "") + " " + (entity.lname ?? ""))")
+        // userId alone identifies the row for diagnostics — email/name are PII
+        // and don't need to be persisted to the log file.
+        StoreLogger.debug("👤 [UserDAO] \(action) — userId: \(userId)")
     }
 
     // MARK: - Read

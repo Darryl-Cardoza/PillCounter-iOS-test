@@ -30,9 +30,9 @@ final class SFaceEmbeddingService {
             let cfg = MLModelConfiguration()
             cfg.computeUnits = .cpuAndNeuralEngine
             model = try sface_112x112_float16(configuration: cfg)
-            Log("SFace: model loaded and ready")
+            AppLogger.shared.info("SFace: model loaded and ready")
         } catch {
-            Log("SFace: failed to load — \(error)")
+            AppLogger.shared.error("SFace: failed to load", error: error)
         }
     }
 
@@ -43,15 +43,15 @@ final class SFaceEmbeddingService {
     /// Never logs the embedding vector itself — only success/failure.
     func extractEmbedding(alignedFace: CVPixelBuffer) -> FaceEmbedding? {
         guard let model else {
-            Log("SFace: model not loaded")
+            AppLogger.shared.warn("SFace: model not loaded")
             return nil
         }
         guard let input = pixelBufferToNHWCFloat16(alignedFace) else {
-            Log("SFace: input conversion failed")
+            AppLogger.shared.warn("SFace: input conversion failed")
             return nil
         }
         guard let output = try? model.prediction(data: input) else {
-            Log("SFace: model.prediction threw")
+            AppLogger.shared.warn("SFace: model.prediction threw")
             return nil
         }
 
@@ -80,8 +80,8 @@ final class SFaceEmbeddingService {
         // different from other captures on the same device flags a
         // preprocessing mismatch, not a matching-logic bug.
         let l2Norm = sqrt(vector.reduce(Float(0)) { $0 + $1 * $1 })
-        Log("DEBUG embedding: dim=\(dim) L2norm=\(String(format: "%.4f", l2Norm))")
-        Log("SFace: embedding extracted (dim=\(dim))")
+        AppLogger.shared.debug("DEBUG embedding: dim=\(dim) L2norm=\(String(format: "%.4f", l2Norm))")
+        AppLogger.shared.debug("SFace: embedding extracted (dim=\(dim))")
         // qualityScore is filled in by the caller (FaceQualityChecker already
         // ran before extraction) — 0 here is just a placeholder default.
         return FaceEmbedding(vector: vector, qualityScore: 0)

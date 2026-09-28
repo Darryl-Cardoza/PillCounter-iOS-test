@@ -101,7 +101,8 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
             processNext()
             return
         }
-        StoreLogger.debug("📡 [HL7] Built txn message for \(item.txnId):\n\(hl7)")
+        // Message body carries patient/drug PHI — log only identifying metadata, never the raw HL7 text.
+        StoreLogger.debug("📡 [HL7] Built txn message for \(item.txnId) (\(hl7.count) chars)")
         guard let manager = hl7Manager, !hl7.isEmpty else {
             return
         }

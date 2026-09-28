@@ -38,7 +38,7 @@ final class FaceAvatarStore {
 
     private var directoryURL: URL? {
         guard let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            Log("FaceAvatarStore: no Application Support directory")
+            AppLogger.shared.error("FaceAvatarStore: no Application Support directory")
             return nil
         }
         return base.appendingPathComponent("FaceAvatars", isDirectory: true)
@@ -67,7 +67,7 @@ final class FaceAvatarStore {
             try mutableURL.setResourceValues(values)
             return directoryURL
         } catch {
-            Log("FaceAvatarStore: failed to create avatar directory — \(error.localizedDescription)")
+            AppLogger.shared.error("FaceAvatarStore: failed to create avatar directory", error: error)
             return nil
         }
     }
@@ -95,7 +95,7 @@ final class FaceAvatarStore {
         guard !userId.isEmpty else { return nil }
         guard let directoryURL = ensureDirectory() else { return nil }
         guard let data = image.jpegData(compressionQuality: jpegQuality) else {
-            Log("FaceAvatarStore: JPEG encoding failed for user \(userId)")
+            AppLogger.shared.error("FaceAvatarStore: JPEG encoding failed for user \(userId)")
             return nil
         }
 
@@ -112,7 +112,7 @@ final class FaceAvatarStore {
             )
             return filename
         } catch {
-            Log("FaceAvatarStore: failed to write avatar for user \(userId) — \(error.localizedDescription)")
+            AppLogger.shared.error("FaceAvatarStore: failed to write avatar for user \(userId)", error: error)
             return nil
         }
     }
@@ -137,7 +137,7 @@ final class FaceAvatarStore {
         do {
             try fileManager.removeItem(at: fileURL)
         } catch {
-            Log("FaceAvatarStore: failed to delete avatar \(filename) — \(error.localizedDescription)")
+            AppLogger.shared.error("FaceAvatarStore: failed to delete avatar \(filename)", error: error)
         }
     }
 
@@ -148,7 +148,7 @@ final class FaceAvatarStore {
         do {
             try fileManager.removeItem(at: directoryURL)
         } catch {
-            Log("FaceAvatarStore: failed to delete avatar directory — \(error.localizedDescription)")
+            AppLogger.shared.error("FaceAvatarStore: failed to delete avatar directory", error: error)
         }
     }
 }

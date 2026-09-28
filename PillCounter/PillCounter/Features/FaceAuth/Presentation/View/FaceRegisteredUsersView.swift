@@ -96,6 +96,6 @@ struct FaceRegisteredUsersView: View {
                 averageQuality: avgQuality, createdAt: user.created_at, isActive: user.is_active
             )
         }
-        Log("RegisteredUsers: loaded \(rows.count) user(s), total embeddings: \(rows.reduce(0) { $0 + $1.embeddingCount })")
+        AppLogger.shared.info("RegisteredUsers: loaded \(rows.count) user(s), total embeddings: \(rows.reduce(0) { $0 + $1.embeddingCount })")
     }
 }

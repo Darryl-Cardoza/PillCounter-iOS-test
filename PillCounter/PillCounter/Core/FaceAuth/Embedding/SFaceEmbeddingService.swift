@@ -32,7 +32,7 @@ final class SFaceEmbeddingService {
             model = try sface_112x112_float16(configuration: cfg)
             AppLogger.shared.info("SFace: model loaded and ready")
         } catch {
-            AppLogger.shared.error("SFace: failed to load", error: error)
+            AppLogger.shared.error("SFace: failed to load", error: error, event: .modelLoadFailed)
         }
     }
 
@@ -43,15 +43,15 @@ final class SFaceEmbeddingService {
     /// Never logs the embedding vector itself — only success/failure.
     func extractEmbedding(alignedFace: CVPixelBuffer) -> FaceEmbedding? {
         guard let model else {
-            AppLogger.shared.warn("SFace: model not loaded")
+            AppLogger.shared.warn("SFace: model not loaded", event: .modelLoadFailed)
             return nil
         }
         guard let input = pixelBufferToNHWCFloat16(alignedFace) else {
-            AppLogger.shared.warn("SFace: input conversion failed")
+            AppLogger.shared.warn("SFace: input conversion failed", event: .faceCaptureFailed)
             return nil
         }
         guard let output = try? model.prediction(data: input) else {
-            AppLogger.shared.warn("SFace: model.prediction threw")
+            AppLogger.shared.warn("SFace: model.prediction threw", event: .faceCaptureFailed)
             return nil
         }
 

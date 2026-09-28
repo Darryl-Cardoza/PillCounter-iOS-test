@@ -27,7 +27,7 @@ final class FieldEncryptionManager {
             guard let combined = sealed.combined else { return value }
             return combined.base64EncodedString()
         } catch {
-            AppLogger.shared.error("FieldEncryption: encrypt failed", error: error)
+            AppLogger.shared.error("FieldEncryption: encrypt failed", error: error, event: .securityCheckFailed)
             return value
         }
     }
@@ -66,7 +66,7 @@ final class FieldEncryptionManager {
             // It is real ciphertext but we cannot decrypt it (key mismatch /
             // unavailable / corruption). Do NOT return the ciphertext — that
             // would render an encrypted blob in the UI. Surface nil instead.
-            AppLogger.shared.error("FieldEncryption: decrypt failed on ciphertext", error: error)
+            AppLogger.shared.error("FieldEncryption: decrypt failed on ciphertext", error: error, event: .securityCheckFailed)
             return nil
         }
     }

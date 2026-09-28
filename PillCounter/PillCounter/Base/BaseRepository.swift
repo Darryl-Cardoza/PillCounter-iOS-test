@@ -102,7 +102,7 @@ extension BaseRepositoryProtocol {
                     do {
                         return try JSONDecoder().decode(T.self, from: data)
                     } catch {
-                        AppLogger.shared.error("Parsing error for \(T.self)", error: error)
+                        AppLogger.shared.error("Parsing error for \(T.self)", error: error, event: .networkError)
                         throw APIError.parsingError
                     }
                 case 401:

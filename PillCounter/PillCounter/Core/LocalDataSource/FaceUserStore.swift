@@ -152,7 +152,7 @@ final class FaceUserStore {
         do {
             try context.execute(NSBatchDeleteRequest(fetchRequest: request))
         } catch {
-            AppLogger.shared.error("FaceUserStore: failed to delete all users", error: error)
+            AppLogger.shared.error("FaceUserStore: failed to delete all users", error: error, event: .faceDeleteFailed)
         }
         // A batch delete bypasses `deleteUser`, so no per-row avatar cleanup
         // ran — clear the whole avatar directory instead.

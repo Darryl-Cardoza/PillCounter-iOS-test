@@ -136,7 +136,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
             // could ever release the overlay.
             FaceSessionManager.shared.releaseLockIfNoUsersEnrolled()
             state = .failed(.noRegisteredUsers)
-            AppLogger.shared.warn("Authentication: no registered users — aborting")
+            AppLogger.shared.warn("Authentication: no registered users — aborting", event: .faceVerifyFailed)
             return
         }
 
@@ -208,7 +208,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
         ) else {
             // Stay on the scanning copy — this is an internal per-frame
             // failure, not something the user can act on.
-            AppLogger.shared.warn("Authentication: embedding generation failed for this frame")
+            AppLogger.shared.warn("Authentication: embedding generation failed for this frame", event: .faceCaptureFailed)
             return
         }
 
@@ -284,7 +284,7 @@ final class FaceAuthenticationViewModel: ObservableObject {
         cameraService.stop()
         cameraService.onFrame = nil
 
-        AppLogger.shared.warn("Authentication: scan budget of \(scanBudgetSeconds)s expired — no match")
+        AppLogger.shared.warn("Authentication: scan budget of \(scanBudgetSeconds)s expired — no match", event: .faceVerifyFailed)
         DispatchQueue.main.async { self.state = .failed(.unknownUser) }
     }
 

@@ -5,13 +5,19 @@ import Foundation
 private final class MockLogDestination: LogDestination {
     private let lock = NSLock()
     private var _written: [String] = []
+    private var _entries: [LogEntry] = []
     var written: [String] {
         lock.lock(); defer { lock.unlock() }
         return _written
     }
-    func write(_ formatted: String) {
+    var entries: [LogEntry] {
+        lock.lock(); defer { lock.unlock() }
+        return _entries
+    }
+    func write(_ entry: LogEntry, formatted: String) {
         lock.lock()
         _written.append(formatted)
+        _entries.append(entry)
         lock.unlock()
     }
 }

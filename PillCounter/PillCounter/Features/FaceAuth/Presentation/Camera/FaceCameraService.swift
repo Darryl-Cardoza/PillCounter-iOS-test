@@ -81,7 +81,7 @@ final class FaceCameraService: NSObject, ObservableObject {
                 let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
                 let newInput = try? AVCaptureDeviceInput(device: device)
             else {
-                AppLogger.shared.warn("FaceCameraService: flip failed — no camera at position \(newPosition)")
+                AppLogger.shared.warn("FaceCameraService: flip failed — no camera at position \(newPosition)", event: .faceCaptureFailed)
                 return
             }
 

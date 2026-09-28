@@ -77,7 +77,7 @@ struct PillCounterApp: App {
             do {
                 try RuntimeUnit.activateIfNeeded()
             } catch {
-                AppLogger.shared.error("RuntimeUnit: activateIfNeeded failed", error: error)
+                AppLogger.shared.error("RuntimeUnit: activateIfNeeded failed", error: error, event: .securityCheckFailed)
             }
         }
 
@@ -355,7 +355,7 @@ extension PillCounterApp {
             }
         guard !orphans.isEmpty else { return }
 
-        AppLogger.shared.warn("PillCounterApp: purging \(orphans.count) embedding-less face user row(s) from a prior stuck-enrollment bug")
+        AppLogger.shared.warn("PillCounterApp: purging \(orphans.count) embedding-less face user row(s) from a prior stuck-enrollment bug", event: .faceDeleteFailed)
         for user in orphans {
             guard let id = user.id else { continue }
             repository.deleteUser(id: id)
@@ -371,7 +371,7 @@ extension PillCounterApp {
         do {
             try RuntimeUnit.activateIfNeeded()
         } catch {
-            AppLogger.shared.error("RuntimeUnit: activateIfNeeded failed", error: error)
+            AppLogger.shared.error("RuntimeUnit: activateIfNeeded failed", error: error, event: .securityCheckFailed)
         }
     }
 }

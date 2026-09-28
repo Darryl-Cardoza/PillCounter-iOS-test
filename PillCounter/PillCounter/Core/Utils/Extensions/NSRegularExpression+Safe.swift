@@ -15,7 +15,7 @@ extension NSRegularExpression {
         do {
             return try NSRegularExpression(pattern: pattern, options: options)
         } catch {
-            AppLogger.shared.error("NSRegularExpression: invalid literal pattern '\(pattern)', falling back to a never-matching pattern", error: error)
+            AppLogger.shared.error("NSRegularExpression: invalid literal pattern '\(pattern)', falling back to a never-matching pattern", error: error, event: .unknownError)
             // "$^" is a fixed, guaranteed-valid pattern that matches nothing.
             return try! NSRegularExpression(pattern: "$^")
         }

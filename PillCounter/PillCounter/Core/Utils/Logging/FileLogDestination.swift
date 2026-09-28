@@ -36,7 +36,7 @@ public final class FileLogDestination: LogDestination {
         try? url.setResourceValues(resourceValues)
     }
 
-    public func write(_ formatted: String) {
+    public func write(_ entry: LogEntry, formatted: String) {
         queue.async { [fileURL] in
             guard let data = (formatted + "\n").data(using: .utf8) else { return }
             guard let handle = try? FileHandle(forWritingTo: fileURL) else {

@@ -133,7 +133,7 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
         guard let filename = avatarStore.save(userId: userId, image: image) else {
             // Writing the image failed, so there is no filename worth storing —
             // the row keeps a nil photo_path and renders the placeholder.
-            AppLogger.shared.warn("Repository: avatar write failed for user \(userId)")
+            AppLogger.shared.warn("Repository: avatar write failed for user \(userId)", event: .fileWriteError)
             return
         }
         userStore.setPhotoPath(id: userId, filename: filename)
@@ -201,7 +201,7 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
 
         return allUsers.compactMap { user in
             guard let userId = user.id, let userName = user.name else {
-                AppLogger.shared.warn("Repository: skipping user row with nil id/name")
+                AppLogger.shared.warn("Repository: skipping user row with nil id/name", event: .databaseError)
                 return nil
             }
             let stored = embeddingStore.getEmbeddingsForUser(userId: userId)
@@ -219,11 +219,11 @@ final class FaceRecognitionRepository: FaceRecognitionRepositoryProtocol {
                     // which would sail through as a "valid" 0-dimension vector
                     // and silently score 0 against everything forever. Reject
                     // it explicitly instead.
-                    AppLogger.shared.warn("Repository: embedding row for \(userId) has nil/empty payload — likely a decrypt failure, skipping")
+                    AppLogger.shared.warn("Repository: embedding row for \(userId) has nil/empty payload — likely a decrypt failure, skipping", event: .databaseError)
                     return nil
                 }
                 guard let vector = FaceEmbedding.unpack(base64: base64), !vector.isEmpty else {
-                    AppLogger.shared.warn("Repository: embedding row for \(userId) failed to unpack (base64 len=\(base64.count)) — corrupted or undecryptable")
+                    AppLogger.shared.warn("Repository: embedding row for \(userId) failed to unpack (base64 len=\(base64.count)) — corrupted or undecryptable", event: .databaseError)
                     return nil
                 }
                 return vector

@@ -105,7 +105,7 @@ final class SessionManager: ObservableObject {
                 markExpired()
             }
         } catch {
-            AppLogger.shared.error("Token refresh request failed, marking session expired", error: error)
+            AppLogger.shared.error("Token refresh request failed, marking session expired", error: error, event: .tokenRefreshFailed)
             markExpired()
         }
     }

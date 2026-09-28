@@ -7,7 +7,7 @@ public final class AppLogger {
     private let queue: DispatchQueue
 
     public init(
-        destinations: [LogDestination] = [FileLogDestination()],
+        destinations: [LogDestination] = [FileLogDestination(), RemoteLogDestination()],
         queue: DispatchQueue = DispatchQueue(label: "com.pillcounter.applogger")
     ) {
         self.destinations = destinations
@@ -15,35 +15,53 @@ public final class AppLogger {
     }
 
     public func verbose(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(level: .verbose, message: message, error: nil, file: file, function: function, line: line)
+        log(level: .verbose, message: message, error: nil, event: nil, context: nil, file: file, function: function, line: line)
     }
 
     public func debug(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(level: .debug, message: message, error: nil, file: file, function: function, line: line)
+        log(level: .debug, message: message, error: nil, event: nil, context: nil, file: file, function: function, line: line)
     }
 
-    public func info(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(level: .info, message: message, error: nil, file: file, function: function, line: line)
+    public func info(
+        _ message: String,
+        event: LogEvent? = nil,
+        context: [String: Any]? = nil,
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(level: .info, message: message, error: nil, event: event, context: context, file: file, function: function, line: line)
     }
 
-    public func warn(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(level: .warn, message: message, error: nil, file: file, function: function, line: line)
+    public func warn(
+        _ message: String,
+        event: LogEvent? = nil,
+        context: [String: Any]? = nil,
+        file: String = #file,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(level: .warn, message: message, error: nil, event: event, context: context, file: file, function: function, line: line)
     }
 
     public func error(
         _ message: String,
         error underlyingError: Error? = nil,
+        event: LogEvent? = nil,
+        context: [String: Any]? = nil,
         file: String = #file,
         function: String = #function,
         line: Int = #line
     ) {
-        log(level: .error, message: message, error: underlyingError, file: file, function: function, line: line)
+        log(level: .error, message: message, error: underlyingError, event: event, context: context, file: file, function: function, line: line)
     }
 
     private func log(
         level: LogLevel,
         message: String,
         error underlyingError: Error?,
+        event: LogEvent?,
+        context: [String: Any]?,
         file: String,
         function: String,
         line: Int
@@ -69,14 +87,17 @@ public final class AppLogger {
             message: message,
             humanReadableError: humanReadable,
             actualError: actual,
-            stackTrace: stack
+            stackTrace: stack,
+            underlyingError: underlyingError,
+            event: event,
+            context: context
         )
         let formatted = LogFormatter.format(entry)
         let destinations = self.destinations
 
         queue.async {
             for destination in destinations {
-                destination.write(formatted)
+                destination.write(entry, formatted: formatted)
             }
         }
     }

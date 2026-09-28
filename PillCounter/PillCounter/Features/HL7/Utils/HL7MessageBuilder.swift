@@ -83,7 +83,7 @@ final class HL7CompletionBuilder {
         // Mirrors the validateHl7Message failure path below: refuse to send
         // rather than crash the app on a corrupt/partially-synced transaction.
         guard let drug = txn.drug else {
-            AppLogger.shared.error("HL7CompletionBuilder: txn.drug relationship is nil, cannot build completion message for txn \(txn.txn_id)")
+            AppLogger.shared.error("HL7CompletionBuilder: txn.drug relationship is nil, cannot build completion message for txn \(txn.txn_id)", event: .hl7SendFailed)
             return ""
         }
 
@@ -269,7 +269,7 @@ final class HL7CompletionBuilder {
         }
 
         guard self.validateHl7Message(finalMessage) else {
-            AppLogger.shared.warn("HL7: buildCompletionMessage validation failed — refusing to send")
+            AppLogger.shared.warn("HL7: buildCompletionMessage validation failed — refusing to send", event: .hl7SendFailed)
             return ""
         }
 
@@ -369,7 +369,7 @@ final class HL7CompletionBuilder {
     private func validateHl7Message(_ encoded: String) -> Bool {
         let segments = encoded.components(separatedBy: "\r")
         guard let msh = segments.first(where: { $0.hasPrefix("MSH") }) else {
-            AppLogger.shared.warn("HL7 validation: no MSH segment")
+            AppLogger.shared.warn("HL7 validation: no MSH segment", event: .hl7SendFailed)
             return false
         }
 
@@ -383,13 +383,13 @@ final class HL7CompletionBuilder {
         let requiredMshFieldIndexes = [6, 8, 9, 10, 11]
         for index in requiredMshFieldIndexes {
             guard index < fields.count, !fields[index].trimmingCharacters(in: .whitespaces).isEmpty else {
-                AppLogger.shared.warn("HL7 validation: MSH field \(index) is empty")
+                AppLogger.shared.warn("HL7 validation: MSH field \(index) is empty", event: .hl7SendFailed)
                 return false
             }
         }
 
         guard !self.versionId.trimmingCharacters(in: .whitespaces).isEmpty else {
-            AppLogger.shared.warn("HL7 validation: version id is empty")
+            AppLogger.shared.warn("HL7 validation: version id is empty", event: .hl7SendFailed)
             return false
         }
 

@@ -88,6 +88,9 @@ final class Hl7EventHandler: Hl7EventListener {
 
     /// Called when any HL7-related error occurs.
     func onError(source: String, error: Error) {
-        AppLogger.shared.error("HL7 error | \(source)", error: error)
+        // The only current caller (Hl7ServiceManager.parse) is a message-parse
+        // failure — classified as a receive failure since it happens while
+        // processing an inbound message.
+        AppLogger.shared.error("HL7 error | \(source)", error: error, event: .hl7ReceiveFailed)
     }
 }

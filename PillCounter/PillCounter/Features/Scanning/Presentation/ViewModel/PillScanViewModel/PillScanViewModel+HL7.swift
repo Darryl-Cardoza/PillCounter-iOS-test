@@ -15,7 +15,7 @@ extension PillScanViewModel {
         callback: HL7SimpleCallback? = nil
     ) {
         guard let msgType = classifyInboundMessage(message) else {
-            AppLogger.shared.warn("Unknown HL7 message")
+            AppLogger.shared.warn("Unknown HL7 message", event: .hl7ReceiveFailed)
             return
         }
 
@@ -281,7 +281,7 @@ extension PillScanViewModel {
                     )
                 }
             }
-            AppLogger.shared.warn("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), refillNo=\(refillNo ?? "nil"), refillMismatch=\(rxKnownUnderOtherRefill), orderStatus=\(orderStatusRaw ?? "nil") — ignoring")
+            AppLogger.shared.warn("HL7 ORC|XO: no active or restorable transaction for rxNo=\(rxNo), refillNo=\(refillNo ?? "nil"), refillMismatch=\(rxKnownUnderOtherRefill), orderStatus=\(orderStatusRaw ?? "nil") — ignoring", event: .hl7ReceiveFailed)
             callback?(false)
             return
         }
@@ -319,7 +319,7 @@ extension PillScanViewModel {
                     resolvedDrugName = lookup
                     AppLogger.shared.debug("HL7 ORC|XO: drug created via API → \(lookup)")
                 } else {
-                    AppLogger.shared.warn("HL7 ORC|XO: API returned no drug name for NDC=\(hl7Ndc) — aborting edit")
+                    AppLogger.shared.warn("HL7 ORC|XO: API returned no drug name for NDC=\(hl7Ndc) — aborting edit", event: .drugLookupFailed)
                     HL7NotificationManager.show(
                         title: L10n.Hl7Notification.editRxFailedTitle,
                         body: L10n.Hl7Notification.drugNotFoundBody(rxNo: rxNo, ndc: hl7Ndc)
@@ -328,7 +328,7 @@ extension PillScanViewModel {
                     return
                 }
             } catch {
-                AppLogger.shared.error("HL7 ORC|XO: API failed for NDC=\(hl7Ndc)", error: error)
+                AppLogger.shared.error("HL7 ORC|XO: API failed for NDC=\(hl7Ndc)", error: error, event: .drugLookupFailed)
                 HL7NotificationManager.show(
                     title: L10n.Hl7Notification.editRxFailedTitle,
                     body: L10n.Hl7Notification.drugNotFoundBody(rxNo: rxNo, ndc: hl7Ndc)
@@ -441,7 +441,7 @@ extension PillScanViewModel {
         var drugType: String? = nil
 
         guard !ndc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            AppLogger.shared.warn("HL7: Missing NDC")
+            AppLogger.shared.warn("HL7: Missing NDC", event: .ndcNotFound)
             return
         }
 
@@ -492,7 +492,7 @@ extension PillScanViewModel {
                         drugId: newId,
                         drug:   scannedNdc
                     ) else {
-                        AppLogger.shared.warn("HL7: API returned empty drug name")
+                        AppLogger.shared.warn("HL7: API returned empty drug name", event: .drugLookupFailed)
                         HL7NotificationManager.show(
                             title: L10n.BarcodeScan.drugNotFound,
                             body: L10n.BarcodeScan.drugNotFoundMessage
@@ -505,7 +505,7 @@ extension PillScanViewModel {
 
                     AppLogger.shared.debug("HL7: Drug created via API → \(lookup)")
                 } else {
-                    AppLogger.shared.warn("HL7: API returned empty drug name")
+                    AppLogger.shared.warn("HL7: API returned empty drug name", event: .drugLookupFailed)
                     HL7NotificationManager.show(
                         title: L10n.BarcodeScan.drugNotFound,
                         body: L10n.BarcodeScan.drugNotFoundMessage
@@ -514,7 +514,7 @@ extension PillScanViewModel {
                 }
 
             } catch {
-                AppLogger.shared.error("HL7: API failed for NDC \(ndc)", error: error)
+                AppLogger.shared.error("HL7: API failed for NDC \(ndc)", error: error, event: .drugLookupFailed)
                 HL7NotificationManager.show(
                     title: L10n.BarcodeScan.drugNotFound,
                     body: L10n.BarcodeScan.drugNotFoundMessage
@@ -589,7 +589,7 @@ extension PillScanViewModel {
             let createdTxn = self.currentTransaction
 
             guard let createdTxn else {
-                AppLogger.shared.warn("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)")
+                AppLogger.shared.warn("HL7: Transaction rejected — drug \(drugIdToUse) did not resolve, no txn created for NDC \(ndc)", event: .ndcNotFound)
                 HL7NotificationManager.show(
                     title: L10n.BarcodeScan.drugNotFound,
                     body: L10n.BarcodeScan.drugNotFoundMessage
@@ -663,7 +663,7 @@ extension PillScanViewModel {
 
         let ndc = zui.ndc.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ndc.isEmpty else {
-            AppLogger.shared.warn("HL7 ZUI order packet: missing NDC — ignoring")
+            AppLogger.shared.warn("HL7 ZUI order packet: missing NDC — ignoring", event: .ndcNotFound)
             callback?(false)
             return
         }
@@ -701,7 +701,7 @@ extension PillScanViewModel {
 
         let ndc = zni.ndc.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ndc.isEmpty else {
-            AppLogger.shared.warn("HL7 ZNI dispense result: missing NDC — ignoring")
+            AppLogger.shared.warn("HL7 ZNI dispense result: missing NDC — ignoring", event: .ndcNotFound)
             callback?(false)
             return
         }
@@ -738,7 +738,7 @@ extension PillScanViewModel {
         let currentUser = userDataLocalStorage.fetchByUserId(userId)
         let txns = currentUser.map { transactionDAO.fetchByRxNo(rxNo, for: $0) } ?? []
         guard !txns.isEmpty else {
-            AppLogger.shared.warn("HL7: Cancel order — no transactions found for Rx \(rxNo)")
+            AppLogger.shared.warn("HL7: Cancel order — no transactions found for Rx \(rxNo)", event: .hl7OrderCancel)
             callback?(false)
             return
         }

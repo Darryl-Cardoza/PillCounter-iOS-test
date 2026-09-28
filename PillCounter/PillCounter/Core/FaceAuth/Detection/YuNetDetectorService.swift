@@ -95,7 +95,7 @@ final class YuNetDetectorService {
             model = try yunet_640x640_float16(configuration: cfg)
             AppLogger.shared.info("YuNet: model loaded and ready")
         } catch {
-            AppLogger.shared.error("YuNet: failed to load", error: error)
+            AppLogger.shared.error("YuNet: failed to load", error: error, event: .modelLoadFailed)
         }
     }
 
@@ -107,21 +107,21 @@ final class YuNetDetectorService {
     /// letterbox, inference error) — callers treat that as "no face found".
     func detect(pixelBuffer: CVPixelBuffer) -> [FaceDetectionResult] {
         guard let model else {
-            AppLogger.shared.warn("YuNet: model not loaded")
+            AppLogger.shared.warn("YuNet: model not loaded", event: .modelLoadFailed)
             return []
         }
         let frameSize = pixelBuffer.size
 
         guard let (lbBuffer, scale, padX, padY) = letterbox(pixelBuffer) else {
-            AppLogger.shared.warn("YuNet: letterbox failed for frame \(frameSize)")
+            AppLogger.shared.warn("YuNet: letterbox failed for frame \(frameSize)", event: .faceCaptureFailed)
             return []
         }
         guard let inputArray = pixelBufferToNHWCFloat16(lbBuffer) else {
-            AppLogger.shared.warn("YuNet: NHWC conversion failed")
+            AppLogger.shared.warn("YuNet: NHWC conversion failed", event: .faceCaptureFailed)
             return []
         }
         guard let output = try? model.prediction(input: inputArray) else {
-            AppLogger.shared.warn("YuNet: model.prediction threw")
+            AppLogger.shared.warn("YuNet: model.prediction threw", event: .faceCaptureFailed)
             return []
         }
 

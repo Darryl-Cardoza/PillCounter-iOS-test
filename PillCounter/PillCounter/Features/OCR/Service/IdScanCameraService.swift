@@ -160,7 +160,7 @@ final class IdScanCameraService: NSObject, ObservableObject {
             }
             device.unlockForConfiguration()
         } catch {
-            AppLogger.shared.error("IdScanCameraService: could not lock device for continuous AF/AE", error: error)
+            AppLogger.shared.error("IdScanCameraService: could not lock device for continuous AF/AE", error: error, event: .scanFailed)
         }
     }
 

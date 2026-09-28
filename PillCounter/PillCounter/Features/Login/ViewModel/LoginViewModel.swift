@@ -111,7 +111,7 @@ class LoginViewModel: ObservableObject {
             isOtpSent = false
             resendOTPSent = false
             errorMessage = "Something went wrong."
-            AppLogger.shared.error("sendOTP error", error: error)
+            AppLogger.shared.error("sendOTP error", error: error, event: .otpSendFailed)
         }
     }
 
@@ -185,11 +185,11 @@ class LoginViewModel: ObservableObject {
             } else {
                 errorMessage = "Unable to verify OTP. Please try again."
             }
-            AppLogger.shared.error("verifyOTP error", error: error)
+            AppLogger.shared.error("verifyOTP error", error: error, event: .otpVerifyFailed)
         } catch {
             isOtpVerificationSuccess = false
             errorMessage = "Unable to verify OTP. Please try again."
-            AppLogger.shared.error("verifyOTP error", error: error)
+            AppLogger.shared.error("verifyOTP error", error: error, event: .otpVerifyFailed)
         }
     }
 
@@ -225,7 +225,7 @@ class LoginViewModel: ObservableObject {
                 Hl7ServiceController.shared.evaluate()
             }
         } catch {
-            AppLogger.shared.error("logout error", error: error)
+            AppLogger.shared.error("logout error", error: error, event: .logoutFailed)
         }
     }
 
@@ -247,7 +247,7 @@ class LoginViewModel: ObservableObject {
             }
         } catch {
             errorMessage = "Something went wrong!"
-            AppLogger.shared.error("resendOTP error", error: error)
+            AppLogger.shared.error("resendOTP error", error: error, event: .otpSendFailed)
         }
     }
 }

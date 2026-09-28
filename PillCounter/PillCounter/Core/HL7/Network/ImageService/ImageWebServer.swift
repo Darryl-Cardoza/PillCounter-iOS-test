@@ -49,7 +49,7 @@ final class ImageWebServer {
                 case .ready:
                     AppLogger.shared.info("Image server running on port \(self.port)")
                 case .failed(let error):
-                    AppLogger.shared.error("Image server failed", error: error)
+                    AppLogger.shared.error("Image server failed", error: error, event: .hl7ServiceError)
                 default:
                     break
                 }
@@ -63,7 +63,7 @@ final class ImageWebServer {
             self.listener = listener
 
         } catch {
-            AppLogger.shared.error("Failed to start image server", error: error)
+            AppLogger.shared.error("Failed to start image server", error: error, event: .hl7ServiceError)
         }
 
         startPortEighty()
@@ -84,7 +84,7 @@ final class ImageWebServer {
                 case .ready:
                     AppLogger.shared.info("Image server running on port 80")
                 case .failed(let error):
-                    AppLogger.shared.error("Image server (port 80) failed", error: error)
+                    AppLogger.shared.error("Image server (port 80) failed", error: error, event: .hl7ServiceError)
                 default:
                     break
                 }
@@ -98,7 +98,7 @@ final class ImageWebServer {
             self.portEightyListener = listener
 
         } catch {
-            AppLogger.shared.error("Failed to start image server on port 80", error: error)
+            AppLogger.shared.error("Failed to start image server on port 80", error: error, event: .hl7ServiceError)
         }
     }
 
@@ -152,7 +152,7 @@ final class ImageWebServer {
             if let data { buffer.append(data) }
 
             if let error {
-                AppLogger.shared.error("Image server receive error", error: error)
+                AppLogger.shared.error("Image server receive error", error: error, event: .hl7ReceiveFailed)
                 connection.cancel()
                 return
             }
@@ -514,7 +514,7 @@ final class ImageWebServer {
         connection.send(content: response,
         completion: .contentProcessed { error in
             if let error {
-                AppLogger.shared.error("Image server send error", error: error)
+                AppLogger.shared.error("Image server send error", error: error, event: .hl7SendFailed)
             }
             connection.cancel()
             onComplete(error == nil)

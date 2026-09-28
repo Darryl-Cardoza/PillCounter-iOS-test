@@ -124,7 +124,7 @@ extension PillScanViewModel {
 
             } catch {
 
-                AppLogger.shared.error("API failed → fallback create", error: error)
+                AppLogger.shared.error("API failed → fallback create", error: error, event: .drugLookupFailed)
 
                 let newId = generateUniqueDrugId()
 
@@ -245,7 +245,7 @@ extension PillScanViewModel {
                     throw NSError(domain: "HL7", code: -1)
                 }
             } catch {
-                AppLogger.shared.error("API failed → fallback create", error: error)
+                AppLogger.shared.error("API failed → fallback create", error: error, event: .drugLookupFailed)
                 let newId = generateUniqueDrugId()
                 drugMasterDAO.saveManual(
                     ndc: ndc,
@@ -504,7 +504,7 @@ extension PillScanViewModel {
                 )
 
             } catch {
-                AppLogger.shared.error("Controlled-drug API lookup failed for an NDC during batch create; item skipped", error: error)
+                AppLogger.shared.error("Controlled-drug API lookup failed for an NDC during batch create; item skipped", error: error, event: .drugLookupFailed)
                 continue
             }
         }

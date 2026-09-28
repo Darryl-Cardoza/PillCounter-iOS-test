@@ -417,7 +417,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         // reference box went stale and the overlap collapsed.
         trackGate.observe(detectedBox)
         if trackGate.isBroken {
-            AppLogger.shared.warn("Enrollment: track lost — restarting the scan from .center")
+            AppLogger.shared.warn("Enrollment: track lost — restarting the scan from .center", event: .faceCaptureFailed)
             restartForBrokenTrack()
             return
         }
@@ -443,7 +443,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         if let anchor = centerAnchorBox, !boxMatchesAnchor(box, anchor: anchor, frameSize: detections[0].frameSize) {
             consecutiveAnchorMismatchFrames += 1
             if consecutiveAnchorMismatchFrames > anchorMismatchGraceFrames {
-                AppLogger.shared.warn("Enrollment: track lost — box mismatched the center-step anchor for \(consecutiveAnchorMismatchFrames) frames")
+                AppLogger.shared.warn("Enrollment: track lost — box mismatched the center-step anchor for \(consecutiveAnchorMismatchFrames) frames", event: .faceCaptureFailed)
                 restartForBrokenTrack()
                 return
             }
@@ -651,7 +651,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             // SFace/alignment failure — discard this step's candidate and keep
             // sampling. The step has no deadline of its own, so this simply
             // retries until a frame embeds successfully.
-            AppLogger.shared.warn("Enrollment: step \(currentStepIndex) (\(step)) — embedding generation failed, retrying")
+            AppLogger.shared.warn("Enrollment: step \(currentStepIndex) (\(step)) — embedding generation failed, retrying", event: .faceCaptureFailed)
             bestPoseMatchedCandidate = nil
             settleDeadline = nil
             poseStability.reset()
@@ -672,7 +672,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
                 pixelBuffer: candidate.pixelBuffer, detection: candidate.detection
             )
             if frontalAvatar == nil {
-                AppLogger.shared.warn("Enrollment: frontal avatar render failed — user will show the placeholder")
+                AppLogger.shared.warn("Enrollment: frontal avatar render failed — user will show the placeholder", event: .faceCaptureFailed)
             }
             // The fixed reference every later frame's box is checked
             // against for track continuity (see centerAnchorBox's
@@ -733,7 +733,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
             return
         }
 
-        AppLogger.shared.warn("Enrollment: .center matches existing user \(match.userId) — prompting")
+        AppLogger.shared.warn("Enrollment: .center matches existing user \(match.userId) — prompting", event: .faceDuplicateFound)
         duplicateMatch = match // pipeline stays paused until the user answers
     }
 
@@ -742,7 +742,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
     /// where `.center` paused — the remaining four poses run normally.
     func continueAfterDuplicate() {
         guard let match = duplicateMatch else { return }
-        AppLogger.shared.warn("Enrollment: continuing despite duplicate of \(match.userId)")
+        AppLogger.shared.warn("Enrollment: continuing despite duplicate of \(match.userId)", event: .faceDuplicateFound)
         duplicateMatch = nil
         resumeCaptureAfterDuplicatePrompt()
     }
@@ -810,7 +810,7 @@ final class FaceEnrollmentViewModel: ObservableObject {
         // enough; a gallery missing an angle can't match that angle later.
         let missing = Set(poseSteps).subtracting(collectedSteps)
         guard missing.isEmpty else {
-            AppLogger.shared.warn("Enrollment: refusing to finish — missing steps \(missing)")
+            AppLogger.shared.warn("Enrollment: refusing to finish — missing steps \(missing)", event: .faceRegisterFailed)
             DispatchQueue.main.async { self.state = .failed(.timedOut) }
             return
         }

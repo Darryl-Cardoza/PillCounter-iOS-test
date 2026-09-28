@@ -174,19 +174,19 @@ struct RuntimeUnit {
         do {
             privateKey = try enclaveKey()
         } catch {
-            AppLogger.shared.error("RuntimeUnit: failed to retrieve Enclave Key", error: error)
+            AppLogger.shared.error("RuntimeUnit: failed to retrieve Enclave Key", error: error, event: .securityCheckFailed)
             throw SealError(reason: "Missing Key")
         }
 
         // 2. Extract the Public Key from the Private Key
         // Encryption is a Public Key operation. The Secure Enclave requires this explicit step.
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
-            AppLogger.shared.error("RuntimeUnit: failed to generate Public Key from Private Key")
+            AppLogger.shared.error("RuntimeUnit: failed to generate Public Key from Private Key", event: .securityCheckFailed)
             throw SealError(reason: "Public Key Generation Failed")
         }
 
         guard let data = value.data(using: .utf8) else {
-            AppLogger.shared.error("RuntimeUnit: failed to encode refined value as UTF-8")
+            AppLogger.shared.error("RuntimeUnit: failed to encode refined value as UTF-8", event: .securityCheckFailed)
             throw SealError(reason: "Encoding Failed")
         }
 
@@ -202,7 +202,7 @@ struct RuntimeUnit {
             )
         else {
             let err = error!.takeRetainedValue() as Error
-            AppLogger.shared.error("RuntimeUnit: encryption failed", error: err)
+            AppLogger.shared.error("RuntimeUnit: encryption failed", error: err, event: .securityCheckFailed)
             throw SealError(reason: "Encryption Failed")
         }
 

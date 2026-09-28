@@ -453,7 +453,7 @@ final class CameraService: NSObject, ObservableObject {
                 device.unlockForConfiguration()
             } catch {
                 // Intentionally silent — camera still works without this tweak.
-                AppLogger.shared.error("CameraService: failed to apply fast-focus defaults", error: error)
+                AppLogger.shared.error("CameraService: failed to apply fast-focus defaults", error: error, event: .scanFailed)
             }
             self.reseedCenterFocusAndExposure(on: device)
 
@@ -466,7 +466,7 @@ final class CameraService: NSObject, ObservableObject {
                     device.activeVideoMaxFrameDuration = duration
                     device.unlockForConfiguration()
                 } catch {
-                    AppLogger.shared.error("CameraService: could not lock 15 fps", error: error)
+                    AppLogger.shared.error("CameraService: could not lock 15 fps", error: error, event: .scanFailed)
                 }
             }
 
@@ -521,7 +521,7 @@ final class CameraService: NSObject, ObservableObject {
             device.unlockForConfiguration()
         } catch {
             // Intentionally silent — a failed fps cap must not break the camera.
-            AppLogger.shared.error("CameraService: failed to cap camera frame rate to \(fps)fps", error: error)
+            AppLogger.shared.error("CameraService: failed to cap camera frame rate to \(fps)fps", error: error, event: .scanFailed)
         }
     }
 
@@ -552,7 +552,7 @@ final class CameraService: NSObject, ObservableObject {
                 is3ALocked = true
             } catch {
                 // Intentionally silent — a failed 3A lock must not break the camera.
-                AppLogger.shared.error("CameraService: failed to lock AE/AF/AWB (3A) on stable tray", error: error)
+                AppLogger.shared.error("CameraService: failed to lock AE/AF/AWB (3A) on stable tray", error: error, event: .scanFailed)
             }
         }
     }
@@ -585,7 +585,7 @@ final class CameraService: NSObject, ObservableObject {
                 device.unlockForConfiguration()
             } catch {
                 // Intentionally silent — camera still works without this tweak.
-                AppLogger.shared.error("CameraService: failed to reseed center focus/exposure", error: error)
+                AppLogger.shared.error("CameraService: failed to reseed center focus/exposure", error: error, event: .scanFailed)
             }
         }
     }
@@ -612,7 +612,7 @@ final class CameraService: NSObject, ObservableObject {
                 device.unlockForConfiguration()
             } catch {
                 // Intentionally silent.
-                AppLogger.shared.error("CameraService: failed to unlock 3A (AE/AF/AWB) before next session", error: error)
+                AppLogger.shared.error("CameraService: failed to unlock 3A (AE/AF/AWB) before next session", error: error, event: .scanFailed)
             }
             is3ALocked = false
         }
@@ -772,7 +772,7 @@ final class CameraService: NSObject, ObservableObject {
                 device.unlockForConfiguration()
             } catch {
                 // Intentionally silent — barcode scanning still works without focus assist.
-                AppLogger.shared.error("CameraService: failed to enable focus-assist for barcode scanning", error: error)
+                AppLogger.shared.error("CameraService: failed to enable focus-assist for barcode scanning", error: error, event: .scanFailed)
             }
         }
 
@@ -819,7 +819,7 @@ final class CameraService: NSObject, ObservableObject {
                         device.unlockForConfiguration()
                     } catch {
                         // Intentionally silent.
-                        AppLogger.shared.error("CameraService: failed to set focus point of interest from tap", error: error)
+                        AppLogger.shared.error("CameraService: failed to set focus point of interest from tap", error: error, event: .scanFailed)
                     }
                 }
                 #if DEBUG
@@ -895,7 +895,7 @@ final class CameraService: NSObject, ObservableObject {
             }
         } catch {
             // Intentionally silent – zoom failure should not break camera
-            AppLogger.shared.error("CameraService: failed to set camera zoom factor", error: error)
+            AppLogger.shared.error("CameraService: failed to set camera zoom factor", error: error, event: .scanFailed)
         }
     }
 

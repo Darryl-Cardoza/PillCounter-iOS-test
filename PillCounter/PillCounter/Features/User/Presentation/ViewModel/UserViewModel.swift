@@ -59,7 +59,7 @@ class UserViewModel: ObservableObject {
             }
             return healthy
         } catch {
-            AppLogger.shared.error("Server health check request failed", error: error)
+            AppLogger.shared.error("Server health check request failed", error: error, event: .healthCheckFailed)
             OfflineSessionManager.shared.markOffline()
             return false
         }
@@ -171,7 +171,7 @@ class UserViewModel: ObservableObject {
                     Hl7ServiceController.shared.notifySettingsUpdated()
                 }
             } catch {
-                AppLogger.shared.error("Failed to load mobile settings", error: error)
+                AppLogger.shared.error("Failed to load mobile settings", error: error, event: .settingsFetchFailed)
                 await MainActor.run {
                     self.isMaintenance = false
                     self.isForceUpdate = false
@@ -339,7 +339,7 @@ class UserViewModel: ObservableObject {
             getAllTransactionsAndFilterByCountType()
 
         } catch {
-            AppLogger.shared.error("Error fetching user", error: error)
+            AppLogger.shared.error("Error fetching user", error: error, event: .userFetchFailed)
             // The auth/me call failed. Fall back to whatever we have cached so the
             // terminal dropdown (and profile) stay populated instead of going blank.
             if terminals.isEmpty {
@@ -388,7 +388,7 @@ class UserViewModel: ObservableObject {
                 AppStorageManager.shared.pharmacyTypeOptions = types
             }
         } catch {
-            AppLogger.shared.error("Failed to fetch pharmacy types", error: error)
+            AppLogger.shared.error("Failed to fetch pharmacy types", error: error, event: .settingsFetchFailed)
         }
     }
 
@@ -407,7 +407,7 @@ class UserViewModel: ObservableObject {
                 countryOptions = AppStorageManager.shared.countryOptions
             }
         } catch {
-            AppLogger.shared.error("Failed to fetch countries", error: error)
+            AppLogger.shared.error("Failed to fetch countries", error: error, event: .settingsFetchFailed)
             countryOptions = AppStorageManager.shared.countryOptions
         }
     }
@@ -486,10 +486,10 @@ class UserViewModel: ObservableObject {
             }
         } catch APIError.server(let message) {
             profileErrorMessage = message
-            AppLogger.shared.error("Failed to update user profile", error: APIError.server(message: message))
+            AppLogger.shared.error("Failed to update user profile", error: APIError.server(message: message), event: .profileUpdateFailed)
         } catch {
             profileErrorMessage = nil
-            AppLogger.shared.error("Failed to update user profile", error: error)
+            AppLogger.shared.error("Failed to update user profile", error: error, event: .profileUpdateFailed)
         }
     }
     // func to check if any updates were there in the profile.
@@ -519,7 +519,7 @@ class UserViewModel: ObservableObject {
 
         // Get the user
         guard let user = userLocalDB.fetchByUserId( userID) else {
-            AppLogger.shared.warn("[TransactionCount] User not found in local DB. UserID: \(userID)")
+            AppLogger.shared.warn("[TransactionCount] User not found in local DB. UserID: \(userID)", event: .databaseError)
             return
         }
 
@@ -733,7 +733,7 @@ class UserViewModel: ObservableObject {
             }
 
         } catch {
-            AppLogger.shared.error("Failed to delete user profile", error: error)
+            AppLogger.shared.error("Failed to delete user profile", error: error, event: .profileDeleteFailed)
         }
     }
     
@@ -787,7 +787,7 @@ class UserViewModel: ObservableObject {
                 AppStorageManager.shared.selectedTerminalName = ""
             }
         } catch {
-            AppLogger.shared.error("Failed to load terminals", error: error)
+            AppLogger.shared.error("Failed to load terminals", error: error, event: .terminalLoadFailed)
             hydrateTerminalsFromCache()
         }
     }
@@ -877,7 +877,7 @@ class UserViewModel: ObservableObject {
                     // `terminals` is now stale relative to `selectedTerminal` until
                     // the next `loadTerminals()` call. Log so the divergence is
                     // diagnosable instead of failing invisibly.
-                    AppLogger.shared.warn("[updateTerminal] Claim succeeded but post-claim terminal re-fetch failed — local terminals list is stale")
+                    AppLogger.shared.warn("[updateTerminal] Claim succeeded but post-claim terminal re-fetch failed — local terminals list is stale", event: .terminalLoadFailed)
                 }
                 return true
             }
@@ -886,7 +886,7 @@ class UserViewModel: ObservableObject {
             terminalErrorMessage = L10n.Profile.Error.errorTerminalAlreadyClaimedMessage
             return false
         } catch {
-            AppLogger.shared.error("Failed to update terminal", error: error)
+            AppLogger.shared.error("Failed to update terminal", error: error, event: .terminalUpdateFailed)
             terminalErrorMessage = L10n.Profile.Error.errorUpdateTerminalMessage
             return false
         }

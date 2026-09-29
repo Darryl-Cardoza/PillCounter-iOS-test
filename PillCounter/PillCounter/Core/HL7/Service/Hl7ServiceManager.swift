@@ -443,6 +443,8 @@ final class Hl7ServiceManager {
 
         case .failed(let error):
             print("[HL7][CLIENT] Failed: \(error)")
+            AppLogger.shared.error("PMS connection failed", error: error, event: .hl7ConnectFailed,
+                                   context: ["endpoint": clientConnection.map { "\($0.endpoint)" } ?? "-"])
             disconnectClientInternal(notifyListener: true)
 
         case .waiting(let error):
@@ -456,6 +458,8 @@ final class Hl7ServiceManager {
             // both reaching `.ready` and each firing `onClientConnected()`,
             // sending every queued message twice. Just log and leave it.
             print("[HL7][CLIENT] Waiting (unreachable): \(error) — letting it retry internally")
+            AppLogger.shared.warn("PMS connection waiting (unreachable): \(error)", event: .hl7ConnectFailed,
+                                  context: ["endpoint": clientConnection.map { "\($0.endpoint)" } ?? "-"])
 
         case .cancelled:
             print("[HL7][CLIENT] Cancelled")
@@ -555,9 +559,15 @@ final class Hl7ServiceManager {
         }
 
         let framed = MLLP.frame(hl7)
+        let endpoint = "\(connection.endpoint)"
         connection.send(content: framed, completion: .contentProcessed { error in
-            if let error { print("[HL7][CLIENT] Send FAILED: \(error)") }
-            else         { print("[HL7][CLIENT] Send SUCCESS") }
+            if let error {
+                print("[HL7][CLIENT] Send FAILED: \(error)")
+                AppLogger.shared.error("PMS send failed", error: error, event: .hl7SendFailed,
+                                       context: ["endpoint": endpoint])
+            } else {
+                print("[HL7][CLIENT] Send SUCCESS")
+            }
         })
         return true
     }

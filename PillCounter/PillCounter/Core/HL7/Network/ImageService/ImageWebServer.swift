@@ -161,7 +161,7 @@ final class ImageWebServer {
             let terminator = Data("\r\n\r\n".utf8)
             if buffer.range(of: terminator) != nil {
                 guard let request = String(data: buffer, encoding: .utf8) else {
-                    self.send(self.errorResponse(400), on: connection)
+                    self.send(self.errorResponse(400, reason: "request is not valid UTF-8"), on: connection)
                     return
                 }
                 let (response, deliveredFilenames) = self.handleRequest(request)
@@ -183,7 +183,7 @@ final class ImageWebServer {
 
             // Guard against an unbounded request from a misbehaving client.
             guard buffer.count <= 65536 else {
-                self.send(self.errorResponse(431), on: connection)
+                self.send(self.errorResponse(431, reason: "request headers too large"), on: connection)
                 return
             }
 
@@ -207,13 +207,13 @@ final class ImageWebServer {
         let lines = request.components(separatedBy: "\r\n")
 
         guard let firstLine = lines.first else {
-            return (errorResponse(400), [])
+            return (errorResponse(400, reason: "empty request"), [])
         }
 
 
         let parts = firstLine.components(separatedBy: " ")
         guard parts.count >= 2, parts[0] == "GET" else {
-            return (errorResponse(405), [])
+            return (errorResponse(405, reason: "unsupported method or malformed request line"), [])
         }
 
         let rawPath = parts[1]
@@ -265,7 +265,7 @@ final class ImageWebServer {
         }
 
         guard path.hasPrefix("/images/") else {
-            return (errorResponse(404), [])
+            return (errorResponse(404, reason: "unknown route"), [])
         }
 
         return serveImage(String(path.dropFirst("/images/".count)))
@@ -281,10 +281,10 @@ final class ImageWebServer {
     /// PMS always receives the plain JPEG bytes — the encrypted file is never sent directly.
     private func serveImage(_ fileName: String) -> (Data, [String]) {
 
-        guard isSafe(fileName) else { return (errorResponse(400), []) }
+        guard isSafe(fileName) else { return (errorResponse(400, reason: "unsafe filename"), []) }
 
         guard var decrypted = PhotoFileManager.shared.loadDecryptedData(from: fileName) else {
-            return (errorResponse(404), [])
+            return (errorResponse(404, reason: "image not found"), [])
         }
         defer { decrypted.resetBytes(in: 0..<decrypted.count) }
 
@@ -316,7 +316,7 @@ final class ImageWebServer {
         naming: ZipNaming = .legacy,
         lookup: (String) -> PillCountTransactionEntity?
     ) -> (Data, [String]) {
-        guard !key.isEmpty, let txn = lookup(key) else { return (errorResponse(404), []) }
+        guard !key.isEmpty, let txn = lookup(key) else { return (errorResponse(404, reason: "transaction not found"), []) }
 
         var entries: [ImageEntry] = []
         var deliveredFilenames: [String] = []
@@ -337,7 +337,7 @@ final class ImageWebServer {
             deliveredFilenames.append(imagePath)
         }
 
-        guard !entries.isEmpty else { return (errorResponse(404), []) }
+        guard !entries.isEmpty else { return (errorResponse(404, reason: "no images for transaction"), []) }
 
         return (zipResponse(entries, fileName: zipFileName, naming: naming, rxNo: txn.rx_no ?? "", orderId: txn.transaction_order_id ?? ""), deliveredFilenames)
     }
@@ -500,8 +500,11 @@ final class ImageWebServer {
         }
     }
 
-    private func errorResponse(_ code: Int) -> Data {
-        httpResponse(#"{"success":false}"#, status: code)
+    // `reason` is a fixed string on purpose — the request path/filename is client-controlled.
+    private func errorResponse(_ code: Int, reason: String) -> Data {
+        AppLogger.shared.warn("Image server returned \(code)", event: .hl7ServiceError,
+                              context: ["status": code, "reason": reason])
+        return httpResponse(#"{"success":false}"#, status: code)
     }
 
     /// Sends the response and reports via `onComplete` whether every byte was

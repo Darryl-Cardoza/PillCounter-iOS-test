@@ -62,12 +62,19 @@ final class DrugCatalogStore {
     /// Downloads the drug image once and stores its local file path on the entity,
     /// so every subsequent read serves from disk instead of the network.
     private func downloadAndStoreImage(from url: URL, drugId: Int64) {
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            var logContext: [String: Any] = ["drugId": drugId, "host": url.host ?? "-", "path": url.path]
             guard let self, let data, error == nil, let image = UIImage(data: data) else {
                 StoreLogger.debug("❌ [DrugMasterDAO] image download failed for drugId \(drugId): \(String(describing: error))")
+                if let status = (response as? HTTPURLResponse)?.statusCode { logContext["statusCode"] = status }
+                if let error { logContext["error"] = String(describing: error) }
+                AppLogger.shared.warn("Drug image download failed", event: .drugImageFailed, context: logContext)
                 return
             }
-            guard let fileName = PhotoFileManager.shared.saveImage(image) else { return }
+            guard let fileName = PhotoFileManager.shared.saveImage(image) else {
+                AppLogger.shared.warn("Drug image save failed", event: .drugImageFailed, context: logContext)
+                return
+            }
             self.context.performAndWait {
                 guard let entity = self.fetchByIdNoWrap(drugId), entity.drug_image == nil else { return }
                 entity.drug_image = fileName

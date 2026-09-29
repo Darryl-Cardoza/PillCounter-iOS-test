@@ -49,6 +49,7 @@ extension BaseRepositoryProtocol {
         extraHeaders: [String: String]? = nil
     ) async throws -> T {
         guard let url = URL(string: url) else {
+            logFailure("Invalid request URL", method: method, url: nil)
             throw APIError.invalidURL
         }
 
@@ -63,7 +64,12 @@ extension BaseRepositoryProtocol {
         request.allHTTPHeaderFields = allHeaders.filter { !$0.key.isEmpty && !$0.value.isEmpty }
 
         if let body = body {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            } catch {
+                logFailure("Request body serialization failed", method: method, url: url, error: error)
+                throw error
+            }
         }
 
         logRequest(request, body: body)
@@ -94,6 +100,7 @@ extension BaseRepositoryProtocol {
                 logResponse(data, response)
 
                 guard let httpResponse = response as? HTTPURLResponse else {
+                    logFailure("Non-HTTP response received", method: method, url: url, attempt: attempt)
                     throw APIError.invalidResponse
                 }
 
@@ -102,16 +109,26 @@ extension BaseRepositoryProtocol {
                     do {
                         return try JSONDecoder().decode(T.self, from: data)
                     } catch {
-                        AppLogger.shared.error("Parsing error for \(T.self)", error: error, event: .networkError)
+                        logFailure("Parsing error for \(T.self)", method: method, url: url,
+                                   statusCode: httpResponse.statusCode, attempt: attempt, error: error)
                         throw APIError.parsingError
                     }
                 case 401:
+                    logFailure("Request unauthorized", method: method, url: url,
+                               statusCode: 401, attempt: attempt, isWarning: true, event: .sessionExpired)
                     NotificationCenter.default.post(name: .unauthorizedResponseReceived, object: nil)
                     throw APIError.unauthorized
                 case 500 where attempt < maxRetries:
+                    logFailure("Server error, retrying", method: method, url: url,
+                               statusCode: 500, attempt: attempt, isWarning: true)
                     attempt += 1
                     continue
                 default:
+                    let code = httpResponse.statusCode
+                    let failureMessage = code == 400 ? "Bad request (HTTP 400)"
+                        : (400..<500).contains(code) ? "Request rejected (HTTP \(code))"
+                        : "Request failed with HTTP \(code)"
+                    logFailure(failureMessage, method: method, url: url, statusCode: code, attempt: attempt)
                     // The body may carry a server-authored message (e.g. "Invalid OTP",
                     // "Maximum number of logged-in devices reached...") that's more
                     // useful to show than a generic status-code error — every
@@ -142,10 +159,15 @@ extension BaseRepositoryProtocol {
                 // network-level catch below (URLSession failure) should retry.
                 throw error
             } catch {
+                let isTimeout = (error as? URLError)?.code == .timedOut
                 if attempt < maxRetries {
+                    logFailure("Network failure, retrying", method: method, url: url, attempt: attempt,
+                               isWarning: true, event: isTimeout ? .networkTimeout : .networkError, error: error)
                     attempt += 1
                     continue
                 } else {
+                    logFailure("Network failure", method: method, url: url, attempt: attempt,
+                               event: isTimeout ? .networkTimeout : .networkError, error: error)
                     NotificationCenter.default.post(name: .serverErrorResponseReceived, object: nil)
                     throw APIError.unknown(error)
                 }
@@ -153,6 +175,33 @@ extension BaseRepositoryProtocol {
         }
 
         throw APIError.serverError(statusCode: 500)
+    }
+
+    // MARK: - Failure logging
+    // Deliberately excludes headers, bodies, query string and the server `message`
+    // (it can echo user input) — remote logs must stay free of PII and secrets.
+    private static func logFailure(
+        _ message: String,
+        method: HTTPMethod,
+        url: URL?,
+        statusCode: Int? = nil,
+        attempt: Int? = nil,
+        isWarning: Bool = false,
+        event: LogEvent = .networkError,
+        error: Error? = nil
+    ) {
+        var context: [String: Any] = ["method": method.rawValue]
+        if let path = url?.path { context["path"] = path }
+        if let statusCode { context["statusCode"] = statusCode }
+        if let attempt { context["attempt"] = attempt }
+
+        if isWarning {
+            // warn() has no error parameter, so carry the error in context.
+            if let error { context["error"] = String(describing: error) }
+            AppLogger.shared.warn(message, event: event, context: context)
+        } else {
+            AppLogger.shared.error(message, error: error, event: event, context: context)
+        }
     }
 
     // MARK: - Error body decoding

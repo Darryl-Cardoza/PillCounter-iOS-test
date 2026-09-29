@@ -44,9 +44,9 @@ public enum DeviceInfoProvider {
         DeviceKeyProvider.shared.getDeviceKey()
     }
 
-    public static var appName: String {
-        Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "PillCounter"
-    }
+    // /mobile/logs only accepts "dispensesure" or "dispensesure_companion" (422 otherwise);
+    // this target is the retail DispenseSure app, so a bundle-derived name won't validate.
+    public static let appName = "dispensesure"
 
     public static var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"

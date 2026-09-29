@@ -50,9 +50,19 @@ final class RemoteLogHTTPClient {
     }
 
     func deliver(_ body: Data) async -> RemoteLogDeliveryResult {
-        guard let url = URL(string: baseURL() + "/mobile/logs") else { return .retry }
+        guard let url = URL(string: baseURL() + "/mobile/logs") else {
+            #if DEBUG
+            print("[RemoteLogHTTPClient] NOT SENT — invalid base URL")
+            #endif
+            return .retry
+        }
         let key = self.serverKey()
-        guard !key.isEmpty else { return .retry }
+        guard !key.isEmpty else {
+            #if DEBUG
+            print("[RemoteLogHTTPClient] NOT SENT — X-Server-Key is empty")
+            #endif
+            return .retry
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -63,6 +73,9 @@ final class RemoteLogHTTPClient {
         do {
             let (_, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { return .retry }
+            #if DEBUG
+            print("[RemoteLogHTTPClient] POST \(url.path) → \(http.statusCode) (\(body.count) bytes)")
+            #endif
             return Self.classify(statusCode: http.statusCode)
         } catch {
             #if DEBUG

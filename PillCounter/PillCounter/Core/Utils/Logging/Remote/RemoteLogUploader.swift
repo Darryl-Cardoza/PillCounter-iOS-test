@@ -37,7 +37,13 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
 
     func submit(_ payload: RemoteLogPayload) {
         guard let body = try? JSONEncoder().encode(payload) else { return }
-        guard canSend else { file.appendPending(body); return }
+        guard canSend else {
+            #if DEBUG
+            print("[RemoteLogUploader] QUEUED, not sent — offline or in backoff")
+            #endif
+            file.appendPending(body)
+            return
+        }
         Task.detached(priority: .background) {
             await self.withBackgroundTime { await self.deliverOrQueue(body) }
         }

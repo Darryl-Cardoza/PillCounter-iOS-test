@@ -45,6 +45,9 @@ final class RemoteLogDestination: LogDestination {
             network: .init(type: network.type, isOnline: network.isOnline)
         )
 
+        #if DEBUG
+        print("[RemoteLogDestination] submit \(event.rawValue): \(payload.message)")
+        #endif
         uploader.submit(payload)
     }
 

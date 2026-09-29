@@ -153,7 +153,6 @@ class LoginViewModel: ObservableObject {
 
             if result.isSuccess ?? false {
                 otp = Array(repeating: "", count: 6)
-                DeviceInfoProvider.startNewSession(reason: "login")
                 isOtpVerificationSuccess = true
 
                 // All sensitive values written to Keychain via AppStorageManager
@@ -169,6 +168,11 @@ class LoginViewModel: ObservableObject {
                 let expiresIn = TimeInterval(result.data?.expiresIn ?? 86400)
                 store.tokenExpiryTimestamp =
                     Date().addingTimeInterval(expiresIn).timeIntervalSince1970
+
+                // After the stores above so the SESSION_STARTED marker passes the
+                // logged-in gate and /mobile/logs has a token to authenticate with.
+                DeviceInfoProvider.startNewSession(reason: "login")
+                RemoteLogUploader.shared.flushWithBackgroundTime()
 
                 SessionManager.shared.reset()
                 Hl7ServiceController.shared.evaluate()

@@ -128,7 +128,9 @@ extension BaseRepositoryProtocol {
                     let failureMessage = code == 400 ? "Bad request (HTTP 400)"
                         : (400..<500).contains(code) ? "Request rejected (HTTP \(code))"
                         : "Request failed with HTTP \(code)"
-                    logFailure(failureMessage, method: method, url: url, statusCode: code, attempt: attempt)
+                    if code != 429 {
+                        logFailure(failureMessage, method: method, url: url, statusCode: code, attempt: attempt)
+                    }
                     // The body may carry a server-authored message (e.g. "Invalid OTP",
                     // "Maximum number of logged-in devices reached...") that's more
                     // useful to show than a generic status-code error — every

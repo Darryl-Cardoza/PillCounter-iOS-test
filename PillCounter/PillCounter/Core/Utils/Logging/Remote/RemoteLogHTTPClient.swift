@@ -18,14 +18,17 @@ final class RemoteLogHTTPClient {
     private let session: URLSession
     private let baseURL: () -> String
     private let serverKey: () -> String
+    private let accessToken: () -> String
 
     init(
         session: URLSession? = nil,
         baseURL: @escaping () -> String = { ConfigurationManager.shared.apiBaseURL },
-        serverKey: @escaping () -> String = { ConfigurationManager.shared.xServerKey }
+        serverKey: @escaping () -> String = { ConfigurationManager.shared.xServerKey },
+        accessToken: @escaping () -> String = { AppStorageManager.shared.accessToken ?? "" }
     ) {
         self.baseURL = baseURL
         self.serverKey = serverKey
+        self.accessToken = accessToken
         if let session {
             self.session = session
         } else {
@@ -43,7 +46,7 @@ final class RemoteLogHTTPClient {
     static func classify(statusCode: Int) -> RemoteLogDeliveryResult {
         switch statusCode {
         case 200..<300: return .delivered
-        case 408, 429: return .retry
+        case 401, 408, 429: return .retry
         case 400..<500: return .drop
         default: return .retry
         }
@@ -64,17 +67,29 @@ final class RemoteLogHTTPClient {
             return .retry
         }
 
+        let token = self.accessToken()
+        guard !token.isEmpty else {
+            #if DEBUG
+            print("[RemoteLogHTTPClient] NOT SENT — no access token")
+            #endif
+            return .retry
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(key, forHTTPHeaderField: "X-Server-Key")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.httpBody = body
 
         do {
-            let (_, response) = try await session.data(for: request)
+            let (responseData, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { return .retry }
             #if DEBUG
             print("[RemoteLogHTTPClient] POST \(url.path) → \(http.statusCode) (\(body.count) bytes)")
+            if !(200..<300).contains(http.statusCode) {
+                print("[RemoteLogHTTPClient] response body: \(String(data: responseData.prefix(500), encoding: .utf8) ?? "<non-UTF8>")")
+            }
             #endif
             return Self.classify(statusCode: http.statusCode)
         } catch {

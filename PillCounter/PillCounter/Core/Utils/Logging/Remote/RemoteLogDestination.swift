@@ -2,13 +2,20 @@ import Foundation
 
 final class RemoteLogDestination: LogDestination {
     private let uploader: RemoteLogSubmitting
+    private let isLoggedIn: () -> Bool
 
-    init(uploader: RemoteLogSubmitting = RemoteLogUploader.shared) {
+    init(
+        uploader: RemoteLogSubmitting = RemoteLogUploader.shared,
+        isLoggedIn: @escaping () -> Bool = { AppStorageManager.shared.isLoggedIn }
+    ) {
         self.uploader = uploader
+        self.isLoggedIn = isLoggedIn
     }
 
     func write(_ entry: LogEntry, formatted: String) {
         guard entry.level >= .error || entry.event == .sessionStarted else { return }
+        // /mobile/logs requires the access token, which only exists after login.
+        guard isLoggedIn() else { return }
 
         let event = entry.event ?? EventClassifier.classify(entry)
         let tag = Self.tag(forFile: entry.file)

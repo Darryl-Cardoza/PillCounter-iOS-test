@@ -36,11 +36,12 @@ private final class LogAPIStubProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
-private func makeClient(serverKey: String = "test-key", baseURL: String = "https://api.example.com") -> RemoteLogHTTPClient {
+private func makeClient(serverKey: String = "test-key", accessToken: String = "test-token",
+                        baseURL: String = "https://api.example.com") -> RemoteLogHTTPClient {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [LogAPIStubProtocol.self]
     return RemoteLogHTTPClient(session: URLSession(configuration: config),
-                               baseURL: { baseURL }, serverKey: { serverKey })
+                               baseURL: { baseURL }, serverKey: { serverKey }, accessToken: { accessToken })
 }
 
 @Suite(.serialized)
@@ -58,7 +59,7 @@ struct RemoteLogHTTPClientTests {
         #expect(RemoteLogHTTPClient.classify(statusCode: 299) == .delivered)
         #expect(RemoteLogHTTPClient.classify(statusCode: 301) == .retry)
         #expect(RemoteLogHTTPClient.classify(statusCode: 400) == .drop)
-        #expect(RemoteLogHTTPClient.classify(statusCode: 401) == .drop)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 401) == .retry)
         #expect(RemoteLogHTTPClient.classify(statusCode: 408) == .retry)
         #expect(RemoteLogHTTPClient.classify(statusCode: 422) == .drop)
         #expect(RemoteLogHTTPClient.classify(statusCode: 429) == .retry)
@@ -75,6 +76,7 @@ struct RemoteLogHTTPClientTests {
         #expect(request?.httpMethod == "POST")
         #expect(request?.url?.absoluteString == "https://api.example.com/mobile/logs")
         #expect(request?.value(forHTTPHeaderField: "X-Server-Key") == "test-key")
+        #expect(request?.value(forHTTPHeaderField: "Authorization") == "Bearer test-token")
         #expect(request?.value(forHTTPHeaderField: "Content-Type") == "application/json")
         #expect(LogAPIStubProtocol.lastBody == body)
     }
@@ -98,6 +100,17 @@ struct RemoteLogHTTPClientTests {
 
     @Test func transportFailureIsRetryable() async {
         LogAPIStubProtocol.fail = true
+        #expect(await makeClient().deliver(Data("{}".utf8)) == .retry)
+    }
+
+    @Test func emptyAccessTokenIsRetryableAndNothingIsSent() async {
+        let result = await makeClient(accessToken: "").deliver(Data("{}".utf8))
+        #expect(result == .retry)
+        #expect(LogAPIStubProtocol.lastRequest == nil)
+    }
+
+    @Test func unauthorizedIsRetryable() async {
+        LogAPIStubProtocol.status = 401
         #expect(await makeClient().deliver(Data("{}".utf8)) == .retry)
     }
 

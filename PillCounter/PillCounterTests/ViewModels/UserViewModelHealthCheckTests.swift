@@ -165,7 +165,7 @@ struct UserViewModelHealthCheckTests {
         await withCleanOfflineState {
             let uploader = RecordingUploader()
             let queue = DispatchQueue(label: "test.health.remote")
-            let logger = AppLogger(destinations: [RemoteLogDestination(uploader: uploader)], queue: queue)
+            let logger = AppLogger(destinations: [RemoteLogDestination(uploader: uploader, isLoggedIn: { true })], queue: queue)
             let viewModel = UserViewModel(
                 userLocalDB: MockUserDataSource(),
                 healthRepo: StubHealthRepository(

@@ -20,7 +20,7 @@ private final class RecordingHTTPClient: RemoteLogSubmitting {
 struct RemoteLogDestinationTests {
     @Test func shipsErrorLevelEntries() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(uploader: client)
+        let destination = RemoteLogDestination(uploader: client, isLoggedIn: { true })
         let entry = LogEntry(level: .error, file: "/Features/Scanning/BarcodeAndQRDecoder.swift",
                               function: "f", line: 1, message: "Scan failed")
         destination.write(entry, formatted: "irrelevant")
@@ -28,9 +28,18 @@ struct RemoteLogDestinationTests {
         #expect(client.sent.first?.event == "SCAN_FAILED")
     }
 
+    @Test func dropsEverythingWhileLoggedOut() {
+        let client = RecordingHTTPClient()
+        let destination = RemoteLogDestination(uploader: client, isLoggedIn: { false })
+        destination.write(LogEntry(level: .error, file: "/f.swift", function: "f", line: 1, message: "m"), formatted: "irrelevant")
+        destination.write(LogEntry(level: .info, file: "/f.swift", function: "f", line: 1, message: "Session started",
+                                   event: .sessionStarted), formatted: "irrelevant")
+        #expect(client.sent.isEmpty)
+    }
+
     @Test func doesNotShipWarnInfoDebugVerbose() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(uploader: client)
+        let destination = RemoteLogDestination(uploader: client, isLoggedIn: { true })
         for level: LogLevel in [.warn, .info, .debug, .verbose] {
             let entry = LogEntry(level: level, file: "/f.swift", function: "f", line: 1, message: "m")
             destination.write(entry, formatted: "irrelevant")
@@ -40,7 +49,7 @@ struct RemoteLogDestinationTests {
 
     @Test func shipsSessionStartedMarkerBelowErrorLevel() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(uploader: client)
+        let destination = RemoteLogDestination(uploader: client, isLoggedIn: { true })
         let entry = LogEntry(level: .info, file: "/f.swift", function: "f", line: 1, message: "Session started",
                               event: .sessionStarted, context: ["reason": "login", "previous_session_id": "old"])
         destination.write(entry, formatted: "irrelevant")
@@ -54,7 +63,7 @@ struct RemoteLogDestinationTests {
         defer { LoggerConfig.minimumLogLevel = previous }
 
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(uploader: client)
+        let destination = RemoteLogDestination(uploader: client, isLoggedIn: { true })
         let warnEntry = LogEntry(level: .warn, file: "/f.swift", function: "f", line: 1, message: "m")
         destination.write(warnEntry, formatted: "irrelevant")
         #expect(client.sent.isEmpty)
@@ -62,7 +71,7 @@ struct RemoteLogDestinationTests {
 
     @Test func redactsMessageBeforeSending() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(uploader: client)
+        let destination = RemoteLogDestination(uploader: client, isLoggedIn: { true })
         let entry = LogEntry(level: .error, file: "/f.swift", function: "f", line: 1,
                               message: "contact jane.doe@example.com about scan failure")
         destination.write(entry, formatted: "irrelevant")
@@ -71,7 +80,7 @@ struct RemoteLogDestinationTests {
 
     @Test func explicitEventOnEntryWinsOverClassifier() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(uploader: client)
+        let destination = RemoteLogDestination(uploader: client, isLoggedIn: { true })
         let entry = LogEntry(level: .error, file: "/Features/Scanning/BarcodeAndQRDecoder.swift",
                               function: "f", line: 1, message: "Scan failed", event: .dispenseCount)
         destination.write(entry, formatted: "irrelevant")

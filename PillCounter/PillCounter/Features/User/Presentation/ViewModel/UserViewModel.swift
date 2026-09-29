@@ -22,6 +22,7 @@ class UserViewModel: ObservableObject {
     let userRepo: UserRepositoryProtocol
     let settingsRepo: SettingsRepositoryProtocol
     let healthRepo: HealthRepositoryProtocol
+    let logger: AppLogger
 
     init(
         userLocalDB: UserDataSource = UserStore.shared,
@@ -31,7 +32,8 @@ class UserViewModel: ObservableObject {
         batchDAO: BatchDataSource = BatchStore.shared,
         userRepo: UserRepositoryProtocol = UserRepository.shared,
         settingsRepo: SettingsRepositoryProtocol = SettingsRepository.shared,
-        healthRepo: HealthRepositoryProtocol = HealthRepository.shared
+        healthRepo: HealthRepositoryProtocol = HealthRepository.shared,
+        logger: AppLogger = .shared
     ) {
         self.userLocalDB = userLocalDB
         self.transactionDAO = transactionDAO
@@ -41,6 +43,7 @@ class UserViewModel: ObservableObject {
         self.userRepo = userRepo
         self.settingsRepo = settingsRepo
         self.healthRepo = healthRepo
+        self.logger = logger
     }
 
     /// Silent, non-blocking server-health probe. Fired from Dashboard's
@@ -55,11 +58,22 @@ class UserViewModel: ObservableObject {
             if healthy {
                 OfflineSessionManager.shared.markHealthy(checkedAt: response.data?.checkedAt)
             } else {
+                let failed = (response.data?.checks ?? [:]).filter { $0.value.isHealthy != true }
+                logger.error(
+                    "Server health check reported unhealthy",
+                    event: .healthCheckFailed,
+                    context: [
+                        "failed_checks": failed.keys.sorted().joined(separator: ","),
+                        "details": failed.keys.sorted()
+                            .map { "\($0): \(LogRedactor.redact(failed[$0]?.detail) ?? "-")" }
+                            .joined(separator: "; ")
+                    ]
+                )
                 OfflineSessionManager.shared.markOffline()
             }
             return healthy
         } catch {
-            AppLogger.shared.error("Server health check request failed", error: error, event: .healthCheckFailed)
+            logger.error("Server health check request failed", error: error, event: .healthCheckFailed)
             OfflineSessionManager.shared.markOffline()
             return false
         }

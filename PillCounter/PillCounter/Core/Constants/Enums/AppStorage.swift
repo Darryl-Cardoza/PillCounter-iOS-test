@@ -680,5 +680,6 @@ final class AppStorageManager {
 
         defaults.removeObject(forKey: AppStorageKeys.isNewUser)
         clearTerminalCache()
+        DeviceInfoProvider.startNewSession(reason: "logout")
     }
 }

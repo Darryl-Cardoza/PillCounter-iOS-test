@@ -36,6 +36,7 @@ struct PillCounterApp: App {
     private let isCompromised: Bool
 
     init() {
+        DeviceInfoProvider.logLaunchSession()
         _ = CoreDataManager.shared
         NSManagedObject.installEncryptionHooks()
 
@@ -315,6 +316,8 @@ extension PillCounterApp {
                 initiallyVisible: false
             )
 
+            RemoteLogUploader.shared.flushWithBackgroundTime()
+
             //Remove the overlay once the app is visible again.
             isObscured = false
             if SecurityManager.isDeviceCompromised() {
@@ -330,6 +333,8 @@ extension PillCounterApp {
             faceSessionManager.releaseLockIfNoUsersEnrolled()
 
         case .background:
+            RemoteLogUploader.shared.flushWithBackgroundTime()
+
             //Apply the overlay before iOS takes the snapshot.
             isObscured = true
             SecurityMonitor.shared.stopMonitoring()

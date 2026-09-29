@@ -76,6 +76,19 @@ struct AppLoggerTests {
         #expect(mock.written.first?.contains("Level: DEBUG") == true)
     }
 
+    @Test func sessionMarkerBypassesMinimumLogLevel() {
+        let mock = MockLogDestination()
+        let queue = DispatchQueue(label: "test.applogger.marker")
+        let logger = AppLogger(destinations: [mock], queue: queue)
+
+        logger.info("Session started", event: .sessionStarted, context: ["reason": "logout"])
+        logger.info("ordinary info")
+        queue.sync {}
+
+        #expect(mock.written.count == 1)
+        #expect(mock.written.first?.contains("Session started") == true)
+    }
+
     @Test func unrecognizedErrorPreservesOriginalErrorTextAlongsideGenericMessage() {
         struct CustomError: Error, CustomStringConvertible {
             var description: String { "CustomError(code: 42)" }

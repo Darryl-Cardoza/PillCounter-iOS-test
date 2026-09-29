@@ -153,6 +153,7 @@ class LoginViewModel: ObservableObject {
 
             if result.isSuccess ?? false {
                 otp = Array(repeating: "", count: 6)
+                DeviceInfoProvider.startNewSession(reason: "login")
                 isOtpVerificationSuccess = true
 
                 // All sensitive values written to Keychain via AppStorageManager

@@ -2,61 +2,108 @@ import Testing
 import Foundation
 @testable import PillCounter
 
-private final class StubURLProtocol: URLProtocol {
-    static var handler: ((URLRequest) -> (Int, Data))?
+private final class LogAPIStubProtocol: URLProtocol {
+    nonisolated(unsafe) static var status = 200
+    nonisolated(unsafe) static var fail = false
+    nonisolated(unsafe) static var lastRequest: URLRequest?
+    nonisolated(unsafe) static var lastBody: Data?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        guard let handler = Self.handler else {
-            client?.urlProtocolDidFinishLoading(self)
+        Self.lastRequest = request
+        Self.lastBody = request.httpBody ?? request.httpBodyStream.map { stream in
+            stream.open(); defer { stream.close() }
+            var data = Data()
+            var buffer = [UInt8](repeating: 0, count: 1024)
+            while stream.hasBytesAvailable {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                if count <= 0 { break }
+                data.append(buffer, count: count)
+            }
+            return data
+        }
+        if Self.fail {
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return
         }
-        let (status, data) = handler(request)
-        guard let response = HTTPURLResponse(url: request.url!, statusCode: status,
-                                              httpVersion: nil, headerFields: nil) else {
-            client?.urlProtocolDidFinishLoading(self)
-            return
-        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: Self.status, httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocol(self, didLoad: Data())
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
 }
 
-private func stubSession() -> URLSession {
+private func makeClient(serverKey: String = "test-key", baseURL: String = "https://api.example.com") -> RemoteLogHTTPClient {
     let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [StubURLProtocol.self]
-    return URLSession(configuration: config)
+    config.protocolClasses = [LogAPIStubProtocol.self]
+    return RemoteLogHTTPClient(session: URLSession(configuration: config),
+                               baseURL: { baseURL }, serverKey: { serverKey })
 }
 
-private func samplePayload() -> RemoteLogPayload {
-    RemoteLogPayload(
-        deviceKey: "d", appName: "PillCounter", appVersion: "1", platform: "iOS", osVersion: "17",
-        deviceModel: "iPhone15,3", sessionId: "s", logId: "l", severity: 4,
-        timestamp: "2026-09-28T00:00:00.000Z", message: "m", tag: "t", event: "UNKNOWN_ERROR",
-        context: nil, error: nil, network: .init(type: "wifi", isOnline: true)
-    )
-}
-
+@Suite(.serialized)
 struct RemoteLogHTTPClientTests {
-    @Test func sendDoesNotThrowOnNon2xxResponse() async {
-        StubURLProtocol.handler = { _ in (500, Data()) }
-        let client = RemoteLogHTTPClient(session: stubSession())
-        client.send(samplePayload())
-        // Fire-and-forget: nothing to await; this test's success is that it
-        // returns immediately without throwing/crashing.
+    init() {
+        LogAPIStubProtocol.status = 200
+        LogAPIStubProtocol.fail = false
+        LogAPIStubProtocol.lastRequest = nil
+        LogAPIStubProtocol.lastBody = nil
     }
 
-    @Test func sendDoesNotThrowOnTransportFailure() async {
-        let brokenSession = URLSession(configuration: {
-            let config = URLSessionConfiguration.ephemeral
-            config.protocolClasses = [] // no handler registered -> load fails
-            return config
-        }())
-        let client = RemoteLogHTTPClient(session: brokenSession)
-        client.send(samplePayload())
+    @Test func classifiesStatusCodes() {
+        #expect(RemoteLogHTTPClient.classify(statusCode: 200) == .delivered)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 201) == .delivered)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 299) == .delivered)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 301) == .retry)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 400) == .drop)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 401) == .drop)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 408) == .retry)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 422) == .drop)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 429) == .retry)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 500) == .retry)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 503) == .retry)
+    }
+
+    @Test func successfulPostIsDeliveredWithExpectedRequest() async {
+        let body = Data("{\"log_id\":\"1\"}".utf8)
+        let result = await makeClient().deliver(body)
+
+        #expect(result == .delivered)
+        let request = LogAPIStubProtocol.lastRequest
+        #expect(request?.httpMethod == "POST")
+        #expect(request?.url?.absoluteString == "https://api.example.com/mobile/logs")
+        #expect(request?.value(forHTTPHeaderField: "X-Server-Key") == "test-key")
+        #expect(request?.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(LogAPIStubProtocol.lastBody == body)
+    }
+
+    @Test func serverErrorIsRetryable() async {
+        LogAPIStubProtocol.status = 503
+        #expect(await makeClient().deliver(Data("{}".utf8)) == .retry)
+    }
+
+    @Test func throttleAndTimeoutStatusesAreRetryable() async {
+        for status in [408, 429] {
+            LogAPIStubProtocol.status = status
+            #expect(await makeClient().deliver(Data("{}".utf8)) == .retry)
+        }
+    }
+
+    @Test func badRequestIsDropped() async {
+        LogAPIStubProtocol.status = 422
+        #expect(await makeClient().deliver(Data("{}".utf8)) == .drop)
+    }
+
+    @Test func transportFailureIsRetryable() async {
+        LogAPIStubProtocol.fail = true
+        #expect(await makeClient().deliver(Data("{}".utf8)) == .retry)
+    }
+
+    @Test func emptyServerKeyIsRetryableAndNothingIsSent() async {
+        let result = await makeClient(serverKey: "").deliver(Data("{}".utf8))
+        #expect(result == .retry)
+        #expect(LogAPIStubProtocol.lastRequest == nil)
     }
 }

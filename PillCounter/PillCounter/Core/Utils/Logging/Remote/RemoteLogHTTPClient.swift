@@ -1,17 +1,31 @@
 import Foundation
 
-protocol RemoteLogSending {
-    func send(_ payload: RemoteLogPayload)
+enum RemoteLogDeliveryResult: Equatable {
+    case delivered
+    case retry
+    case drop
+}
+
+protocol RemoteLogDelivering {
+    func deliver(_ body: Data) async -> RemoteLogDeliveryResult
 }
 
 /// Isolated from the app's shared network pipeline (BaseRepository/SharedSession)
 /// by design — a failure to fetch the auth key or deliver a log must never be
 /// logged back through AppLogger, or it creates a feedback loop. Every failure
-/// path here is swallowed after a console-only print.
+/// path here is reported as a result after a console-only print.
 final class RemoteLogHTTPClient {
     private let session: URLSession
+    private let baseURL: () -> String
+    private let serverKey: () -> String
 
-    init(session: URLSession? = nil) {
+    init(
+        session: URLSession? = nil,
+        baseURL: @escaping () -> String = { ConfigurationManager.shared.apiBaseURL },
+        serverKey: @escaping () -> String = { ConfigurationManager.shared.xServerKey }
+    ) {
+        self.baseURL = baseURL
+        self.serverKey = serverKey
         if let session {
             self.session = session
         } else {
@@ -26,29 +40,37 @@ final class RemoteLogHTTPClient {
         }
     }
 
-    func send(_ payload: RemoteLogPayload) {
-        guard let url = URL(string: ConfigurationManager.shared.apiBaseURL + "/mobile/logs") else { return }
-        let serverKey = ConfigurationManager.shared.xServerKey
-        guard !serverKey.isEmpty else { return }
-        guard let body = try? JSONEncoder().encode(payload) else { return }
+    static func classify(statusCode: Int) -> RemoteLogDeliveryResult {
+        switch statusCode {
+        case 200..<300: return .delivered
+        case 408, 429: return .retry
+        case 400..<500: return .drop
+        default: return .retry
+        }
+    }
+
+    func deliver(_ body: Data) async -> RemoteLogDeliveryResult {
+        guard let url = URL(string: baseURL() + "/mobile/logs") else { return .retry }
+        let key = self.serverKey()
+        guard !key.isEmpty else { return .retry }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(serverKey, forHTTPHeaderField: "X-Server-Key")
+        request.setValue(key, forHTTPHeaderField: "X-Server-Key")
         request.httpBody = body
 
-        let session = self.session
-        Task.detached(priority: .background) {
-            do {
-                _ = try await session.data(for: request)
-            } catch {
-                #if DEBUG
-                print("[RemoteLogHTTPClient] delivery failed: \(error)")
-                #endif
-            }
+        do {
+            let (_, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return .retry }
+            return Self.classify(statusCode: http.statusCode)
+        } catch {
+            #if DEBUG
+            print("[RemoteLogHTTPClient] delivery failed: \(error)")
+            #endif
+            return .retry
         }
     }
 }
 
-extension RemoteLogHTTPClient: RemoteLogSending {}
+extension RemoteLogHTTPClient: RemoteLogDelivering {}

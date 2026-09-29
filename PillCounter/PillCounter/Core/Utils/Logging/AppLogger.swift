@@ -7,7 +7,7 @@ public final class AppLogger {
     private let queue: DispatchQueue
 
     public init(
-        destinations: [LogDestination] = [FileLogDestination(), RemoteLogDestination()],
+        destinations: [LogDestination] = [RemoteLogDestination()],
         queue: DispatchQueue = DispatchQueue(label: "com.pillcounter.applogger")
     ) {
         self.destinations = destinations
@@ -73,7 +73,7 @@ public final class AppLogger {
             effectiveLevel = level
         }
 
-        guard effectiveLevel >= LoggerConfig.minimumLogLevel else { return }
+        guard effectiveLevel >= LoggerConfig.minimumLogLevel || event == .sessionStarted else { return }
 
         let humanReadable = underlyingError.map { ErrorTranslator.translate($0) }
         let actual = underlyingError.map { "\(type(of: $0)): \($0)" }

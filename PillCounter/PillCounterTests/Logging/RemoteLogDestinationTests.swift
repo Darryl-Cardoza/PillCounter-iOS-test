@@ -2,14 +2,14 @@ import Testing
 import Foundation
 @testable import PillCounter
 
-private final class RecordingHTTPClient: RemoteLogSending {
+private final class RecordingHTTPClient: RemoteLogSubmitting {
     private let lock = NSLock()
     private var _sent: [RemoteLogPayload] = []
     var sent: [RemoteLogPayload] {
         lock.lock(); defer { lock.unlock() }
         return _sent
     }
-    func send(_ payload: RemoteLogPayload) {
+    func submit(_ payload: RemoteLogPayload) {
         lock.lock()
         _sent.append(payload)
         lock.unlock()
@@ -20,7 +20,7 @@ private final class RecordingHTTPClient: RemoteLogSending {
 struct RemoteLogDestinationTests {
     @Test func shipsErrorLevelEntries() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(httpClient: client)
+        let destination = RemoteLogDestination(uploader: client)
         let entry = LogEntry(level: .error, file: "/Features/Scanning/BarcodeAndQRDecoder.swift",
                               function: "f", line: 1, message: "Scan failed")
         destination.write(entry, formatted: "irrelevant")
@@ -30,12 +30,22 @@ struct RemoteLogDestinationTests {
 
     @Test func doesNotShipWarnInfoDebugVerbose() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(httpClient: client)
+        let destination = RemoteLogDestination(uploader: client)
         for level: LogLevel in [.warn, .info, .debug, .verbose] {
             let entry = LogEntry(level: level, file: "/f.swift", function: "f", line: 1, message: "m")
             destination.write(entry, formatted: "irrelevant")
         }
         #expect(client.sent.isEmpty)
+    }
+
+    @Test func shipsSessionStartedMarkerBelowErrorLevel() {
+        let client = RecordingHTTPClient()
+        let destination = RemoteLogDestination(uploader: client)
+        let entry = LogEntry(level: .info, file: "/f.swift", function: "f", line: 1, message: "Session started",
+                              event: .sessionStarted, context: ["reason": "login", "previous_session_id": "old"])
+        destination.write(entry, formatted: "irrelevant")
+        #expect(client.sent.first?.event == "SESSION_STARTED")
+        #expect(client.sent.first?.context?["previous_session_id"] == "old")
     }
 
     @Test func remoteGateIgnoresGlobalMinimumLogLevel() {
@@ -44,7 +54,7 @@ struct RemoteLogDestinationTests {
         defer { LoggerConfig.minimumLogLevel = previous }
 
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(httpClient: client)
+        let destination = RemoteLogDestination(uploader: client)
         let warnEntry = LogEntry(level: .warn, file: "/f.swift", function: "f", line: 1, message: "m")
         destination.write(warnEntry, formatted: "irrelevant")
         #expect(client.sent.isEmpty)
@@ -52,7 +62,7 @@ struct RemoteLogDestinationTests {
 
     @Test func redactsMessageBeforeSending() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(httpClient: client)
+        let destination = RemoteLogDestination(uploader: client)
         let entry = LogEntry(level: .error, file: "/f.swift", function: "f", line: 1,
                               message: "contact jane.doe@example.com about scan failure")
         destination.write(entry, formatted: "irrelevant")
@@ -61,7 +71,7 @@ struct RemoteLogDestinationTests {
 
     @Test func explicitEventOnEntryWinsOverClassifier() {
         let client = RecordingHTTPClient()
-        let destination = RemoteLogDestination(httpClient: client)
+        let destination = RemoteLogDestination(uploader: client)
         let entry = LogEntry(level: .error, file: "/Features/Scanning/BarcodeAndQRDecoder.swift",
                               function: "f", line: 1, message: "Scan failed", event: .dispenseCount)
         destination.write(entry, formatted: "irrelevant")

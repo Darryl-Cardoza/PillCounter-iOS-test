@@ -1,14 +1,14 @@
 import Foundation
 
 final class RemoteLogDestination: LogDestination {
-    private let httpClient: RemoteLogSending
+    private let uploader: RemoteLogSubmitting
 
-    init(httpClient: RemoteLogSending = RemoteLogHTTPClient()) {
-        self.httpClient = httpClient
+    init(uploader: RemoteLogSubmitting = RemoteLogUploader.shared) {
+        self.uploader = uploader
     }
 
     func write(_ entry: LogEntry, formatted: String) {
-        guard entry.level >= .error else { return }
+        guard entry.level >= .error || entry.event == .sessionStarted else { return }
 
         let event = entry.event ?? EventClassifier.classify(entry)
         let tag = Self.tag(forFile: entry.file)
@@ -45,7 +45,7 @@ final class RemoteLogDestination: LogDestination {
             network: .init(type: network.type, isOnline: network.isOnline)
         )
 
-        httpClient.send(payload)
+        uploader.submit(payload)
     }
 
     private static let timestampFormatter: ISO8601DateFormatter = {

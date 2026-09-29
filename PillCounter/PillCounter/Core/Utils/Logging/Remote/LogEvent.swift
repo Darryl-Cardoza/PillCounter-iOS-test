@@ -8,6 +8,8 @@ public enum LogEvent: String {
     case logoutFailed = "LOGOUT_FAILED"
     case sessionExpired = "SESSION_EXPIRED"
     case sessionTimeout = "SESSION_TIMEOUT"
+    /// Marker entry on every session-id rotation; bypasses the ERROR+ filters.
+    case sessionStarted = "SESSION_STARTED"
 
     // MARK: - OTP
     case otpVerified = "OTP_VERIFIED"

@@ -7,10 +7,10 @@ public final class AppLogger {
     private let queue: DispatchQueue
 
     public init(
-        destinations: [LogDestination] = [RemoteLogDestination()],
+        destinations: [LogDestination]? = nil,
         queue: DispatchQueue = DispatchQueue(label: "com.pillcounter.applogger")
     ) {
-        self.destinations = destinations
+        self.destinations = destinations ?? [RemoteLogDestination()]
         self.queue = queue
     }
 

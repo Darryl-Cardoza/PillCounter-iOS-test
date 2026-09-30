@@ -44,10 +44,11 @@ final class RemoteLogDestination: LogDestination {
             logId: UUID().uuidString,
             severity: max(entry.level.rawValue - 1, 0),
             timestamp: Self.timestampFormatter.string(from: entry.timestamp),
-            message: LogRedactor.redact(entry.message) ?? entry.message,
+            message: Self.message(for: entry),
             tag: tag,
             event: event.rawValue,
-            context: entry.context?.mapValues { String(describing: $0) },
+            context: ["file": Self.fileName(entry), "method": Self.methodName(entry)]
+                .merging(entry.context?.mapValues { String(describing: $0) } ?? [:]) { _, custom in custom },
             error: errorInfo,
             network: .init(type: network.type, isOnline: network.isOnline)
         )
@@ -56,6 +57,23 @@ final class RemoteLogDestination: LogDestination {
         print("[RemoteLogDestination] submit \(event.rawValue): \(payload.message)")
         #endif
         uploader.submit(payload)
+    }
+
+    private static func fileName(_ entry: LogEntry) -> String {
+        (entry.file as NSString).lastPathComponent
+    }
+
+    private static func methodName(_ entry: LogEntry) -> String {
+        String(entry.function.prefix { $0 != "(" })
+    }
+
+    /// "File.swift -> ClassName -> method -> error", the same shape Android sends.
+    /// Swift has no runtime caller-class, so the file's base name stands in for it.
+    private static func message(for entry: LogEntry) -> String {
+        let file = fileName(entry)
+        let detail = entry.humanReadableError ?? entry.actualError ?? entry.message
+        let redacted = LogRedactor.redact(detail) ?? detail
+        return "\(file) -> \((file as NSString).deletingPathExtension) -> \(methodName(entry)) -> \(redacted)"
     }
 
     private static let timestampFormatter: ISO8601DateFormatter = {

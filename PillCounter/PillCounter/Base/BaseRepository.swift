@@ -30,7 +30,9 @@ protocol BaseRepositoryProtocol {
         accessToken: String?,
         body: [String: Any]?,
         responseType: T.Type,
-        extraHeaders: [String: String]?
+        extraHeaders: [String: String]?,
+        file: String,
+        function: String
     ) async throws -> T
 
     static func headers(_ accessToken: String?) -> [String: String]
@@ -46,8 +48,25 @@ extension BaseRepositoryProtocol {
         accessToken: String? = nil,
         body: [String: Any]? = nil,
         responseType: T.Type,
-        extraHeaders: [String: String]? = nil
+        extraHeaders: [String: String]? = nil,
+        file: String = #file,
+        function: String = #function
     ) async throws -> T {
+        // Shadows the static helper so failures are attributed to the calling repository, not this file.
+        func logFailure(
+            _ message: String,
+            method: HTTPMethod,
+            url: URL?,
+            statusCode: Int? = nil,
+            attempt: Int? = nil,
+            isWarning: Bool = false,
+            event: LogEvent = .networkError,
+            error: Error? = nil
+        ) {
+            Self.logFailure(message, method: method, url: url, statusCode: statusCode, attempt: attempt,
+                            isWarning: isWarning, event: event, error: error, file: file, function: function)
+        }
+
         guard let url = URL(string: url) else {
             logFailure("Invalid request URL", method: method, url: nil)
             throw APIError.invalidURL
@@ -190,7 +209,9 @@ extension BaseRepositoryProtocol {
         attempt: Int? = nil,
         isWarning: Bool = false,
         event: LogEvent = .networkError,
-        error: Error? = nil
+        error: Error? = nil,
+        file: String = #file,
+        function: String = #function
     ) {
         var context: [String: Any] = ["method": method.rawValue]
         if let path = url?.path { context["path"] = path }
@@ -200,9 +221,9 @@ extension BaseRepositoryProtocol {
         if isWarning {
             // warn() has no error parameter, so carry the error in context.
             if let error { context["error"] = String(describing: error) }
-            AppLogger.shared.warn(message, event: event, context: context)
+            AppLogger.shared.warn(message, event: event, context: context, file: file, function: function)
         } else {
-            AppLogger.shared.error(message, error: error, event: event, context: context)
+            AppLogger.shared.error(message, error: error, event: event, context: context, file: file, function: function)
         }
     }
 

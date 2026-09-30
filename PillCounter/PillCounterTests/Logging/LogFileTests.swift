@@ -40,7 +40,7 @@ struct LogFileTests {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
         let file = LogFile(fileURL: url, maxPending: 2, maxAge: 3600)
         file.appendPending(pending("old", at: Date().addingTimeInterval(-7200)))
-        file.append(LogFile.pendingPrefix + "{truncated")
+        file.append("{truncated")
         file.appendPending(pending("1"))
         file.appendPending(pending("2"))
         file.appendPending(pending("3"))
@@ -51,13 +51,14 @@ struct LogFileTests {
 
     @Test func startupPurgesFreeTextButKeepsPendingLines() throws {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
-        let queued = LogFile.pendingPrefix + String(decoding: pending("keep"), as: UTF8.self)
-        let legacy = "====\nTimestamp: t\nMessage:\nold free text\n====\n" + queued + "\nmore old text\n"
+        let queued = String(decoding: pending("keep"), as: UTF8.self)
+        let legacy = "====\nTimestamp: t\nMessage:\nold free text\n====\n@@PENDING@@ " + queued + "\nmore old text\n"
         try legacy.write(to: url, atomically: true, encoding: .utf8)
 
         let file = LogFile(fileURL: url)
         let contents = try String(contentsOf: url, encoding: .utf8)
         #expect(!contents.contains("old free text") && !contents.contains("more old text"))
+        #expect(!contents.contains("@@PENDING@@"))
         #expect(file.pendingLines() == [queued])
     }
 
@@ -86,7 +87,7 @@ struct LogFileTests {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
         let file = LogFile(fileURL: url)
         file.appendPending(pending("a"))
-        file.compact(removing: [LogFile.pendingPrefix + "{\"not\":\"there\"}"])
+        file.compact(removing: ["{\"not\":\"there\"}"])
         #expect(file.pendingLines().count == 1)
     }
 
@@ -100,18 +101,15 @@ struct LogFileTests {
         #expect(!lines[0].contains("\n"))
     }
 
-    @Test func trimsOldestBytesAtBlockBoundary() throws {
+    @Test func trimsOldestBytesAtLineBoundary() throws {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
         let file = LogFile(fileURL: url, maxBytes: 400)
-        let delimiter = String(repeating: "=", count: 60)
-        for i in 0..<10 {
-            file.append("\(delimiter)\nTimestamp: t\(i)\nMessage:\nblock \(i)\n\(delimiter)")
-        }
-        file.appendPending(pending("x"))
-        _ = file.pendingLines() // drains the async writes
+        for i in 0..<20 { file.appendPending(pending("id\(i)")) }
+        let lines = file.pendingLines()
         let contents = try String(contentsOf: url, encoding: .utf8)
         #expect(contents.utf8.count <= 400)
-        #expect(contents.hasPrefix(delimiter + "\nTimestamp:") || contents.hasPrefix(LogFile.pendingPrefix))
-        #expect(!contents.contains("block 0"))
+        #expect(!lines.isEmpty && lines.allSatisfy { $0.hasSuffix("}") })
+        #expect(!contents.contains("id0\""))
+        #expect(contents.contains("id19"))
     }
 }

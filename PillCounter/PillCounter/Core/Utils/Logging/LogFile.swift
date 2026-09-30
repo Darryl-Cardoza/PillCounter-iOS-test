@@ -1,11 +1,13 @@
 import Foundation
 
 /// Sole owner of dispensesure_logs.txt, a temporary offline queue of remote log
-/// payloads (`@@PENDING@@ {json}`, one line each) that empties as they upload.
+/// payloads (one JSON object per line) that empties as they upload.
 /// Every read and rewrite goes through one serial queue.
 final class LogFile: @unchecked Sendable {
-    static let pendingPrefix = "@@PENDING@@ "
-    private static let blockDelimiter = String(repeating: "=", count: 60)
+    // Only for migrating queues written by earlier versions, which prefixed each payload line.
+    private static let legacyPrefix = "@@PENDING@@ "
+
+    private static func isPending(_ line: String) -> Bool { line.hasPrefix("{") }
 
     static let defaultURL: URL = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -65,10 +67,13 @@ final class LogFile: @unchecked Sendable {
     }
 
     /// The file is now only an offline queue; drops free-text blocks written by
-    /// earlier versions while keeping every queued payload. Idempotent.
+    /// earlier versions and strips the legacy line prefix, keeping every queued payload. Idempotent.
     private func purgeFreeText() {
         guard let content = try? String(contentsOf: fileURL, encoding: .utf8), !content.isEmpty else { return }
-        let pending = content.components(separatedBy: "\n").filter { $0.hasPrefix(Self.pendingPrefix) }
+        let pending = content.components(separatedBy: "\n").compactMap { line -> String? in
+            if line.hasPrefix(Self.legacyPrefix) { return String(line.dropFirst(Self.legacyPrefix.count)) }
+            return Self.isPending(line) ? line : nil
+        }
         let result = pending.isEmpty ? "" : pending.joined(separator: "\n") + "\n"
         if result != content { try? result.write(to: fileURL, atomically: true, encoding: .utf8) }
     }
@@ -80,13 +85,13 @@ final class LogFile: @unchecked Sendable {
     func appendPending(_ body: Data) {
         guard let json = String(data: body, encoding: .utf8) else { return }
         queue.async {
-            self.appendLocked(Self.pendingPrefix + json)
+            self.appendLocked(json)
             self.compactLocked(removing: [])
         }
     }
 
     func pendingLines() -> [String] {
-        queue.sync { readLines().filter { $0.hasPrefix(Self.pendingPrefix) } }
+        queue.sync { readLines().filter(Self.isPending) }
     }
 
     /// Rewrites the file once: drops `removing`, corrupt/expired pending lines,
@@ -127,10 +132,10 @@ final class LogFile: @unchecked Sendable {
         var lines = content.components(separatedBy: "\n")
 
         var keep = lines.map { line -> Bool in
-            guard line.hasPrefix(Self.pendingPrefix) else { return true }
+            guard Self.isPending(line) else { return true }
             return !removing.contains(line) && !isCorruptOrExpired(line, now: now)
         }
-        let pendingIndices = lines.indices.filter { lines[$0].hasPrefix(Self.pendingPrefix) && keep[$0] }
+        let pendingIndices = lines.indices.filter { Self.isPending(lines[$0]) && keep[$0] }
         if pendingIndices.count > maxPending {
             pendingIndices.prefix(pendingIndices.count - maxPending).forEach { keep[$0] = false }
         }
@@ -145,20 +150,17 @@ final class LogFile: @unchecked Sendable {
     }
 
     private func isCorruptOrExpired(_ line: String, now: Date) -> Bool {
-        let json = line.dropFirst(Self.pendingPrefix.count)
-        guard let data = json.data(using: .utf8),
+        guard let data = line.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return true }
         guard let stamp = object["timestamp"] as? String,
               let date = Self.timestampFormatter.date(from: stamp) else { return false }
         return now.timeIntervalSince(date) > maxAge
     }
 
-    /// Cuts at a block boundary so a partial free-text block never survives.
+    /// Cuts at a line boundary so a partial payload never survives.
     private static func trimToNewest(_ text: String, maxBytes: Int) -> String {
         let tail = String(decoding: Array(text.utf8.suffix(maxBytes)), as: UTF8.self)
-        let boundaries = ["\n" + blockDelimiter + "\nTimestamp:", "\n" + pendingPrefix]
-        let cut = boundaries.compactMap { tail.range(of: $0)?.lowerBound }.min()
-        guard let cut else { return "" }
+        guard let cut = tail.firstIndex(of: "\n") else { return "" }
         return String(tail[tail.index(after: cut)...])
     }
 }

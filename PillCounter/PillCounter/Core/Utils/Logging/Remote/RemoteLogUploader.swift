@@ -4,8 +4,9 @@ protocol RemoteLogSubmitting {
     func submit(_ payload: RemoteLogPayload)
 }
 
-/// Online → send now, never touching the file. Offline (or on a retryable
-/// failure) the payload is queued in the log file and replayed by `flush()`.
+/// Online → send now (retrying a retryable failure a couple of times), never
+/// touching the file unless it still fails. Offline, or once retries are
+/// exhausted, the payload is queued in the log file and replayed by `flush()`.
 final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
     static let shared: RemoteLogUploader = {
         let uploader = RemoteLogUploader()
@@ -21,18 +22,22 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
     private let client: RemoteLogDelivering
     private let file: LogFile
     private let isOnline: () -> Bool
+    private let retryDelays: [Duration]
     private let lock = NSLock()
     private var flushing = false
+    private var flushScheduled = false
     private var retryAfter = Date.distantPast
 
     init(
         client: RemoteLogDelivering = RemoteLogHTTPClient(),
         file: LogFile = .shared,
-        isOnline: @escaping () -> Bool = { NetworkStatusProvider.shared.snapshot().isOnline }
+        isOnline: @escaping () -> Bool = { NetworkStatusProvider.shared.snapshot().isOnline },
+        retryDelays: [Duration] = [.seconds(2), .seconds(5)]
     ) {
         self.client = client
         self.file = file
         self.isOnline = isOnline
+        self.retryDelays = retryDelays
     }
 
     func submit(_ payload: RemoteLogPayload) {
@@ -77,7 +82,12 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
     }
 
     func deliverOrQueue(_ body: Data) async {
-        switch await client.deliver(body) {
+        var result = await client.deliver(body)
+        for delay in retryDelays where result == .retry {
+            try? await Task.sleep(for: delay)
+            result = await client.deliver(body)
+        }
+        switch result {
         case .retry:
             noteFailure()
             file.appendPending(body)
@@ -95,8 +105,7 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
         var done = Set<String>()
         for line in file.pendingLines() {
             guard canSend else { break }
-            let body = Data(line.dropFirst(LogFile.pendingPrefix.count).utf8)
-            switch await client.deliver(body) {
+            switch await client.deliver(Data(line.utf8)) {
             case .delivered, .drop: done.insert(line)
             case .retry: noteFailure(); return finish(done)
             }
@@ -126,8 +135,20 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
         lock.lock(); flushing = false; lock.unlock()
     }
 
+    /// Backs off, then replays the queue once the backoff ends — otherwise a
+    /// queued log would wait for the next launch/foreground/connectivity event.
     private func noteFailure() {
-        lock.lock(); retryAfter = Date().addingTimeInterval(Self.backoff); lock.unlock()
+        lock.lock()
+        retryAfter = Date().addingTimeInterval(Self.backoff)
+        let schedule = !flushScheduled
+        flushScheduled = true
+        lock.unlock()
+        guard schedule else { return }
+        Task.detached(priority: .background) {
+            try? await Task.sleep(for: .seconds(Self.backoff))
+            self.lock.lock(); self.flushScheduled = false; self.lock.unlock()
+            await self.flush()
+        }
     }
 
     func resetBackoff() {

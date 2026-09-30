@@ -54,7 +54,7 @@ struct RemoteLogUploaderTests {
     @Test func offlineSubmitQueuesWithoutSending() {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         let client = FakeClient([])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { false })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { false }, retryDelays: [])
         uploader.submit(payload())
         #expect(file.pendingLines().count == 1)
         #expect(client.bodies.isEmpty)
@@ -63,7 +63,7 @@ struct RemoteLogUploaderTests {
     @Test func onlineDeliveryDoesNotTouchTheFile() async {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         let client = FakeClient([.delivered])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.deliverOrQueue(body("a"))
         #expect(client.bodies.count == 1)
         #expect(file.pendingLines().isEmpty)
@@ -73,7 +73,7 @@ struct RemoteLogUploaderTests {
     @Test func retryableFailureQueuesAndDropDiscards() async {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         let client = FakeClient([.retry, .drop])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.deliverOrQueue(body("a"))
         #expect(file.pendingLines().count == 1)
         uploader.resetBackoff()
@@ -85,7 +85,7 @@ struct RemoteLogUploaderTests {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         file.appendPending(body("1")); file.appendPending(body("2")); file.appendPending(body("3"))
         let client = FakeClient([])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.flush()
         #expect(client.bodies.count == 3)
         #expect(client.bodies[0].contains("\"1\"") && client.bodies[2].contains("\"3\""))
@@ -96,7 +96,7 @@ struct RemoteLogUploaderTests {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         file.appendPending(body("1"))
         let client = FakeClient([])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { false })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { false }, retryDelays: [])
         await uploader.flush()
         #expect(client.bodies.isEmpty)
         #expect(file.pendingLines().count == 1)
@@ -105,7 +105,7 @@ struct RemoteLogUploaderTests {
     @Test func flushWithEmptyQueueSendsNothing() async {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         let client = FakeClient([])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.flush()
         #expect(client.bodies.isEmpty)
     }
@@ -114,7 +114,7 @@ struct RemoteLogUploaderTests {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         file.appendPending(body("1")); file.appendPending(body("2"))
         let client = FakeClient([.drop, .delivered])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.flush()
         #expect(client.bodies.count == 2)
         #expect(file.pendingLines().isEmpty)
@@ -124,7 +124,7 @@ struct RemoteLogUploaderTests {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         file.appendPending(body("1"))
         let client = FakeClient([.retry, .delivered])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.flush()
         #expect(client.bodies.count == 1)
 
@@ -142,7 +142,7 @@ struct RemoteLogUploaderTests {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         file.appendPending(body("old1")); file.appendPending(body("old2"))
         let client = FakeClient([])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.deliverOrQueue(body("live"))
         #expect(client.bodies.count == 3)
         #expect(client.bodies[0].contains("live"))
@@ -152,7 +152,7 @@ struct RemoteLogUploaderTests {
     @Test func liveSendFailureQueuesAndBlocksFurtherSendsUntilReset() async {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         let client = FakeClient([.retry])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.deliverOrQueue(body("a"))
         await uploader.flush()
         #expect(client.bodies.count == 1)
@@ -177,7 +177,7 @@ struct RemoteLogUploaderTests {
         for id in 1...5 { file.appendPending(body("\(id)")) }
         let client = FakeClient([])
         client.delay = .milliseconds(20)
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         async let first: Void = uploader.flush()
         async let second: Void = uploader.flush()
         _ = await (first, second)
@@ -199,7 +199,7 @@ struct RemoteLogUploaderTests {
         let lines = file.pendingLines()
         #expect(lines.count == 1)
         let json = try JSONSerialization.jsonObject(
-            with: Data(lines[0].dropFirst(LogFile.pendingPrefix.count).utf8)) as? [String: Any]
+            with: Data(lines[0].utf8)) as? [String: Any]
         #expect(json?["message"] as? String == "line one\nline two")
     }
 
@@ -208,16 +208,46 @@ struct RemoteLogUploaderTests {
         let original = body("exact")
         file.appendPending(original)
         let client = FakeClient([])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.flush()
         #expect(client.bodies == [String(decoding: original, as: UTF8.self)])
+    }
+
+    @Test func liveSendRetriesThenDeliversWithoutTouchingTheFile() async {
+        let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let client = FakeClient([.retry, .retry, .delivered])
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true },
+                                         retryDelays: [.milliseconds(1), .milliseconds(1)])
+        await uploader.deliverOrQueue(body("a"))
+        #expect(client.bodies.count == 3)
+        #expect(file.pendingLines().isEmpty)
+    }
+
+    @Test func liveSendQueuesOnlyAfterRetriesAreExhausted() async {
+        let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let client = FakeClient([.retry, .retry, .retry])
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true },
+                                         retryDelays: [.milliseconds(1), .milliseconds(1)])
+        await uploader.deliverOrQueue(body("a"))
+        #expect(client.bodies.count == 3)
+        #expect(file.pendingLines().count == 1)
+    }
+
+    @Test func dropIsNeverRetriedOrQueued() async {
+        let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let client = FakeClient([.drop])
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true },
+                                         retryDelays: [.milliseconds(1), .milliseconds(1)])
+        await uploader.deliverOrQueue(body("a"))
+        #expect(client.bodies.count == 1)
+        #expect(file.pendingLines().isEmpty)
     }
 
     @Test func flushStopsAtFirstRetryableFailureAndKeepsRest() async {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         file.appendPending(body("1")); file.appendPending(body("2")); file.appendPending(body("3"))
         let client = FakeClient([.delivered, .retry])
-        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true })
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [])
         await uploader.flush()
         #expect(client.bodies.count == 2)
         let left = file.pendingLines()

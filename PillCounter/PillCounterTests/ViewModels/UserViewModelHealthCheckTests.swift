@@ -179,7 +179,7 @@ struct UserViewModelHealthCheckTests {
 
             #expect(uploader.sent.count == 1)
             #expect(uploader.sent.first?.event == "HEALTH_CHECK_FAILED")
-            #expect(uploader.sent.first?.severity == LogLevel.error.rawValue)
+            #expect(uploader.sent.first?.severity == 3)
             #expect(uploader.sent.first?.context?["failed_checks"] == "db")
         }
     }

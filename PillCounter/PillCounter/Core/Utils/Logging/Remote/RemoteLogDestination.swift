@@ -42,7 +42,7 @@ final class RemoteLogDestination: LogDestination {
             deviceModel: DeviceInfoProvider.deviceModel,
             sessionId: DeviceInfoProvider.sessionId,
             logId: UUID().uuidString,
-            severity: entry.level.rawValue,
+            severity: max(entry.level.rawValue - 1, 0),
             timestamp: Self.timestampFormatter.string(from: entry.timestamp),
             message: LogRedactor.redact(entry.message) ?? entry.message,
             tag: tag,

@@ -37,6 +37,20 @@ struct RemoteLogDestinationTests {
         #expect(client.sent.isEmpty)
     }
 
+    @Test func loggedOutEntriesNeverReachTheQueueFile() throws {
+        struct NoopClient: RemoteLogDelivering {
+            func deliver(_ body: Data) async -> RemoteLogDeliveryResult { .delivered }
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".txt")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let file = LogFile(fileURL: url)
+        let uploader = RemoteLogUploader(client: NoopClient(), file: file, isOnline: { false })
+        let destination = RemoteLogDestination(uploader: uploader, isLoggedIn: { false })
+        destination.write(LogEntry(level: .error, file: "/f.swift", function: "f", line: 1, message: "m"), formatted: "irrelevant")
+        #expect(file.pendingLines().isEmpty)
+        #expect(try String(contentsOf: url, encoding: .utf8).isEmpty)
+    }
+
     @Test func doesNotShipWarnInfoDebugVerbose() {
         let client = RecordingHTTPClient()
         let destination = RemoteLogDestination(uploader: client, isLoggedIn: { true })

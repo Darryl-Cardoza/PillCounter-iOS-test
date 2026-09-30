@@ -423,8 +423,8 @@ private struct DebugFaceVerifyCover: ViewModifier {
         content.fullScreenCover(isPresented: $isPresented) {
             FaceAuthenticationView { userId, userName in
                 // userId alone identifies the match for diagnostics — userName is
-                // PII and doesn't need to be persisted to the log file, even here
-                // on a DEBUG-only screen (the log file itself isn't build-gated).
+                // PII and doesn't need to be logged at all, even here
+                // on a DEBUG-only screen (remote log shipping isn't build-gated).
                 AppLogger.shared.debug("DEBUG VerifyFace: matched userId \(userId)")
                 // Exercise the real unlock plumbing — session owner switch,
                 // last_authenticated_at write, idle timer arming — not just

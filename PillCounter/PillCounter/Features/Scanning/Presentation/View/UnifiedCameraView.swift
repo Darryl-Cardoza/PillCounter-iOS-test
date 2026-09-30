@@ -2181,14 +2181,9 @@ extension UnifiedCameraView {
     }
 
     func handleSubstitute() {
-        // Falls back to the current transaction's own NDC when nothing has been
-        // scanned yet, matching the NDC resolution used elsewhere in this view
-        // (see fetchedRxTransaction/selectedTransaction .drug?.ndc above).
-        let value: String
-        if let scanned = scannedRawValue, !scanned.isEmpty {
-            value = scanned
-        } else {
-            value = pillScanViewModel.selectedTransaction?.drug?.ndc ?? ""
+        guard let value = scannedRawValue, !value.isEmpty else {
+            pillScanViewModel.showToastMessage(text: L10n.BarcodeScan.rescanRequired)
+            return
         }
         Task { @MainActor in
             guard let txnId = pillScanViewModel.selectedTransaction?.txn_id else { return }

@@ -47,7 +47,7 @@ struct AppLoggerTests {
         #expect(mock.written.isEmpty)
     }
 
-    @Test func errorCapturesUnderlyingErrorTranslationAndStackTrace() {
+    @Test func errorCapturesUnderlyingErrorAndTranslation() {
         let mock = MockLogDestination()
         let queue = DispatchQueue(label: "test.applogger.3")
         let logger = AppLogger(destinations: [mock], queue: queue)
@@ -59,7 +59,6 @@ struct AppLoggerTests {
         #expect(output.contains("Human Readable Error:"))
         #expect(output.contains("The request timed out"))
         #expect(output.contains("Actual Error:"))
-        #expect(output.contains("Stack Trace:"))
     }
 
     @Test func cancellationErrorIsLoggedAtDebugNotError() {

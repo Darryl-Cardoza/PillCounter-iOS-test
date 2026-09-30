@@ -35,11 +35,6 @@ public enum LogFormatter {
                 lines.append(actual)
                 lines.append("")
             }
-            if let stack = entry.stackTrace {
-                lines.append("Stack Trace:")
-                lines.append(stack)
-                lines.append("")
-            }
         } else {
             lines.append("Message:")
             lines.append(entry.message)

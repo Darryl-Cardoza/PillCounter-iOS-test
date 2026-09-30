@@ -1,7 +1,7 @@
 // DAOLogger.swift
 // PillCounter
 //
-// Prints query results in a fixed-width ASCII table to the Xcode console.
+// Logs query results in a fixed-width ASCII table via AppLogger (DEBUG console).
 // Usage: DAOLogger.log(dao: "TransactionDAO", op: "fetchAll", columns: [...], rows: [[...]])
 
 import Foundation

@@ -4,8 +4,8 @@ import Foundation
 /// before they leave the device. THIS IS A SAFETY NET, NOT A GUARANTEE: a
 /// patient/user name or other free-form sensitive detail typed directly into a
 /// log message as plain text is indistinguishable from ordinary text and will
-/// NOT be caught here. Local file logging is never passed through this type —
-/// only the fields shipped to the remote destination are redacted.
+/// NOT be caught here. Only what is shipped remotely (message, error, context) is
+/// redacted; the DEBUG console output is not.
 public enum LogRedactor {
     public static func redact(_ text: String?) -> String? {
         guard let text else { return nil }

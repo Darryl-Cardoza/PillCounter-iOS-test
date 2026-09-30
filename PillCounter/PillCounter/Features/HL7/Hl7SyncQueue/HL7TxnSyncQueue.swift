@@ -93,7 +93,8 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
             else { return nil }
             let message = HL7CompletionBuilder(config: builderConfig, context: bgContext)
                 .buildCompletionMessage(txn: txn, user: user)
-            return message
+            // Builder returns "" when it refuses to send; drop the item so it can't block the queue.
+            return message.isEmpty ? nil : message
         }
 
         guard let hl7 else {
@@ -103,7 +104,7 @@ final class HL7TxnSyncQueue: HL7SyncQueue<TxnSyncQueueItem> {
         }
         // Message body carries patient/drug PHI — log only identifying metadata, never the raw HL7 text.
         StoreLogger.debug("📡 [HL7] Built txn message for \(item.txnId) (\(hl7.count) chars)")
-        guard let manager = hl7Manager, !hl7.isEmpty else {
+        guard let manager = hl7Manager else {
             return
         }
 

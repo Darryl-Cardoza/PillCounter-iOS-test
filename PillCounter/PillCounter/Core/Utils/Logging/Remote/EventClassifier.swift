@@ -15,15 +15,7 @@ public enum EventClassifier {
 
     private static func classifyByErrorType(_ error: Error) -> LogEvent? {
         if let urlError = error as? URLError {
-            switch urlError.code {
-            case .timedOut:
-                return .networkTimeout
-            case .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost,
-                 .cannotFindHost, .dnsLookupFailed:
-                return .networkError
-            default:
-                return .networkError
-            }
+            return urlError.code == .timedOut ? .networkTimeout : .networkError
         }
         if error is DecodingError { return .networkError }
 
@@ -42,9 +34,10 @@ public enum EventClassifier {
 
     private static func classifyByModule(file: String, message: String) -> LogEvent {
         let path = file.lowercased()
+        let module = LogModule(file: file)
         let text = message.lowercased()
 
-        if path.contains("/login/") || path.contains("sessionmanager") {
+        if module == .login {
             if text.contains("logout") { return .logoutFailed }
             if text.contains("session"), text.contains("idle") || text.contains("inactiv") {
                 return .sessionTimeout
@@ -54,10 +47,10 @@ public enum EventClassifier {
             }
             return .loginFailed
         }
-        if path.contains("verifypin") || path.contains("otp") {
+        if module == .verify {
             return text.contains("pin") ? .pinVerifyFailed : .otpVerifyFailed
         }
-        if path.contains("/faceauth/") || path.contains("face") {
+        if module == .face {
             if text.contains("register") { return .faceRegisterFailed }
             if text.contains("capture") { return .faceCaptureFailed }
             if text.contains("duplicate") { return .faceDuplicateFound }
@@ -66,7 +59,7 @@ public enum EventClassifier {
             if text.contains("observe") { return .faceProfileObserveFailed }
             return .faceVerifyFailed
         }
-        if path.contains("/scanning/") || path.contains("/ocr/") {
+        if module == .scanning {
             if text.contains("ndc") { return .ndcScanFailed }
             if text.contains("rx") { return .rxScanFailed }
             if text.contains("vial") { return .vialScanFailed }
@@ -78,12 +71,12 @@ public enum EventClassifier {
         // Checked before the generic "hl7" branch below — HL7SyncQueue's path
         // contains "hl7" too, and its failures are sync/offline events, not
         // transport ones.
-        if path.contains("hl7syncqueue") || path.contains("unsyncedtransaction") {
+        if module == .syncQueue {
             if text.contains("inventory") { return .inventorySyncFailed }
             if text.contains("retry") { return .syncRetryFailed }
             return .transactionSyncFailed
         }
-        if path.contains("hl7") {
+        if module == .hl7 {
             if text.contains("send") { return .hl7SendFailed }
             if text.contains("receive") { return .hl7ReceiveFailed }
             if text.contains("connect") { return .hl7ConnectFailed }
@@ -91,22 +84,42 @@ public enum EventClassifier {
             if text.contains("stop") { return .hl7ServiceStopped }
             return .hl7ServiceError
         }
-        if path.contains("/history/") {
+        if module == .history {
             return text.contains("delete") ? .historyDeleteFailed : .historyLoadFailed
         }
-        if path.contains("/settings/") || path.contains("/profile/") {
+        if module == .settings {
             if path.contains("terminal") { return .terminalLoadFailed }
             if text.contains("profile") { return .profileUpdateFailed }
             if text.contains("pms") { return .pmsTestFailed }
             if text.contains("purge") { return .transactionPurgeFailed }
             return .settingsFetchFailed
         }
-        if path.contains("localdatasource") || path.contains("coredatamanager") {
+        if module == .dataStore {
             return .databaseError
         }
-        if path.contains("runtimeunit") || path.contains("/config/") {
+        if module == .security {
             return .securityCheckFailed
         }
         return .unknownError
+    }
+}
+
+/// Path-to-feature lookup shared by event classification and remote tagging.
+enum LogModule {
+    case login, verify, syncQueue, face, scanning, hl7, history, settings, dataStore, security, other
+
+    init(file: String) {
+        let path = file.lowercased()
+        if path.contains("/login/") || path.contains("sessionmanager") { self = .login }
+        else if path.contains("verifypin") || path.contains("otp") { self = .verify }
+        else if path.contains("hl7syncqueue") || path.contains("unsyncedtransaction") { self = .syncQueue }
+        else if path.contains("/face") { self = .face }
+        else if path.contains("/scanning/") || path.contains("/ocr/") { self = .scanning }
+        else if path.contains("hl7") { self = .hl7 }
+        else if path.contains("/history/") { self = .history }
+        else if path.contains("/settings/") || path.contains("/profile/") { self = .settings }
+        else if path.contains("localdatasource") || path.contains("coredatamanager") { self = .dataStore }
+        else if path.contains("runtimeunit") || path.contains("/config/") { self = .security }
+        else { self = .other }
     }
 }

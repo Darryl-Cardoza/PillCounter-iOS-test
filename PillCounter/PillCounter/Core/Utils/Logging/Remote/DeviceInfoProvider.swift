@@ -13,7 +13,7 @@ public enum DeviceInfoProvider {
     }
 
     @discardableResult
-    public static func rotateSession() -> String {
+    private static func rotateSession() -> String {
         sessionLock.lock(); defer { sessionLock.unlock() }
         currentSessionId = UUID().uuidString
         return currentSessionId

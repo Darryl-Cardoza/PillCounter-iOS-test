@@ -3,13 +3,13 @@ import Testing
 
 struct LogEventTests {
     @Test func everyCaseRoundTripsThroughItsRawValue() {
-        for event in [LogEvent.loginSubmitted, .unknownError, .appCrash] {
+        for event in [LogEvent.loginFailed, .unknownError, .appCrash] {
             #expect(LogEvent(rawValue: event.rawValue) == event)
         }
     }
 
     @Test func rawValueIsScreamingSnakeCase() {
-        #expect(LogEvent.scanTimeout.rawValue == "SCAN_TIMEOUT")
+        #expect(LogEvent.scanFailed.rawValue == "SCAN_FAILED")
         #expect(LogEvent.dispenseCount.rawValue == "DISPENSE_COUNT")
     }
 }

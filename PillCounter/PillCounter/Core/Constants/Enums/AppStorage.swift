@@ -662,6 +662,7 @@ final class AppStorageManager {
         Keychain.deletePassword(for: AppStorageKeys.userEmail)
         Keychain.deletePassword(for: AppStorageKeys.isLoggedIn)
         Keychain.deletePassword(for: AppStorageKeys.tokenExpiryTimestamp)
+        DeviceInfoProvider.startNewSession(reason: "session_expired")
     }
 
     /// Full logout — wipes every Keychain item for this app except the

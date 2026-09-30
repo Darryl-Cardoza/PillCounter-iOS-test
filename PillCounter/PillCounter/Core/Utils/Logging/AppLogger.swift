@@ -10,7 +10,11 @@ public final class AppLogger {
         destinations: [LogDestination]? = nil,
         queue: DispatchQueue = DispatchQueue(label: "com.pillcounter.applogger")
     ) {
+        #if DEBUG
+        self.destinations = destinations ?? [ConsoleLogDestination(), RemoteLogDestination()]
+        #else
         self.destinations = destinations ?? [RemoteLogDestination()]
+        #endif
         self.queue = queue
     }
 
@@ -77,7 +81,6 @@ public final class AppLogger {
 
         let humanReadable = underlyingError.map { ErrorTranslator.translate($0) }
         let actual = underlyingError.map { "\(type(of: $0)): \($0)" }
-        let stack = underlyingError != nil ? Thread.callStackSymbols.joined(separator: "\n") : nil
 
         let entry = LogEntry(
             level: effectiveLevel,
@@ -87,7 +90,6 @@ public final class AppLogger {
             message: message,
             humanReadableError: humanReadable,
             actualError: actual,
-            stackTrace: stack,
             underlyingError: underlyingError,
             event: event,
             context: context

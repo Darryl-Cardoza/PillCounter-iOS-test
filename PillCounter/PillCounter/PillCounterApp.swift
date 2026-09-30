@@ -58,10 +58,6 @@ struct PillCounterApp: App {
         // launch.
         PillCounterApp.purgeEmbeddinglessFaceUsers()
 
-        // Never log the raw device key — it's a persistent auth secret sent as
-        // `deviceKey:` on every login/OTP call, not something to persist to disk.
-        AppLogger.shared.info("Device key resolved (\(DeviceKeyProvider.shared.getDeviceKey().count) chars)")
-
         // Cold launch (app was fully closed, now reopened) always requires a
         // fresh face scan — never resume a session from a prior process.
         FaceSessionManager.shared.lockOnColdLaunch()

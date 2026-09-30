@@ -119,9 +119,7 @@ struct RuntimeUnit {
 
         var item: CFTypeRef?
         if SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess {
-            // kSecReturnRef + a kSecClassKey query should guarantee a single SecKey,
-            // but check the concrete type rather than force-casting so a future query
-            // change that widens the match fails safe instead of crashing.
+            // Check the type instead of force-casting so a widened query fails safe.
             guard let item, CFGetTypeID(item) == SecKeyGetTypeID() else {
                 throw KeychainTypeError(reason: "Unexpected Keychain item type for Enclave key")
             }

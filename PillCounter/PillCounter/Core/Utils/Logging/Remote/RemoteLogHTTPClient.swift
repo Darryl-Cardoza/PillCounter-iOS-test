@@ -3,6 +3,9 @@ import Foundation
 enum RemoteLogDeliveryResult: Equatable {
     case delivered
     case retry
+    /// Credentials/config unusable (no token, 401, empty server key, bad URL): keep queued but
+    /// don't schedule a retry — the next login/launch/foreground flush picks it up.
+    case unauthorized
     case drop
 }
 
@@ -46,7 +49,8 @@ final class RemoteLogHTTPClient {
     static func classify(statusCode: Int) -> RemoteLogDeliveryResult {
         switch statusCode {
         case 200..<300: return .delivered
-        case 401, 408, 429: return .retry
+        case 401: return .unauthorized
+        case 408, 429: return .retry
         case 400..<500: return .drop
         default: return .retry
         }
@@ -57,14 +61,14 @@ final class RemoteLogHTTPClient {
             #if DEBUG
             print("[RemoteLogHTTPClient] NOT SENT — invalid base URL")
             #endif
-            return .retry
+            return .unauthorized
         }
         let key = self.serverKey()
         guard !key.isEmpty else {
             #if DEBUG
             print("[RemoteLogHTTPClient] NOT SENT — X-Server-Key is empty")
             #endif
-            return .retry
+            return .unauthorized
         }
 
         let token = self.accessToken()
@@ -72,7 +76,7 @@ final class RemoteLogHTTPClient {
             #if DEBUG
             print("[RemoteLogHTTPClient] NOT SENT — no access token")
             #endif
-            return .retry
+            return .unauthorized
         }
 
         var request = URLRequest(url: url)

@@ -91,6 +91,8 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
         case .retry:
             noteFailure()
             file.appendPending(body)
+        case .unauthorized:
+            file.appendPending(body)
         case .delivered:
             await flush()
         case .drop:
@@ -108,6 +110,7 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
             switch await client.deliver(Data(line.utf8)) {
             case .delivered, .drop: done.insert(line)
             case .retry: noteFailure(); return finish(done)
+            case .unauthorized: return finish(done)
             }
         }
         finish(done)

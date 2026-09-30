@@ -52,19 +52,22 @@ extension BaseRepositoryProtocol {
         file: String = #file,
         function: String = #function
     ) async throws -> T {
-        // Shadows the static helper so failures are attributed to the calling repository, not this file.
+        // Deliberately excludes headers, bodies, query string and the server `message`
+        // (it can echo user input) — remote logs must stay free of PII and secrets.
         func logFailure(
             _ message: String,
             method: HTTPMethod,
             url: URL?,
             statusCode: Int? = nil,
             attempt: Int? = nil,
-            isWarning: Bool = false,
             event: LogEvent = .networkError,
             error: Error? = nil
         ) {
-            Self.logFailure(message, method: method, url: url, statusCode: statusCode, attempt: attempt,
-                            isWarning: isWarning, event: event, error: error, file: file, function: function)
+            var context: [String: Any] = ["method": method.rawValue]
+            if let path = url?.path { context["path"] = path }
+            if let statusCode { context["statusCode"] = statusCode }
+            if let attempt { context["attempt"] = attempt }
+            AppLogger.shared.error(message, error: error, event: event, context: context, file: file, function: function)
         }
 
         guard let url = URL(string: url) else {
@@ -133,13 +136,9 @@ extension BaseRepositoryProtocol {
                         throw APIError.parsingError
                     }
                 case 401:
-                    logFailure("Request unauthorized", method: method, url: url,
-                               statusCode: 401, attempt: attempt, isWarning: true, event: .sessionExpired)
                     NotificationCenter.default.post(name: .unauthorizedResponseReceived, object: nil)
                     throw APIError.unauthorized
                 case 500 where attempt < maxRetries:
-                    logFailure("Server error, retrying", method: method, url: url,
-                               statusCode: 500, attempt: attempt, isWarning: true)
                     attempt += 1
                     continue
                 default:
@@ -180,51 +179,19 @@ extension BaseRepositoryProtocol {
                 // network-level catch below (URLSession failure) should retry.
                 throw error
             } catch {
-                let isTimeout = (error as? URLError)?.code == .timedOut
                 if attempt < maxRetries {
-                    logFailure("Network failure, retrying", method: method, url: url, attempt: attempt,
-                               isWarning: true, event: isTimeout ? .networkTimeout : .networkError, error: error)
                     attempt += 1
                     continue
-                } else {
-                    logFailure("Network failure", method: method, url: url, attempt: attempt,
-                               event: isTimeout ? .networkTimeout : .networkError, error: error)
-                    NotificationCenter.default.post(name: .serverErrorResponseReceived, object: nil)
-                    throw APIError.unknown(error)
                 }
+                let isTimeout = (error as? URLError)?.code == .timedOut
+                logFailure("Network failure", method: method, url: url, attempt: attempt,
+                           event: isTimeout ? .networkTimeout : .networkError, error: error)
+                NotificationCenter.default.post(name: .serverErrorResponseReceived, object: nil)
+                throw APIError.unknown(error)
             }
         }
 
         throw APIError.serverError(statusCode: 500)
-    }
-
-    // MARK: - Failure logging
-    // Deliberately excludes headers, bodies, query string and the server `message`
-    // (it can echo user input) — remote logs must stay free of PII and secrets.
-    private static func logFailure(
-        _ message: String,
-        method: HTTPMethod,
-        url: URL?,
-        statusCode: Int? = nil,
-        attempt: Int? = nil,
-        isWarning: Bool = false,
-        event: LogEvent = .networkError,
-        error: Error? = nil,
-        file: String = #file,
-        function: String = #function
-    ) {
-        var context: [String: Any] = ["method": method.rawValue]
-        if let path = url?.path { context["path"] = path }
-        if let statusCode { context["statusCode"] = statusCode }
-        if let attempt { context["attempt"] = attempt }
-
-        if isWarning {
-            // warn() has no error parameter, so carry the error in context.
-            if let error { context["error"] = String(describing: error) }
-            AppLogger.shared.warn(message, event: event, context: context, file: file, function: function)
-        } else {
-            AppLogger.shared.error(message, error: error, event: event, context: context, file: file, function: function)
-        }
     }
 
     // MARK: - Error body decoding

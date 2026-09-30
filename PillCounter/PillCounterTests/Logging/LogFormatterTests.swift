@@ -29,15 +29,13 @@ struct LogFormatterTests {
             line: 10,
             message: "Failed while retrieving the user profile from the backend.",
             humanReadableError: "The request timed out while communicating with the server.",
-            actualError: "URLError: timed out",
-            stackTrace: "frame 0\nframe 1"
+            actualError: "URLError: timed out"
         )
         let formatted = LogFormatter.format(entry)
         #expect(formatted.contains("Human Readable Error:"))
         #expect(formatted.contains("The request timed out while communicating with the server."))
         #expect(formatted.contains("Actual Error:"))
         #expect(formatted.contains("URLError: timed out"))
-        #expect(formatted.contains("Stack Trace:"))
     }
 
     @Test func formatsMultilineMessageWithoutBreakingBlockDelimiters() {

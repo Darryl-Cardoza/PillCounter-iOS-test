@@ -97,7 +97,7 @@ class HL7SyncQueue<Item: HL7QueueItem> {
     /// Subclass MUST override — marks the item at `queue.first`'s
     /// underlying row synced (via its own store, on a background context).
     func markCurrentItemSynced() {
-        AppLogger.shared.error("HL7SyncQueue: markCurrentItemSynced() not overridden by \(type(of: self))", event: .appCrash)
+        AppLogger.shared.error("HL7SyncQueue: markCurrentItemSynced() not overridden by \(type(of: self))", event: .unknownError)
         fatalError("markCurrentItemSynced() must be overridden by \(type(of: self))")
     }
 
@@ -106,7 +106,7 @@ class HL7SyncQueue<Item: HL7QueueItem> {
     /// ACK arriving after that item was already timed-out/removed from
     /// `queue` — see `recentlyTimedOutByAckMessageId`.
     func markItemSynced(_ item: Item) {
-        AppLogger.shared.error("HL7SyncQueue: markItemSynced(_:) not overridden by \(type(of: self))", event: .appCrash)
+        AppLogger.shared.error("HL7SyncQueue: markItemSynced(_:) not overridden by \(type(of: self))", event: .unknownError)
         fatalError("markItemSynced(_:) must be overridden by \(type(of: self))")
     }
 
@@ -115,7 +115,7 @@ class HL7SyncQueue<Item: HL7QueueItem> {
     /// after the first page loads, and again after every ACK/NACK/timeout
     /// via `advanceQueue()` to keep the drain going.
     func processNext() {
-        AppLogger.shared.error("HL7SyncQueue: processNext() not overridden by \(type(of: self))", event: .appCrash)
+        AppLogger.shared.error("HL7SyncQueue: processNext() not overridden by \(type(of: self))", event: .unknownError)
         fatalError("processNext() must be overridden by \(type(of: self))")
     }
 

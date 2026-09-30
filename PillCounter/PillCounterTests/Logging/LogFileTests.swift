@@ -13,60 +13,36 @@ private func pending(_ id: String, at date: Date = Date()) -> Data {
 
 @Suite(.serialized)
 struct LogFileTests {
-    @Test func pendingLinesKeepOrderAndIgnoreTextBlocks() {
+    @Test func pendingLinesKeepOrder() {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
         let file = LogFile(fileURL: url)
-        file.append("free text\n{not pending}")
         file.appendPending(pending("a"))
-        file.append("more text")
         file.appendPending(pending("b"))
         let lines = file.pendingLines()
         #expect(lines.count == 2)
         #expect(lines[0].contains("\"a\"") && lines[1].contains("\"b\""))
     }
 
-    @Test func compactRemovesOnlyGivenLinesAndKeepsText() throws {
+    @Test func compactRemovesOnlyGivenLines() {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
         let file = LogFile(fileURL: url)
-        file.append("keep me")
         file.appendPending(pending("a"))
         file.appendPending(pending("b"))
         file.compact(removing: [file.pendingLines()[0]])
         #expect(file.pendingLines().count == 1)
-        #expect(try String(contentsOf: url, encoding: .utf8).contains("keep me"))
     }
 
     @Test func dropsExpiredCorruptAndOverflowPending() {
         let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
         let file = LogFile(fileURL: url, maxPending: 2, maxAge: 3600)
         file.appendPending(pending("old", at: Date().addingTimeInterval(-7200)))
-        file.append("{truncated")
+        file.appendPending(Data("{truncated".utf8))
         file.appendPending(pending("1"))
         file.appendPending(pending("2"))
         file.appendPending(pending("3"))
         let lines = file.pendingLines()
         #expect(lines.count == 2)
         #expect(lines[0].contains("\"2\"") && lines[1].contains("\"3\""))
-    }
-
-    @Test func startupPurgesFreeTextButKeepsPendingLines() throws {
-        let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
-        let queued = String(decoding: pending("keep"), as: UTF8.self)
-        let legacy = "====\nTimestamp: t\nMessage:\nold free text\n====\n@@PENDING@@ " + queued + "\nmore old text\n"
-        try legacy.write(to: url, atomically: true, encoding: .utf8)
-
-        let file = LogFile(fileURL: url)
-        let contents = try String(contentsOf: url, encoding: .utf8)
-        #expect(!contents.contains("old free text") && !contents.contains("more old text"))
-        #expect(!contents.contains("@@PENDING@@"))
-        #expect(file.pendingLines() == [queued])
-    }
-
-    @Test func startupOnFileWithOnlyFreeTextLeavesItEmpty() throws {
-        let url = tempURL(); defer { try? FileManager.default.removeItem(at: url) }
-        try "just old text\n".write(to: url, atomically: true, encoding: .utf8)
-        _ = LogFile(fileURL: url)
-        #expect(try String(contentsOf: url, encoding: .utf8).isEmpty)
     }
 
     @Test func startupOnEmptyOrMissingFileIsSafe() throws {

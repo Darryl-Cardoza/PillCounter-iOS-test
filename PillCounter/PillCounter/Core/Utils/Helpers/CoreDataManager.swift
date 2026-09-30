@@ -20,28 +20,13 @@ final class CoreDataManager {
 
     private static let modelName = "PillCounter"
 
-    /// Loaded exactly once per process and reused by EVERY `CoreDataManager`
-    /// instance (`.shared` and every `init(inMemory:)`). `NSPersistentContainer
-    /// (name:)` on its own resolves/loads the named `.xcdatamodeld` itself —
-    /// calling it more than once in one process (e.g. `.shared` plus a
-    /// test's own `CoreDataManager(inMemory: true)`) can produce two
-    /// distinct `NSManagedObjectModel` instances for the same model name,
-    /// and Core Data can then fail to bind a generated class (e.g.
-    /// `UserEntity`) to a single unambiguous `NSEntityDescription` —
-    /// surfacing as "+[UserEntity entity] Failed to find a unique match for
-    /// an NSEntityDescription to a managed object subclass" the first time
-    /// any entity of that type is touched, and breaking encryption's
-    /// `entity.name` lookup (in `NsManagedObject+Encryption.swift`) silently
-    /// for the remainder of the process. Sharing one model instance across
-    /// every container avoids the ambiguity entirely.
+    /// Shared by every instance: loading the model per container yields duplicate
+    /// NSManagedObjectModels and "Failed to find a unique match for an NSEntityDescription".
     private static let managedObjectModel: NSManagedObjectModel = {
         guard let url = Bundle.main.url(forResource: modelName, withExtension: "momd"),
               let model = NSManagedObjectModel(contentsOf: url)
         else {
-            // No recovery is possible here — every entity type the app defines
-            // resolves through this model, so continuing would just turn one
-            // clear startup crash into an unbounded number of confusing ones
-            // at first Core Data use. Log for diagnostics, then fail fast.
+            // Unrecoverable: every entity resolves through this model. Log, then fail fast.
             AppLogger.shared.error("CoreDataManager: failed to load Core Data model \(modelName) from bundle", event: .databaseError)
             fatalError("Failed to load Core Data model \(modelName)")
         }
@@ -55,9 +40,7 @@ final class CoreDataManager {
         container = NSPersistentContainer(name: CoreDataManager.modelName, managedObjectModel: CoreDataManager.managedObjectModel)
 
         guard let description = container.persistentStoreDescriptions.first else {
-            // NSPersistentContainer always seeds persistentStoreDescriptions from its
-            // model/name at init — an empty array here means Core Data itself is in
-            // a broken state, not something this layer can work around.
+            // Core Data seeds this at init; empty means it is broken.
             AppLogger.shared.error("CoreDataManager: persistentStoreDescriptions is empty, cannot configure store", event: .databaseError)
             fatalError("No store description")
         }
@@ -68,17 +51,13 @@ final class CoreDataManager {
             forKey: NSPersistentStoreFileProtectionKey
         )
 
-        // An existing on-disk store predating a model change (e.g. the
-        // FaceUserEntity/FaceEmbeddingEntity additions) must migrate, or the
-        // store never loads and every later fetch fails.
+        // Existing on-disk stores must migrate on model changes or never load.
         description.shouldMigrateStoreAutomatically = true
         description.shouldInferMappingModelAutomatically = true
 
         container.loadPersistentStores { description, error in
             if let error = error {
-                // Continuing here leaves a container with no store attached —
-                // every fetch afterwards fails in a way that reads like a
-                // missing entity rather than a failed migration.
+                // No store attached: later fetches would fail confusingly.
                 assertionFailure("Failed to load Core Data: \(error)")
                 AppLogger.shared.error("Failed to load Core Data", error: error, event: .databaseError)
             }
@@ -89,26 +68,11 @@ final class CoreDataManager {
             #endif
         }
 
-        // Background contexts (see `backgroundContext` below) save directly to
-        // the persistent store coordinator, as siblings of `viewContext`, not
-        // as its children — a background save only reaches `viewContext` via
-        // this merge notification. Without it, `viewContext` keeps serving
-        // stale snapshots (e.g. `is_synced`) and stale references to objects
-        // a background context deleted.
+        // Background contexts save to the coordinator, not through viewContext; this merges their changes in.
         container.viewContext.automaticallyMergesChangesFromParent = true
     }
 
-    /// In-memory initializer for unit tests. Each instance gets an isolated
-    /// store that never touches disk, so tests can build and query entities
-    /// without affecting the app database or each other. Shares the same
-    /// cached `managedObjectModel` as `.shared` — see that property's doc
-    /// comment for why that matters.
-    ///
-    /// Usage in a test:
-    /// ```
-    /// let cd = CoreDataManager(inMemory: true)
-    /// let txn = PillCountTransactionEntity(context: cd.context)
-    /// ```
+    /// Isolated in-memory store for unit tests.
     init(inMemory: Bool) {
         container = NSPersistentContainer(name: CoreDataManager.modelName, managedObjectModel: CoreDataManager.managedObjectModel)
 
@@ -120,9 +84,7 @@ final class CoreDataManager {
 
         container.loadPersistentStores { _, error in
             if let error = error {
-                // In-memory store load failures are effectively always a test-setup
-                // bug (misconfigured description), not a runtime condition — fail
-                // fast so the failing test points straight at the cause.
+                // Load failure here is a test-setup bug; fail fast.
                 AppLogger.shared.error("CoreDataManager: failed to load in-memory Core Data store", error: error, event: .databaseError)
                 fatalError("Failed to load in-memory Core Data: \(error.localizedDescription)")
             }
@@ -149,10 +111,7 @@ final class CoreDataManager {
         }
     }
 
-    /// Same as `save(context:)`, but reports whether the save actually
-    /// persisted — for callers that must not report a downstream effect
-    /// (e.g. deleting a backing file) as done when the underlying save
-    /// silently failed. Returns `true` when there was nothing to save.
+    /// Like `save(context:)`, but returns whether the save persisted (`true` if nothing to save).
     @discardableResult
     func saveReturningSuccess(context: NSManagedObjectContext) -> Bool {
         guard context.hasChanges else { return true }
@@ -171,26 +130,8 @@ final class CoreDataManager {
         }
     }
 
-    /// Destroys every persistent store file backing this container and
-    /// reloads a fresh, empty one at the same URL. Unlike `resetContext()`
-    /// (which only clears the in-memory context), this actually deletes the
-    /// on-disk data.
-    ///
-    /// Not called from any production path — field-DEK recovery
-    /// (`DatabaseKeyProvider.recoverFromUnrecoverableDek`) used to call this
-    /// on every unrecoverable-key event, wiping the whole database over one
-    /// undecryptable field. That was disproportionate, so recovery now
-    /// blanks only the affected fields in place instead. Retained here as a
-    /// manual/emergency recovery mechanism for a genuinely corrupted store —
-    /// exercised only by `CoreDataManagerTests`.
-    ///
-    /// Only safe to call when nothing else is actively fetching/saving on
-    /// this coordinator — `destroyPersistentStore` is not documented as safe
-    /// concurrent with in-flight context operations, and any `NSManagedObject`
-    /// already faulted from the destroyed store becomes invalid afterward.
-    /// This is an accepted, narrow risk: the call site (an unrecoverable-DEK
-    /// recovery) is expected to be exceedingly rare — normally only right
-    /// after a corrupted/invalidated Keychain item — not a routine path.
+    /// Deletes the on-disk store and reloads an empty one. Not called from production;
+    /// only safe when nothing else is fetching/saving on this coordinator.
     func destroyAndReloadStore() {
         resetContext()
 

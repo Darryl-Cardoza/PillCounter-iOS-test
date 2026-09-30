@@ -14,8 +14,10 @@ final class RemoteLogDestination: LogDestination {
 
     func write(_ entry: LogEntry, formatted: String) {
         guard entry.level >= .error || entry.event == .sessionStarted else { return }
-        // /mobile/logs requires the access token, which only exists after login.
-        guard isLoggedIn() else { return }
+        // /mobile/logs requires the access token, which only exists after login. The
+        // session marker is exempt: logout wipes the token before this async write
+        // runs, and the uploader queues it until the next login.
+        guard isLoggedIn() || entry.event == .sessionStarted else { return }
 
         let event = entry.event ?? EventClassifier.classify(entry)
         let tag = Self.tag(forFile: entry.file)
@@ -25,8 +27,7 @@ final class RemoteLogDestination: LogDestination {
         if entry.underlyingError != nil || entry.actualError != nil {
             errorInfo = RemoteLogPayload.ErrorInfo(
                 type: entry.underlyingError.map { String(describing: type(of: $0)) },
-                message: LogRedactor.redact(entry.humanReadableError ?? entry.actualError),
-                stackTrace: LogRedactor.redact(entry.stackTrace),
+                message: LogRedactor.redact(entry.actualError ?? entry.humanReadableError),
                 isFatal: false
             )
         } else {
@@ -48,7 +49,7 @@ final class RemoteLogDestination: LogDestination {
             tag: tag,
             event: event.rawValue,
             context: ["file": Self.fileName(entry), "method": Self.methodName(entry)]
-                .merging(entry.context?.mapValues { String(describing: $0) } ?? [:]) { _, custom in custom },
+                .merging(entry.context?.mapValues { LogRedactor.redact(String(describing: $0)) ?? "" } ?? [:]) { _, custom in custom },
             error: errorInfo,
             network: .init(type: network.type, isOnline: network.isOnline)
         )
@@ -71,7 +72,7 @@ final class RemoteLogDestination: LogDestination {
     /// Swift has no runtime caller-class, so the file's base name stands in for it.
     private static func message(for entry: LogEntry) -> String {
         let file = fileName(entry)
-        let detail = entry.humanReadableError ?? entry.actualError ?? entry.message
+        let detail = [entry.message, entry.humanReadableError].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " -> ")
         let redacted = LogRedactor.redact(detail) ?? detail
         return "\(file) -> \((file as NSString).deletingPathExtension) -> \(methodName(entry)) -> \(redacted)"
     }
@@ -82,20 +83,20 @@ final class RemoteLogDestination: LogDestination {
         return formatter
     }()
 
-    /// Reuses EventClassifier's module→feature grouping rather than a
-    /// one-tag-per-file scheme, which would produce 100+ near-meaningless tags.
+    /// One tag per feature module (see LogModule), not per file.
     private static func tag(forFile file: String) -> String {
-        let path = file.lowercased()
-        if path.contains("/login/") || path.contains("sessionmanager") { return "auth.login" }
-        if path.contains("verifypin") || path.contains("otp") { return "auth.verify" }
-        if path.contains("hl7syncqueue") || path.contains("unsyncedtransaction") { return "sync.transaction" }
-        if path.contains("/faceauth/") || path.contains("face") { return "auth.face" }
-        if path.contains("/scanning/") || path.contains("/ocr/") { return "scanning.pill" }
-        if path.contains("hl7") { return "hl7.sync" }
-        if path.contains("/history/") { return "history" }
-        if path.contains("/settings/") || path.contains("/profile/") { return "settings.profile" }
-        if path.contains("localdatasource") || path.contains("coredatamanager") { return "data.store" }
-        if path.contains("runtimeunit") || path.contains("/config/") { return "security.keys" }
-        return "app.general"
+        switch LogModule(file: file) {
+        case .login: return "auth.login"
+        case .verify: return "auth.verify"
+        case .syncQueue: return "sync.transaction"
+        case .face: return "auth.face"
+        case .scanning: return "scanning.pill"
+        case .hl7: return "hl7.sync"
+        case .history: return "history"
+        case .settings: return "settings.profile"
+        case .dataStore: return "data.store"
+        case .security: return "security.keys"
+        case .other: return "app.general"
+        }
     }
 }

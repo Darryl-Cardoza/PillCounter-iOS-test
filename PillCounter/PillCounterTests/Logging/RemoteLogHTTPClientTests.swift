@@ -59,7 +59,7 @@ struct RemoteLogHTTPClientTests {
         #expect(RemoteLogHTTPClient.classify(statusCode: 299) == .delivered)
         #expect(RemoteLogHTTPClient.classify(statusCode: 301) == .retry)
         #expect(RemoteLogHTTPClient.classify(statusCode: 400) == .drop)
-        #expect(RemoteLogHTTPClient.classify(statusCode: 401) == .retry)
+        #expect(RemoteLogHTTPClient.classify(statusCode: 401) == .unauthorized)
         #expect(RemoteLogHTTPClient.classify(statusCode: 408) == .retry)
         #expect(RemoteLogHTTPClient.classify(statusCode: 422) == .drop)
         #expect(RemoteLogHTTPClient.classify(statusCode: 429) == .retry)
@@ -103,20 +103,20 @@ struct RemoteLogHTTPClientTests {
         #expect(await makeClient().deliver(Data("{}".utf8)) == .retry)
     }
 
-    @Test func emptyAccessTokenIsRetryableAndNothingIsSent() async {
+    @Test func emptyAccessTokenIsUnauthorizedAndNothingIsSent() async {
         let result = await makeClient(accessToken: "").deliver(Data("{}".utf8))
-        #expect(result == .retry)
+        #expect(result == .unauthorized)
         #expect(LogAPIStubProtocol.lastRequest == nil)
     }
 
-    @Test func unauthorizedIsRetryable() async {
+    @Test func unauthorizedIsNotRetried() async {
         LogAPIStubProtocol.status = 401
-        #expect(await makeClient().deliver(Data("{}".utf8)) == .retry)
+        #expect(await makeClient().deliver(Data("{}".utf8)) == .unauthorized)
     }
 
-    @Test func emptyServerKeyIsRetryableAndNothingIsSent() async {
+    @Test func emptyServerKeyIsNotRetriedAndNothingIsSent() async {
         let result = await makeClient(serverKey: "").deliver(Data("{}".utf8))
-        #expect(result == .retry)
+        #expect(result == .unauthorized)
         #expect(LogAPIStubProtocol.lastRequest == nil)
     }
 }

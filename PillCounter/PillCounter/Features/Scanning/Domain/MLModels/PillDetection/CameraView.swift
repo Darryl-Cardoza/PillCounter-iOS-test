@@ -94,7 +94,7 @@ final class PreviewView: UIView {
     required init?(coder: NSCoder) {
         // Unreachable in this SwiftUI-driven app (no storyboard/XIB instantiation),
         // but log before crashing rather than a bare fatalError if that ever changes.
-        AppLogger.shared.error("CameraView.PreviewView: init(coder:) invoked — not implemented, no storyboard/XIB path exists", event: .appCrash)
+        AppLogger.shared.error("CameraView.PreviewView: init(coder:) invoked — not implemented, no storyboard/XIB path exists", event: .unknownError)
         fatalError("init(coder:) has not been implemented")
     }
 

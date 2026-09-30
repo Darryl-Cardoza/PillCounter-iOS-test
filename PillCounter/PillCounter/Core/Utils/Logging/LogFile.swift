@@ -4,9 +4,6 @@ import Foundation
 /// payloads (one JSON object per line) that empties as they upload.
 /// Every read and rewrite goes through one serial queue.
 final class LogFile: @unchecked Sendable {
-    // Only for migrating queues written by earlier versions, which prefixed each payload line.
-    private static let legacyPrefix = "@@PENDING@@ "
-
     private static func isPending(_ line: String) -> Bool { line.hasPrefix("{") }
 
     static let defaultURL: URL = FileManager.default
@@ -50,36 +47,14 @@ final class LogFile: @unchecked Sendable {
             try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         }
         if !fm.fileExists(atPath: fileURL.path) {
-            let legacy = directory.appendingPathComponent("app.log")
-            if fileURL == Self.defaultURL, fm.fileExists(atPath: legacy.path) {
-                try? fm.moveItem(at: legacy, to: fileURL)
-            } else {
-                fm.createFile(atPath: fileURL.path, contents: nil)
-            }
+            fm.createFile(atPath: fileURL.path, contents: nil)
         }
-        purgeFreeText()
         var url = fileURL
         var resourceValues = URLResourceValues()
         resourceValues.isExcludedFromBackup = true
         try? url.setResourceValues(resourceValues)
         try? fm.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
                               ofItemAtPath: fileURL.path)
-    }
-
-    /// The file is now only an offline queue; drops free-text blocks written by
-    /// earlier versions and strips the legacy line prefix, keeping every queued payload. Idempotent.
-    private func purgeFreeText() {
-        guard let content = try? String(contentsOf: fileURL, encoding: .utf8), !content.isEmpty else { return }
-        let pending = content.components(separatedBy: "\n").compactMap { line -> String? in
-            if line.hasPrefix(Self.legacyPrefix) { return String(line.dropFirst(Self.legacyPrefix.count)) }
-            return Self.isPending(line) ? line : nil
-        }
-        let result = pending.isEmpty ? "" : pending.joined(separator: "\n") + "\n"
-        if result != content { try? result.write(to: fileURL, atomically: true, encoding: .utf8) }
-    }
-
-    func append(_ text: String) {
-        queue.async { self.appendLocked(text) }
     }
 
     func appendPending(_ body: Data) {

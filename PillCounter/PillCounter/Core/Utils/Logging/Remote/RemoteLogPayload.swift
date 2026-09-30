@@ -7,12 +7,10 @@ struct RemoteLogPayload: Encodable {
     struct ErrorInfo: Encodable {
         let type: String?
         let message: String?
-        let stackTrace: String?
         let isFatal: Bool
 
         enum CodingKeys: String, CodingKey {
             case type, message
-            case stackTrace = "stack_trace"
             case isFatal = "is_fatal"
         }
     }

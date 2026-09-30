@@ -44,9 +44,9 @@ public final class NetworkStatusProvider {
     }
 
     private static func connectionType(_ path: NWPath) -> String {
+        if path.status != .satisfied { return "offline" }
         if path.usesInterfaceType(.wifi) { return "wifi" }
         if path.usesInterfaceType(.cellular) { return "cellular" }
-        if path.usesInterfaceType(.wiredEthernet) { return "wired" }
         return "unknown"
     }
 }

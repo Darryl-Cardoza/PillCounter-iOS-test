@@ -24,10 +24,11 @@ final class RemoteLogDestination: LogDestination {
         let network = NetworkStatusProvider.shared.snapshot()
 
         let errorInfo: RemoteLogPayload.ErrorInfo?
-        if entry.underlyingError != nil || entry.actualError != nil {
+        if entry.underlyingError != nil || entry.actualError != nil || entry.stackTrace != nil {
             errorInfo = RemoteLogPayload.ErrorInfo(
                 type: entry.underlyingError.map { String(describing: type(of: $0)) },
                 message: LogRedactor.redact(entry.actualError ?? entry.humanReadableError),
+                stackTrace: entry.stackTrace,
                 isFatal: false
             )
         } else {

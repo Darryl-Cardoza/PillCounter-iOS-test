@@ -9,6 +9,7 @@ public struct LogEntry {
     public let message: String
     public let humanReadableError: String?
     public let actualError: String?
+    public let stackTrace: String?
     /// The original error, kept alongside its translated string forms above —
     /// EventClassifier needs the real type (URLError code, DecodingError, etc.)
     /// to classify accurately; a string can't be pattern-matched reliably.
@@ -25,6 +26,7 @@ public struct LogEntry {
         message: String,
         humanReadableError: String? = nil,
         actualError: String? = nil,
+        stackTrace: String? = nil,
         underlyingError: Error? = nil,
         event: LogEvent? = nil,
         context: [String: Any]? = nil
@@ -37,6 +39,7 @@ public struct LogEntry {
         self.message = message
         self.humanReadableError = humanReadableError
         self.actualError = actualError
+        self.stackTrace = stackTrace
         self.underlyingError = underlyingError
         self.event = event
         self.context = context

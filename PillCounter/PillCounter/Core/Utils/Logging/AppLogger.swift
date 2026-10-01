@@ -81,6 +81,7 @@ public final class AppLogger {
 
         let humanReadable = underlyingError.map { ErrorTranslator.translate($0) }
         let actual = underlyingError.map { "\(type(of: $0)): \($0)" }
+        let stack = effectiveLevel >= .error ? Self.callerStack() : nil
 
         let entry = LogEntry(
             level: effectiveLevel,
@@ -90,6 +91,7 @@ public final class AppLogger {
             message: message,
             humanReadableError: humanReadable,
             actualError: actual,
+            stackTrace: stack,
             underlyingError: underlyingError,
             event: event,
             context: context
@@ -102,6 +104,11 @@ public final class AppLogger {
                 destination.write(entry, formatted: formatted)
             }
         }
+    }
+
+    /// Drops the logger's own frames (callerStack, log, the public method) so the top frame is the caller.
+    private static func callerStack() -> String {
+        Thread.callStackSymbols.dropFirst(3).prefix(40).joined(separator: "\n")
     }
 
     private func isCancellation(_ error: Error) -> Bool {

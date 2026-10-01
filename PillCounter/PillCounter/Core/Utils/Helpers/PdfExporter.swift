@@ -230,7 +230,7 @@ private final class BatchPDFRenderer {
         let textHeight = estimateTextHeight(note, font: PDF.font(11), width: textWidth)
         let sectionH   = textHeight + 36
 
-        var y = checkPageBreak(neededHeight: sectionH + 8, currentY: startY)
+        let y = checkPageBreak(neededHeight: sectionH + 8, currentY: startY)
 
         drawRoundedRect(CGRect(x: PDF.margin, y: y, width: PDF.contentWidth, height: sectionH),
                         fill: PDF.sectionBg, stroke: PDF.divider, radius: 8)
@@ -959,7 +959,7 @@ private final class DrugHistoryPDFRenderer {
         let textHeight = estimateTextHeight(note, font: PDF.font(11), width: textWidth)
         let sectionH   = textHeight + 36
         
-        var y = checkPageBreak(neededHeight: sectionH + 8, currentY: startY)
+        let y = checkPageBreak(neededHeight: sectionH + 8, currentY: startY)
         
         drawRoundedRect(CGRect(x: PDF.margin, y: y, width: PDF.contentWidth, height: sectionH),
                         fill: PDF.sectionBg, stroke: PDF.divider, radius: 8)

@@ -77,7 +77,7 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
             UIApplication.shared.endBackgroundTask(id)
             id = .invalid
         }
-        id = UIApplication.shared.beginBackgroundTask(withName: "log-upload", expirationHandler: finish)
+        id = UIApplication.shared.beginBackgroundTask(withName: "log-upload") { finish() }
         return finish
     }
 
@@ -149,9 +149,13 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
         guard schedule else { return }
         Task.detached(priority: .background) {
             try? await Task.sleep(for: .seconds(Self.backoff))
-            self.lock.lock(); self.flushScheduled = false; self.lock.unlock()
+            self.clearFlushScheduled()
             await self.flush()
         }
+    }
+
+    private func clearFlushScheduled() {
+        lock.lock(); flushScheduled = false; lock.unlock()
     }
 
     func resetBackoff() {

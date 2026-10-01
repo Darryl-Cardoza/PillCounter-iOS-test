@@ -69,7 +69,7 @@ struct BottomSheetModifier<SheetContent: View>: ViewModifier {
                 .ignoresSafeArea()
             )
             // Fire onDismiss whenever the sheet transitions to hidden
-            .onChange(of: isPresented) { newValue in
+            .onChange(of: isPresented) { _, newValue in
                 if newValue == false {
                     onDismiss?()
                 }

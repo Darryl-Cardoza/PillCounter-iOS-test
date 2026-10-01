@@ -26,8 +26,7 @@ struct SecurityManager {
         #if DEBUG
         return false
         #else
-        return
-        isJailbroken()
+        return isJailbroken()
         || isDebuggerAttached()
         || isRunningOnSimulator()
         || isTampered()

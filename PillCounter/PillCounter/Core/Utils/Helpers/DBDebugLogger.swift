@@ -30,7 +30,7 @@ final class DBDebugLogger {
         print(sep)
         for r in rows {
             let createdAt = r.created_at.map { formatDate($0) } ?? "-"
-            print("| \(r.user_id) | \(r.fname ?? "") | \(r.lname ?? "") | \(r.email ?? "") | \(r.phone_number ?? "") | \(r.pharmacy_name ?? "") | \(r.npi_id ?? "") | \(r.is_verified) | \(r.language ?? "") | \(r.timezone ?? "") | \(r.notifications) | \(createdAt) |")
+            print("| \(r.user_id.map { "\($0)" } ?? "") | \(r.fname ?? "") | \(r.lname ?? "") | \(r.email ?? "") | \(r.phone_number ?? "") | \(r.pharmacy_name ?? "") | \(r.npi_id ?? "") | \(r.is_verified) | \(r.language ?? "") | \(r.timezone ?? "") | \(r.notifications) | \(createdAt) |")
         }
         print(sep)
     }

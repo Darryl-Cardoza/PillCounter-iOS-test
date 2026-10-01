@@ -150,6 +150,7 @@ class UserViewModel: ObservableObject {
     func loadMobileThemeSettings() {
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
 
+        let logger = self.logger
         Task.detached(priority: .background) {
             do {
                 let response = try await self.settingsRepo.getMobileSettings(currentVersion: appVersion)

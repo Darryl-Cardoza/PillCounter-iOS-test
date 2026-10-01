@@ -60,6 +60,25 @@ struct RemoteLogUploaderTests {
         #expect(client.bodies.isEmpty)
     }
 
+    @Test func identicalSubmitsWithinWindowCollapseToOne() {
+        let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let uploader = RemoteLogUploader(client: FakeClient([]), file: file, isOnline: { false }, retryDelays: [])
+        uploader.submit(payload()); uploader.submit(payload())
+        #expect(file.pendingLines().count == 1)
+    }
+
+    @Test func flushSkipsLinesQueuedByAnotherUser() async {
+        let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        file.appendPending(Data("{\"log_id\":\"a\",\"timestamp\":\"\(stamp)\",\"context\":{\"user_id\":\"A\"}}".utf8))
+        file.appendPending(Data("{\"log_id\":\"b\",\"timestamp\":\"\(stamp)\",\"context\":{\"user_id\":\"B\"}}".utf8))
+        let client = FakeClient([])
+        let uploader = RemoteLogUploader(client: client, file: file, isOnline: { true }, retryDelays: [], currentUserId: { "B" })
+        await uploader.flush()
+        #expect(client.bodies.count == 1 && client.bodies[0].contains("\"b\""))
+        #expect(file.pendingLines().count == 1)
+    }
+
     @Test func onlineDeliveryDoesNotTouchTheFile() async {
         let (file, url) = makeFile(); defer { try? FileManager.default.removeItem(at: url) }
         let client = FakeClient([.delivered])

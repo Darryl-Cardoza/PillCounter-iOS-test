@@ -27,20 +27,25 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
     private var flushing = false
     private var flushScheduled = false
     private var retryAfter = Date.distantPast
+    private var recent: [String: Date] = [:]
+    private let currentUserId: () -> String?
 
     init(
         client: RemoteLogDelivering = RemoteLogHTTPClient(),
         file: LogFile = .shared,
         isOnline: @escaping () -> Bool = { NetworkStatusProvider.shared.snapshot().isOnline },
-        retryDelays: [Duration] = [.seconds(2), .seconds(5)]
+        retryDelays: [Duration] = [.seconds(2), .seconds(5)],
+        currentUserId: @escaping () -> String? = { AppStorageManager.shared.userId }
     ) {
         self.client = client
         self.file = file
         self.isOnline = isOnline
         self.retryDelays = retryDelays
+        self.currentUserId = currentUserId
     }
 
     func submit(_ payload: RemoteLogPayload) {
+        guard !isDuplicate(payload) else { return }
         guard let body = try? JSONEncoder().encode(payload) else { return }
         guard canSend else {
             #if DEBUG
@@ -107,6 +112,7 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
         var done = Set<String>()
         for line in file.pendingLines() {
             guard canSend else { break }
+            guard belongsToCurrentUser(line) else { continue }
             switch await client.deliver(Data(line.utf8)) {
             case .delivered, .drop: done.insert(line)
             case .retry: noteFailure(); return finish(done)
@@ -117,6 +123,27 @@ final class RemoteLogUploader: RemoteLogSubmitting, @unchecked Sendable {
     }
 
     // MARK: - State
+
+    /// Identical errors inside this window collapse into one, so a failure loop can't flood the endpoint.
+    private static let dedupeWindow: TimeInterval = 10
+
+    private func isDuplicate(_ payload: RemoteLogPayload) -> Bool {
+        let key = payload.event + payload.message
+        let now = Date()
+        lock.lock(); defer { lock.unlock() }
+        if let last = recent[key], now.timeIntervalSince(last) < Self.dedupeWindow { return true }
+        if recent.count > 200 { recent = recent.filter { now.timeIntervalSince($0.value) < Self.dedupeWindow } }
+        recent[key] = now
+        return false
+    }
+
+    /// Queued lines stamped by another user stay queued; unstamped lines go with any token.
+    private func belongsToCurrentUser(_ line: String) -> Bool {
+        guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+              let owner = (object["context"] as? [String: Any])?["user_id"] as? String,
+              !owner.isEmpty else { return true }
+        return owner == currentUserId()
+    }
 
     private var canSend: Bool {
         lock.lock(); defer { lock.unlock() }

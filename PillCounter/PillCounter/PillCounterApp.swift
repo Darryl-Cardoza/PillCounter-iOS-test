@@ -149,6 +149,10 @@ struct PillCounterApp: App {
                                 }
                             }
                             .task {
+                                if ConfigurationManager.shared.xServerKey.isEmpty {
+                                    toastManager.show(message: L10n.Security.serverKeyUnavailable, duration: 6)
+                                }
+
                                 // Single gate: only fetch when a token already
                                 // exists. If logged out at launch, the onChange
                                 // below fires this same call once login succeeds.

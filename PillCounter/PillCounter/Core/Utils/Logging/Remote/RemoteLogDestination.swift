@@ -48,7 +48,7 @@ final class RemoteLogDestination: LogDestination {
             message: Self.message(for: entry),
             tag: tag,
             event: event.rawValue,
-            context: ["file": Self.fileName(entry), "method": Self.methodName(entry)]
+            context: Self.baseContext(entry)
                 .merging(entry.context?.mapValues { LogRedactor.redact(String(describing: $0)) ?? "" } ?? [:]) { _, custom in custom },
             error: errorInfo,
             network: .init(type: network.type, isOnline: network.isOnline)
@@ -58,6 +58,12 @@ final class RemoteLogDestination: LogDestination {
         print("[RemoteLogDestination] submit \(event.rawValue): \(payload.message)")
         #endif
         uploader.submit(payload)
+    }
+
+    private static func baseContext(_ entry: LogEntry) -> [String: String] {
+        var context = ["file": fileName(entry), "method": methodName(entry)]
+        if let userId = AppStorageManager.shared.userId { context["user_id"] = userId }
+        return context
     }
 
     private static func fileName(_ entry: LogEntry) -> String {

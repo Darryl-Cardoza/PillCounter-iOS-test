@@ -578,6 +578,7 @@ Reanudando su sesión...";
 "security.alertMessage" = "Este dispositivo no cumple con los requisitos de seguridad.
 Para proteger sus datos, la aplicación no puede continuar.";
 "security.exitButton" = "Salir";
+"security.serverKeyUnavailable" = "Configuración segura incompleta. Es posible que algunas funciones no funcionen. Reinicie la aplicación.";
 "forceUpdate.message" = "Su versión actual ha expirado, es hora de obtener una receta nueva.
 Actualice ahora para la dosis correcta de funciones.";
 "forceUpdate.updateButton" = "Actualizar";

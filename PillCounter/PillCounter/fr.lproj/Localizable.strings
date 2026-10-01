@@ -578,6 +578,7 @@ Reprise de votre session...";
 "security.alertMessage" = "Cet appareil ne répond pas aux exigences de sécurité.
 Pour protéger vos données, l'application ne peut pas continuer.";
 "security.exitButton" = "Quitter";
+"security.serverKeyUnavailable" = "Configuration sécurisée incomplète. Certaines fonctions peuvent ne pas fonctionner. Redémarrez l'application.";
 "forceUpdate.message" = "Votre version actuelle a expiré - il est temps d'obtenir une nouvelle ordonnance.
 Mettez à jour maintenant pour la bonne dose de fonctionnalités!";
 "forceUpdate.updateButton" = "Mettre à jour";

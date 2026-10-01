@@ -586,6 +586,7 @@
 "security.alertTitle" = "Security Alert";
 "security.alertMessage" = "This device does not meet security requirements.\nTo protect your data, the app cannot continue.";
 "security.exitButton" = "Exit";
+"security.serverKeyUnavailable" = "Secure setup incomplete. Some features may not work. Restart the app.";
 
 
 // MARK: - FORCE UPDATE

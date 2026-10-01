@@ -31,6 +31,11 @@ struct LogRedactorTests {
         #expect(LogRedactor.redact(ndc) == ndc)
     }
 
+    @Test func doesNotRedactIPv4Addresses() {
+        let text = "PMS endpoint 192.168.100.200 unreachable"
+        #expect(LogRedactor.redact(text) == text)
+    }
+
     @Test func passesThroughTextWithNoSensitiveData() {
         let plain = "Scan timed out after 3 attempts"
         #expect(LogRedactor.redact(plain) == plain)

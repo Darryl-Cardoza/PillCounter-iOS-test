@@ -646,6 +646,7 @@ enum L10n {
         static let alertTitle = NSLocalizedString("security.alertTitle", comment: "")
         static let alertMessage = NSLocalizedString("security.alertMessage", comment: "")
         static let exitButton = NSLocalizedString("security.exitButton", comment: "")
+        static let serverKeyUnavailable = NSLocalizedString("security.serverKeyUnavailable", comment: "")
     }
 
     // MARK: - Force Update

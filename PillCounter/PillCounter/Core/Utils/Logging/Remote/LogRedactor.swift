@@ -21,7 +21,7 @@ public enum LogRedactor {
     private static let nationalIdPattern = #"\b\d{3}-\d{2}-\d{4}\b"#
     // Requires a separator (space/dash/dot/plus/parens) inside the run so a bare
     // contiguous digit run — an NDC code, Rx number, order/batch ID — never matches.
-    private static let phonePattern = #"(?:\+\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]\d{3,4}[\s.-]\d{3,4}"#
+    private static let phonePattern = #"(?<![\d.])(?:\+\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]\d{3,4}[\s.-]\d{3,4}(?!\.?\d)"#
     // 13-19 digits, optionally grouped with spaces/dashes; Luhn-checked separately
     // below rather than matched-and-replaced in one pass, since only a Luhn-valid
     // run should be treated as a real card number.

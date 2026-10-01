@@ -154,7 +154,7 @@ final class GloveDetectionService {
         ) else { return [] }
 
         print(String(format:
-            "── [GLOVE MODEL] REQUEST  frame=%.0f×%.0f letterboxed=%d×%d scale=%.4f padX=%.1f padY=%.1f",
+            "── [GLOVE MODEL] REQUEST  frame=%.0f×%.0f letterboxed=%ld×%ld scale=%.4f padX=%.1f padY=%.1f",
             frameSize.width, frameSize.height, inputSize, inputSize, scale, padX, padY))
 
         let inferenceStart = CACurrentMediaTime()
@@ -189,8 +189,8 @@ final class GloveDetectionService {
 
         for (tensor, stride) in strideOutputs {
             print(String(format:
-                "   [GLOVE MODEL] head stride=%d shape=%@",
-                stride, tensor.shape))
+                "   [GLOVE MODEL] head stride=%ld shape=%@",
+                stride, "\(tensor.shape)"))
         }
 
         guard !strideOutputs.isEmpty else { return [] }
@@ -214,7 +214,7 @@ final class GloveDetectionService {
         let noGloveRaw = candidates.filter { $0.gloveClass == .noGlove }.count
 
         print(String(format:
-            "   [GLOVE MODEL] candidates glove=%d no_glove=%d (pre-NMS, conf>=%.2f)",
+            "   [GLOVE MODEL] candidates glove=%ld no_glove=%ld (pre-NMS, conf>=%.2f)",
             gloveRaw, noGloveRaw, confThreshold))
 
         guard !candidates.isEmpty else { return [] }
@@ -226,7 +226,7 @@ final class GloveDetectionService {
         let finalNoGlove = final.filter { $0.gloveClass == .noGlove }.count
 
         print(String(format:
-            "── [GLOVE MODEL] RESULT   glove=%d no_glove=%d (post-NMS)", finalGlove, finalNoGlove))
+            "── [GLOVE MODEL] RESULT   glove=%ld no_glove=%ld (post-NMS)", finalGlove, finalNoGlove))
         for det in final {
             let cls = det.gloveClass == .glove ? "GLOVE" : "NO_GLOVE"
             let r = det.rect

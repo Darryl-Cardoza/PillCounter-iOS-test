@@ -236,7 +236,7 @@ extension BaseRepositoryProtocol {
             }
         }
 
-        if let body = body,
+        if let body = body, JSONSerialization.isValidJSONObject(body),
            let jsonData = try? JSONSerialization.data(withJSONObject: body, options: .prettyPrinted),
            let jsonString = String(data: jsonData, encoding: .utf8) {
             print("➡️ Body:\n\(jsonString)")

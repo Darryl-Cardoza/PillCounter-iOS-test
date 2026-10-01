@@ -79,11 +79,6 @@ final class FaceQualityChecker {
         let frame = detection.frameSize
         let box = detection.boundingBox
 
-        // TEMP DEBUG — remove after root-causing bug 1/bug 2.
-        let l = detection.landmarks
-        AppLogger.shared.debug("DEBUG detect: score=\(String(format: "%.3f", detection.confidence)) box=(\(Int(box.minX)),\(Int(box.minY)),\(Int(box.width))x\(Int(box.height))) frame=\(Int(frame.width))x\(Int(frame.height))")
-        AppLogger.shared.debug("DEBUG landmarks: rEye=\(l.rightEye) lEye=\(l.leftEye) nose=\(l.nose) rMouth=\(l.rightMouthCorner) lMouth=\(l.leftMouthCorner)")
-
         guard box.width >= minFaceWidthPx else {
             AppLogger.shared.debug("Quality: REJECT faceTooSmall (width \(box.width) < \(minFaceWidthPx))")
             return .rejected(.faceTooSmall, qualityScore: Float(box.width))
@@ -96,7 +91,7 @@ final class FaceQualityChecker {
         let centerOffsetY = abs(box.midY - frame.height / 2)
         guard centerOffsetX <= frame.width * maxCenterOffsetXRatio,
               centerOffsetY <= frame.height * maxCenterOffsetYRatio else {
-            AppLogger.shared.debug("Quality: REJECT faceCropIncomplete (offset \(Int(centerOffsetX)),\(Int(centerOffsetY)))")
+            AppLogger.shared.debug("Quality: REJECT faceCropIncomplete (offset \(centerOffsetX),\(centerOffsetY))")
             return .rejected(.faceCropIncomplete, qualityScore: Float(box.width))
         }
 

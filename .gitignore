@@ -80,3 +80,7 @@ SECURITY_DATA_PROTECTION_REPORT.md
 *./claude
 ./claude
 plans
+
+# graphify knowledge-graph output (regenerable)
+graphify-out/
+**/graphify-out/

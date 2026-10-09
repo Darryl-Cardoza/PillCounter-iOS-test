@@ -39,6 +39,7 @@ final class RemoteLogDestination: LogDestination {
             deviceKey: DeviceInfoProvider.deviceKey,
             appName: DeviceInfoProvider.appName,
             appVersion: DeviceInfoProvider.appVersion,
+            buildNumber: DeviceInfoProvider.buildNumber,
             platform: DeviceInfoProvider.platform,
             osVersion: DeviceInfoProvider.osVersion,
             deviceModel: DeviceInfoProvider.deviceModel,

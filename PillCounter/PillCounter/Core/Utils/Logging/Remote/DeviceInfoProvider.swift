@@ -52,6 +52,11 @@ public enum DeviceInfoProvider {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
     }
 
+    /// `<version>-<build>-<sha6>` stamped by the Release build phase; "debug" for Debug builds.
+    public static var buildNumber: String? {
+        Bundle.main.infoDictionary?["BuildVersionID"] as? String
+    }
+
     public static var platform: String { "iOS" }
 
     public static var osVersion: String {

@@ -30,6 +30,7 @@ struct RemoteLogPayload: Encodable {
     let deviceKey: String
     let appName: String
     let appVersion: String
+    var buildNumber: String?
     let platform: String
     let osVersion: String
     let deviceModel: String
@@ -48,6 +49,7 @@ struct RemoteLogPayload: Encodable {
         case deviceKey = "device_key"
         case appName = "app_name"
         case appVersion = "app_version"
+        case buildNumber = "build_number"
         case platform
         case osVersion = "os_version"
         case deviceModel = "device_model"

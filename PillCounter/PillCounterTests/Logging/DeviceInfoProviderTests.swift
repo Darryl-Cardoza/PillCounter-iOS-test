@@ -36,4 +36,9 @@ struct DeviceInfoProviderTests {
     @Test func appVersionFallsBackWhenBundleValueMissing() {
         #expect(!DeviceInfoProvider.appVersion.isEmpty)
     }
+
+    @Test func buildNumberMatchesExpectedFormat() throws {
+        let value = try #require(DeviceInfoProvider.buildNumber)
+        #expect(value == "debug" || value.wholeMatch(of: /[\d.]+-\d+-([0-9a-f]{6}|local0)/) != nil)
+    }
 }

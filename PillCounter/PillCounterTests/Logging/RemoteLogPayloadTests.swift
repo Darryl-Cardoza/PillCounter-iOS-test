@@ -32,4 +32,18 @@ struct RemoteLogPayloadTests {
         let data = try JSONEncoder().encode(payload)
         #expect(!data.isEmpty)
     }
+
+    @Test func buildNumberEncodedWhenSetAndOmittedWhenNil() throws {
+        func json(_ build: String?) throws -> [String: Any]? {
+            let payload = RemoteLogPayload(
+                deviceKey: "d", appName: "a", appVersion: "1", buildNumber: build, platform: "iOS",
+                osVersion: "17", deviceModel: "m", sessionId: "s", logId: "l", severity: 4,
+                timestamp: "t", message: "m", tag: "t", event: "e", context: nil, error: nil,
+                network: .init(type: "wifi", isOnline: true)
+            )
+            return try JSONSerialization.jsonObject(with: JSONEncoder().encode(payload)) as? [String: Any]
+        }
+        #expect(try json("1.0-7-abc123")?["build_number"] as? String == "1.0-7-abc123")
+        #expect(try json(nil)?.keys.contains("build_number") == false)
+    }
 }

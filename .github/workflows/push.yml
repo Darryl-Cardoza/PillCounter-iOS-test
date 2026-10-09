@@ -85,7 +85,7 @@ jobs:
       checkout_hl7core: true
       configuration: "Release"
       coverage_threshold: "30.00"
-      build_archive: false
+      build_archive: true
 
       run_tests: false
       run_coverage: false

@@ -83,6 +83,7 @@ jobs:
       workspace: ""    # auto-detected (PillCounter.xcworkspace)
       project: ""      # auto-detected (PillCounter.xcodeproj)
       checkout_hl7core: true
+      build_hl7core: true   # Hl7Core main no longer commits hl7Core/swiftpackage
       configuration: "Release"
       coverage_threshold: "30.00"
       build_archive: true

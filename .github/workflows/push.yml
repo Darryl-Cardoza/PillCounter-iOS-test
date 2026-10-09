@@ -131,7 +131,12 @@ jobs:
     with:
       version: ${{ needs.extract-version.outputs.version }}
 
+      # Release targets. GitHub release is always created; each flag below is
+      # an independent opt-in (all off = GitHub only).
       deploy_to_testflight: false
+      deploy_to_esper: false
+      esper_export_method: "ad-hoc"   # development, ad-hoc or enterprise
+      esper_tenant: ""
       ios_bundle_id: "com.ritetechnologies.PillCounting"
 
       enable_whats_new: false
@@ -151,6 +156,10 @@ jobs:
       APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
       APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
       APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+      IOS_ESPER_CERT_P12_BASE64: ${{ secrets.IOS_ESPER_CERT_P12_BASE64 }}
+      IOS_ESPER_CERT_PASSWORD: ${{ secrets.IOS_ESPER_CERT_PASSWORD }}
+      IOS_ESPER_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_ESPER_PROVISION_PROFILE_BASE64 }}
+      ESPER_API_KEY: ${{ secrets.ESPER_API_KEY }}
       PIPELINE_TOKEN: ${{ secrets.PIPELINE_TOKEN }}
 
   # Uploads the dSYMs from the exact archive `cd` shipped (a rebuild would get

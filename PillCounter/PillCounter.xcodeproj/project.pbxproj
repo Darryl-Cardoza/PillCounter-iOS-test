@@ -171,7 +171,6 @@
 				473A48F12EB4F11200EEA905 /* Sources */,
 				473A48F22EB4F11200EEA905 /* Frameworks */,
 				473A48F32EB4F11200EEA905 /* Resources */,
-				79FF00052F0000010000A001 /* Stamp Build Version ID */,
 			);
 			buildRules = (
 			);
@@ -309,30 +308,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		79FF00052F0000010000A001 /* Stamp Build Version ID */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
-			);
-			name = "Stamp Build Version ID";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "[ \"$CONFIGURATION\" = Release ] && [ -n \"$GITHUB_SHA\" ] || exit 0\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Set :BuildVersionID $MARKETING_VERSION-$CURRENT_PROJECT_VERSION-$(echo \"$GITHUB_SHA\" | cut -c1-6)\" \"$PLIST\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		473A48F12EB4F11200EEA905 /* Sources */ = {
@@ -497,7 +472,6 @@
 		473A49202EB4F11300EEA905 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_VERSION_ID = "debug";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Debug.entitlements";
@@ -567,7 +541,6 @@
 		473A49212EB4F11300EEA905 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_VERSION_ID = "$(MARKETING_VERSION)-$(CURRENT_PROJECT_VERSION)-local0";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Release.entitlements";
@@ -798,7 +771,6 @@
 		79FF00022F0000010000A001 /* LoadTest */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_VERSION_ID = "debug";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "PillCounter/PillCounter-Debug.entitlements";

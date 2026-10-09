@@ -37,8 +37,10 @@ struct DeviceInfoProviderTests {
         #expect(!DeviceInfoProvider.appVersion.isEmpty)
     }
 
-    @Test func buildNumberMatchesExpectedFormat() throws {
+    @Test func buildNumberIsTheMainBinaryUUID() throws {
         let value = try #require(DeviceInfoProvider.buildNumber)
-        #expect(value == "debug" || value.wholeMatch(of: /[\d.]+-\d+-([0-9a-f]{6}|local0)/) != nil)
+        let uuid = try #require(UUID(uuidString: value))
+        #expect(value == uuid.uuidString)
+        #expect(value == DeviceInfoProvider.buildNumber)
     }
 }

@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags, for the build-number guard below
 
       - name: Extract MARKETING_VERSION from Xcode project
         id: version
@@ -37,6 +39,28 @@ jobs:
 
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Extracted version: ${version} (from MARKETING_VERSION=${raw_version})"
+
+      # Apple rejects a repeated build number for the same version, and dSYM
+      # lookups are cleaner with unique builds.
+      - name: Reject a reused build number
+        if: contains(github.ref_name, 'release')
+        run: |
+          set -euo pipefail
+          PBX=PillCounter/PillCounter.xcodeproj/project.pbxproj
+          field() { { grep -m1 "$2 = " <<<"$1" || true; } | sed -E "s/.*$2 = ([^;]+);.*/\1/" | tr -d ' '; }
+
+          src=$(cat "$PBX")
+          cur="$(field "$src" MARKETING_VERSION)-$(field "$src" CURRENT_PROJECT_VERSION)"
+          echo "Build id: $cur"
+
+          for tag in $(git tag --list '*release*'); do
+            [ "$tag" = "$GITHUB_REF_NAME" ] && continue
+            old=$(git show "$tag:$PBX" 2>/dev/null) || continue
+            if [ "$(field "$old" MARKETING_VERSION)-$(field "$old" CURRENT_PROJECT_VERSION)" = "$cur" ]; then
+              echo "::error::Build id $cur was already released in tag $tag. Bump CURRENT_PROJECT_VERSION."
+              exit 1
+            fi
+          done
 
   # CI for PRs and branch pushes
   ci:
@@ -127,3 +151,32 @@ jobs:
       APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
       APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
       PIPELINE_TOKEN: ${{ secrets.PIPELINE_TOKEN }}
+
+  # Uploads the dSYMs from the exact archive `cd` shipped (a rebuild would get
+  # new binary UUIDs). Never runs for a failed build.
+  upload-dsyms:
+    name: Upload dSYMs to Datadog
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, 'release')
+    needs: [ci, cd]
+    runs-on: macos-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download archive
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-archive-unsigned
+          path: archive
+
+      - name: Upload dSYMs
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_SITE: datadoghq.com
+        run: |
+          set -euo pipefail
+          if [ -z "$DATADOG_API_KEY" ]; then
+            echo "::warning::DATADOG_API_KEY is not set; skipping dSYM upload."
+            exit 0
+          fi
+          npx --yes @datadog/datadog-ci@5.24.1 dsyms upload archive/ios-archive-unsigned.xcarchive/dSYMs

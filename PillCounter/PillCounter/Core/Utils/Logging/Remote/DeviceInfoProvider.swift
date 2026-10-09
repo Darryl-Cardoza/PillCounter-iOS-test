@@ -1,4 +1,5 @@
 import Foundation
+import MachO
 import UIKit
 
 /// Device/runtime metadata for the remote log payload. Several fields have no
@@ -52,10 +53,23 @@ public enum DeviceInfoProvider {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
     }
 
-    /// `<version>-<build>-<sha6>` stamped by the Release build phase; "debug" for Debug builds.
-    public static var buildNumber: String? {
-        Bundle.main.infoDictionary?["BuildVersionID"] as? String
-    }
+    /// Main executable's LC_UUID: unique per build and equal to its dSYM's UUID,
+    /// which version/build numbers are not.
+    public static var buildNumber: String? { mainExecutableUUID }
+
+    private static let mainExecutableUUID: String? = {
+        guard let header = _dyld_get_image_header(0) else { return nil } // image 0 is the main executable
+        let header64 = UnsafeRawPointer(header).assumingMemoryBound(to: mach_header_64.self)
+        var cursor = UnsafeRawPointer(header) + MemoryLayout<mach_header_64>.size
+        for _ in 0..<header64.pointee.ncmds {
+            let command = cursor.assumingMemoryBound(to: load_command.self).pointee
+            if command.cmd == UInt32(LC_UUID) {
+                return UUID(uuid: cursor.assumingMemoryBound(to: uuid_command.self).pointee.uuid).uuidString
+            }
+            cursor += Int(command.cmdsize)
+        }
+        return nil
+    }()
 
     public static var platform: String { "iOS" }
 
